@@ -1,0 +1,12 @@
+[submodule "desktop"]
+	path = desktop
+	url = https://github.com/pankaj1980patel/my-domain-desktop.git
+[submodule "ios"]
+	path = ios
+	url = https://github.com/pankaj1980patel/my-domain-ios.git
+[submodule "mac"]
+	path = mac
+	url = https://github.com/pankaj1980patel/my-domain-mac.git
+[submodule "android"]
+	path = android
+	url = https://github.com/pankaj1980patel/my-domain-android.git
