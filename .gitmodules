@@ -13,3 +13,6 @@
 [submodule "server"]
 	path = server
 	url = https://github.com/pankaj1980patel/my-domain-server.git
+[submodule "core"]
+	path = core
+	url = https://github.com/pankaj1980patel/my-domain-core.git
