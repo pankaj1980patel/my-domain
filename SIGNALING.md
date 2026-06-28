@@ -48,7 +48,13 @@ exchanges it for an OAuth token (cached ~55 min) and calls FCM HTTP v1.
 ## Adapters
 
 - Desktop: commands `connect`, `firewall_check`, `update_ws_open`, `on_signal`;
-  `platform_kind = "desktop"`.
+  `platform_kind = "desktop"`. **FCM receive is wired natively** (`src/fcm.rs`,
+  crate `fcm_receiver_rs`): registers as a web/Android client to obtain a real
+  FCM token, holds a persistent MTalk connection, and feeds data messages into
+  `Engine::on_signal`. Token reported via `Platform::fcm_token()` + refresh;
+  registration persisted in `<config>/fcm_creds.json`. Needs `MYDOMAIN_FCM_APP_ID`
+  + `MYDOMAIN_FCM_VAPID_KEY` (env or `<config>/fcm_config.json`); api_key/project
+  default to the public web config. Disabled (logged) if those are unset.
 - Android: JNI `nativeSetFcmToken`, `nativeOnSignal`, `nativeConnect`,
   `nativeFirewallCheck`, `nativePollEvents`, `nativeShare*`; settable FCM token;
   `platform_kind = "android"`.
@@ -59,9 +65,10 @@ exchanges it for an OAuth token (cached ~55 min) and calls FCM HTTP v1.
    - Android: a `FirebaseMessagingService` (Kotlin) that obtains the token →
      `nativeSetFcmToken`, and on a data message → `nativeOnSignal(from, payload)`.
      Needs `google-services.json` in the android app.
-   - Desktop: FCM client delivery is awkward off-mobile — wire the planned
-     `GET /signal/stream` SSE channel instead (server endpoint + desktop reader),
-     then feed `on_signal`.
+   - Desktop: **done** — native `fcm_receiver_rs` path (see Adapters above). The
+     remaining step is supplying `MYDOMAIN_FCM_APP_ID` + `MYDOMAIN_FCM_VAPID_KEY`
+     (create a Web app + Web Push cert pair in the Firebase console) and a live
+     cross-device test.
 2. **coturn (STUN/TURN host):** deploy coturn with `use-auth-secret`; server mints
    ephemeral creds into `RelayOffer`. The TURN relay client + `connect()` rungs for
    hole-punch/relay are not yet wired into the live data path.
