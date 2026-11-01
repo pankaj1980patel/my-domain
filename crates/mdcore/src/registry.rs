@@ -205,7 +205,10 @@ pub fn registry_fetch(
     token: &str,
     exclude: &str,
 ) -> Result<Vec<RegistryDevice>, String> {
-    ureq::get(&format!("{}/devices?exclude={}", base(url), exclude))
+    // `.query` percent-encodes the value; node ids are opaque strings and
+    // were previously pasted into the URL raw.
+    ureq::get(&format!("{}/devices", base(url)))
+        .query("exclude", exclude)
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .call()

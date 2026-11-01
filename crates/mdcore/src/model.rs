@@ -37,7 +37,7 @@ pub enum Source {
 }
 
 /// A known peer device.
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct Peer {
     pub node_id: String,
     pub name: String,

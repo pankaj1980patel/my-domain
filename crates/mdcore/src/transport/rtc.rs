@@ -116,6 +116,7 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
     let my_conn_id = RTC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let mut cid: Option<ChannelId> = None;
     let mut registered = false;
+    let mut lost_race = false;
     let mut buf = vec![0u8; 2000];
 
     loop {
@@ -142,12 +143,20 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                     Event::ChannelOpen(id, _) => {
                         cid = Some(id);
                         if !registered {
-                            registered = true;
-                            ctx.ws_conns
-                                .lock()
-                                .unwrap()
-                                .insert(node_id.clone(), (my_conn_id, tx.clone()));
-                            mark_live(&ctx, &node_id, TransportKind::WebRtc, None);
+                            // Like the punch path: never clobber a link that
+                            // already exists (e.g. WS); if we lost the race,
+                            // close this session instead.
+                            let mut g = ctx.ws_conns.lock().unwrap();
+                            if let std::collections::hash_map::Entry::Vacant(slot) =
+                                g.entry(node_id.clone())
+                            {
+                                slot.insert((my_conn_id, tx.clone()));
+                                drop(g);
+                                registered = true;
+                                mark_live(&ctx, &node_id, TransportKind::WebRtc, None);
+                            } else {
+                                lost_race = true;
+                            }
                         }
                     }
                     Event::ChannelData(data) => {
@@ -167,6 +176,11 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                 }
             }
         };
+
+        if lost_race {
+            rtc.disconnect();
+            break;
+        }
 
         // Stop if a newer link replaced us or the heartbeat evicted us.
         if registered {
