@@ -38,7 +38,7 @@ my-domain does the equivalent automatically.
 | **Hole punching** | Both sides send UDP to each other's public address *at the same time*, so each router creates a mapping that lets the other's packets in | [nat/punch.rs](../crates/mdcore/src/nat/punch.rs), [transport/punch.rs](../crates/mdcore/src/transport/punch.rs) |
 | **QUIC** | Reliable, encrypted, multiplexed streams over UDP | [transport/quic.rs](../crates/mdcore/src/transport/quic.rs) |
 | **WebRTC** | Browsers' P2P stack (ICE/DTLS/SCTP). A second, independent way to traverse NATs | [transport/rtc.rs](../crates/mdcore/src/transport/rtc.rs) |
-| **Relay** | When nothing direct works, forward traffic through a server. *Next step of Phase 2* | — |
+| **Relay** | When nothing direct works, forward traffic through the server over an ordinary WebSocket | [transport/relay.rs](../crates/mdcore/src/transport/relay.rs), [apps/server/src/relay.rs](../apps/server/src/relay.rs) |
 
 ## 3. Hole punching, step by step
 
@@ -118,17 +118,49 @@ option first. Each rung can be switched off (`CoreConfig::rungs`):
 | 3 | Ask the peer, via a signal, to open its WebSocket for us | signal |
 | 4 | **STUN + hole punch, then QUIC on the punched socket** | signal + STUN |
 | 5 | WebRTC data channel | signal (+ STUN) |
-| 6 | Relay through the server | *coming next* |
+| 6 | **Relay** through the server's WebSocket `/relay` | yes (always works if the server is reachable) |
 
 And without calling `connect` at all: **`Engine::send` dials QUIC on first
 use** (`auto_quic`) and reuses the link. A failed dial is remembered for 30 s
 so an unreachable peer doesn't cost a timeout on every message.
 
-## 6. How it's tested
+## 6. The relay (rung 6)
+
+Some networks block UDP entirely (corporate Wi-Fi, some hotels), and two
+symmetric NATs defeat hole punching. The relay always works if both devices
+can reach the server, because it's just an outgoing HTTPS-style connection.
+
+```
+laptop ──ws──►  server /relay  ◄──ws── phone
+   {"to":"phone","data":"<E2EE frame>"}  ──►  {"from":"laptop","data":"<E2EE frame>"}
+```
+- **Auth:** the first frame carries the session token; the server verifies it
+  (`verify_token`, same check as the HTTP API).
+- **Isolation:** frames are only forwarded between devices of the *same user*.
+  A test (`never_forwards_to_another_users_device`) proves it on the real server
+  code, and `different_accounts_cannot_reach_each_other_through_the_relay` proves
+  it end to end against the fake.
+- **Privacy:** `data` is never parsed by the server. It's the same encrypted
+  frame the direct links carry. A client test scans everything the relay
+  forwarded and asserts no plaintext appears.
+- **Liveness:** a peer counts as connected only when its `Hello` arrives
+  *through the relay*, which proves it's actually connected there. Each side
+  answers the first `Hello` it gets, so both confirm even if one joined late.
+- **Cost:** every byte crosses the server twice, so it's the last rung, not the first.
+- **Limit today:** `ws://` only. A server behind `https://` needs TLS on the
+  WebSocket (`wss://`), a small addition when the server moves to HTTPS.
+
+## 7. How it's tested
 
 All of this runs in tests, on loopback, on macOS, Linux and the Android phone:
 [crates/mdcore/tests/connect_ladder.rs](../crates/mdcore/tests/connect_ladder.rs)
 enables one rung at a time and checks the transport that came up and the exact
-signals exchanged. See [08-testing.md](08-testing.md). Loopback can't fake a
-real NAT, though. Linux network namespaces (planned) will put two engines behind
-two simulated NAT routers.
+signals exchanged. See [08-testing.md](08-testing.md).
+
+Loopback can't fake a real NAT, though. The plan is Linux network namespaces:
+two engines, each behind its own simulated NAT router (`ip netns` + `iptables
+MASQUERADE`), with a STUN server and the registry "on the internet" namespace.
+**Each device has to be its own process** to live in its own namespace. The
+engine opens new sockets later from background threads (e.g. for punching),
+so pinning threads of one test process to namespaces isn't reliable. That's
+why this test arrives with `mdctl`, the headless engine binary, in Phase 3.
