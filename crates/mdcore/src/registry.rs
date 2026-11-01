@@ -23,6 +23,8 @@ pub struct RegistryDevice {
     pub udp_port: u16,
     #[serde(default)]
     pub ws_port: u16,
+    #[serde(default)]
+    pub quic_port: u16,
     // Peer-visible reachability state (server `DeviceOut`); defaulted so older
     // server responses still deserialize.
     #[serde(default)]
@@ -107,6 +109,7 @@ pub fn registry_register(
             "tcp_port": id.tcp_port,
             "udp_port": id.udp_port,
             "ws_port": id.ws_port,
+            "quic_port": id.quic_port,
             "fcm_token": fcm_token,
             "platform": platform,
             "supports_ipv6": supports_ipv6,

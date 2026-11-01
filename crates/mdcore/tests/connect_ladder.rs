@@ -142,3 +142,96 @@ fn connect_to_unknown_peer_is_rejected_immediately() {
         Err(mdcore::CoreError::PeerNotFound)
     ));
 }
+
+// ---------------------------------------------------------------------------
+// QUIC (Phase 2)
+// ---------------------------------------------------------------------------
+
+fn only_quic() -> ConnectRungs {
+    ConnectRungs {
+        quic: true,
+        ..ConnectRungs::none()
+    }
+}
+
+#[test]
+fn rung0_quic_connects_without_any_signal() {
+    let (a, b, hub) = pair_on_hub("rung-quic", only_quic());
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("quic"));
+    // The acceptor registers the link too (it learns a's node id from Hello).
+    assert_eq!(b.wait_connected(&a, LADDER_WAIT).as_deref(), Some("quic"));
+    assert!(
+        hub.log().is_empty(),
+        "direct QUIC needs no server: {:?}",
+        hub.log()
+    );
+
+    assert_eq!(a.engine.send(&b.node_id(), "over quic").unwrap(), "QUIC");
+    assert_eq!(b.sink.wait_for_message("over quic").protocol, "QUIC");
+    // Same connection, other direction.
+    assert_eq!(b.engine.send(&a.node_id(), "quic reply").unwrap(), "QUIC");
+    a.sink.wait_for_message("quic reply");
+}
+
+#[test]
+fn quic_delivers_messages_far_larger_than_the_punch_path_allows() {
+    // The punch path caps messages at 1 MiB and loses the whole message if one
+    // datagram drops. QUIC streams are reliable and flow-controlled.
+    let (a, b, _hub) = pair_on_hub("quic-big", only_quic());
+    a.engine.connect(&b.node_id()).unwrap();
+    a.wait_connected(&b, LADDER_WAIT).unwrap();
+
+    let big: String = (0..2_000_000u32)
+        .map(|i| (b'a' + (i % 26) as u8) as char)
+        .collect();
+    a.engine.send(&b.node_id(), &big).unwrap();
+    let got = b.sink.wait_for_message(&big);
+    assert_eq!(got.text.len(), 2_000_000);
+}
+
+#[test]
+fn features_ride_the_quic_link() {
+    let (a, b, _hub) = pair_on_hub("quic-clip", only_quic());
+    a.engine.connect(&b.node_id()).unwrap();
+    a.wait_connected(&b, LADDER_WAIT).unwrap();
+    b.wait_connected(&a, LADDER_WAIT).unwrap();
+
+    b.clip().user_copies("copied on b, pulled over quic");
+    assert_eq!(
+        a.engine.get_clipboard(&b.node_id()).unwrap(),
+        "copied on b, pulled over quic"
+    );
+}
+
+#[test]
+fn with_every_rung_enabled_quic_is_preferred() {
+    let (a, b, hub) = pair_on_hub("quic-first", ConnectRungs::default());
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("quic"));
+    assert_eq!(
+        a.ladder_stages(&b).first().map(String::as_str),
+        Some("quic")
+    );
+    assert!(hub.log().is_empty());
+}
+
+#[test]
+fn a_peer_without_quic_falls_through_to_the_next_rung() {
+    let (a, b, _hub) = pair_on_hub(
+        "quic-skip",
+        ConnectRungs {
+            quic: true,
+            lan_udp: true,
+            ..ConnectRungs::none()
+        },
+    );
+    // As an older build would advertise it: no QUIC port.
+    let mut old_b = b.as_peer();
+    old_b.quic_port = 0;
+    a.engine.upsert_peer(old_b);
+
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("udp"));
+    assert!(!a.ladder_stages(&b).contains(&"quic".to_string()));
+}

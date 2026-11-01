@@ -34,6 +34,12 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
 thiserror = "2"
 parking_lot = "0.12"
+# Async runtime + QUIC (Phase 2, ADR-0002). `ring` crypto everywhere: it
+# cross-compiles to Android with the NDK clang (aws-lc needs cmake + more).
+tokio = { version = "1", features = ["rt-multi-thread", "net", "time", "sync", "macros", "io-util"] }
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+rcgen = { version = "0.14", default-features = false, features = ["crypto", "ring"] }
 
 # Lints every member opts into with `[lints] workspace = true`.
 [workspace.lints.rust]

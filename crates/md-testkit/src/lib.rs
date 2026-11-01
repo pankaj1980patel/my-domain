@@ -371,6 +371,7 @@ impl TestNode {
             tcp_port: id.tcp_port,
             udp_port: id.udp_port,
             ws_port: id.ws_port,
+            quic_port: id.quic_port,
             source: Source::Manual,
             ws_open: false,
             inbound_blocked: false,

@@ -12,6 +12,9 @@ pub struct Identity {
     pub tcp_port: u16,
     pub udp_port: u16,
     pub ws_port: u16,
+    /// QUIC endpoint (UDP) port. 0 = no QUIC (older builds).
+    #[serde(default)]
+    pub quic_port: u16,
 }
 
 /// LAN discovery beacon (UDP datagram body).
@@ -22,6 +25,9 @@ pub struct Beacon {
     pub tcp_port: u16,
     pub udp_port: u16,
     pub ws_port: u16,
+    /// QUIC endpoint (UDP) port; 0 when the peer doesn\'t speak QUIC yet.
+    #[serde(default)]
+    pub quic_port: u16,
     #[serde(default)]
     pub reply: bool,
 }
@@ -45,6 +51,9 @@ pub struct Peer {
     pub tcp_port: u16,
     pub udp_port: u16,
     pub ws_port: u16,
+    /// QUIC endpoint (UDP) port; 0 when the peer doesn\'t speak QUIC yet.
+    #[serde(default)]
+    pub quic_port: u16,
     pub source: Source,
     /// Peer-reported reachability (from the registry; `false`/`None` for
     /// LAN/manual peers we discovered ourselves). Drives the connect ladder.

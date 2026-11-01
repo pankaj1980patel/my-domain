@@ -13,6 +13,9 @@
 /// debugging ("only try hole punching").
 #[derive(Clone, Debug)]
 pub struct ConnectRungs {
+    /// 0. Direct QUIC to the peer's advertised address (reliable, encrypted,
+    ///    multiplexed; preferred whenever it works).
+    pub quic: bool,
     /// 1. UDP ping on the same LAN.
     pub lan_udp: bool,
     /// 2. Direct WebSocket to an address the peer advertises as reachable.
@@ -28,6 +31,7 @@ pub struct ConnectRungs {
 impl Default for ConnectRungs {
     fn default() -> Self {
         ConnectRungs {
+            quic: true,
             lan_udp: true,
             direct_ws: true,
             signaled_ws: true,
@@ -41,6 +45,7 @@ impl ConnectRungs {
     /// Every rung off; switch on the ones you want.
     pub fn none() -> Self {
         ConnectRungs {
+            quic: false,
             lan_udp: false,
             direct_ws: false,
             signaled_ws: false,

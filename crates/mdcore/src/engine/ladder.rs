@@ -112,6 +112,21 @@ fn run_connect_ladder<P: Platform>(
 
     // Rung 1 — same-LAN UDP ping/pong (no FCM, no server).
     let rungs = ctx.config.rungs.clone();
+
+    // Rung 0 — direct QUIC to the peer's advertised address. One handshake
+    // round trip; works on the LAN and to any peer that accepts inbound UDP.
+    if rungs.quic && peer.quic_port != 0 {
+        emit("quic", None);
+        if ctx
+            .quic
+            .connect(ctx.clone(), &peer.ip, peer.quic_port)
+            .is_ok()
+            && wait_live(&ctx, &node_id, 3000)
+        {
+            return; // the link emits PeerConnected
+        }
+    }
+
     if rungs.lan_udp && same_lan(&ctx, &peer) {
         emit("udp_ping", None);
         if udp_ping_connect(&ctx, &node_id) {

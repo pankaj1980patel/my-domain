@@ -91,6 +91,8 @@ pub struct NetCtx<P: Platform> {
     pub signaler: Arc<Mutex<Option<Arc<dyn Signaler>>>>,
     /// Set when the `Engine` is dropped; background loops exit on their next tick.
     pub shutdown: Arc<AtomicBool>,
+    /// Dial/accept QUIC connections (the runtime itself is owned by `Engine`).
+    pub quic: transport::quic::QuicLink,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -117,6 +119,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             config: self.config.clone(),
             signaler: self.signaler.clone(),
             shutdown: self.shutdown.clone(),
+            quic: self.quic.clone(),
         }
     }
 }
@@ -143,6 +146,8 @@ pub struct Engine<P: Platform> {
     token: Arc<Mutex<Option<String>>>,
     username: Arc<Mutex<Option<String>>>,
     disco_send: Arc<UdpSocket>,
+    /// Owns the QUIC runtime; dropped (after `Drop::drop` runs) with the engine.
+    _quic: transport::quic::QuicNode,
 }
 
 impl<P: Platform> Engine<P> {
@@ -177,6 +182,7 @@ impl<P: Platform> Engine<P> {
             .port();
         let ws_listener = TcpListener::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
         let ws_port = ws_listener.local_addr().map_err(|e| e.to_string())?.port();
+        let quic = transport::quic::QuicNode::start()?;
 
         let identity = Arc::new(Mutex::new(Identity {
             node_id,
@@ -185,6 +191,7 @@ impl<P: Platform> Engine<P> {
             tcp_port,
             udp_port,
             ws_port,
+            quic_port: quic.link().port(),
         }));
 
         let peers: PeerMap = Arc::new(Mutex::new(HashMap::new()));
@@ -243,6 +250,7 @@ impl<P: Platform> Engine<P> {
             config: Arc::new(config),
             signaler: Arc::default(),
             shutdown: Arc::default(),
+            quic: quic.link(),
         };
 
         // Direct messaging receivers.
@@ -258,6 +266,7 @@ impl<P: Platform> Engine<P> {
             let ctx = ctx.clone();
             std::thread::spawn(move || ws::ws_server_loop(ws_listener, ctx));
         }
+        ctx.quic.spawn_accept_loop(ctx.clone());
 
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
         background::spawn_all(&ctx);
@@ -268,6 +277,7 @@ impl<P: Platform> Engine<P> {
             token: Arc::new(Mutex::new(None)),
             username: Arc::new(Mutex::new(None)),
             disco_send,
+            _quic: quic,
         })
     }
 
@@ -298,6 +308,7 @@ impl<P: Platform> Engine<P> {
                 Udp => "UDP",
                 Punch => "punch",
                 WebRtc => "webrtc",
+                Quic => "QUIC",
             }
             .to_string();
         }

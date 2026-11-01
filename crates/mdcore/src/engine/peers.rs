@@ -41,6 +41,7 @@ impl<P: Platform> Engine<P> {
                         tcp_port: d.tcp_port,
                         udp_port: d.udp_port,
                         ws_port: d.ws_port,
+                        quic_port: d.quic_port,
                         source: Source::Registry,
                         ws_open: d.ws_open,
                         inbound_blocked: d.inbound_blocked,
@@ -105,6 +106,7 @@ impl<P: Platform> Engine<P> {
                 tcp_port,
                 udp_port,
                 ws_port,
+                quic_port: 0, // unknown for a hand-entered peer
                 source: Source::Manual,
                 ws_open: false,
                 inbound_blocked: false,

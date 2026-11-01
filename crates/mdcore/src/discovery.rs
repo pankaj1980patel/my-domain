@@ -87,6 +87,7 @@ pub fn send_beacon(socket: &UdpSocket, id: &Identity, reply: bool, to: &[SocketA
         tcp_port: id.tcp_port,
         udp_port: id.udp_port,
         ws_port: id.ws_port,
+        quic_port: id.quic_port,
         reply,
     };
     if let Ok(payload) = serde_json::to_vec(&beacon) {
@@ -123,6 +124,7 @@ pub fn merge_beacon(peers: &mut HashMap<String, Peer>, beacon: &Beacon, src: IpA
         existing.tcp_port = beacon.tcp_port;
         existing.udp_port = beacon.udp_port;
         existing.ws_port = beacon.ws_port;
+        existing.quic_port = beacon.quic_port;
         return *existing != before;
     }
     if peers.values().filter(|p| p.source == Source::Lan).count() >= MAX_LAN_PEERS {
@@ -137,6 +139,7 @@ pub fn merge_beacon(peers: &mut HashMap<String, Peer>, beacon: &Beacon, src: IpA
             tcp_port: beacon.tcp_port,
             udp_port: beacon.udp_port,
             ws_port: beacon.ws_port,
+            quic_port: beacon.quic_port,
             source: Source::Lan,
             ws_open: false,
             inbound_blocked: false,
@@ -221,6 +224,7 @@ mod tests {
             tcp_port: tcp,
             udp_port: tcp + 1,
             ws_port: tcp + 2,
+            quic_port: tcp + 3,
             reply: false,
         }
     }

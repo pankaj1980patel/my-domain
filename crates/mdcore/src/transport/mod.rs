@@ -6,6 +6,7 @@
 //! binary multiplexed framing (v2) is layered on later in `wire::`.
 
 pub mod punch;
+pub mod quic;
 #[cfg(feature = "webrtc")]
 pub mod rtc;
 pub mod ws;
@@ -48,6 +49,7 @@ pub enum TransportKind {
     Udp,
     Punch,
     WebRtc,
+    Quic,
 }
 
 /// A live peer-to-peer link. `last_seen` drives heartbeat staleness for the
