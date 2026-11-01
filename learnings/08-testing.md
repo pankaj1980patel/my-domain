@@ -120,21 +120,56 @@ They catch platform differences, like socket behaviour, that a Mac-only CI would
   delivered (serde accepts trailing whitespace); after, it's rejected. That
   proves the cap, not the JSON parser, did the rejecting.
 
+## Testing the connect ladder: `SignalHub` + `ConnectRungs`
+
+Rungs 3–5 need a *signal* to reach the other device. In production that's an
+HTTP POST to the server, which forwards it as an FCM push. In tests:
+
+- **`SignalHub`** (md-testkit) implements the core's `Signaler` trait. `send(from,
+  to, signal)` looks up the target engine and calls its `on_signal` **on a new
+  thread**, like a push arriving asynchronously. It also logs each signal type,
+  so a test can assert the exact handshake: `["punch_offer", "punch_answer"]`.
+- **`CoreConfig::rungs`** enables one rung at a time. Two engines on `127.0.0.1`
+  are always "on the same LAN", so without this, rung 1 would win every time and
+  the others would never run.
+- **`test_config()`** sets `stun_servers: vec![]`, so tests never call Google's
+  STUN server. Loopback host candidates are enough.
+
+The hub holds **`Weak`** references to engines. Each engine holds the hub (as
+its signaler), so strong `Arc`s both ways would form a reference cycle that is
+never freed. Node has a GC that collects cycles; Rust's `Arc` doesn't.
+
+```rust
+let (a, b, hub) = pair_on_hub("rung-punch", ConnectRungs { punch: true, ..ConnectRungs::none() });
+a.engine.connect(&b.node_id()).unwrap();
+assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("punch"));
+assert_eq!(hub.kinds(), vec!["punch_offer", "punch_answer"]);
+```
+
+`..ConnectRungs::none()` is **struct update syntax**: "every other field from
+this value". It's like `{ ...ConnectRungs.none(), punch: true }` in JS.
+
 ## Current inventory (Phase 1, 2026-11-01)
 
 | File | Tests | Covers |
 |---|---|---|
 | `crypto.rs` | 7 | round trip, key derivation, wrong key, nonce freshness, tampering, malformed input |
-| `nat/stun.rs` | 6 | XOR/legacy address parsing, rejects junk, transaction-id check, fake STUN server on loopback |
-| `transport/punch.rs` | 11 | chunking, reordering, duplicates, loss, 1 MiB cap (both directions), reassembly cap |
+| `error.rs` | 2 | error text unchanged for the UIs; serializes as its message |
+| `events.rs` | 4 | **JSON contract** with desktop JS and Android Kotlin |
+| `nat/stun.rs` | 6 | address parsing, rejects junk, transaction-id check, fake STUN server |
+| `transport/punch.rs` | 11 | chunking, reorder, duplicates, loss, 1 MiB cap (both directions), reassembly cap |
 | `transport/mod.rs` | 1 | transport choice (`best_proto`) |
-| `discovery.rs` | 8 | LAN targets, beacon merge/trust rules, LAN peer cap |
+| `discovery.rs` | 8 | LAN targets, beacon trust rules, LAN peer cap |
 | `wire/frame.rs` | 1 | v2 frame round trip |
-| `tests/messaging.rs` | 14 | chat over UDP/TCP/WS, wrong key, undecryptable flood, clipboard pull/push, notifications, TCP hardening |
+| `tests/messaging.rs` | 16 | chat over UDP/TCP/WS, typed errors, wrong key + flood, clipboard, notifications, TCP hardening |
+| `tests/connect_ladder.rs` | 6 | each rung alone: LAN UDP, signaled WS, **hole punch**, **WebRTC**, all-off, unknown peer |
 
-**46 tests, green on macOS, Linux (Manjaro) and Android 16 (ARM64).**
+**60 tests, green on macOS, Linux (Manjaro) and Android 16 (ARM64).** The ladder
+suite passed 10 consecutive runs (flakiness check).
 
-Not yet covered, and why:
-- The connect ladder, punch and WebRTC end to end. They need signaling through the
-  server. A `Signaler` trait with an in-memory implementation comes next in Phase 1.
-- Real NAT traversal: Linux network namespaces in Phase 2.
+Not yet covered:
+- The WebRTC "lost race" path (a session opening while another link owns the
+  slot). It needs a hand-crafted SDP offer.
+- Real NAT traversal through actual NAT routers: Linux network namespaces in Phase 2.
+- Login, registry refresh and firewall checks (HTTP to the server). A `Registry`
+  trait comes with the server work.

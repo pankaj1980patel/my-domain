@@ -77,3 +77,40 @@ splitting `engine.rs`, `Serialize` on `CoreEvent` (delete both apps'
 hand-written JSON), the key-value store in core, and `Registry`/`Signaler`
 traits with in-memory test doubles. That unlocks tests for the connect ladder,
 punch and WebRTC.
+
+
+## Part 2 (same day): structure
+
+| Commit | Change |
+|---|---|
+| `refactor: typed CoreError (thiserror)…` | `CoreError` enum. Display texts unchanged; `Serialize` emits the message so Tauri commands return `Result<T, CoreError>` |
+| `refactor: parking_lot locks…` | 132 `.lock().unwrap()` removed, no lock poisoning; mdcore has **zero** `unwrap()` outside tests and now enforces `clippy::unwrap_used` |
+| `refactor: CoreEvent serializes itself…` | `#[derive(Serialize)] #[serde(tag = "kind")]`; desktop sink went from ~80 lines to 1; contract tests pin the JSON |
+| `CoreConfig + Signaler seam; connect-ladder tests…` | STUN configurable, rungs switchable, signals pluggable; every rung tested, including real punch and WebRTC, on all 3 platforms |
+
+### Rust concepts met
+- **`thiserror`**: `#[derive(Error)]` plus `#[error("text")]` per variant
+  generates `Display` and `std::error::Error`. `#[from] io::Error` generates
+  `From`, so `?` converts I/O errors automatically.
+- **`From` impls drive `?`**: `impl From<String> for CoreError` is why old
+  string-error helpers still work with `?` inside functions returning `CoreError`.
+  A *tail expression* (the last value, without `?`) doesn't convert
+  automatically. That's why some sites needed `.map_err(Into::into)`.
+- **Lock poisoning vs `parking_lot`**: std's `lock()` returns a `Result` because a
+  previous holder may have panicked. `parking_lot` drops poisoning and returns
+  the guard directly.
+- **Internally tagged enums** (`#[serde(tag = "kind")]`): the variant name becomes
+  a field. It's the Rust side of a TS discriminated union.
+- **Trait objects in shared state**: `Arc<Mutex<Option<Arc<dyn Signaler>>>>` reads
+  as "a swappable, optional, thread-safe pointer to *some* type implementing
+  `Signaler`". Each layer has a job: outer `Arc` = shared across threads, `Mutex`
+  = swappable at runtime, `Option` = may be unset, inner `Arc<dyn …>` = the
+  implementation, chosen at runtime.
+- **`Weak`** breaks the engine ⇄ hub reference cycle.
+- **Struct update syntax** `CoreConfig { rungs, ..test_config() }`.
+
+### Gotchas
+- `allow-unwrap-in-tests` in `clippy.toml` only covers `#[test]` functions, not
+  helper functions in `tests/*.rs`. Those files get `#![allow(clippy::unwrap_used)]`.
+- `sed` with several `-e 'NNNs/…/'` line edits in one pass is safe, because
+  addresses refer to the *input* line numbers even after an earlier edit inserts lines.
