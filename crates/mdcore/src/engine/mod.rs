@@ -78,9 +78,9 @@ pub struct NetCtx<P: Platform> {
     pub installed_apps: Arc<Mutex<String>>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
-    /// Directed transport for peers with no live persistent channel: "UDP"
-    /// (default) or "TCP". A live WS/punch/WebRTC link always wins over this.
-    pub directed_transport: Arc<Mutex<String>>,
+    /// Directed transport for peers with no live persistent channel (UDP by
+    /// default). A live WS/punch/WebRTC link always wins over this.
+    pub directed_transport: Arc<Mutex<transport::Directed>>,
     /// Rate limiter for "could not decrypt" notices, keyed by sender IP.
     pub decrypt_fail_last: DecryptFailures,
     /// Every envelope that failed to decrypt, notified or not.
@@ -201,7 +201,7 @@ impl<P: Platform> Engine<P> {
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));
-        let directed_transport = Arc::new(Mutex::new(String::from("UDP")));
+        let directed_transport = Arc::new(Mutex::new(transport::Directed::default()));
 
         // Discovery socket. If multicast bind fails (some networks/permissions),
         // fall back to a plain UDP socket for sending — messaging still works.
@@ -282,16 +282,15 @@ impl<P: Platform> Engine<P> {
 
     /// The transport a message to `node_id` should use right now: the active
     /// persistent link (WS/punch/WebRTC) if any, else the directed transport.
-    fn proto_for(&self, node_id: &str) -> &'static str {
-        let directed = self.ctx.directed_transport.lock().clone();
-        transport::best_proto(&self.ctx.ws_conns, &directed, node_id)
+    fn proto_for(&self, node_id: &str) -> transport::SendPath {
+        transport::path_for(&self.ctx, node_id)
     }
 
     /// The transport label to *report* for a send. Punch and WebRTC links reuse
-    /// the WS send path (registered in `ws_conns`), so `proto_for` returns "WS"
+    /// the WS send path (registered in `ws_conns`), so `proto_for` returns `Link`
     /// for them; resolve the real kind from the live-connection registry so the
     /// UI shows "punch"/"webrtc" rather than the internal send-path name.
-    fn display_transport(&self, node_id: &str, proto: &'static str) -> String {
+    fn display_transport(&self, node_id: &str, path: transport::SendPath) -> String {
         use transport::TransportKind::*;
         if let Some(c) = self.ctx.p2p_conns.lock().get(node_id) {
             return match c.kind {
@@ -302,7 +301,7 @@ impl<P: Platform> Engine<P> {
             }
             .to_string();
         }
-        proto.to_string()
+        path.label().to_string()
     }
 
     /// Send an already-built control-message JSON to one peer (active connection).
@@ -322,18 +321,13 @@ impl<P: Platform> Engine<P> {
 
     /// Directed transport setting ("UDP" | "TCP") for peers with no live link.
     pub fn directed_transport(&self) -> String {
-        self.ctx.directed_transport.lock().clone()
+        self.ctx.directed_transport.lock().label().to_string()
     }
 
     /// Set the directed transport ("UDP" default, or "TCP"); anything else maps
     /// to UDP. Only affects peers without a live persistent connection.
     pub fn set_directed_transport(&self, t: &str) {
-        let v = if t.trim().eq_ignore_ascii_case("tcp") {
-            "TCP"
-        } else {
-            "UDP"
-        };
-        *self.ctx.directed_transport.lock() = v.to_string();
+        *self.ctx.directed_transport.lock() = transport::Directed::parse(t);
     }
 
     fn emit_peers(&self) {

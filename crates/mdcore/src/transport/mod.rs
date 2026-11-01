@@ -177,26 +177,73 @@ fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) 
     }));
 }
 
-/// Pick the transport for a message to `node_id`. Any live persistent channel —
-/// WebSocket, UDP hole-punch, or WebRTC, all of which register in `ws_conns` and
-/// share its `"WS"` framed send path — is always preferred so exchanges ride the
-/// active connection. With no such channel, fall back to the user's directed
-/// transport preference (`UDP` default, or `TCP`). This is the single chooser
-/// used by chat send and every discrete feature.
-pub fn best_proto(ws_conns: &WsConns, directed: &str, node_id: &str) -> &'static str {
-    if ws_conns.lock().contains_key(node_id) {
-        "WS"
-    } else if directed.trim().eq_ignore_ascii_case("tcp") {
-        "TCP"
-    } else {
-        "UDP"
+/// How a message leaves this device.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SendPath {
+    /// Over the peer's live persistent link. WebSocket, UDP hole punch and
+    /// WebRTC all register in `ws_conns` and share one framed send path.
+    Link,
+    /// One short TCP connection per message.
+    Tcp,
+    /// One UDP datagram.
+    Udp,
+}
+
+impl SendPath {
+    /// Label reported to the UI (the strings the apps have always shown).
+    pub fn label(self) -> &'static str {
+        match self {
+            SendPath::Link => "WS",
+            SendPath::Tcp => "TCP",
+            SendPath::Udp => "UDP",
+        }
     }
 }
 
-/// `best_proto` for a `NetCtx` (reads the engine's directed-transport setting).
-fn clip_proto<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> &'static str {
-    let directed = ctx.directed_transport.lock().clone();
-    best_proto(&ctx.ws_conns, &directed, node_id)
+/// The user's choice for peers with no live link (settings: "UDP" / "TCP").
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Directed {
+    #[default]
+    Udp,
+    Tcp,
+}
+
+impl Directed {
+    /// "tcp" (any case, trimmed) selects TCP; anything else is UDP.
+    pub fn parse(s: &str) -> Self {
+        if s.trim().eq_ignore_ascii_case("tcp") {
+            Directed::Tcp
+        } else {
+            Directed::Udp
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Directed::Udp => "UDP",
+            Directed::Tcp => "TCP",
+        }
+    }
+}
+
+/// Pick how to send to `node_id`: a live persistent link always wins (so
+/// exchanges ride the active connection); otherwise the directed choice. The
+/// single chooser used by chat and every feature.
+pub fn best_path(ws_conns: &WsConns, directed: Directed, node_id: &str) -> SendPath {
+    if ws_conns.lock().contains_key(node_id) {
+        SendPath::Link
+    } else {
+        match directed {
+            Directed::Tcp => SendPath::Tcp,
+            Directed::Udp => SendPath::Udp,
+        }
+    }
+}
+
+/// `best_path` using a context's directed-transport setting.
+pub(crate) fn path_for<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> SendPath {
+    let directed = *ctx.directed_transport.lock();
+    best_path(&ctx.ws_conns, directed, node_id)
 }
 
 /// Send an already-built control-message JSON to one peer over the active
@@ -204,14 +251,14 @@ fn clip_proto<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> &'static str {
 /// every discrete feature.
 pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
     let from = ctx.identity.lock().name.clone();
-    let proto = clip_proto(ctx, node_id);
+    let path = path_for(ctx, node_id);
     let _ = send_payload(
         &ctx.peers,
         &ctx.ws_conns,
         &ctx.key,
         &from,
         node_id,
-        proto,
+        path,
         text,
     );
 }
@@ -264,7 +311,7 @@ pub fn send_payload(
     key: &KeyHolder,
     from: &str,
     node_id: &str,
-    protocol: &str,
+    path: SendPath,
     text: &str,
 ) -> crate::Result<()> {
     let k = key.lock().ok_or(CoreError::NoKey)?;
@@ -276,8 +323,7 @@ pub fn send_payload(
     let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
     let body = serde_json::to_vec(&env).map_err(|e| e.to_string())?;
 
-    let proto = protocol.to_uppercase();
-    if proto == "WS" {
+    if path == SendPath::Link {
         let frame = serde_json::to_string(&WsFrame::Msg {
             nonce: env.nonce.clone(),
             ciphertext: env.ciphertext.clone(),
@@ -302,8 +348,8 @@ pub fn send_payload(
         .cloned()
         .ok_or(CoreError::PeerNotFound)?;
     let ip: Ipv4Addr = peer.ip.parse().map_err(|_| "bad peer ip")?;
-    match proto.as_str() {
-        "TCP" => {
+    match path {
+        SendPath::Tcp => {
             let addr = SocketAddr::new(ip.into(), peer.tcp_port);
             let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))
                 .map_err(|e| format!("TCP connect failed: {e}"))?;
@@ -315,16 +361,15 @@ pub fn send_payload(
                 .map_err(|e| e.to_string())?;
             Ok(())
         }
-        "UDP" => {
+        SendPath::Udp => {
             let socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
             socket
                 .send_to(&body, SocketAddr::new(ip.into(), peer.udp_port))
                 .map_err(|e| format!("UDP send failed: {e}"))?;
             Ok(())
         }
-        other => Err(CoreError::InvalidInput(format!(
-            "unknown protocol: {other}"
-        ))),
+        // Returned early above; kept so the match stays exhaustive without a panic.
+        SendPath::Link => Err(CoreError::NoLink("no live link".into())),
     }
 }
 
@@ -409,20 +454,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn best_proto_prefers_a_live_link_then_the_directed_choice() {
+    fn best_path_prefers_a_live_link_then_the_directed_choice() {
         let conns: WsConns = Arc::default();
-        assert_eq!(best_proto(&conns, "UDP", "peer"), "UDP");
-        assert_eq!(best_proto(&conns, "tcp", "peer"), "TCP", "case-insensitive");
-        assert_eq!(best_proto(&conns, " TCP ", "peer"), "TCP", "trimmed");
-        assert_eq!(
-            best_proto(&conns, "anything", "peer"),
-            "UDP",
-            "unknown -> UDP"
-        );
+        assert_eq!(best_path(&conns, Directed::Udp, "peer"), SendPath::Udp);
+        assert_eq!(best_path(&conns, Directed::Tcp, "peer"), SendPath::Tcp);
 
         let (tx, _rx) = std::sync::mpsc::channel();
         conns.lock().insert("peer".into(), (1, tx));
-        assert_eq!(best_proto(&conns, "TCP", "peer"), "WS", "live link wins");
-        assert_eq!(best_proto(&conns, "TCP", "other"), "TCP");
+        assert_eq!(
+            best_path(&conns, Directed::Tcp, "peer"),
+            SendPath::Link,
+            "live link wins"
+        );
+        assert_eq!(best_path(&conns, Directed::Tcp, "other"), SendPath::Tcp);
+    }
+
+    #[test]
+    fn directed_parses_leniently_and_defaults_to_udp() {
+        assert_eq!(Directed::parse("tcp"), Directed::Tcp);
+        assert_eq!(Directed::parse(" TCP "), Directed::Tcp);
+        assert_eq!(Directed::parse("UDP"), Directed::Udp);
+        assert_eq!(Directed::parse("carrier pigeon"), Directed::Udp);
+        assert_eq!(Directed::default(), Directed::Udp);
     }
 }

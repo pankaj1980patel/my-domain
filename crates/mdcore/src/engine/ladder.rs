@@ -77,7 +77,7 @@ fn udp_ping_connect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
         &ctx.key,
         &name,
         node_id,
-        "UDP",
+        transport::SendPath::Udp,
         &ping,
     )
     .is_err()
