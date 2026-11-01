@@ -16,10 +16,10 @@ to **Rust**. Every Rust idea is shown next to its closest Node equivalent.
 | 3 | [02-repo-layout.md](02-repo-layout.md) | Why each folder exists and what goes where | ✅ |
 | 4 | [12-build-ci-release.md](12-build-ci-release.md) | Cargo workspace, CI jobs, device lab, deploy | ✅ |
 | 5 | [glossary.md](glossary.md) | Every term (NAT, STUN, FFI, crate, …) in one place | ✅ |
-| – | 03-networking.md | LAN discovery, NAT, STUN, hole punching, QUIC, WebRTC, relay | Phase 2 |
+| 7 | [03-networking.md](03-networking.md) | NAT, STUN, hole punching, QUIC, the connect ladder | ✅ |
 | – | 04-crypto-identity.md | Device keys, certificates, pinning, replay protection | Phase 4 |
 | – | 05-domains-permissions.md | Domains, grants, flags, the `ask` flow, audit log | Phase 4 |
-| – | 06-async-tokio.md | Threads → tokio: tasks, channels, cancellation | Phase 2 |
+| 8 | [06-async-tokio.md](06-async-tokio.md) | tokio vs the Node event loop; our sync/async bridge | ✅ (growing) |
 | – | 07-ffi-bridges.md | UniFFI, Tauri commands, why hand-written JNI was removed | Phase 3 |
 | 6 | [08-testing.md](08-testing.md) | Test pyramid, md-testkit, running tests on the phone, writing good tests | ✅ |
 | – | 09-android.md | Services, permission tiers, Accessibility, MediaProjection, Shizuku | Phase 3/5 |
