@@ -40,6 +40,10 @@ const CHUNK_PAYLOAD: usize = 1024;
 /// Cap on simultaneously-reassembling messages, so a peer dribbling partial
 /// chunks can't grow memory unbounded.
 const REASM_MAX: usize = 256;
+/// Largest message the punch path will reassemble: 1024 chunks x 1 KiB = 1 MiB.
+/// A datagram claiming more is dropped, so a 12-byte packet can no longer make
+/// us preallocate up to 65535 slots.
+const MAX_CHUNKS: u16 = 1024;
 
 /// Split `data` into chunk datagrams and send each to `peer`. Always emits at
 /// least one datagram (so empty payloads still arrive).
@@ -54,6 +58,13 @@ fn send_chunked(
     } else {
         data.chunks(CHUNK_PAYLOAD).collect()
     };
+    // The receiver drops anything over MAX_CHUNKS; fail loudly here instead.
+    if chunks.len() > MAX_CHUNKS as usize {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("message too large for the punch path: {} bytes", data.len()),
+        ));
+    }
     let total = chunks.len() as u16;
     let mut pkt = Vec::with_capacity(CHUNK_HDR + CHUNK_PAYLOAD);
     for (i, chunk) in chunks.iter().enumerate() {
@@ -84,7 +95,7 @@ fn reasm_feed(pending: &mut HashMap<u32, Reasm>, pkt: &[u8]) -> Option<Vec<u8>> 
     let id = u32::from_be_bytes([pkt[4], pkt[5], pkt[6], pkt[7]]);
     let total = u16::from_be_bytes([pkt[8], pkt[9]]);
     let index = u16::from_be_bytes([pkt[10], pkt[11]]);
-    if total == 0 || index >= total {
+    if total == 0 || total > MAX_CHUNKS || index >= total {
         return None;
     }
     let payload = pkt[CHUNK_HDR..].to_vec();
@@ -370,6 +381,14 @@ mod tests {
     }
 
     #[test]
+    fn sender_refuses_messages_over_the_cap() {
+        let tx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let too_big = vec![0u8; MAX_CHUNKS as usize * CHUNK_PAYLOAD + 1];
+        let err = send_chunked(&tx, "127.0.0.1:9".parse().unwrap(), 1, &too_big).unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+    }
+
+    #[test]
     fn a_lost_chunk_loses_the_whole_message() {
         // CURRENT BEHAVIOUR: no retransmission. QUIC (Phase 2) replaces this.
         let mut pkts = chunk_on_the_wire(&[1u8; 3000]);
@@ -406,16 +425,33 @@ mod tests {
     }
 
     #[test]
-    fn known_gap_claimed_chunk_count_is_preallocated() {
-        // KNOWN GAP (fixed in Phase 1 security work): one 12-byte datagram
-        // claiming total = 65535 makes the reassembler allocate 65535 slots.
-        // With REASM_MAX ids that is ~16.7M slots from tiny packets.
+    fn oversized_chunk_counts_are_dropped() {
+        // Regression: one 12-byte datagram claiming total = 65535 used to make
+        // the reassembler preallocate 65535 slots (x256 ids ~ 16.7M slots).
         let mut pending = HashMap::new();
         let mut pkt = b"mdck".to_vec();
         pkt.extend_from_slice(&7u32.to_be_bytes());
         pkt.extend_from_slice(&u16::MAX.to_be_bytes());
         pkt.extend_from_slice(&0u16.to_be_bytes());
-        reasm_feed(&mut pending, &pkt);
-        assert_eq!(pending[&7].parts.len(), u16::MAX as usize);
+        assert!(reasm_feed(&mut pending, &pkt).is_none());
+        assert!(pending.is_empty(), "nothing allocated");
+    }
+
+    #[test]
+    fn a_one_mib_message_is_still_accepted() {
+        let data = vec![3u8; MAX_CHUNKS as usize * CHUNK_PAYLOAD];
+        let mut pending = HashMap::new();
+        let mut done = None;
+        // Feed chunk by chunk through the real encoder without a socket
+        // (1024 loopback datagrams could overflow the OS receive buffer).
+        for (i, chunk) in data.chunks(CHUNK_PAYLOAD).enumerate() {
+            let mut pkt = b"mdck".to_vec();
+            pkt.extend_from_slice(&1u32.to_be_bytes());
+            pkt.extend_from_slice(&MAX_CHUNKS.to_be_bytes());
+            pkt.extend_from_slice(&(i as u16).to_be_bytes());
+            pkt.extend_from_slice(chunk);
+            done = reasm_feed(&mut pending, &pkt).or(done);
+        }
+        assert_eq!(done.unwrap(), data);
     }
 }

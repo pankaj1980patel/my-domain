@@ -3,7 +3,7 @@
 //! that will later punch, so the mapping matches.
 
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use rand_core::{OsRng, RngCore};
 
@@ -21,16 +21,29 @@ pub fn stun_binding(socket: &UdpSocket, server: SocketAddr) -> Option<SocketAddr
     req.extend_from_slice(&MAGIC.to_be_bytes());
     req.extend_from_slice(&txid);
 
-    socket.set_read_timeout(Some(Duration::from_secs(2))).ok()?;
     socket.send_to(&req, server).ok()?;
 
+    // Other datagrams (e.g. a peer's early punch packets) can arrive on this
+    // socket first, so keep reading until a response with OUR transaction id
+    // shows up or the 2 s budget runs out.
+    let deadline = Instant::now() + Duration::from_secs(2);
     let mut buf = [0u8; 512];
-    let (n, _src) = socket.recv_from(&mut buf).ok()?;
-    parse_mapped(&buf[..n])
+    loop {
+        let left = deadline.checked_duration_since(Instant::now())?;
+        socket.set_read_timeout(Some(left)).ok()?;
+        let (n, _src) = socket.recv_from(&mut buf).ok()?;
+        if let Some(addr) = parse_mapped(&buf[..n], &txid) {
+            return Some(addr);
+        }
+    }
 }
 
-fn parse_mapped(msg: &[u8]) -> Option<SocketAddr> {
-    if msg.len() < 20 {
+/// Parse a Binding Success Response, accepting it only if it echoes `txid`
+/// (RFC 5389 sec. 7.3: a response whose transaction id doesn't match an
+/// outstanding request must be discarded; otherwise anyone can spoof our
+/// "public address").
+fn parse_mapped(msg: &[u8], txid: &[u8; 12]) -> Option<SocketAddr> {
+    if msg.len() < 20 || msg[8..20] != txid[..] {
         return None;
     }
     // Binding Success Response.
@@ -78,6 +91,8 @@ fn parse_mapped(msg: &[u8]) -> Option<SocketAddr> {
 mod tests {
     use super::*;
 
+    const TXID: [u8; 12] = [0x5A; 12];
+
     /// Build a Binding Success Response carrying one address attribute.
     fn response(attr_type: u16, port: u16, ip: [u8; 4]) -> Vec<u8> {
         let magic = MAGIC.to_be_bytes();
@@ -98,7 +113,7 @@ mod tests {
         m.extend_from_slice(&0x0101u16.to_be_bytes()); // Binding Success
         m.extend_from_slice(&12u16.to_be_bytes()); // attrs length
         m.extend_from_slice(&magic);
-        m.extend_from_slice(&[0u8; 12]); // transaction id
+        m.extend_from_slice(&TXID);
         m.extend_from_slice(&attr_type.to_be_bytes());
         m.extend_from_slice(&8u16.to_be_bytes());
         m.extend_from_slice(&[0, 0x01]); // reserved, family IPv4
@@ -109,13 +124,13 @@ mod tests {
 
     #[test]
     fn parses_xor_mapped_address() {
-        let got = parse_mapped(&response(0x0020, 54321, [203, 0, 113, 7])).unwrap();
+        let got = parse_mapped(&response(0x0020, 54321, [203, 0, 113, 7]), &TXID).unwrap();
         assert_eq!(got, "203.0.113.7:54321".parse().unwrap());
     }
 
     #[test]
     fn parses_legacy_mapped_address() {
-        let got = parse_mapped(&response(0x0001, 4000, [198, 51, 100, 2])).unwrap();
+        let got = parse_mapped(&response(0x0001, 4000, [198, 51, 100, 2]), &TXID).unwrap();
         assert_eq!(got, "198.51.100.2:4000".parse().unwrap());
     }
 
@@ -123,20 +138,44 @@ mod tests {
     fn rejects_non_success_and_truncated_messages() {
         let mut not_success = response(0x0020, 1, [1, 2, 3, 4]);
         not_success[1] = 0x11; // 0x0111 = Binding Error Response
-        assert!(parse_mapped(&not_success).is_none());
-        assert!(parse_mapped(&[0u8; 10]).is_none());
+        assert!(parse_mapped(&not_success, &TXID).is_none());
+        assert!(parse_mapped(&[0u8; 10], &TXID).is_none());
         let full = response(0x0020, 1, [1, 2, 3, 4]);
-        assert!(parse_mapped(&full[..full.len() - 3]).is_none());
+        assert!(parse_mapped(&full[..full.len() - 3], &TXID).is_none());
     }
 
     #[test]
-    fn known_gap_transaction_id_is_not_checked() {
-        // KNOWN GAP (fixed with the QUIC rewrite in Phase 2): the response's
-        // transaction id is never compared with the request's, so any datagram
-        // shaped like a STUN success response is believed. This test documents
-        // that parse_mapped accepts a response with an arbitrary txid.
+    fn response_with_a_different_transaction_id_is_rejected() {
+        // Regression: the txid used to be ignored, so any datagram shaped like
+        // a STUN success response was believed as our public address.
         let mut spoofed = response(0x0020, 9, [6, 6, 6, 6]);
         spoofed[8..20].copy_from_slice(&[0xAB; 12]);
-        assert!(parse_mapped(&spoofed).is_some());
+        assert!(parse_mapped(&spoofed, &TXID).is_none());
+    }
+
+    #[test]
+    fn binding_ignores_stray_datagrams_until_the_real_answer() {
+        // A fake STUN server on loopback: first sends junk, then a spoofed
+        // response, then the genuine one echoing the request's txid.
+        let server = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let client = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let addr = server.local_addr().unwrap();
+        let t = std::thread::spawn(move || {
+            let mut buf = [0u8; 64];
+            let (n, from) = server.recv_from(&mut buf).unwrap();
+            assert_eq!(n, 20, "binding request is a bare 20-byte header");
+            let mut txid = [0u8; 12];
+            txid.copy_from_slice(&buf[8..20]);
+            server.send_to(b"mdpunch!", from).unwrap();
+            let mut spoof = response(0x0020, 1, [6, 6, 6, 6]);
+            spoof[8..20].copy_from_slice(&[0xEE; 12]);
+            server.send_to(&spoof, from).unwrap();
+            let mut real = response(0x0020, 40000, [203, 0, 113, 9]);
+            real[8..20].copy_from_slice(&txid);
+            server.send_to(&real, from).unwrap();
+        });
+        let got = stun_binding(&client, addr).unwrap();
+        t.join().unwrap();
+        assert_eq!(got, "203.0.113.9:40000".parse().unwrap());
     }
 }
