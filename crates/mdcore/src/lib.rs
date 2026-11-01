@@ -9,6 +9,7 @@
 //! Service framework (protocol v2).
 
 pub mod capabilities;
+pub mod config;
 pub mod crypto;
 pub mod discovery;
 pub mod engine;
@@ -25,6 +26,7 @@ pub mod signal;
 pub mod transport;
 pub mod wire;
 
+pub use config::{ConnectRungs, CoreConfig};
 pub use engine::Engine;
 pub use error::{CoreError, Result};
 pub use events::{CoreEvent, EventSink};

@@ -7,7 +7,7 @@
 //! treats a punched link exactly like a WebSocket — no special-casing.
 
 use std::collections::HashMap;
-use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::{SocketAddr, UdpSocket};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -126,7 +126,6 @@ fn reasm_feed(pending: &mut HashMap<u32, Reasm>, pkt: &[u8]) -> Option<Vec<u8>> 
     None
 }
 /// Public STUN server for reflexive-candidate discovery.
-const STUN_SERVER: &str = "stun.l.google.com:19302";
 /// Punch-connection ids live in a high range so they never collide with WS ids.
 static PUNCH_CONN_SEQ: AtomicU64 = AtomicU64::new(1_000_000);
 
@@ -145,7 +144,7 @@ pub fn gather_candidates<P: Platform>(ctx: &NetCtx<P>) -> Option<(UdpSocket, Vec
             kind: "host".into(),
         });
     }
-    if let Some(server) = resolve_stun() {
+    if let Some(server) = ctx.config.stun_server() {
         if let Some(refl) = stun_binding(&socket, server) {
             cands.push(Candidate {
                 ip: refl.ip().to_string(),
@@ -159,10 +158,6 @@ pub fn gather_candidates<P: Platform>(ctx: &NetCtx<P>) -> Option<(UdpSocket, Vec
     } else {
         Some((socket, cands))
     }
-}
-
-fn resolve_stun() -> Option<SocketAddr> {
-    STUN_SERVER.to_socket_addrs().ok()?.find(|a| a.is_ipv4())
 }
 
 fn to_addrs(cands: &[Candidate]) -> Vec<SocketAddr> {

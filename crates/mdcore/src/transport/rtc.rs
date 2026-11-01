@@ -6,7 +6,7 @@
 //! treats it exactly like a WebSocket. The app's encrypted `WsFrame::Msg` rides
 //! the channel verbatim; str0m's DTLS is just transport security underneath.
 
-use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
+use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Once;
@@ -24,7 +24,6 @@ use crate::platform::Platform;
 
 use super::{drop_live, handle_incoming, mark_live, TransportKind};
 
-const STUN_SERVER: &str = "stun.l.google.com:19302";
 static RTC_CONN_SEQ: AtomicU64 = AtomicU64::new(2_000_000);
 static CRYPTO_INIT: Once = Once::new();
 
@@ -32,10 +31,6 @@ fn ensure_crypto() {
     CRYPTO_INIT.call_once(|| {
         str0m::crypto::from_feature_flags().install_process_default();
     });
-}
-
-fn resolve(s: &str) -> Option<SocketAddr> {
-    s.to_socket_addrs().ok()?.find(|a| a.is_ipv4())
 }
 
 /// Bind a UDP socket on our LAN IP and build an `Rtc` with host + reflexive
@@ -51,7 +46,7 @@ fn new_rtc<P: Platform>(ctx: &NetCtx<P>) -> Option<(Rtc, UdpSocket)> {
     if let Ok(host) = Candidate::host(local, "udp") {
         rtc.add_local_candidate(host);
     }
-    if let Some(server) = resolve(STUN_SERVER) {
+    if let Some(server) = ctx.config.stun_server() {
         if let Some(refl) = stun_binding(&socket, server) {
             if let Ok(c) = Candidate::server_reflexive(refl, local, "udp") {
                 rtc.add_local_candidate(c);

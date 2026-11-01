@@ -3457,6 +3457,7 @@ name = "md-testkit"
 version = "0.1.0"
 dependencies = [
  "mdcore",
+ "serde_json",
 ]
 
 [[package]]

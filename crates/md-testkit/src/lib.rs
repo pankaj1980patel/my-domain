@@ -24,12 +24,13 @@
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 use std::time::{Duration, Instant};
 
 use mdcore::capabilities::{Clipboard, Notifier};
 use mdcore::model::{IncomingMessage, Peer, Source};
-use mdcore::{CoreEvent, Engine, EventSink, IfaceMode, Platform};
+use mdcore::signal::{Signal, Signaler};
+use mdcore::{CoreConfig, CoreError, CoreEvent, Engine, EventSink, IfaceMode, Platform};
 
 /// Default time a test waits for an event before failing.
 pub const WAIT: Duration = Duration::from_secs(5);
@@ -221,9 +222,85 @@ impl RecordingSink {
 // Nodes
 // ---------------------------------------------------------------------------
 
+/// Config for test engines: no STUN (keeps tests off the internet), all
+/// ladder rungs on.
+pub fn test_config() -> CoreConfig {
+    CoreConfig {
+        stun_servers: vec![],
+        ..CoreConfig::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// In-memory signaling
+// ---------------------------------------------------------------------------
+
+/// Plays the registry server's `/signal` relay (+ FCM push) in memory: a
+/// signal sent to a node id is delivered to that engine's `on_signal` on a new
+/// thread, like a push arriving asynchronously.
+///
+/// Holds `Weak` references: each engine holds the hub (as its signaler), so
+/// strong references both ways would form a cycle that never gets freed.
+#[derive(Default)]
+pub struct SignalHub {
+    nodes: Mutex<HashMap<String, Weak<Engine<MockPlatform>>>>,
+    log: Mutex<Vec<(String, String, String)>>,
+}
+
+impl SignalHub {
+    pub fn new() -> Arc<Self> {
+        Arc::default()
+    }
+
+    fn register(self: &Arc<Self>, engine: &Arc<Engine<MockPlatform>>) {
+        let id = engine.identity().node_id;
+        self.nodes
+            .lock()
+            .unwrap()
+            .insert(id, Arc::downgrade(engine));
+        engine.set_signaler(self.clone());
+    }
+
+    /// Every signal relayed so far, as `(from, to, type)`, e.g.
+    /// `("a", "b", "punch_offer")`.
+    pub fn log(&self) -> Vec<(String, String, String)> {
+        self.log.lock().unwrap().clone()
+    }
+
+    /// The signal types relayed so far, in order.
+    pub fn kinds(&self) -> Vec<String> {
+        self.log().into_iter().map(|(_, _, k)| k).collect()
+    }
+}
+
+impl Signaler for SignalHub {
+    fn send(&self, from: &str, to: &str, signal: &Signal) -> mdcore::Result<()> {
+        let target = self
+            .nodes
+            .lock()
+            .unwrap()
+            .get(to)
+            .and_then(Weak::upgrade)
+            .ok_or(CoreError::PeerNotFound)?;
+        let payload = serde_json::to_string(signal).map_err(|e| CoreError::Other(e.to_string()))?;
+        let kind = serde_json::from_str::<serde_json::Value>(&payload)
+            .ok()
+            .and_then(|v| v["type"].as_str().map(String::from))
+            .unwrap_or_default();
+        self.log
+            .lock()
+            .unwrap()
+            .push((from.to_string(), to.to_string(), kind));
+        let from = from.to_string();
+        std::thread::spawn(move || target.on_signal(&from, &payload));
+        Ok(())
+    }
+}
+
 /// One running engine plus handles to everything a test wants to inspect.
 pub struct TestNode {
-    pub engine: Engine<MockPlatform>,
+    /// In an `Arc` so a [`SignalHub`] can reach it from other threads.
+    pub engine: Arc<Engine<MockPlatform>>,
     pub sink: Arc<RecordingSink>,
     pub clipboard: Option<Arc<MemClipboard>>,
     pub notifier: Arc<RecordingNotifier>,
@@ -237,10 +314,24 @@ impl TestNode {
     }
 
     pub fn start_with(platform: MockPlatform) -> Self {
+        Self::start_full(platform, test_config())
+    }
+
+    /// Start a node whose signals go through `hub`, with the given config
+    /// (e.g. only some ladder rungs enabled).
+    pub fn start_on_hub(id: &str, hub: &Arc<SignalHub>, config: CoreConfig) -> Self {
+        let node = Self::start_full(MockPlatform::new(id), config);
+        hub.register(&node.engine);
+        node
+    }
+
+    pub fn start_full(platform: MockPlatform, config: CoreConfig) -> Self {
         let clipboard = platform.clipboard.clone();
         let notifier = platform.notifier.clone();
         let sink = Arc::new(RecordingSink::default());
-        let engine = Engine::start(platform, sink.clone()).expect("engine starts");
+        let engine = Arc::new(
+            Engine::start_with_config(platform, sink.clone(), config).expect("engine starts"),
+        );
         engine
             .dev_login(TEST_USER, TEST_PASSPHRASE)
             .expect("offline login");
@@ -279,6 +370,33 @@ impl TestNode {
     pub fn pair(a: &TestNode, b: &TestNode) {
         a.engine.upsert_peer(b.as_peer());
         b.engine.upsert_peer(a.as_peer());
+    }
+
+    /// Wait until this node reports a live link to `peer` over any transport;
+    /// returns the transport kind ("udp", "ws", "punch", "webrtc").
+    pub fn wait_connected(&self, peer: &TestNode, timeout: Duration) -> Option<String> {
+        let id = peer.node_id();
+        self.sink.wait_until(timeout, |e| match e {
+            CoreEvent::PeerConnected { node_id, transport } if *node_id == id => {
+                serde_json::to_value(transport)
+                    .ok()
+                    .and_then(|v| v.as_str().map(String::from))
+            }
+            _ => None,
+        })
+    }
+
+    /// The connect-ladder stages this node reported for `peer`, in order.
+    pub fn ladder_stages(&self, peer: &TestNode) -> Vec<String> {
+        let id = peer.node_id();
+        self.sink
+            .all()
+            .into_iter()
+            .filter_map(|e| match e {
+                CoreEvent::ConnectProgress { node_id, stage, .. } if node_id == id => Some(stage),
+                _ => None,
+            })
+            .collect()
     }
 
     pub fn clip(&self) -> &MemClipboard {

@@ -14,6 +14,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
+use crate::config::CoreConfig;
 use crate::crypto::derive_key;
 use crate::discovery::{self, PeerMap, DISCOVERY_PORT};
 use crate::error::CoreError;
@@ -24,7 +25,7 @@ use crate::platform::Platform;
 use crate::registry::{
     auth_call, base, registry_fetch, registry_register, verify_password_call, RegistryDevice,
 };
-use crate::signal::Signal;
+use crate::signal::{Signal, Signaler};
 use crate::transport::{self, ws, P2pConns};
 
 pub type KeyHolder = Arc<Mutex<Option<[u8; 32]>>>;
@@ -74,6 +75,10 @@ pub struct NetCtx<P: Platform> {
     pub decrypt_fail_last: DecryptFailures,
     /// Every envelope that failed to decrypt, notified or not.
     pub decrypt_fail_count: Arc<std::sync::atomic::AtomicU64>,
+    /// Start-time configuration (STUN servers, enabled ladder rungs).
+    pub config: Arc<CoreConfig>,
+    /// Overrides how signals are delivered; `None` = the registry over HTTP.
+    pub signaler: Arc<Mutex<Option<Arc<dyn Signaler>>>>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -97,6 +102,8 @@ impl<P: Platform> Clone for NetCtx<P> {
             directed_transport: self.directed_transport.clone(),
             decrypt_fail_last: self.decrypt_fail_last.clone(),
             decrypt_fail_count: self.decrypt_fail_count.clone(),
+            config: self.config.clone(),
+            signaler: self.signaler.clone(),
         }
     }
 }
@@ -129,6 +136,15 @@ impl<P: Platform> Engine<P> {
     /// Bind sockets, build identity, and spawn the discovery / tcp / udp / ws /
     /// clipboard / network-change threads.
     pub fn start(platform: P, sink: Arc<dyn EventSink>) -> crate::Result<Engine<P>> {
+        Self::start_with_config(platform, sink, CoreConfig::default())
+    }
+
+    /// Like `start`, with explicit configuration (STUN servers, ladder rungs).
+    pub fn start_with_config(
+        platform: P,
+        sink: Arc<dyn EventSink>,
+        config: CoreConfig,
+    ) -> crate::Result<Engine<P>> {
         let platform = Arc::new(platform);
 
         let raw_id = platform.device_id();
@@ -211,6 +227,8 @@ impl<P: Platform> Engine<P> {
             directed_transport: directed_transport.clone(),
             decrypt_fail_last: Arc::default(),
             decrypt_fail_count: Arc::default(),
+            config: Arc::new(config),
+            signaler: Arc::default(),
         };
 
         // Direct messaging receivers.
@@ -891,15 +909,13 @@ impl<P: Platform> Engine<P> {
 
     /// Relay a typed signal to a sibling device (via the server's FCM relay).
     pub fn send_signal(&self, to: &str, sig: &Signal) -> crate::Result<()> {
-        let url = self
-            .server_url
-            .lock()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-        let me = self.ctx.identity.lock().node_id.clone();
-        let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
-        crate::registry::send_signal(&url, &token, &me, to, "signal", data).map_err(Into::into)
+        send_signal_via(&self.server_url, &self.token, &self.ctx, to, sig)
+    }
+
+    /// Route signals through `signaler` instead of the registry's HTTP relay
+    /// (tests use an in-memory hub; a WebSocket relay can plug in here later).
+    pub fn set_signaler(&self, signaler: Arc<dyn Signaler>) {
+        *self.ctx.signaler.lock() = Some(signaler);
     }
 
     /// Round-trip FCM self-test: ask the server to push a `ping` to our own
@@ -1114,9 +1130,13 @@ fn send_signal_via<P: Platform>(
     to: &str,
     sig: &Signal,
 ) -> crate::Result<()> {
+    let me = ctx.identity.lock().node_id.clone();
+    let custom = ctx.signaler.lock().clone();
+    if let Some(signaler) = custom {
+        return signaler.send(&me, to, sig);
+    }
     let url = server_url.lock().clone().ok_or(CoreError::NotLoggedIn)?;
     let tok = token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-    let me = ctx.identity.lock().node_id.clone();
     let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
     crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(Into::into)
 }
@@ -1145,7 +1165,8 @@ fn run_connect_ladder<P: Platform>(
     };
 
     // Rung 1 — same-LAN UDP ping/pong (no FCM, no server).
-    if same_lan(&ctx, &peer) {
+    let rungs = ctx.config.rungs.clone();
+    if rungs.lan_udp && same_lan(&ctx, &peer) {
         emit("udp_ping", None);
         if udp_ping_connect(&ctx, &node_id) {
             emit("connected", Some("udp".into()));
@@ -1154,7 +1175,7 @@ fn run_connect_ladder<P: Platform>(
     }
 
     // Rung 2 — direct WS if the peer advertises a reachable WS server.
-    if peer.ws_port != 0 && peer.ws_open && !peer_inbound_blocked(&peer) {
+    if rungs.direct_ws && peer.ws_port != 0 && peer.ws_open && !peer_inbound_blocked(&peer) {
         emit("direct_ws", None);
         if ws::ws_connect(ctx.clone(), &peer.ip, peer.ws_port).is_ok()
             && wait_live(&ctx, &node_id, 3000)
@@ -1165,53 +1186,62 @@ fn run_connect_ladder<P: Platform>(
 
     // Rung 3 — FCM-coordinated WS: ask the peer to open its WS and reply WsReady,
     // which our on_signal dials. (1 FCM round trip.)
-    emit("via_signal", None);
-    let sid = uuid::Uuid::new_v4().to_string();
-    if send_signal_via(
-        &server_url,
-        &token,
-        &ctx,
-        &node_id,
-        &Signal::StartWs { sid },
-    )
-    .is_ok()
-        && wait_live(&ctx, &node_id, 8000)
-    {
-        return;
+    if rungs.signaled_ws {
+        emit("via_signal", None);
+        let sid = uuid::Uuid::new_v4().to_string();
+        if send_signal_via(
+            &server_url,
+            &token,
+            &ctx,
+            &node_id,
+            &Signal::StartWs { sid },
+        )
+        .is_ok()
+            && wait_live(&ctx, &node_id, 8000)
+        {
+            return;
+        }
     }
 
     // Rung 4 — UDP hole punch. Gather our candidates up front, offer them in one
     // signal, and punch toward the peer's answered candidates (1 FCM round trip).
-    emit("punching", None);
-    if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
-        let sid = uuid::Uuid::new_v4().to_string();
-        let (tx, rx) = mpsc::channel::<Vec<crate::signal::Candidate>>();
-        ctx.punch_waiters.lock().insert(sid.clone(), tx);
-        let offer = Signal::PunchOffer {
-            sid: sid.clone(),
-            candidates: my_cands,
-            start_in_ms: 0,
-        };
-        if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
-            if let Ok(peer_cands) = rx.recv_timeout(Duration::from_secs(8)) {
-                ctx.punch_waiters.lock().remove(&sid);
-                transport::punch::punch_and_run(ctx.clone(), socket, peer_cands, node_id.clone());
-                // hole_punch (≤8s) + bidirectional confirmation (≤3s).
-                if wait_live(&ctx, &node_id, 12000) {
-                    return;
+    if rungs.punch {
+        emit("punching", None);
+        if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
+            let sid = uuid::Uuid::new_v4().to_string();
+            let (tx, rx) = mpsc::channel::<Vec<crate::signal::Candidate>>();
+            ctx.punch_waiters.lock().insert(sid.clone(), tx);
+            let offer = Signal::PunchOffer {
+                sid: sid.clone(),
+                candidates: my_cands,
+                start_in_ms: 0,
+            };
+            if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
+                if let Ok(peer_cands) = rx.recv_timeout(Duration::from_secs(8)) {
+                    ctx.punch_waiters.lock().remove(&sid);
+                    transport::punch::punch_and_run(
+                        ctx.clone(),
+                        socket,
+                        peer_cands,
+                        node_id.clone(),
+                    );
+                    // hole_punch (≤8s) + bidirectional confirmation (≤3s).
+                    if wait_live(&ctx, &node_id, 12000) {
+                        return;
+                    }
+                } else {
+                    ctx.punch_waiters.lock().remove(&sid);
                 }
             } else {
                 ctx.punch_waiters.lock().remove(&sid);
             }
-        } else {
-            ctx.punch_waiters.lock().remove(&sid);
         }
     }
 
     // Rung 5 — WebRTC data channel. Gather candidates into one SDP offer, send
     // it, and on the single answer drive ICE/DTLS/SCTP peer-to-peer (1 FCM RTT).
     #[cfg(feature = "webrtc")]
-    {
+    if rungs.webrtc {
         emit("webrtc", None);
         if let Some((rtc, socket, pending, offer_sdp)) = transport::rtc::create_offer(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();

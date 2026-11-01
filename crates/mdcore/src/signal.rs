@@ -8,6 +8,14 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Delivers a signal to another of the user's devices. The default (no
+/// signaler set) is the registry server's `/signal` relay over HTTP, which the
+/// server forwards as an FCM push. `Engine::set_signaler` swaps in another
+/// path: an in-memory hub in tests, a WebSocket relay later.
+pub trait Signaler: Send + Sync + 'static {
+    fn send(&self, from: &str, to: &str, signal: &Signal) -> crate::Result<()>;
+}
+
 /// An ICE-style connection candidate.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Candidate {
