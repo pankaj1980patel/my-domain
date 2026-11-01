@@ -33,6 +33,8 @@ pub struct DeviceReq {
     pub udp_port: i32,
     #[serde(default)]
     pub ws_port: i32,
+    #[serde(default)]
+    pub quic_port: i32,
     // Signaling / NAT-traversal extras (all optional).
     #[serde(default)]
     pub fcm_token: Option<String>,
@@ -52,6 +54,7 @@ pub struct DeviceOut {
     pub tcp_port: i32,
     pub udp_port: i32,
     pub ws_port: i32,
+    pub quic_port: i32,
     pub last_seen: i64,
     // Peer-visible capability/state (NOT fcm_token).
     pub ws_open: bool,
@@ -84,6 +87,7 @@ pub async fn register(
         "tcp_port": req.tcp_port,
         "udp_port": req.udp_port,
         "ws_port": req.ws_port,
+        "quic_port": req.quic_port,
         "last_seen": now(),
         "supports_ipv6": req.supports_ipv6,
     };
@@ -145,6 +149,7 @@ pub async fn list(
             tcp_port: d.tcp_port,
             udp_port: d.udp_port,
             ws_port: d.ws_port,
+            quic_port: d.quic_port,
             last_seen: d.last_seen,
             ws_open: d.ws_open,
             inbound_blocked: d.inbound_blocked,

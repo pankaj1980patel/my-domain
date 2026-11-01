@@ -32,6 +32,9 @@ pub struct Device {
     pub udp_port: i32,
     #[serde(default)]
     pub ws_port: i32,
+    /// QUIC (UDP) port; 0 for devices that registered before QUIC existed.
+    #[serde(default)]
+    pub quic_port: i32,
     pub last_seen: i64,
 
     /// FCM registration token — SERVER SECRET. Used only to relay signals; never

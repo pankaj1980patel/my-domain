@@ -198,3 +198,25 @@ fn without_a_custom_signaler_signals_go_to_the_servers_relay() {
     assert_eq!(sig["to"], "some-other-device");
     assert_eq!(sig["data"]["type"], "bye");
 }
+
+#[test]
+fn registry_peers_carry_their_quic_port_and_connect_over_quic() {
+    let reg = FakeRegistry::start();
+    reg.add_user("alice", "hunter22");
+    let laptop = alice_on(&reg, "reg-quic-laptop");
+    let phone = alice_on(&reg, "reg-quic-phone");
+    phone.engine.refresh_from_server().unwrap();
+    laptop.engine.refresh_from_server().unwrap();
+
+    let peer = &laptop.engine.get_peers()[0];
+    assert_eq!(peer.quic_port, phone.engine.identity().quic_port);
+    assert_ne!(peer.quic_port, 0);
+
+    laptop.engine.connect(&phone.node_id()).unwrap();
+    assert_eq!(
+        laptop
+            .wait_connected(&phone, std::time::Duration::from_secs(10))
+            .as_deref(),
+        Some("quic")
+    );
+}
