@@ -139,10 +139,54 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 |---|---|
 | A: quick wins | Battery and device info, ring device, open link, launch app, flashlight, DND/ringer, volume, clipboard history, notification actions |
 | B: media and phone | Media control for any app, call log, live call alert, dial and speaker, answer/end, contacts, SMS, OTP → desktop clipboard |
-| C: files | File push (resumable), browse, download, gallery, photo backup |
+| C: files | File push (resumable), browse, download, gallery, photo backup, **Wi-Fi Direct fast path** for big transfers (below) |
 | D: screen and control | Screen share, remote input, phone as touchpad/keyboard, presentation remote |
 | E: connectivity (Shizuku, see [ADR-0006](../learnings/decisions/ADR-0006-shizuku.md)) | Wi-Fi scan/toggle/connect, Bluetooth, airplane mode, mobile data, hotspot |
 | F: find, security, automation | Locate, lost mode, wipe, triggers, scenes, schedules, webhooks |
+
+### Fast path for large transfers: Wi-Fi Direct
+
+When a transfer is large (a big file, a gallery backup, a folder), upgrade to
+a **direct Wi-Fi link between the two devices** if both support it, then
+switch back afterwards. This is the same idea as Android's Quick Share
+"bandwidth upgrade".
+
+- **Why it's faster:**
+  - A normal transfer goes device → router → device, sharing the router's
+    airtime with everything else on the network.
+  - Wi-Fi Direct is one hop between the devices, often several times faster.
+  - It also works with no router at all, e.g. outdoors, or when one device is
+    on mobile data.
+- **How:**
+  1. Start every transfer on the current link.
+  2. If the file is over a threshold (e.g. 50 MB) and both devices advertise
+     Wi-Fi Direct, negotiate the upgrade over the existing encrypted link.
+  3. Form the Wi-Fi Direct group and run QUIC over it, with the same keys and
+     the same end-to-end encryption.
+  4. Resume the transfer on the new link at the byte where it stopped.
+  5. If the upgrade fails or the link drops, keep going on the original link.
+     The user never has to choose.
+- **Where it works:**
+  - **Android ⇄ Android:** `WifiP2pManager`.
+  - **Android ⇄ Linux:** `wpa_supplicant` P2P over D-Bus. Driver support
+    varies, so the laptop has to be tested.
+  - **macOS: not available.** Apple doesn't expose Wi-Fi Direct; it uses its
+    own AWDL, which has no public API for this. The Mac stays on the normal
+    link (LAN QUIC) or a wired/USB link.
+  - Where Wi-Fi Direct isn't possible, alternatives worth measuring:
+    - Phone hotspot
+    - USB tethering (`adb reverse` in the lab)
+    - Wi-Fi Aware (NAN) on newer Android
+- **Permissions:**
+  - Android 13+: `NEARBY_WIFI_DEVICES`.
+  - Older Android: location.
+  - Ask on the first big transfer, with a one-line reason ("for faster
+    transfers to nearby devices").
+- **Test:**
+  - A lab scenario sends a 1 GB file phone ⇄ laptop with and without the
+    upgrade, and records the speed.
+  - A fallback test cuts the Wi-Fi Direct link mid-transfer and checks the
+    file finishes on the original link and arrives intact (checksum).
 
 A feature counts as done when it has:
 - handler unit tests
