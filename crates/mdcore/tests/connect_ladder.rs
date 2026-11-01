@@ -92,8 +92,9 @@ fn rung4_hole_punch_connects_and_carries_chat() {
         "punch"
     );
     b.sink.wait_for_message("through the hole");
-    // Large messages are chunked over the punched UDP path and reassembled.
-    let big = "x".repeat(50_000);
+    // The punched path runs QUIC, so large messages arrive intact (the old
+    // datagram path capped them at 1 MiB and dropped them on any loss).
+    let big = "x".repeat(2_000_000);
     a.engine.send(&b.node_id(), &big).unwrap();
     b.sink.wait_for_message(&big);
 }

@@ -47,6 +47,13 @@ const ALPN: &[u8] = b"mydomain/1";
 pub(crate) const MAX_FRAME: usize = 4 * 1024 * 1024;
 /// How long a dial may take (QUIC handshake is 1 round trip).
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
+/// How long the accepting side of a punched path waits for the dialer.
+const PUNCH_ACCEPT_TIMEOUT: Duration = Duration::from_secs(10);
+/// QUIC keep-alive. NAT routers forget idle UDP mappings (often within
+/// 30 s), which would silently close a punched path; a ping every few
+/// seconds keeps it open. Also lets each side notice a dead peer.
+const KEEP_ALIVE: Duration = Duration::from_secs(5);
+const IDLE_TIMEOUT: Duration = Duration::from_secs(20);
 /// Time allowed for the peer's `Hello` after the connection is up.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(3);
 /// Connection ids live in their own range so they never collide with WS/punch/rtc.
@@ -127,7 +134,7 @@ impl QuicLink {
                 let ctx = ctx.clone();
                 tokio::spawn(async move {
                     if let Ok(conn) = incoming.await {
-                        run_connection(conn, ctx, false).await;
+                        run_connection(conn, ctx, false, TransportKind::Quic).await;
                     }
                 });
             }
@@ -150,14 +157,67 @@ impl QuicLink {
                 .map_err(|_| "QUIC connect timed out".to_string())?
                 .map_err(|e| format!("QUIC handshake failed: {e}"))
         })?;
-        self.rt.spawn(run_connection(conn, ctx, true));
+        self.rt
+            .spawn(run_connection(conn, ctx, true, TransportKind::Quic));
+        Ok(())
+    }
+
+    /// Run QUIC over an already hole-punched UDP socket: a fresh endpoint on
+    /// that exact socket (so the NAT mappings the punch opened are reused),
+    /// then either dial `peer` or accept its connection. Exactly one side must
+    /// dial; callers decide that deterministically (lower node id dials).
+    /// Returns at once; the link reports itself via `PeerConnected`.
+    pub fn run_over_socket<P: Platform>(
+        &self,
+        ctx: NetCtx<P>,
+        socket: std::net::UdpSocket,
+        peer: SocketAddr,
+        dial: bool,
+        kind: TransportKind,
+    ) -> std::io::Result<()> {
+        let _guard = self.rt.enter();
+        socket.set_nonblocking(true)?;
+        socket.set_read_timeout(None)?;
+        let mut endpoint = Endpoint::new(
+            quinn::EndpointConfig::default(),
+            Some(server_config().map_err(std::io::Error::other)?),
+            socket,
+            Arc::new(quinn::TokioRuntime),
+        )?;
+        endpoint.set_default_client_config(client_config().map_err(std::io::Error::other)?);
+        self.rt.spawn(async move {
+            let conn = if dial {
+                match endpoint.connect(peer, "mydomain") {
+                    Ok(c) => tokio::time::timeout(CONNECT_TIMEOUT, c)
+                        .await
+                        .ok()
+                        .and_then(Result::ok),
+                    Err(_) => None,
+                }
+            } else {
+                match tokio::time::timeout(PUNCH_ACCEPT_TIMEOUT, endpoint.accept()).await {
+                    Ok(Some(incoming)) => incoming.await.ok(),
+                    _ => None,
+                }
+            };
+            if let Some(conn) = conn {
+                run_connection(conn, ctx, dial, kind).await;
+            }
+            // `endpoint` lives until here: it owns the punched socket.
+            endpoint.close(0u32.into(), b"bye");
+        });
         Ok(())
     }
 }
 
 /// Drive one connection: exchange `Hello`s, register the link, then pump
 /// frames both ways until either side goes away.
-async fn run_connection<P: Platform>(conn: Connection, ctx: NetCtx<P>, dialer: bool) {
+async fn run_connection<P: Platform>(
+    conn: Connection,
+    ctx: NetCtx<P>,
+    dialer: bool,
+    kind: TransportKind,
+) {
     // The dialer opens the stream; the acceptor waits for it.
     let stream = if dialer {
         conn.open_bi().await
@@ -200,7 +260,7 @@ async fn run_connection<P: Platform>(conn: Connection, ctx: NetCtx<P>, dialer: b
         g.insert(peer_id.clone(), (my_conn_id, tx));
     }
     let remote = conn.remote_address();
-    mark_live(&ctx, &peer_id, TransportKind::Quic, Some(remote));
+    mark_live(&ctx, &peer_id, kind, Some(remote));
 
     // Bridge: the engine queues outgoing frames on a std channel; forward them
     // into an async channel the writer task awaits. The thread ends when the
@@ -291,9 +351,17 @@ fn server_config() -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Se
         .with_no_client_auth()
         .with_single_cert(vec![cert.cert.der().clone()], key.into())?;
     tls.alpn_protocols = vec![ALPN.to_vec()];
-    Ok(quinn::ServerConfig::with_crypto(Arc::new(
-        QuicServerConfig::try_from(tls)?,
-    )))
+    let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls)?));
+    cfg.transport_config(transport_config()?);
+    Ok(cfg)
+}
+
+fn transport_config(
+) -> Result<Arc<quinn::TransportConfig>, Box<dyn std::error::Error + Send + Sync>> {
+    let mut t = quinn::TransportConfig::default();
+    t.keep_alive_interval(Some(KEEP_ALIVE));
+    t.max_idle_timeout(Some(IDLE_TIMEOUT.try_into()?));
+    Ok(Arc::new(t))
 }
 
 fn client_config() -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
@@ -303,9 +371,9 @@ fn client_config() -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Se
         .with_custom_certificate_verifier(Arc::new(AcceptAnyCert(provider())))
         .with_no_client_auth();
     tls.alpn_protocols = vec![ALPN.to_vec()];
-    Ok(quinn::ClientConfig::new(Arc::new(
-        QuicClientConfig::try_from(tls)?,
-    )))
+    let mut cfg = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls)?));
+    cfg.transport_config(transport_config()?);
+    Ok(cfg)
 }
 
 fn provider() -> Arc<rustls::crypto::CryptoProvider> {
