@@ -1,0 +1,8 @@
+/target
+.env
+.DS_Store
+# Firebase service-account key for FCM (never commit secrets).
+fcm-sa.json
+*-fcm-sa.json
+# Locally cross-built release binary (shipped via deploy, not committed).
+my-domain-server-amd64
