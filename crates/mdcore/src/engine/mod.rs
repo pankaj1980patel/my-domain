@@ -148,7 +148,14 @@ pub struct Engine<P: Platform> {
     disco_send: Arc<UdpSocket>,
     /// Owns the QUIC runtime; dropped (after `Drop::drop` runs) with the engine.
     _quic: transport::quic::QuicNode,
+    /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC skips
+    /// them for `QUIC_RETRY_AFTER`, so an unreachable peer doesn't cost a
+    /// connect timeout on every message.
+    quic_failed: Mutex<HashMap<String, std::time::Instant>>,
 }
+
+/// How long to wait before auto-dialing a peer again after a failed attempt.
+const QUIC_RETRY_AFTER: Duration = Duration::from_secs(30);
 
 impl<P: Platform> Engine<P> {
     /// Bind sockets, build identity, and spawn the discovery / tcp / udp / ws /
@@ -278,12 +285,50 @@ impl<P: Platform> Engine<P> {
             username: Arc::new(Mutex::new(None)),
             disco_send,
             _quic: quic,
+            quic_failed: Mutex::default(),
         })
     }
 
     /// Whether this engine is shutting down (its `Engine` was dropped).
     pub fn is_shut_down(&self) -> bool {
         self.ctx.shutdown.load(Ordering::Relaxed)
+    }
+
+    /// Make sure there is a live link to `node_id` if QUIC can provide one:
+    /// returns at once if a link exists; otherwise dials the peer's QUIC port
+    /// (at most ~3 s) unless auto-QUIC is off, the peer has no QUIC port, or a
+    /// dial failed in the last `QUIC_RETRY_AFTER`.
+    ///
+    /// Only call from API threads (`send`, `get_clipboard`): it blocks on the
+    /// QUIC runtime, which would panic if called from inside that runtime.
+    fn ensure_link(&self, node_id: &str) {
+        if !self.ctx.config.auto_quic || self.ctx.ws_conns.lock().contains_key(node_id) {
+            return;
+        }
+        let Some(peer) = self.ctx.peers.lock().get(node_id).cloned() else {
+            return;
+        };
+        if peer.quic_port == 0 {
+            return;
+        }
+        if let Some(t) = self.quic_failed.lock().get(node_id) {
+            if t.elapsed() < QUIC_RETRY_AFTER {
+                return;
+            }
+        }
+        let ok = self
+            .ctx
+            .quic
+            .connect(self.net_ctx(), &peer.ip, peer.quic_port)
+            .is_ok()
+            && wait_for_link(&self.ctx, node_id, Duration::from_secs(2));
+        if ok {
+            self.quic_failed.lock().remove(node_id);
+        } else {
+            self.quic_failed
+                .lock()
+                .insert(node_id.to_string(), std::time::Instant::now());
+        }
     }
 
     fn net_ctx(&self) -> NetCtx<P> {
@@ -385,6 +430,20 @@ impl<P: Platform> Engine<P> {
             username: self.ctx.platform.kv_get("username").unwrap_or_default(),
         }
     }
+}
+
+/// Wait until `node_id` has an entry in `ws_conns` (a link registered its
+/// outgoing queue). The QUIC dial returns after the handshake; registration
+/// happens a moment later, after the `Hello` exchange.
+fn wait_for_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str, max: Duration) -> bool {
+    let deadline = std::time::Instant::now() + max;
+    while std::time::Instant::now() < deadline {
+        if ctx.ws_conns.lock().contains_key(node_id) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
 }
 
 impl<P: Platform> Drop for Engine<P> {

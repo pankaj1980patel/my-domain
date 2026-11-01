@@ -26,22 +26,74 @@ fn pair(test: &str) -> (TestNode, TestNode) {
 // Chat over each directed transport
 // ---------------------------------------------------------------------------
 
-#[test]
-fn chat_over_udp_by_default() {
-    let (a, b) = pair("chat-udp");
-    let used = a.engine.send(&b.node_id(), "hello over udp").unwrap();
-    assert_eq!(used, "UDP");
-
-    let msg = b.sink.wait_for_message("hello over udp");
-    assert!(msg.ok, "decrypted with the shared key");
-    assert_eq!(msg.protocol, "UDP");
-    // `from` is the sender's username (offline login), not its node id.
-    assert_eq!(msg.from, md_testkit::TEST_USER);
+/// Like `pair`, but with QUIC disabled, to exercise the legacy directed
+/// transports (one UDP datagram / one TCP connection per message).
+fn pair_without_quic(test: &str) -> (TestNode, TestNode) {
+    let cfg = || mdcore::CoreConfig {
+        auto_quic: false,
+        ..md_testkit::test_config()
+    };
+    let a = TestNode::start_full(MockPlatform::new(&format!("{test}-a")), cfg());
+    let b = TestNode::start_full(MockPlatform::new(&format!("{test}-b")), cfg());
+    TestNode::pair(&a, &b);
+    (a, b)
 }
 
 #[test]
-fn chat_over_tcp_when_directed() {
-    let (a, b) = pair("chat-tcp");
+fn chat_opens_and_reuses_a_quic_link_by_default() {
+    let (a, b) = pair("chat-quic");
+    // No explicit connect(): the first send dials QUIC.
+    assert_eq!(a.engine.send(&b.node_id(), "first").unwrap(), "QUIC");
+    let msg = b.sink.wait_for_message("first");
+    assert!(msg.ok, "decrypted with the shared key");
+    assert_eq!(msg.protocol, "QUIC");
+    // `from` is the sender's username (offline login), not its node id.
+    assert_eq!(msg.from, md_testkit::TEST_USER);
+
+    // Reused, and the receiver can answer on the same link.
+    assert_eq!(a.engine.send(&b.node_id(), "second").unwrap(), "QUIC");
+    b.sink.wait_for_message("second");
+    assert_eq!(b.engine.send(&a.node_id(), "reply").unwrap(), "QUIC");
+    a.sink.wait_for_message("reply");
+}
+
+#[test]
+fn unreachable_quic_port_falls_back_to_udp_and_is_not_retried_every_send() {
+    let (a, b) = pair("chat-quic-dead");
+    let mut peer = b.as_peer();
+    peer.quic_port = 9; // nothing speaks QUIC there
+    a.engine.upsert_peer(peer);
+
+    assert_eq!(
+        a.engine.send(&b.node_id(), "after a failed dial").unwrap(),
+        "UDP"
+    );
+    b.sink.wait_for_message("after a failed dial");
+
+    // The failure is remembered, so the next send doesn't wait for a dial.
+    let t = std::time::Instant::now();
+    assert_eq!(a.engine.send(&b.node_id(), "fast now").unwrap(), "UDP");
+    assert!(
+        t.elapsed() < Duration::from_millis(500),
+        "took {:?}",
+        t.elapsed()
+    );
+    b.sink.wait_for_message("fast now");
+}
+
+#[test]
+fn chat_over_udp_when_quic_is_off() {
+    let (a, b) = pair_without_quic("chat-udp");
+    let used = a.engine.send(&b.node_id(), "hello over udp").unwrap();
+    assert_eq!(used, "UDP");
+    let msg = b.sink.wait_for_message("hello over udp");
+    assert!(msg.ok);
+    assert_eq!(msg.protocol, "UDP");
+}
+
+#[test]
+fn chat_over_tcp_when_directed_and_quic_is_off() {
+    let (a, b) = pair_without_quic("chat-tcp");
     a.engine.set_directed_transport("TCP");
     let used = a.engine.send(&b.node_id(), "hello over tcp").unwrap();
     assert_eq!(used, "TCP");

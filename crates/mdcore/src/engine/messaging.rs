@@ -31,6 +31,7 @@ impl<P: Platform> Engine<P> {
             .lock()
             .clone()
             .unwrap_or_else(|| self.ctx.identity.lock().name.clone());
+        self.ensure_link(node_id);
         let proto = self.proto_for(node_id);
         transport::send_payload(
             &self.ctx.peers,
@@ -74,6 +75,7 @@ impl<P: Platform> Engine<P> {
         let me = self.ctx.identity.lock().node_id.clone();
         let from = self.ctx.identity.lock().name.clone();
         let req = serde_json::json!({ "type": "clipboard_request", "from": me }).to_string();
+        self.ensure_link(node_id);
         let proto = self.proto_for(node_id);
 
         if let Err(e) = transport::send_payload(

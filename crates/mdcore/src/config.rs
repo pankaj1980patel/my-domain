@@ -62,6 +62,10 @@ pub struct CoreConfig {
     /// is what loopback tests want.
     pub stun_servers: Vec<String>,
     pub rungs: ConnectRungs,
+    /// When sending to a peer with no live link, first open a QUIC link to it
+    /// (if it advertises a QUIC port) and send over that, instead of a lone
+    /// UDP datagram / TCP connection. The link is then reused.
+    pub auto_quic: bool,
 }
 
 impl Default for CoreConfig {
@@ -69,6 +73,7 @@ impl Default for CoreConfig {
         CoreConfig {
             stun_servers: vec!["stun.l.google.com:19302".into()],
             rungs: ConnectRungs::default(),
+            auto_quic: true,
         }
     }
 }
