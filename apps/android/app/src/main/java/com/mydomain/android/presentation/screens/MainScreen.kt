@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.mydomain.android.R
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -171,7 +175,11 @@ fun MainScreen(prefs: SharedPreferences, onLogout: () -> Unit) {
         drawerContent = {
             ModalDrawerSheet {
                 Column(Modifier.padding(16.dp)) {
-                    Text("◆  my-domain", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(28.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text("my-domain", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
                     Text("Your devices", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                 }
                 HorizontalDivider()
@@ -217,7 +225,7 @@ fun MainScreen(prefs: SharedPreferences, onLogout: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
-                    Text("◆", fontSize = 48.sp, color = MaterialTheme.colorScheme.primary)
+                    Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(72.dp))
                     Spacer(Modifier.height(8.dp))
                     Text("Select a device", fontWeight = FontWeight.SemiBold, fontSize = 18.sp)
                     Spacer(Modifier.height(6.dp))

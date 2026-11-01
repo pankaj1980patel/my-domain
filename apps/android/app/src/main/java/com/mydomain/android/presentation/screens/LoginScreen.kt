@@ -30,6 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.mydomain.android.R
+import androidx.compose.foundation.layout.size
 import com.mydomain.android.DevCredentials
 import com.mydomain.android.RustNet
 import kotlinx.coroutines.Dispatchers
@@ -37,9 +41,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 
+private const val DEFAULT_SERVER = "https://152-67-7-50.sslip.io"
+
 @Composable
 fun LoginScreen(prefs: SharedPreferences, dev: DevCredentials? = null, onReady: () -> Unit) {
-    var server by remember { mutableStateOf(dev?.server ?: prefs.getString("server", "") ?: "") }
+    // Default: the hosted registry (HTTPS); a saved or lab-provided server wins.
+    var server by remember { mutableStateOf(dev?.server ?: prefs.getString("server", null) ?: DEFAULT_SERVER) }
     var user by remember { mutableStateOf(dev?.user ?: prefs.getString("user", "") ?: "") }
     var pass by remember { mutableStateOf(dev?.pass ?: "") }
     var key by remember { mutableStateOf(dev?.key ?: "") }
@@ -81,6 +88,7 @@ fun LoginScreen(prefs: SharedPreferences, dev: DevCredentials? = null, onReady: 
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Spacer(Modifier.height(40.dp))
+        Image(painterResource(R.drawable.logo_mark), contentDescription = null, modifier = Modifier.size(84.dp))
         Text("my-domain", fontSize = 26.sp, fontWeight = FontWeight.Bold)
         Text("Log in, then set your encryption key to unlock messaging.", fontSize = 13.sp)
         OutlinedTextField(server, { server = it }, label = { Text("Server URL") }, singleLine = true, modifier = Modifier.fillMaxWidth())

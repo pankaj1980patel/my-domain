@@ -12,9 +12,9 @@
     <!-- ============ Login ============ -->
     <div id="login" class="login-overlay">
       <form id="login-form" class="login-card">
-        <div class="brand"><span class="logo">◆</span><h1>my-domain</h1></div>
+        <div class="brand"><img class="logo" src="assets/logo.png" alt="" /><h1>my-domain</h1></div>
         <p class="muted small">Connect and control all your devices.</p>
-        <label>Server URL<input id="a-server" placeholder="http://192.168.0.10:6969" required /></label>
+        <label>Server URL<input id="a-server" value="https://152-67-7-50.sslip.io" placeholder="https://your-server" required /></label>
         <label>Username<input id="a-user" autocomplete="username" required /></label>
         <label>Password<input id="a-pass" type="password" autocomplete="current-password" required /></label>
         <label>Encryption key
@@ -37,7 +37,7 @@
       <!-- Sidebar -->
       <aside class="sidebar">
         <div class="side-head">
-          <div class="brand sm"><span class="logo">◆</span><span>my-domain</span></div>
+          <div class="brand sm"><img class="logo" src="assets/logo.png" alt="" /><span>my-domain</span></div>
           <div class="me-chip" id="me-chip" title="This device">
             <span class="dot online"></span>
             <span class="me-name" id="me-name">…</span>
@@ -69,7 +69,7 @@
         <!-- Empty state -->
         <section id="view-empty" class="view view-center">
           <div class="empty-hero">
-            <div class="empty-logo">◆</div>
+            <img class="empty-logo" src="assets/logo.png" alt="" />
             <h2>Select a device</h2>
             <p class="muted">Pick a device on the left to share clipboard, send messages and notifications. Use <strong>Scan LAN</strong> or <strong>Refresh</strong> to find them.</p>
           </div>
