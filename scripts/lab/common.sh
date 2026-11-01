@@ -28,3 +28,10 @@ remote() {
     { echo; echo \"===== \$(date '+%F %T')  $* \"; } >> \$HOME/my-domain-lab.log &&
     set -o pipefail && { $*; } 2>&1 | tee -a \$HOME/my-domain-lab.log"
 }
+
+# Device-lab test account (gitignored; see test-creds.env). Optional.
+MD_CREDS="$MD_REPO_ROOT/scripts/lab/test-creds.env"
+if [[ -f "$MD_CREDS" ]]; then
+  # shellcheck disable=SC1090
+  source "$MD_CREDS"
+fi

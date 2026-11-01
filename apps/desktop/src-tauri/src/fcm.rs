@@ -20,6 +20,7 @@
 // like the server skips FCM when its service-account is absent.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -124,6 +125,31 @@ struct Creds {
     auth_secret_base64: String,
 }
 
+/// The FCM token cell, managed by Tauri so commands can trigger `reregister`.
+pub struct FcmToken(pub Arc<Mutex<Option<String>>>);
+
+/// Bumped by `reregister`; a receiver thread from an older generation stops at
+/// its next reconnect instead of listening on a dead registration forever.
+static GENERATION: AtomicU64 = AtomicU64::new(0);
+
+/// Throw away the saved registration and register a fresh token. Used when
+/// FCM reports our token as unregistered (it expired or was revoked): the old
+/// `fcm_creds.json` is kept as `fcm_creds.stale.json` for debugging.
+pub fn reregister(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
+    if let Ok(dir) = app.path().app_config_dir() {
+        let _ = std::fs::rename(dir.join("fcm_creds.json"), dir.join("fcm_creds.stale.json"));
+    }
+    *token_cell.lock().unwrap() = None;
+    GENERATION.fetch_add(1, Ordering::SeqCst);
+    emit_fcm(
+        &app,
+        "info",
+        "",
+        "FCM token rejected; registering a new one",
+    );
+    spawn(app, token_cell);
+}
+
 /// Start the FCM receiver in a background thread. No-op (with a log line) if the
 /// required credentials are absent.
 pub fn spawn(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
@@ -146,8 +172,10 @@ pub fn spawn(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
         return;
     };
 
+    let generation = GENERATION.load(Ordering::SeqCst);
     std::thread::spawn(move || {
-        if let Err(e) = run(app, token_cell, cfg, config_dir.join("fcm_creds.json")) {
+        let creds = config_dir.join("fcm_creds.json");
+        if let Err(e) = run(app, token_cell, cfg, creds, generation) {
             eprintln!("[fcm] receiver stopped: {e}");
         }
     });
@@ -158,6 +186,7 @@ fn run(
     token_cell: Arc<Mutex<Option<String>>>,
     cfg: FcmConfig,
     creds_path: PathBuf,
+    generation: u64,
 ) -> Result<(), String> {
     let mut client =
         FcmClient::new(cfg.api_key, cfg.app_id, cfg.project_id).map_err(|e| e.to_string())?;
@@ -266,6 +295,9 @@ fn run(
             eprintln!("[fcm] listen ended: {e}; reconnecting in 10s");
         }
         std::thread::sleep(Duration::from_secs(10));
+        if GENERATION.load(Ordering::SeqCst) != generation {
+            return Ok(()); // superseded by a fresh registration
+        }
     }
 }
 

@@ -115,6 +115,7 @@ async function enterApp() {
 
 // Round-trip FCM check: push a ping to our own token; the pong returns via the
 // FCM receiver as an fcm-event. No pong within the window => FCM isn't delivering.
+let fcmRetried = false;
 async function fcmSelfTest() {
   try {
     const sid = await invoke("fcm_selftest");
@@ -127,6 +128,8 @@ async function fcmSelfTest() {
     }, 12000);
   } catch (err) {
     dlog("error", "fcm", `self-test ping failed: ${err}`);
+    // The core registered a fresh token; retry once it has reached the server.
+    if (String(err).includes("re-registering") && !fcmRetried) { fcmRetried = true; setTimeout(fcmSelfTest, 8000); }
   }
 }
 
@@ -479,6 +482,14 @@ async function init() {
   const saved = await invoke("get_saved_session");
   if (saved.server_url) el("a-server").value = saved.server_url;
   if (saved.username) el("a-user").value = saved.username;
+  // Device lab: debug builds started with MD_DEV_* set fill in the test account.
+  const dev = await invoke("dev_credentials").catch(() => null);
+  if (dev) {
+    el("a-server").value = dev.server;
+    el("a-user").value = dev.user;
+    el("a-pass").value = dev.pass;
+    el("a-key").value = dev.key;
+  }
 
   el("login-form").addEventListener("submit", (e) => onAuth(e, false));
   el("a-register").addEventListener("click", (e) => onAuth(e, true));
@@ -610,6 +621,8 @@ async function init() {
     const p = selectedPeer();
     if (p && p.node_id === m.from) { setStatus("apps-status", `${(m.apps || []).length} apps`, true); renderApps(); }
   });
+
+  if (dev) onAuth(null, false); // test account: log straight in
 }
 
 window.addEventListener("DOMContentLoaded", init);

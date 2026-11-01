@@ -18,6 +18,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mydomain.android.DevCredentials
 import com.mydomain.android.RustNet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -36,11 +38,11 @@ import kotlinx.coroutines.withContext
 
 
 @Composable
-fun LoginScreen(prefs: SharedPreferences, onReady: () -> Unit) {
-    var server by remember { mutableStateOf(prefs.getString("server", "") ?: "") }
-    var user by remember { mutableStateOf(prefs.getString("user", "") ?: "") }
-    var pass by remember { mutableStateOf("") }
-    var key by remember { mutableStateOf("") }
+fun LoginScreen(prefs: SharedPreferences, dev: DevCredentials? = null, onReady: () -> Unit) {
+    var server by remember { mutableStateOf(dev?.server ?: prefs.getString("server", "") ?: "") }
+    var user by remember { mutableStateOf(dev?.user ?: prefs.getString("user", "") ?: "") }
+    var pass by remember { mutableStateOf(dev?.pass ?: "") }
+    var key by remember { mutableStateOf(dev?.key ?: "") }
     var status by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -51,8 +53,13 @@ fun LoginScreen(prefs: SharedPreferences, onReady: () -> Unit) {
         status = "Connecting…"
         scope.launch {
             val err = withContext(Dispatchers.IO) {
-                val a = if (register) RustNet.nativeAuthRegister(server, user, pass)
-                else RustNet.nativeAuthLogin(server, user, pass)
+                val auth = {
+                    if (register) RustNet.nativeAuthRegister(server, user, pass)
+                    else RustNet.nativeAuthLogin(server, user, pass)
+                }
+                // NetService starts the engine; on a fresh launch it may not be up yet.
+                var a = auth()
+                repeat(50) { if (a == "ERROR: not started") { Thread.sleep(100); a = auth() } }
                 if (a.isNotEmpty()) return@withContext a
                 RustNet.nativeSetEncryptionKey(key)
             }
@@ -65,6 +72,9 @@ fun LoginScreen(prefs: SharedPreferences, onReady: () -> Unit) {
             }
         }
     }
+
+    // Device lab: a test account passed at launch logs straight in.
+    LaunchedEffect(dev) { if (dev != null) submit(false) }
 
     Column(
         Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),

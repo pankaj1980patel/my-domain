@@ -28,6 +28,8 @@ data class Peer(
     val tcpPort: Int, val udpPort: Int, val wsPort: Int, val source: String,
 )
 
+data class DevCredentials(val server: String, val user: String, val pass: String, val key: String)
+
 data class LogEntry(val dir: String, val peer: String, val ip: String, val protocol: String, val text: String, val ok: Boolean)
 
 class MainActivity : ComponentActivity() {
@@ -68,7 +70,19 @@ class MainActivity : ComponentActivity() {
         runCatching { connectivityManager?.registerDefaultNetworkCallback(netCallback!!) }
 
         val prefs = getSharedPreferences("md", Context.MODE_PRIVATE)
-        setContent { MaterialTheme { App(prefs) } }
+        val dev = devCredentials(intent)
+        setContent { MaterialTheme { App(prefs, dev) } }
+    }
+
+    /** Device-lab test account from launch extras (scripts/lab/android.sh
+     *  passes md_server/md_user/md_pass/md_key). Debuggable builds only. */
+    private fun devCredentials(intent: Intent?): DevCredentials? {
+        if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE == 0) return null
+        val get = { k: String -> intent?.getStringExtra(k)?.takeIf { it.isNotBlank() } }
+        return DevCredentials(
+            get("md_server") ?: return null, get("md_user") ?: return null,
+            get("md_pass") ?: return null, get("md_key") ?: return null,
+        )
     }
 
     override fun onDestroy() {
@@ -78,10 +92,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(prefs: android.content.SharedPreferences) {
+fun App(prefs: android.content.SharedPreferences, dev: DevCredentials? = null) {
     var ready by remember { mutableStateOf(RustNet.nativeIsReady() == "true") }
     if (!ready) {
-        LoginScreen(prefs) { ready = true }
+        LoginScreen(prefs, dev) { ready = true }
     } else {
         MainScreen(prefs, onLogout = { ready = false })
     }

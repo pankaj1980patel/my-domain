@@ -13,3 +13,6 @@ node_modules/
 fcm-sa.json
 google-services*.json
 apps/server/my-domain-server-amd64
+
+# device-lab test account
+scripts/lab/test-creds.env

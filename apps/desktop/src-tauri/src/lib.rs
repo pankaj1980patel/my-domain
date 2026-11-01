@@ -176,6 +176,32 @@ fn get_saved_session(engine: State<Eng>) -> SavedSession {
     engine.saved_session()
 }
 
+/// Device-lab test account, from `MD_DEV_SERVER` / `MD_DEV_USER` /
+/// `MD_DEV_PASS` / `MD_DEV_KEY` (see scripts/lab/test-creds.env). The login
+/// screen fills itself in and logs in when these are set. Debug builds only:
+/// a release build never reads credentials from the environment.
+#[derive(serde::Serialize)]
+struct DevCredentials {
+    server: String,
+    user: String,
+    pass: String,
+    key: String,
+}
+
+#[tauri::command]
+fn dev_credentials() -> Option<DevCredentials> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let var = |k: &str| std::env::var(k).ok().filter(|v| !v.is_empty());
+    Some(DevCredentials {
+        server: var("MD_DEV_SERVER")?,
+        user: var("MD_DEV_USER")?,
+        pass: var("MD_DEV_PASS")?,
+        key: var("MD_DEV_KEY")?,
+    })
+}
+
 #[tauri::command]
 fn is_ready(engine: State<Eng>) -> bool {
     engine.is_ready()
@@ -331,9 +357,23 @@ fn firewall_check(engine: State<Eng>) -> Result<FirewallStatus, CoreError> {
 
 /// Round-trip FCM self-test: pushes a ping to our own token via the server. The
 /// pong arrives through the FCM receiver (see `fcm.rs`) as an `fcm-event`.
+/// If FCM rejects our token (expired/revoked registration), register a new one;
+/// the frontend retries the self-test a few seconds later.
 #[tauri::command]
-fn fcm_selftest(engine: State<Eng>) -> Result<String, CoreError> {
-    engine.fcm_selftest()
+fn fcm_selftest(
+    app: AppHandle,
+    engine: State<Eng>,
+    fcm: State<fcm::FcmToken>,
+) -> Result<String, CoreError> {
+    match engine.fcm_selftest() {
+        Err(e) if e.to_string().contains("token invalid") => {
+            fcm::reregister(app, fcm.0.clone());
+            Err(CoreError::Other(
+                "fcm token rejected; re-registering".into(),
+            ))
+        }
+        r => r,
+    }
 }
 
 /// Run + persist this device's inbound firewall status (background) so siblings
@@ -396,6 +436,7 @@ pub fn run() {
                 }
             }
             // Start the FCM receiver (needs the managed Engine for on_signal).
+            app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
             Ok(())
         })
@@ -403,6 +444,7 @@ pub fn run() {
             get_identity,
             get_peers,
             get_saved_session,
+            dev_credentials,
             is_ready,
             session_info,
             auth_register,
