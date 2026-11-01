@@ -12,7 +12,11 @@ source "$(dirname "$0")/common.sh"
 
 say "macOS desktop"
 PIDF="$MD_REPO_ROOT/target/my-domain-mac.pid"
-[[ -f "$PIDF" ]] && { pkill -P "$(cat "$PIDF")" 2>/dev/null; kill "$(cat "$PIDF")" 2>/dev/null; sleep 1; } || true
+# Stop any previous run of THIS repo's desktop app (matched by path, so other
+# projects' tauri apps are left alone), plus the app binary it spawned.
+pkill -f "$MD_REPO_ROOT/apps/desktop/node_modules/.bin/tauri" 2>/dev/null || true
+pkill -f "$MD_REPO_ROOT/target/debug/my-domain" 2>/dev/null || true
+sleep 1
 (cd "$MD_REPO_ROOT/apps/desktop" && npm install --silent &&
   MD_DEV_SERVER="$MD_DEV_SERVER" MD_DEV_USER="$MD_DEV_USER" MD_DEV_PASS="$MD_DEV_PASS" MD_DEV_KEY="$MD_DEV_KEY" \
   nohup npm run tauri dev > "$MD_REPO_ROOT/target/my-domain-mac.log" 2>&1 < /dev/null & echo $! > "$PIDF")

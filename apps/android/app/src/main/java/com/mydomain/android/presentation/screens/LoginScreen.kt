@@ -18,7 +18,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +33,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import com.mydomain.android.R
 import androidx.compose.foundation.layout.size
-import com.mydomain.android.DevCredentials
 import com.mydomain.android.RustNet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -44,12 +42,12 @@ import kotlinx.coroutines.withContext
 private const val DEFAULT_SERVER = "https://152-67-7-50.sslip.io"
 
 @Composable
-fun LoginScreen(prefs: SharedPreferences, dev: DevCredentials? = null, onReady: () -> Unit) {
+fun LoginScreen(prefs: SharedPreferences, onReady: () -> Unit) {
     // Default: the hosted registry (HTTPS); a saved or lab-provided server wins.
-    var server by remember { mutableStateOf(dev?.server ?: prefs.getString("server", null) ?: DEFAULT_SERVER) }
-    var user by remember { mutableStateOf(dev?.user ?: prefs.getString("user", "") ?: "") }
-    var pass by remember { mutableStateOf(dev?.pass ?: "") }
-    var key by remember { mutableStateOf(dev?.key ?: "") }
+    var server by remember { mutableStateOf(prefs.getString("server", null) ?: DEFAULT_SERVER) }
+    var user by remember { mutableStateOf(prefs.getString("user", "") ?: "") }
+    var pass by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
 
@@ -79,9 +77,6 @@ fun LoginScreen(prefs: SharedPreferences, dev: DevCredentials? = null, onReady: 
             }
         }
     }
-
-    // Device lab: a test account passed at launch logs straight in.
-    LaunchedEffect(dev) { if (dev != null) submit(false) }
 
     Column(
         Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()),

@@ -15,6 +15,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -70,8 +71,10 @@ class MainActivity : ComponentActivity() {
         runCatching { connectivityManager?.registerDefaultNetworkCallback(netCallback!!) }
 
         val prefs = getSharedPreferences("md", Context.MODE_PRIVATE)
-        val dev = devCredentials(intent)
-        setContent { MaterialTheme { App(prefs, dev) } }
+        // Device lab: log in with the test account in the background, so it
+        // works even when the phone is locked (Compose only runs on screen).
+        devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
+        setContent { MaterialTheme { App(prefs) } }
     }
 
     /** Device-lab test account from launch extras (scripts/lab/android.sh
@@ -85,6 +88,22 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun devLogin(prefs: android.content.SharedPreferences, dev: DevCredentials) {
+        // NetService starts the engine; on a fresh launch it may not be up yet.
+        var err = RustNet.nativeAuthLogin(dev.server, dev.user, dev.pass)
+        repeat(100) {
+            if (err == "ERROR: not started") {
+                Thread.sleep(100); err = RustNet.nativeAuthLogin(dev.server, dev.user, dev.pass)
+            }
+        }
+        if (err.isEmpty()) err = RustNet.nativeSetEncryptionKey(dev.key)
+        if (err.isEmpty()) {
+            prefs.edit().putString("server", dev.server).putString("user", dev.user).apply()
+            RustNet.nativeRefresh()
+        }
+        android.util.Log.i("mydomain_net", "lab auto-login: ${if (err.isEmpty()) "ok" else err}")
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
@@ -92,10 +111,17 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun App(prefs: android.content.SharedPreferences, dev: DevCredentials? = null) {
+fun App(prefs: android.content.SharedPreferences) {
     var ready by remember { mutableStateOf(RustNet.nativeIsReady() == "true") }
+    // A background login (device lab) can finish while the login screen shows.
+    LaunchedEffect(ready) {
+        while (!ready) {
+            kotlinx.coroutines.delay(500)
+            ready = RustNet.nativeIsReady() == "true"
+        }
+    }
     if (!ready) {
-        LoginScreen(prefs, dev) { ready = true }
+        LoginScreen(prefs) { ready = true }
     } else {
         MainScreen(prefs, onLogout = { ready = false })
     }

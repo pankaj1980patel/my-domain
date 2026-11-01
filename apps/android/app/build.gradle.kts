@@ -69,10 +69,14 @@ cargo {
     targetDirectory = "${rootDir}/../../target"
 }
 
-// Make sure the Rust libs are built before Gradle packages the JNI libs.
+// Make sure the Rust libs are built before Gradle packages the JNI libs, and
+// never trust the merge's up-to-date check: on 2026-11-02 we found every APK
+// for a day had shipped a stale (pre-QUIC) libmydomain_net.so because
+// mergeDebugJniLibFolders kept reporting UP-TO-DATE. Re-merging is a cheap copy.
 tasks.whenTaskAdded {
     if (name == "mergeDebugJniLibFolders" || name == "mergeReleaseJniLibFolders") {
         dependsOn("cargoBuild")
+        outputs.upToDateWhen { false }
     }
 }
 
