@@ -17,6 +17,53 @@ and in [learnings/](../learnings/README.md).
 
 ## 2. Phase 2 leftovers (networking)
 
+- **Signaled QUIC as rung 3** (replaces the signaled WebSocket rung).
+  - We send `QuicOffer { sid, our addresses }` through the server.
+  - The peer dials us over QUIC **and** replies `QuicAnswer { its addresses }`,
+    which we dial too.
+  - The first connection to succeed wins. If both succeed, keep the one
+    opened by the lower `node_id`, the same tie-break the hole punch uses.
+  - It fixes two gaps in today's rungs:
+    - **Stale or missing addresses:** the live server returns no
+      `quic_port`, and a peer may have changed networks since it last
+      checked in. The signal carries its current LAN and public addresses.
+    - **One-way reachability:** when only one side accepts incoming
+      connections (a firewalled Mac, a phone on mobile data), dialing from
+      both ends still connects.
+  - Later, remove the WebSocket rungs (2 and 3); QUIC covers them.
+  - New ladder: direct QUIC → LAN UDP → **signaled QUIC** → hole punch +
+    QUIC → WebRTC → relay.
+  - Test: a ladder test with `SignalHub` where only one side can be dialed.
+- **Relay right away, upgrade in the background.** Today the rungs run one
+  after another, so a peer that's hard to reach takes up to about 66 s to
+  connect, or to fail. Planned instead (the approach Tailscale and WebRTC
+  use):
+  1. **Connect fast:** if the quick rungs (0–3) don't succeed within a few
+     seconds, bring up the **relay as a temporary link**. Messages flow
+     immediately.
+  2. **Keep looking for a direct path:** the hole punch and WebRTC keep
+     trying in the background, and are retried every so often (e.g. on a
+     network change, or every 30–60 s) while the peer is on the relay.
+  3. **Upgrade without a hiccup:** when a direct path comes up, move traffic
+     to it and close the relay link. Nothing in flight is lost, because the
+     old link is closed only after the new one has carried a confirmation
+     both ways.
+  4. **Fall back the same way:** if the direct path drops, switch back to
+     the relay instead of disconnecting.
+  - Better still: **race the rungs instead of queueing them**, like "Happy
+    Eyeballs" in browsers. Start direct QUIC, signaled QUIC and the relay
+    together, use whichever works first, and keep upgrading to the cheapest
+    working path.
+  - Cost: the relay only carries traffic until something better is found,
+    so server load stays low. Large transfers should wait a moment for an
+    upgrade, or trigger the Wi-Fi Direct fast path (Phase 5, wave C).
+  - The UI shows the path in plain words: "Connected via relay, looking for
+    a faster route…", then "Connected directly".
+  - Tests:
+    - Peer reachable only via the relay → connects within a few seconds.
+    - Direct path appears later → traffic moves over, no message lost.
+    - Direct path drops → falls back to the relay.
+  - Needs the latest server deployed, because the live one has no `/relay`.
 - **Move the remaining loops to tokio.** The TCP/UDP/WS listeners,
   discovery and the heartbeat still run on their own threads. Moving them to
   tokio tasks with a `CancellationToken` makes shutdown clean and immediate.
