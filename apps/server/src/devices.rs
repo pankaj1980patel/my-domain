@@ -3,7 +3,7 @@
 
 use axum::{
     extract::{ConnectInfo, Query, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode},
     Json,
 };
 use futures::TryStreamExt;
@@ -65,6 +65,26 @@ pub struct DeviceOut {
     pub reflexive_udp_port: Option<i32>,
 }
 
+/// The caller's real IP. Behind the local reverse proxy (Caddy on :443) every
+/// connection comes from loopback, so take the client IP the proxy put in
+/// `X-Forwarded-For`. The header is trusted ONLY from loopback: a client
+/// talking to :6969 directly can't spoof its address with it.
+pub fn client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
+    if peer.ip().is_loopback() {
+        let forwarded = headers
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            // Caddy replaces untrusted XFF with just the client; if a chain
+            // ever arrives, the right-most entry is the one our proxy added.
+            .and_then(|v| v.rsplit(',').next())
+            .and_then(|v| v.trim().parse::<IpAddr>().ok());
+        if let Some(ip) = forwarded {
+            return ip;
+        }
+    }
+    peer.ip()
+}
+
 /// Register or update (heartbeat / network-change) the caller's device. Uses a
 /// `$set` upsert so a heartbeat that omits e.g. `fcm_token` doesn't clobber the
 /// value stored by an earlier call.
@@ -72,12 +92,13 @@ pub async fn register(
     State(s): State<AppState>,
     user: AuthUser,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(req): Json<DeviceReq>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     let ip = req
         .ip
         .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| addr.ip().to_string());
+        .unwrap_or_else(|| client_ip(addr, &headers).to_string());
 
     let mut set = doc! {
         "user_id": &user.user_id,
@@ -252,6 +273,7 @@ pub async fn probe(
     State(s): State<AppState>,
     user: AuthUser,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(req): Json<ProbeReq>,
 ) -> Result<Json<ProbeOut>, AppError> {
     let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
@@ -260,7 +282,7 @@ pub async fn probe(
         .await?
         .ok_or(AppError::BadRequest("device not found".into()))?;
 
-    let host = addr.ip();
+    let host = client_ip(addr, &headers);
     let want = |p: &str| req.check.is_empty() || req.check.iter().any(|c| c == p);
     let tcp_reachable = want("tcp") && probe_tcp(host, dev.tcp_port).await;
     let ws_reachable = want("ws") && dev.ws_port > 0 && probe_tcp(host, dev.ws_port).await;
@@ -280,4 +302,34 @@ pub async fn probe(
         ws_reachable,
         udp_reachable,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn xff(v: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert("x-forwarded-for", v.parse().unwrap());
+        h
+    }
+
+    #[test]
+    fn client_ip_trusts_forwarded_for_only_from_the_local_proxy() {
+        let proxy: SocketAddr = "127.0.0.1:50000".parse().unwrap();
+        let direct: SocketAddr = "203.0.113.9:50000".parse().unwrap();
+        assert_eq!(
+            client_ip(proxy, &xff("198.51.100.7")),
+            "198.51.100.7".parse::<IpAddr>().unwrap()
+        );
+        assert_eq!(
+            client_ip(proxy, &xff("1.1.1.1, 198.51.100.7")),
+            "198.51.100.7".parse::<IpAddr>().unwrap()
+        );
+        // A direct client can't spoof its address.
+        assert_eq!(client_ip(direct, &xff("10.0.0.1")), direct.ip());
+        // Missing or garbage header: fall back to the socket address.
+        assert_eq!(client_ip(proxy, &HeaderMap::new()), proxy.ip());
+        assert_eq!(client_ip(proxy, &xff("not-an-ip")), proxy.ip());
+    }
 }

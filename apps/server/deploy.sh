@@ -5,12 +5,14 @@
 #   ./deploy.sh                # build amd64 binary, ship it, restart service
 #   BIN_SOURCE=gh ./deploy.sh  # download latest GitHub Actions artifact instead of building
 #   BIN_SOURCE=remote ./deploy.sh   # build on the server itself (needs cargo there)
+#   BIN_SOURCE=docker ./deploy.sh   # cross-compile in a native Docker container
+#                                   # (fast on an arm64 Mac; the 1 GB server can't build it)
 #
 # Config via env vars (defaults match deployment.dev.md):
 #   SSH_TARGET    ssh host (uses ~/.ssh/config)  (default oracle-dev)
 #   APP_DIR       remote install dir   (default /opt/my-domain-server)
 #   SERVICE       systemd unit name    (default my-domain-server)
-#   BIN_SOURCE    cross | gh | remote  (default: auto — cross if installed, else gh)
+#   BIN_SOURCE    cross | docker | gh | remote  (default: auto — cross if installed, else gh)
 #
 # Server env / FCM push credentials (optional — written into the remote
 # systemd EnvironmentFile so the server can send FCM data messages):
@@ -115,6 +117,18 @@ case "$BIN_SOURCE" in
     cross build --release --locked -p "$BIN_NAME" --target "$TARGET"
     LOCAL_BIN="../../target/$TARGET/release/$BIN_NAME"
     ;;
+  docker)
+    # Native-arch container + an x86_64 cross gcc (for ring): no emulation.
+    # Debian bookworm's glibc (2.36) is older than the server's, so the binary runs there.
+    say "Cross-compiling for $TARGET in Docker ..."
+    docker run --rm -v "$(cd ../.. && pwd)":/src -v md-cargo-registry:/usr/local/cargo/registry -w /src \
+      -e CARGO_TARGET_DIR=/src/target/docker \
+      -e CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=x86_64-linux-gnu-gcc \
+      -e CC_x86_64_unknown_linux_gnu=x86_64-linux-gnu-gcc -e AR_x86_64_unknown_linux_gnu=x86_64-linux-gnu-ar \
+      rust:1-bookworm bash -c "apt-get update -qq >/dev/null && apt-get install -y -qq gcc-x86-64-linux-gnu libc6-dev-amd64-cross >/dev/null &&
+        rustup target add $TARGET >/dev/null 2>&1 && cargo build --release --locked -p $BIN_NAME --target $TARGET"
+    LOCAL_BIN="../../target/docker/$TARGET/release/$BIN_NAME"
+    ;;
   gh)
     say "Downloading latest successful build artifact via gh ..."
     TMP="$(mktemp -d)"
@@ -131,7 +145,7 @@ case "$BIN_SOURCE" in
     # --locked) minus build output and secrets, then build just the server.
     rsync -az --delete -e "ssh ${SSH_OPTS[*]}" \
       --exclude target --exclude .git --exclude .env --exclude node_modules \
-      --exclude "fcm-sa.json" --exclude "google-services*.json" \
+      --exclude "fcm-sa.json" --exclude "google-services*.json" --exclude "test-creds.env" \
       ../../ "$REMOTE:/tmp/${BIN_NAME}-src/"
     push_fcm_creds
     ssh "${SSH_OPTS[@]}" "$REMOTE" \
@@ -158,6 +172,8 @@ say "Installing and restarting service ..."
 ssh "${SSH_OPTS[@]}" "$REMOTE" bash -s <<EOF
 set -euo pipefail
 sudo mkdir -p "${APP_DIR}"
+# Keep the running binary for a quick rollback: sudo mv ${APP_DIR}/${BIN_NAME}.prev ${APP_DIR}/${BIN_NAME}
+[ -f "${APP_DIR}/${BIN_NAME}" ] && sudo cp "${APP_DIR}/${BIN_NAME}" "${APP_DIR}/${BIN_NAME}.prev"
 sudo install -m755 "/tmp/${BIN_NAME}.new" "${APP_DIR}/${BIN_NAME}"
 rm -f "/tmp/${BIN_NAME}.new"
 sudo systemctl restart "${SERVICE}"

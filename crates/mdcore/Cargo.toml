@@ -35,7 +35,7 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 # "tls" pulls in the rustls backend + bundled webpki roots so HTTPS works (e.g.
 # an ngrok https tunnel). Matches the android client's stricter feature set.
 ureq = { version = "2", default-features = false, features = ["json", "tls"] }
-tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 # Lightweight, sans-IO WebRTC for the final connect rung. RustCrypto backend
 # only (no aws-lc/openssl) so it cross-compiles cleanly (incl. android NDK).
 str0m = { version = "0.21", default-features = false, features = ["rust-crypto"], optional = true }
