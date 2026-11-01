@@ -102,27 +102,15 @@ pub struct SavedSession {
     pub username: String,
 }
 
+/// The public facade. Everything shared with the background threads lives in
+/// `ctx` (one copy, cheap to clone: every field is an `Arc`); only state the
+/// threads never touch (the server session, the discovery send socket) is here.
 pub struct Engine<P: Platform> {
-    platform: Arc<P>,
-    sink: Arc<dyn EventSink>,
-    identity: Arc<Mutex<Identity>>,
-    peers: PeerMap,
-    ws_conns: WsConns,
-    p2p_conns: P2pConns,
-    punch_waiters: PunchWaiters,
-    rtc_waiters: RtcWaiters,
-    key: KeyHolder,
+    ctx: NetCtx<P>,
     server_url: Arc<Mutex<Option<String>>>,
     token: Arc<Mutex<Option<String>>>,
     username: Arc<Mutex<Option<String>>>,
     disco_send: Arc<UdpSocket>,
-    clip_active: Arc<AtomicBool>,
-    clip_last: Arc<Mutex<String>>,
-    clip_pending: ClipPending,
-    control: Arc<ControlRegistry<P>>,
-    installed_apps: Arc<Mutex<String>>,
-    subs: Subs,
-    directed_transport: Arc<Mutex<String>>,
 }
 
 impl<P: Platform> Engine<P> {
@@ -303,55 +291,23 @@ impl<P: Platform> Engine<P> {
         }
 
         Ok(Engine {
-            platform,
-            sink,
-            identity,
-            peers,
-            ws_conns,
-            p2p_conns,
-            punch_waiters,
-            rtc_waiters,
-            key,
+            ctx,
             server_url: Arc::new(Mutex::new(None)),
             token: Arc::new(Mutex::new(None)),
             username: Arc::new(Mutex::new(None)),
             disco_send,
-            clip_active,
-            clip_last,
-            clip_pending,
-            control,
-            installed_apps,
-            subs,
-            directed_transport,
         })
     }
 
     fn net_ctx(&self) -> NetCtx<P> {
-        NetCtx {
-            platform: self.platform.clone(),
-            identity: self.identity.clone(),
-            key: self.key.clone(),
-            peers: self.peers.clone(),
-            ws_conns: self.ws_conns.clone(),
-            p2p_conns: self.p2p_conns.clone(),
-            punch_waiters: self.punch_waiters.clone(),
-            rtc_waiters: self.rtc_waiters.clone(),
-            sink: self.sink.clone(),
-            clip_active: self.clip_active.clone(),
-            clip_last: self.clip_last.clone(),
-            clip_pending: self.clip_pending.clone(),
-            control: self.control.clone(),
-            installed_apps: self.installed_apps.clone(),
-            subs: self.subs.clone(),
-            directed_transport: self.directed_transport.clone(),
-        }
+        self.ctx.clone()
     }
 
     /// The transport a message to `node_id` should use right now: the active
     /// persistent link (WS/punch/WebRTC) if any, else the directed transport.
     fn proto_for(&self, node_id: &str) -> &'static str {
-        let directed = self.directed_transport.lock().unwrap().clone();
-        transport::best_proto(&self.ws_conns, &directed, node_id)
+        let directed = self.ctx.directed_transport.lock().unwrap().clone();
+        transport::best_proto(&self.ctx.ws_conns, &directed, node_id)
     }
 
     /// The transport label to *report* for a send. Punch and WebRTC links reuse
@@ -360,7 +316,7 @@ impl<P: Platform> Engine<P> {
     /// UI shows "punch"/"webrtc" rather than the internal send-path name.
     fn display_transport(&self, node_id: &str, proto: &'static str) -> String {
         use transport::TransportKind::*;
-        if let Some(c) = self.p2p_conns.lock().unwrap().get(node_id) {
+        if let Some(c) = self.ctx.p2p_conns.lock().unwrap().get(node_id) {
             return match c.kind {
                 Ws => "WS",
                 Udp => "UDP",
@@ -374,12 +330,12 @@ impl<P: Platform> Engine<P> {
 
     /// Send an already-built control-message JSON to one peer (active connection).
     fn send_control(&self, node_id: &str, json: &str) -> Result<(), String> {
-        let from = self.identity.lock().unwrap().name.clone();
+        let from = self.ctx.identity.lock().unwrap().name.clone();
         let proto = self.proto_for(node_id);
         transport::send_payload(
-            &self.peers,
-            &self.ws_conns,
-            &self.key,
+            &self.ctx.peers,
+            &self.ctx.ws_conns,
+            &self.ctx.key,
             &from,
             node_id,
             proto,
@@ -389,7 +345,7 @@ impl<P: Platform> Engine<P> {
 
     /// Directed transport setting ("UDP" | "TCP") for peers with no live link.
     pub fn directed_transport(&self) -> String {
-        self.directed_transport.lock().unwrap().clone()
+        self.ctx.directed_transport.lock().unwrap().clone()
     }
 
     /// Set the directed transport ("UDP" default, or "TCP"); anything else maps
@@ -400,44 +356,44 @@ impl<P: Platform> Engine<P> {
         } else {
             "UDP"
         };
-        *self.directed_transport.lock().unwrap() = v.to_string();
+        *self.ctx.directed_transport.lock().unwrap() = v.to_string();
     }
 
     fn emit_peers(&self) {
-        let list: Vec<Peer> = self.peers.lock().unwrap().values().cloned().collect();
-        self.sink.emit(CoreEvent::PeersUpdated { peers: list });
+        let list: Vec<Peer> = self.ctx.peers.lock().unwrap().values().cloned().collect();
+        self.ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });
     }
 
     // --- read-only state ---
 
     pub fn identity(&self) -> Identity {
-        self.identity.lock().unwrap().clone()
+        self.ctx.identity.lock().unwrap().clone()
     }
 
     pub fn get_peers(&self) -> Vec<Peer> {
-        self.peers.lock().unwrap().values().cloned().collect()
+        self.ctx.peers.lock().unwrap().values().cloned().collect()
     }
 
     pub fn connected_peers(&self) -> Vec<String> {
-        self.p2p_conns.lock().unwrap().keys().cloned().collect()
+        self.ctx.p2p_conns.lock().unwrap().keys().cloned().collect()
     }
 
     pub fn is_ready(&self) -> bool {
-        self.token.lock().unwrap().is_some() && self.key.lock().unwrap().is_some()
+        self.token.lock().unwrap().is_some() && self.ctx.key.lock().unwrap().is_some()
     }
 
     pub fn session_info(&self) -> SessionInfo {
         SessionInfo {
             username: self.username.lock().unwrap().clone(),
             server_url: self.server_url.lock().unwrap().clone(),
-            has_key: self.key.lock().unwrap().is_some(),
+            has_key: self.ctx.key.lock().unwrap().is_some(),
         }
     }
 
     pub fn saved_session(&self) -> SavedSession {
         SavedSession {
-            server_url: self.platform.kv_get("server_url").unwrap_or_default(),
-            username: self.platform.kv_get("username").unwrap_or_default(),
+            server_url: self.ctx.platform.kv_get("server_url").unwrap_or_default(),
+            username: self.ctx.platform.kv_get("username").unwrap_or_default(),
         }
     }
 
@@ -458,8 +414,8 @@ impl<P: Platform> Engine<P> {
         *self.server_url.lock().unwrap() = Some(url.clone());
         *self.token.lock().unwrap() = Some(resp.token);
         *self.username.lock().unwrap() = Some(resp.username.clone());
-        self.platform.kv_set("server_url", &url);
-        self.platform.kv_set("username", &resp.username);
+        self.ctx.platform.kv_set("server_url", &url);
+        self.ctx.platform.kv_set("username", &resp.username);
         Ok(())
     }
 
@@ -490,7 +446,7 @@ impl<P: Platform> Engine<P> {
         }
         let key = derive_key(passphrase, username).ok_or("failed to derive key")?;
         *self.username.lock().unwrap() = Some(username.to_string());
-        *self.key.lock().unwrap() = Some(key);
+        *self.ctx.key.lock().unwrap() = Some(key);
         Ok(())
     }
 
@@ -505,7 +461,7 @@ impl<P: Platform> Engine<P> {
             return Err("encryption key is required".into());
         }
         let key = derive_key(passphrase, &username).ok_or("failed to derive key")?;
-        *self.key.lock().unwrap() = Some(key);
+        *self.ctx.key.lock().unwrap() = Some(key);
         Ok(())
     }
 
@@ -528,7 +484,7 @@ impl<P: Platform> Engine<P> {
             return Err("new encryption key is required".into());
         }
         let key = derive_key(new_passphrase, &username).ok_or("failed to derive key")?;
-        *self.key.lock().unwrap() = Some(key);
+        *self.ctx.key.lock().unwrap() = Some(key);
         Ok(())
     }
 
@@ -538,7 +494,7 @@ impl<P: Platform> Engine<P> {
 
     pub fn logout(&self) {
         *self.token.lock().unwrap() = None;
-        *self.key.lock().unwrap() = None;
+        *self.ctx.key.lock().unwrap() = None;
     }
 
     // --- discovery / peers ---
@@ -551,13 +507,13 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or("not logged in")?;
         let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
-        let id = self.identity.lock().unwrap().clone();
+        let id = self.ctx.identity.lock().unwrap().clone();
         registry_register(
             &url,
             &token,
             &id,
-            self.platform.fcm_token().as_deref(),
-            self.platform.platform_kind(),
+            self.ctx.platform.fcm_token().as_deref(),
+            self.ctx.platform.platform_kind(),
             false,
         )?;
         let devices = registry_fetch(&url, &token, &id.node_id)?;
@@ -567,7 +523,7 @@ impl<P: Platform> Engine<P> {
 
     fn apply_registry_peers(&self, devices: Vec<RegistryDevice>) {
         {
-            let mut map = self.peers.lock().unwrap();
+            let mut map = self.ctx.peers.lock().unwrap();
             map.retain(|_, p| p.source != Source::Registry);
             for d in devices {
                 map.insert(
@@ -592,9 +548,9 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn scan_lan(&self) {
-        let id = self.identity.lock().unwrap().clone();
+        let id = self.ctx.identity.lock().unwrap().clone();
         let socket = self.disco_send.clone();
-        let targets = discovery::lan_targets(&self.platform.iface_mode());
+        let targets = discovery::lan_targets(&self.ctx.platform.iface_mode());
         std::thread::spawn(move || {
             for _ in 0..3 {
                 discovery::send_beacon(&socket, &id, false, &targets);
@@ -608,9 +564,9 @@ impl<P: Platform> Engine<P> {
     pub fn network_changed(&self, new_ip: Option<&str>) {
         let ip = match new_ip {
             Some(s) if s.parse::<Ipv4Addr>().is_ok() => s.to_string(),
-            _ => self.platform.local_ip(),
+            _ => self.ctx.platform.local_ip(),
         };
-        self.identity.lock().unwrap().ip = ip;
+        self.ctx.identity.lock().unwrap().ip = ip;
         if self.token.lock().unwrap().is_some() {
             let _ = self.refresh_from_server();
         }
@@ -634,7 +590,7 @@ impl<P: Platform> Engine<P> {
         } else {
             name.trim().to_string()
         };
-        self.peers.lock().unwrap().insert(
+        self.ctx.peers.lock().unwrap().insert(
             node_id.clone(),
             Peer {
                 node_id,
@@ -660,7 +616,8 @@ impl<P: Platform> Engine<P> {
     /// routed by node_id, so they reach a peer added this way. Used by tests
     /// today and by QR/code pairing later.
     pub fn upsert_peer(&self, peer: Peer) {
-        self.peers
+        self.ctx
+            .peers
             .lock()
             .unwrap()
             .insert(peer.node_id.clone(), peer);
@@ -668,7 +625,7 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn remove_peer(&self, node_id: &str) {
-        self.peers.lock().unwrap().remove(node_id);
+        self.ctx.peers.lock().unwrap().remove(node_id);
         self.emit_peers();
     }
 
@@ -676,6 +633,7 @@ impl<P: Platform> Engine<P> {
 
     pub fn connect_ws(&self, node_id: &str) -> Result<(), String> {
         let peer = self
+            .ctx
             .peers
             .lock()
             .unwrap()
@@ -685,7 +643,7 @@ impl<P: Platform> Engine<P> {
         if peer.ws_port == 0 {
             return Err("peer has no WebSocket port".into());
         }
-        if self.ws_conns.lock().unwrap().contains_key(node_id) {
+        if self.ctx.ws_conns.lock().unwrap().contains_key(node_id) {
             return Ok(());
         }
         ws::ws_connect(self.net_ctx(), &peer.ip, peer.ws_port)
@@ -700,12 +658,12 @@ impl<P: Platform> Engine<P> {
             .lock()
             .unwrap()
             .clone()
-            .unwrap_or_else(|| self.identity.lock().unwrap().name.clone());
+            .unwrap_or_else(|| self.ctx.identity.lock().unwrap().name.clone());
         let proto = self.proto_for(node_id);
         transport::send_payload(
-            &self.peers,
-            &self.ws_conns,
-            &self.key,
+            &self.ctx.peers,
+            &self.ctx.ws_conns,
+            &self.ctx.key,
             &from,
             node_id,
             proto,
@@ -717,59 +675,61 @@ impl<P: Platform> Engine<P> {
     // --- clipboard ---
 
     pub fn enable_clipboard_sync(&self) {
-        if let Some(clip) = self.platform.clipboard() {
+        if let Some(clip) = self.ctx.platform.clipboard() {
             if let Some(cur) = clip.get() {
-                *self.clip_last.lock().unwrap() = cur;
+                *self.ctx.clip_last.lock().unwrap() = cur;
             }
         }
-        self.clip_active.store(true, Ordering::Relaxed);
+        self.ctx.clip_active.store(true, Ordering::Relaxed);
     }
 
     pub fn disable_clipboard_sync(&self) {
-        self.clip_active.store(false, Ordering::Relaxed);
+        self.ctx.clip_active.store(false, Ordering::Relaxed);
     }
 
     pub fn clipboard_sync_enabled(&self) -> bool {
-        self.clip_active.load(Ordering::Relaxed)
+        self.ctx.clip_active.load(Ordering::Relaxed)
     }
 
     /// Pull a peer's clipboard once, write it locally, and return it.
     pub fn get_clipboard(&self, node_id: &str) -> Result<String, String> {
         let clip = self
+            .ctx
             .platform
             .clipboard()
             .ok_or("clipboard not supported on this device")?;
         let (tx, rx) = mpsc::channel::<String>();
-        self.clip_pending
+        self.ctx
+            .clip_pending
             .lock()
             .unwrap()
             .insert(node_id.to_string(), tx);
 
-        let me = self.identity.lock().unwrap().node_id.clone();
-        let from = self.identity.lock().unwrap().name.clone();
+        let me = self.ctx.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().unwrap().name.clone();
         let req = serde_json::json!({ "type": "clipboard_request", "from": me }).to_string();
         let proto = self.proto_for(node_id);
 
         if let Err(e) = transport::send_payload(
-            &self.peers,
-            &self.ws_conns,
-            &self.key,
+            &self.ctx.peers,
+            &self.ctx.ws_conns,
+            &self.ctx.key,
             &from,
             node_id,
             proto,
             &req,
         ) {
-            self.clip_pending.lock().unwrap().remove(node_id);
+            self.ctx.clip_pending.lock().unwrap().remove(node_id);
             return Err(e);
         }
 
         let result = rx.recv_timeout(Duration::from_secs(6));
-        self.clip_pending.lock().unwrap().remove(node_id);
+        self.ctx.clip_pending.lock().unwrap().remove(node_id);
         let content = result.map_err(|_| {
             "no clipboard response from peer (is it reachable and using the same key?)".to_string()
         })?;
         clip.set(&content);
-        *self.clip_last.lock().unwrap() = content.clone();
+        *self.ctx.clip_last.lock().unwrap() = content.clone();
         Ok(content)
     }
 
@@ -777,7 +737,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share an OS notification with all of the user's other devices.
     pub fn share_notification(&self, title: &str, body: &str, app: Option<&str>) {
-        let from = self.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().unwrap().node_id.clone();
         let msg = serde_json::json!({
             "type": "notification", "title": title, "body": body, "app": app, "from": from,
         })
@@ -787,7 +747,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share an incoming/missed/ended call notification.
     pub fn share_call_notification(&self, caller: &str, number: Option<&str>, state: &str) {
-        let from = self.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().unwrap().node_id.clone();
         let msg = serde_json::json!({
             "type": "call_notification", "caller": caller, "number": number, "state": state, "from": from,
         })
@@ -797,7 +757,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share call-history entries (an opaque JSON array, passed through as-is).
     pub fn share_call_history(&self, entries_json: &str) {
-        let from = self.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().unwrap().node_id.clone();
         let entries: serde_json::Value =
             serde_json::from_str(entries_json).unwrap_or(serde_json::Value::Null);
         let msg = serde_json::json!({ "type": "call_history", "entries": entries, "from": from })
@@ -811,19 +771,19 @@ impl<P: Platform> Engine<P> {
     /// by the host (e.g. android PackageManager). Producers answer `apps_request`
     /// with this.
     pub fn set_installed_apps(&self, apps_json: &str) {
-        *self.installed_apps.lock().unwrap() = apps_json.to_string();
+        *self.ctx.installed_apps.lock().unwrap() = apps_json.to_string();
     }
 
     /// Consumer: ask a producer for its app list (reply arrives as CoreEvent::AppsList).
     pub fn request_apps(&self, node_id: &str) -> Result<(), String> {
-        let me = self.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let m = serde_json::json!({ "type": "apps_request", "from": me }).to_string();
         self.send_control(node_id, &m)
     }
 
     /// Consumer: set the full enabled package set on a producer.
     pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> Result<(), String> {
-        let me = self.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let apps: serde_json::Value =
             serde_json::from_str(apps_json).unwrap_or(serde_json::Value::Array(vec![]));
         let m =
@@ -834,8 +794,9 @@ impl<P: Platform> Engine<P> {
     /// Producer: a local app posted a notification — forward it to every peer
     /// subscribed to that package (as a normal `notification`).
     pub fn share_app_notification(&self, pkg: &str, app: &str, title: &str, body: &str) {
-        let me = self.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let targets: Vec<String> = self
+            .ctx
             .subs
             .lock()
             .unwrap()
@@ -872,7 +833,7 @@ impl<P: Platform> Engine<P> {
             });
         }
         let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
-        let node_id = self.identity.lock().unwrap().node_id.clone();
+        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         let probe = crate::registry::probe_inbound(&url, &token, &node_id, &["tcp", "ws"])?;
         let inbound_blocked = !(probe.tcp_reachable || probe.ws_reachable);
         // Persist so siblings see our reachability via `GET /devices` and the
@@ -898,7 +859,7 @@ impl<P: Platform> Engine<P> {
     pub fn report_firewall(&self) {
         let url = self.server_url.lock().unwrap().clone();
         let token = self.token.lock().unwrap().clone();
-        let node_id = self.identity.lock().unwrap().node_id.clone();
+        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         let (Some(url), Some(token)) = (url, token) else {
             return;
         };
@@ -932,7 +893,7 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or("not logged in")?;
         let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
-        let node_id = self.identity.lock().unwrap().node_id.clone();
+        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
     }
 
@@ -945,7 +906,7 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or("not logged in")?;
         let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
-        let me = self.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
         crate::registry::send_signal(&url, &token, &me, to, "signal", data)
     }
@@ -962,7 +923,7 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or("not logged in")?;
         let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
-        let node_id = self.identity.lock().unwrap().node_id.clone();
+        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         let sid = uuid::Uuid::new_v4().to_string();
         crate::registry::send_selfping(&url, &token, &node_id, &sid)?;
         Ok(sid)
@@ -978,7 +939,7 @@ impl<P: Platform> Engine<P> {
             // Initiator wants us reachable: our WS server is already listening,
             // so mark it open and tell them where to dial.
             Signal::StartWs { sid } => {
-                let id = self.identity.lock().unwrap().clone();
+                let id = self.ctx.identity.lock().unwrap().clone();
                 let _ = self.update_ws_open(true);
                 let _ = self.send_signal(
                     from,
@@ -1024,7 +985,7 @@ impl<P: Platform> Engine<P> {
             Signal::PunchAnswer {
                 sid, candidates, ..
             } => {
-                let waiter = self.punch_waiters.lock().unwrap().remove(&sid);
+                let waiter = self.ctx.punch_waiters.lock().unwrap().remove(&sid);
                 if let Some(tx) = waiter {
                     let _ = tx.send(candidates);
                 }
@@ -1053,7 +1014,7 @@ impl<P: Platform> Engine<P> {
             // WebRTC: hand the answer SDP to the waiting initiator thread.
             #[cfg(feature = "webrtc")]
             Signal::SdpAnswer { sid, sdp } => {
-                let waiter = self.rtc_waiters.lock().unwrap().remove(&sid);
+                let waiter = self.ctx.rtc_waiters.lock().unwrap().remove(&sid);
                 if let Some(tx) = waiter {
                     let _ = tx.send(sdp);
                 }
@@ -1072,7 +1033,7 @@ impl<P: Platform> Engine<P> {
     /// `PeerConnected` event when any rung establishes a live link.
     pub fn connect(&self, node_id: &str) -> Result<(), String> {
         // Validate the peer exists up front so the button gets immediate feedback.
-        if !self.peers.lock().unwrap().contains_key(node_id) {
+        if !self.ctx.peers.lock().unwrap().contains_key(node_id) {
             return Err("peer not found".into());
         }
         let ctx = self.net_ctx();
