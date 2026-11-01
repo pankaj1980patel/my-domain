@@ -15,7 +15,92 @@ and in [learnings/](../learnings/README.md).
 | **Archive the six old GitHub repos** | They're merged into this monorepo with full history. |
 | **Merge `monorepo` → `main`** (open a PR) | CI runs only on pushes to `main` and on PRs, so this branch hasn't been through CI yet. |
 
-## 2. Phase 2 leftovers (networking)
+## 2. Connectivity improvements (do these first)
+
+In priority order. Each item makes devices connect in more places, faster,
+or with less battery.
+
+1. **Serve the server on port 443 with HTTPS.** *(first, before everything else)*
+   - Port 6969 is blocked on many office, hotel and campus networks, and the
+     traffic is plain HTTP.
+   - Put the registry, signaling and relay behind TLS on 443: a reverse proxy
+     (Caddy, with automatic Let's Encrypt certificates) in front of the axum
+     server on `oracle-dev`. This needs a domain name pointing at
+     152.67.7.50.
+   - The relay then runs as `wss://`, which is the "relay over TLS" item
+     below.
+   - Clients default to `https://<domain>`; the old `http://…:6969` stays for
+     a while so existing installs keep working.
+2. **Detect NAT type up front, and skip what can't work.**
+   - Ask two STUN servers for our public address. Different answers mean a
+     "symmetric" NAT.
+   - Publish the result with the device's registry entry.
+   - If both peers are behind symmetric NATs, skip the hole punch and WebRTC
+     (about 40 s of guaranteed failure) and go straight to the relay.
+3. **Re-check the network when it changes.**
+   - On a Wi-Fi change, Wi-Fi → mobile data, or wake from sleep:
+     - rejoin LAN discovery
+     - refresh our addresses with the registry
+     - re-run STUN
+     - re-dial dropped links
+   - Android already reports changes (`nativeNetworkChanged`), but nothing
+     acts on them yet. On desktop, watch for interface changes.
+4. **IPv6.**
+   - Many mobile networks (Jio, Airtel) give phones a public IPv6 address
+     with no NAT, so QUIC can connect directly, with no punch and no relay.
+   - Store **several addresses per device** in the registry (LAN IPv4, global
+     IPv6, public address from STUN) and dial them in parallel; the first to
+     answer wins.
+   - Bind the QUIC endpoint dual-stack (IPv4 + IPv6).
+5. **Ask the home router to open a port** (UPnP-IGD, NAT-PMP, PCP).
+   - If the router agrees, the device becomes reachable from anywhere on a
+     known public port. Publish that address as one more candidate.
+   - Renew the mapping before it expires, and remove it on exit.
+6. **QUIC connection migration.**
+   - When the phone moves from Wi-Fi to mobile data, keep the live QUIC
+     connection by rebinding the endpoint to the new network (quinn
+     `Endpoint::rebind`) instead of letting it time out and reconnecting
+     from scratch.
+7. **Standard LAN discovery (mDNS / DNS-SD).**
+   - Advertise `_mydomain._udp.local` with node id and ports. macOS has
+     Bonjour built in, Android has NSD, Linux has Avahi.
+   - It replaces the custom multicast and the /24 sweep (254 packets every
+     ~10 s, which some routers flag). Keep the sweep only as a last fallback.
+8. **Keep-alive that suits phones.**
+   - The fixed 5 s keep-alive and 20 s idle timeout cost a phone battery.
+   - Instead: about 25 s keep-alive (just under typical router timeouts),
+     idle links closed while the screen is off, and wake-up by push when
+     needed.
+   - Tune it per platform and per link type: the relay and LAN can afford
+     less chatter.
+9. **Connection quality.**
+   - Read RTT, packet loss and throughput from each QUIC connection (quinn
+     stats).
+   - Use them to choose between paths, e.g. prefer LAN over relay even when
+     both are up.
+   - Show it in plain words ("Excellent", "Weak connection") in the device
+     card, with details on the Developer screen.
+10. **Better relay.**
+    - Relays in more than one region; clients pick the closest by measured
+      RTT.
+    - Move the relay from WebSocket to QUIC, so it has no head-of-line
+      blocking and copes better with lossy mobile networks.
+    - A per-account bandwidth cap, plus metrics on relay usage.
+11. **Bluetooth LE.**
+    - Find nearby devices and send small commands (ring, media keys, wake,
+      "connect to my hotspot") when there is no shared Wi-Fi or no internet
+      at all.
+    - It can also be the out-of-band channel for pairing and for starting
+      Wi-Fi Direct.
+12. **Clean up old paths.**
+    - Once QUIC covers every case, delete:
+      - the one-off TCP connection and single-UDP-datagram sending
+      - the WebSocket rungs (2 and 3)
+      - the UDP/TCP "directed transport" setting
+    - That's less code and fewer ways to fail. The ladder tests show what can
+      safely go.
+
+## 3. Phase 2 leftovers (networking)
 
 - **Signaled QUIC as rung 3** (replaces the signaled WebSocket rung).
   - We send `QuicOffer { sid, our addresses }` through the server.
@@ -77,7 +162,7 @@ and in [learnings/](../learnings/README.md).
   only been tested against `FakeRelay`. Both follow the same protocol, but
   the two have never been connected.
 
-## 3. Phase 3: Bridges and apps
+## 4. Phase 3: Bridges and apps
 
 - **UniFFI bridge** (`md-ffi`) for Android. Why:
   [ADR-0003](../learnings/decisions/ADR-0003-uniffi.md).
@@ -98,7 +183,7 @@ and in [learnings/](../learnings/README.md).
 - **Lab scenario tests** (`scripts/lab/scenarios/*.toml`), run across the
   Mac, the laptop and the phone.
 
-## 4. UX for everyone (design, colour, polish)
+## 5. UX for everyone (design, colour, polish)
 
 Goal: someone who isn't technical can install it, pair their devices and use
 every feature without help, and enjoy doing it. Today the apps are
@@ -202,7 +287,7 @@ version number 7 times. It collects everything a developer needs:
     pair two devices and send a file unaided?
   - Screenshot tests for both themes, so visual regressions are caught in CI.
 
-## 5. Phase 4: Identity, domains, permissions
+## 6. Phase 4: Identity, domains, permissions
 
 Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 
@@ -233,7 +318,7 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
   - A permission test matrix for every method.
   - Forged-certificate and replay tests.
 
-## 6. Phase 5: Feature waves (see [features.md](features.md))
+## 7. Phase 5: Feature waves (see [features.md](features.md))
 
 | Wave | Features |
 |---|---|
@@ -296,7 +381,7 @@ A feature counts as done when it has:
 - its row ticked in features.md
 - a learnings journal entry
 
-## 7. Phase 6: More devices
+## 8. Phase 6: More devices
 
 - **Android TV / Google TV / Fire TV:** an `:app-tv` module. Fire TV has no
   Google Play Services, so no FCM there.
