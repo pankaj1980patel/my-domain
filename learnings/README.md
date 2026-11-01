@@ -21,7 +21,7 @@ to **Rust**. Every Rust idea is shown next to its closest Node equivalent.
 | – | 05-domains-permissions.md | Domains, grants, flags, the `ask` flow, audit log | Phase 4 |
 | – | 06-async-tokio.md | Threads → tokio: tasks, channels, cancellation | Phase 2 |
 | – | 07-ffi-bridges.md | UniFFI, Tauri commands, why hand-written JNI was removed | Phase 3 |
-| – | 08-testing.md | Test pyramid, testkit, NAT tests in network namespaces | Phase 1 |
+| 6 | [08-testing.md](08-testing.md) | Test pyramid, md-testkit, running tests on the phone, writing good tests | ✅ |
 | – | 09-android.md | Services, permission tiers, Accessibility, MediaProjection, Shizuku | Phase 3/5 |
 | – | 10-desktop.md | Tauri, SolidJS, IPC, OS integrations | Phase 3 |
 | – | 11-server.md | axum, MongoDB schema, JWT, FCM | Phase 4 |
