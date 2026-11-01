@@ -67,7 +67,7 @@ class NetService : Service() {
         // device id; on Android 10+ that's unreadable for normal apps, so fall
         // back to ANDROID_ID (also stable across restarts/reinstalls).
         val ip = wifiIpv4()
-        val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip)
+        val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip, filesDir.absolutePath)
         runCatching { myNodeId = JSONObject(identityJson).optString("node_id", "") }
 
         publishInstalledApps()

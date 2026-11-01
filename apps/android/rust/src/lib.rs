@@ -18,6 +18,7 @@ use log::info;
 
 use mdcore::engine::Engine;
 use mdcore::events::{CoreEvent, EventSink};
+use mdcore::kv::FileKv;
 use mdcore::model::IncomingMessage;
 use mdcore::platform::{detect_local_ip, IfaceMode, Platform};
 
@@ -34,6 +35,9 @@ struct AndroidPlatform {
     wifi_ip: Arc<Mutex<String>>,
     /// Set from Kotlin via `nativeSetFcmToken` once Firebase issues it.
     fcm_token: Arc<Mutex<Option<String>>>,
+    /// Session store in the app's private files dir (`Context.filesDir`).
+    /// Before this, Android had no store and forgot the login on restart.
+    kv: Option<FileKv>,
 }
 
 impl AndroidPlatform {
@@ -67,6 +71,18 @@ impl Platform for AndroidPlatform {
             i.to_string()
         }
     }
+    fn kv_get(&self, key: &str) -> Option<String> {
+        self.kv.as_ref()?.get(key)
+    }
+
+    fn kv_set(&self, key: &str, value: &str) {
+        if let Some(kv) = &self.kv {
+            if let Err(e) = kv.set(key, value) {
+                log::warn!("kv: failed to save {key}: {e}");
+            }
+        }
+    }
+
     fn fcm_token(&self) -> Option<String> {
         self.fcm_token.lock().unwrap().clone()
     }
@@ -183,6 +199,7 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeStart<'l>(
     device_id: JString<'l>,
     name: JString<'l>,
     wifi_ip: JString<'l>,
+    data_dir: JString<'l>,
 ) -> jstring {
     android_logger::init_once(
         android_logger::Config::default()
@@ -192,6 +209,7 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeStart<'l>(
     let device_id = jstr(&mut env, &device_id, "");
     let name = jstr(&mut env, &name, "android");
     let wifi_ip = jstr(&mut env, &wifi_ip, "");
+    let data_dir = jstr(&mut env, &data_dir, "");
 
     if ENGINE.get().is_none() {
         let wifi = Arc::new(Mutex::new(wifi_ip));
@@ -200,6 +218,7 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeStart<'l>(
             name,
             wifi_ip: wifi.clone(),
             fcm_token: fcm_token_cell().clone(),
+            kv: (!data_dir.is_empty()).then(|| FileKv::in_dir(&data_dir)),
         };
         let sink = Arc::new(InboxSink {
             messages: Mutex::new(VecDeque::new()),

@@ -4,7 +4,6 @@
 // crypto, discovery, and messaging live in `mdcore`.
 
 use std::net::IpAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -12,6 +11,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use mdcore::capabilities::Clipboard;
 use mdcore::engine::{Engine, FirewallStatus, SavedSession, SessionInfo};
 use mdcore::events::{CoreEvent, EventSink};
+use mdcore::kv::FileKv;
 use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
@@ -64,27 +64,14 @@ impl Clipboard for DesktopClipboard {
 }
 
 struct DesktopPlatform {
-    app: AppHandle,
+    /// Session store: `<app config dir>/session.json` (same file and format as
+    /// before, so existing saved sessions keep working). `None` if the OS
+    /// gave us no config dir.
+    kv: Option<FileKv>,
     clipboard: DesktopClipboard,
     /// Set by the FCM receiver thread once Firebase issues a token; reported to
     /// the registry on refresh so siblings can signal this device.
     fcm_token: Arc<std::sync::Mutex<Option<String>>>,
-}
-
-impl DesktopPlatform {
-    /// `~/.config/<id>/session.json` — a flat `{key: value}` JSON map.
-    fn config_file(&self) -> Option<PathBuf> {
-        let dir = self.app.path().app_config_dir().ok()?;
-        let _ = std::fs::create_dir_all(&dir);
-        Some(dir.join("session.json"))
-    }
-
-    fn read_map(&self) -> serde_json::Map<String, serde_json::Value> {
-        self.config_file()
-            .and_then(|p| std::fs::read(p).ok())
-            .and_then(|b| serde_json::from_slice(&b).ok())
-            .unwrap_or_default()
-    }
 }
 
 /// Optional test suffix (`TEST=foo npm run tauri dev`) so several instances on
@@ -134,21 +121,13 @@ impl Platform for DesktopPlatform {
     }
 
     fn kv_get(&self, key: &str) -> Option<String> {
-        self.read_map()
-            .get(key)
-            .and_then(|v| v.as_str())
-            .map(String::from)
+        self.kv.as_ref()?.get(key)
     }
 
     fn kv_set(&self, key: &str, value: &str) {
-        let mut map = self.read_map();
-        map.insert(
-            key.to_string(),
-            serde_json::Value::String(value.to_string()),
-        );
-        if let Some(p) = self.config_file() {
-            if let Ok(bytes) = serde_json::to_vec_pretty(&map) {
-                let _ = std::fs::write(p, bytes);
+        if let Some(kv) = &self.kv {
+            if let Err(e) = kv.set(key, value) {
+                eprintln!("[kv] failed to save {key}: {e}");
             }
         }
     }
@@ -400,7 +379,7 @@ pub fn run() {
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
-                app: handle.clone(),
+                kv: handle.path().app_config_dir().ok().map(FileKv::in_dir),
                 clipboard: DesktopClipboard::new(),
                 fcm_token: fcm_token.clone(),
             };
