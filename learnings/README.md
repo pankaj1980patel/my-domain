@@ -7,6 +7,8 @@ as if you had written the project by hand.
 It is written for a developer who knows **Node.js/TypeScript** well and is new
 to **Rust**. Every Rust idea is shown next to its closest Node equivalent.
 
+Project status: [DONE](../docs/DONE.md) · [PENDING](../docs/PENDING.md).
+
 ## How to read it
 
 | Order | File | What you get | Status |

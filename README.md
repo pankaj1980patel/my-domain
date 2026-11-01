@@ -8,6 +8,9 @@ Devices are grouped into **domains**. Any device can be shared inside or outside
 a domain with per-feature permission flags (`off` / `ask` / `on`). See the full
 feature catalogue in [docs/features.md](docs/features.md).
 
+> **Where things stand:** [docs/DONE.md](docs/DONE.md) (built and tested) and
+> [docs/PENDING.md](docs/PENDING.md) (what's left, in priority order).
+
 > **New here, or new to Rust?** Start with [learnings/](learnings/README.md). It
 > explains every folder and decision, with Node.js comparisons.
 
