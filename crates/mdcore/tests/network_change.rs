@@ -34,25 +34,47 @@ fn wait_for(what: &str, mut cond: impl FnMut() -> bool) {
 }
 
 #[test]
-fn moving_networks_closes_links_and_redials_connected_peers() {
-    let (a, b) = (TestNode::start("move-a"), TestNode::start("move-b"));
+fn a_link_we_dialed_survives_a_move() {
+    let (a, b) = (
+        TestNode::start("move-dialed-a"),
+        TestNode::start("move-dialed-b"),
+    );
     TestNode::pair(&a, &b);
-    a.engine.send(&b.node_id(), "before the move").unwrap(); // dials QUIC
+    a.engine.send(&b.node_id(), "before the move").unwrap(); // a dials QUIC
     b.sink.wait_for_message("before the move");
     assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("quic"));
 
-    // Our address changed: the old link must go, and come back by itself.
+    // a's address changed. a is the QUIC client of this link, so it migrates:
+    // no disconnect on either side, and it keeps carrying messages.
     a.engine.network_changed(Some("127.0.0.2"));
     assert_eq!(a.engine.identity().ip, "127.0.0.2");
+    std::thread::sleep(Duration::from_millis(1500)); // past the re-dial point
+    assert_eq!(link_events(&a, &b), (1, 0));
+    assert_eq!(link_events(&b, &a), (1, 0));
+    a.engine.send(&b.node_id(), "after the move").unwrap();
+    b.sink.wait_for_message("after the move");
+    b.engine.send(&a.node_id(), "and back").unwrap();
+    a.sink.wait_for_message("and back");
+}
+
+#[test]
+fn a_link_we_accepted_is_closed_and_redialed_after_a_move() {
+    let (a, b) = (TestNode::start("move-acc-a"), TestNode::start("move-acc-b"));
+    TestNode::pair(&a, &b);
+    b.engine.send(&a.node_id(), "b dials a").unwrap(); // a ACCEPTS this link
+    a.sink.wait_for_message("b dials a");
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("quic"));
+
+    // b would keep sending to a's OLD address, so a drops the link and dials
+    // b itself (as the client, which can migrate next time).
+    a.engine.network_changed(Some("127.0.0.2"));
     wait_for("the link to drop and come back", || {
         link_events(&a, &b) == (2, 1)
     });
-    // The peer saw the old connection close too, then accepted the new one.
     wait_for("the peer to see it", || {
         let (up, down) = link_events(&b, &a);
         down >= 1 && up >= 2
     });
-
     a.engine.send(&b.node_id(), "after the move").unwrap();
     b.sink.wait_for_message("after the move");
     b.engine.send(&a.node_id(), "and back").unwrap();

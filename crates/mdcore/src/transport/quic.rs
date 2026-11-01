@@ -74,8 +74,18 @@ pub struct QuicNode {
     _runtime: tokio::runtime::Runtime,
 }
 
-/// Each peer's registered connection: node_id -> (conn id, remote address, handle).
-type PeerConns = Arc<Mutex<HashMap<String, (u64, SocketAddr, Connection)>>>;
+/// A peer's registered QUIC connection.
+struct PeerConn {
+    id: u64,
+    remote: SocketAddr,
+    conn: Connection,
+    /// We dialed it (we're the QUIC client). Only the client side of a QUIC
+    /// connection may change networks; the server follows it automatically.
+    dialed: bool,
+}
+
+/// Each peer's registered connection, by node id.
+type PeerConns = Arc<Mutex<HashMap<String, PeerConn>>>;
 
 /// What the rest of the engine uses: the endpoint plus a handle to the
 /// runtime. Cheap to clone (both are reference-counted inside).
@@ -84,9 +94,8 @@ pub struct QuicLink {
     endpoint: Endpoint,
     rt: tokio::runtime::Handle,
     port: u16,
-    /// Each peer's registered connection: (conn id, remote address, handle).
-    /// Lets a peer that moved replace its stale link, and lets us close ours
-    /// when OUR network changes.
+    /// Each peer's registered connection. Lets a peer that moved replace its
+    /// stale link, and tells us which links survive OUR network change.
     conns: PeerConns,
 }
 
@@ -167,19 +176,22 @@ impl QuicLink {
         self.port
     }
 
-    /// Close every QUIC connection (our network changed: their paths are
-    /// probably dead). Each connection's task then cleans up its link and
-    /// reports the peer disconnected, so the caller can re-dial.
-    pub fn close_all(&self) {
-        let conns: Vec<Connection> = self
-            .conns
-            .lock()
-            .values()
-            .map(|(_, _, c)| c.clone())
-            .collect();
-        for c in conns {
-            c.close(0u32.into(), b"network changed");
+    /// Our network changed. Connections we DIALED survive it: QUIC lets the
+    /// client change address, and the peer follows the new one as soon as our
+    /// next packet (at most a keep-alive away) arrives from it. Connections
+    /// we ACCEPTED are dead (the peer keeps sending to our old address), so
+    /// close them; each one's task cleans up its link. Returns the peers
+    /// whose links survive, so the caller re-dials only the others.
+    pub fn close_accepted(&self) -> Vec<String> {
+        let mut kept = Vec::new();
+        for (peer, pc) in self.conns.lock().iter() {
+            if pc.dialed {
+                kept.push(peer.clone());
+            } else {
+                pc.conn.close(0u32.into(), b"network changed");
+            }
         }
+        kept
     }
 
     /// Start accepting incoming connections for this engine.
@@ -351,8 +363,8 @@ async fn run_connection<P: Platform>(
                 .conns
                 .lock()
                 .get(&peer_id)
-                .filter(|(id, addr, _)| id == existing_id && *addr != remote)
-                .map(|(_, _, c)| c.clone());
+                .filter(|pc| pc.id == *existing_id && pc.remote != remote)
+                .map(|pc| pc.conn.clone());
             match stale {
                 Some(old) => {
                     g.remove(&peer_id);
@@ -366,10 +378,15 @@ async fn run_connection<P: Platform>(
         }
         g.insert(peer_id.clone(), (my_conn_id, tx));
     }
-    ctx.quic
-        .conns
-        .lock()
-        .insert(peer_id.clone(), (my_conn_id, remote, conn.clone()));
+    ctx.quic.conns.lock().insert(
+        peer_id.clone(),
+        PeerConn {
+            id: my_conn_id,
+            remote,
+            conn: conn.clone(),
+            dialed: dialer,
+        },
+    );
     mark_live(&ctx, &peer_id, kind, Some(remote));
 
     // Bridge: the engine queues outgoing frames on a std channel; forward them
@@ -406,7 +423,7 @@ async fn run_connection<P: Platform>(
     writer.abort();
     {
         let mut qc = ctx.quic.conns.lock();
-        if qc.get(&peer_id).is_some_and(|(id, _, _)| *id == my_conn_id) {
+        if qc.get(&peer_id).is_some_and(|pc| pc.id == my_conn_id) {
             qc.remove(&peer_id);
         }
     }
@@ -469,6 +486,9 @@ fn server_config() -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Se
     tls.alpn_protocols = vec![ALPN.to_vec()];
     let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls)?));
     cfg.transport_config(transport_config()?);
+    // Follow a client that changes address (Wi-Fi -> mobile data). On by
+    // default in quinn; explicit because the network-change logic relies on it.
+    cfg.migration(true);
     Ok(cfg)
 }
 

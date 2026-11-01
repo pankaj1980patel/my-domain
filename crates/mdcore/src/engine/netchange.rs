@@ -3,12 +3,13 @@
 //! desktop a watcher notices the local IP changing.
 //!
 //! What happens:
-//! 1. If our address really changed, every live link is on the old network
-//!    and is dead (or soon will be), so close them now instead of waiting
-//!    ~20 s for timeouts.
+//! 1. If our address really changed: QUIC links we dialed survive (QUIC
+//!    connection migration: the peer follows our new address). Every other
+//!    link is on the old network and dead (or soon will be), so close it now
+//!    instead of waiting ~20 s for a timeout.
 //! 2. Re-announce ourselves on the LAN, re-register with the registry and
 //!    refresh the peer list, re-measure the NAT type.
-//! 3. Re-dial every peer that was connected before, through the full ladder.
+//! 3. Re-dial every peer whose link was closed, through the full ladder.
 
 use super::*;
 
@@ -52,8 +53,10 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
     };
     let was_live: Vec<String> = ctx.p2p_conns.lock().keys().cloned().collect();
     if moved {
-        ctx.quic.close_all();
-        for node in &was_live {
+        // QUIC links we dialed migrate to the new network by themselves;
+        // everything else is on the old network and must be re-dialed.
+        let survives = ctx.quic.close_accepted();
+        for node in was_live.iter().filter(|n| !survives.contains(n)) {
             ctx.ws_conns.lock().remove(node);
             transport::drop_live(ctx, node);
         }
