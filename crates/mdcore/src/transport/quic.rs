@@ -26,10 +26,13 @@
 //! is called through `block_in_place`, and a tiny bridge thread forwards the
 //! engine's synchronous outgoing queue (`std::sync::mpsc`) into an async one.
 
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+
+use parking_lot::Mutex;
 
 use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
@@ -71,6 +74,9 @@ pub struct QuicNode {
     _runtime: tokio::runtime::Runtime,
 }
 
+/// Each peer's registered connection: node_id -> (conn id, remote address, handle).
+type PeerConns = Arc<Mutex<HashMap<String, (u64, SocketAddr, Connection)>>>;
+
 /// What the rest of the engine uses: the endpoint plus a handle to the
 /// runtime. Cheap to clone (both are reference-counted inside).
 #[derive(Clone)]
@@ -78,6 +84,10 @@ pub struct QuicLink {
     endpoint: Endpoint,
     rt: tokio::runtime::Handle,
     port: u16,
+    /// Each peer's registered connection: (conn id, remote address, handle).
+    /// Lets a peer that moved replace its stale link, and lets us close ours
+    /// when OUR network changes.
+    conns: PeerConns,
 }
 
 impl QuicNode {
@@ -104,6 +114,7 @@ impl QuicNode {
                 endpoint,
                 rt: runtime.handle().clone(),
                 port,
+                conns: Arc::default(),
             },
             _runtime: runtime,
         })
@@ -124,6 +135,21 @@ impl Drop for QuicNode {
 impl QuicLink {
     pub fn port(&self) -> u16 {
         self.port
+    }
+
+    /// Close every QUIC connection (our network changed: their paths are
+    /// probably dead). Each connection's task then cleans up its link and
+    /// reports the peer disconnected, so the caller can re-dial.
+    pub fn close_all(&self) {
+        let conns: Vec<Connection> = self
+            .conns
+            .lock()
+            .values()
+            .map(|(_, _, c)| c.clone())
+            .collect();
+        for c in conns {
+            c.close(0u32.into(), b"network changed");
+        }
     }
 
     /// Start accepting incoming connections for this engine.
@@ -247,19 +273,40 @@ async fn run_connection<P: Platform>(
         _ => return,
     };
 
-    // Register as this peer's live link, unless one already exists (one link
-    // per peer, same rule as the other transports).
+    // Register as this peer's live link. One link per peer: if one exists,
+    // keep it (both sides dialed at once), UNLESS it is a QUIC link from a
+    // different address: then the peer moved networks and the old link is
+    // stale, so the new one replaces it.
     let my_conn_id = QUIC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
+    let remote = conn.remote_address();
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     {
         let mut g = ctx.ws_conns.lock();
-        if g.contains_key(&peer_id) {
-            conn.close(0u32.into(), b"duplicate");
-            return;
+        if let Some((existing_id, _)) = g.get(&peer_id) {
+            let stale = ctx
+                .quic
+                .conns
+                .lock()
+                .get(&peer_id)
+                .filter(|(id, addr, _)| id == existing_id && *addr != remote)
+                .map(|(_, _, c)| c.clone());
+            match stale {
+                Some(old) => {
+                    g.remove(&peer_id);
+                    old.close(0u32.into(), b"peer moved");
+                }
+                None => {
+                    conn.close(0u32.into(), b"duplicate");
+                    return;
+                }
+            }
         }
         g.insert(peer_id.clone(), (my_conn_id, tx));
     }
-    let remote = conn.remote_address();
+    ctx.quic
+        .conns
+        .lock()
+        .insert(peer_id.clone(), (my_conn_id, remote, conn.clone()));
     mark_live(&ctx, &peer_id, kind, Some(remote));
 
     // Bridge: the engine queues outgoing frames on a std channel; forward them
@@ -294,6 +341,12 @@ async fn run_connection<P: Platform>(
 
     // Cleanup: only remove our own entry (a newer link may have replaced it).
     writer.abort();
+    {
+        let mut qc = ctx.quic.conns.lock();
+        if qc.get(&peer_id).is_some_and(|(id, _, _)| *id == my_conn_id) {
+            qc.remove(&peer_id);
+        }
+    }
     let ours = {
         let mut g = ctx.ws_conns.lock();
         let ours = g

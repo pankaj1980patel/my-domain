@@ -87,7 +87,7 @@ fn udp_ping_connect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     wait_live(ctx, node_id, 2000)
 }
 
-fn run_connect_ladder<P: Platform>(
+pub(super) fn run_connect_ladder<P: Platform>(
     ctx: NetCtx<P>,
     server_url: Arc<Mutex<Option<String>>>,
     token: Arc<Mutex<Option<String>>>,

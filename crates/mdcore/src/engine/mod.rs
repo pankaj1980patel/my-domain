@@ -31,6 +31,7 @@ use crate::transport::{self, ws, P2pConns};
 mod background;
 mod ladder;
 mod messaging;
+mod netchange;
 mod peers;
 mod session;
 mod sharing;
@@ -297,7 +298,18 @@ impl<P: Platform> Engine<P> {
             quic_failed: Mutex::default(),
         };
         engine.detect_nat();
+        background::spawn_ip_watcher(engine.handles());
         Ok(engine)
+    }
+
+    /// Clonable handles for threads that act on the engine's behalf.
+    pub(crate) fn handles(&self) -> netchange::NetHandles<P> {
+        netchange::NetHandles {
+            ctx: self.ctx.clone(),
+            server_url: self.server_url.clone(),
+            token: self.token.clone(),
+            disco_send: self.disco_send.clone(),
+        }
     }
 
     /// Our NAT type as last measured (`Unknown` until the first STUN check).
@@ -309,22 +321,8 @@ impl<P: Platform> Engine<P> {
     /// seconds), then re-register so peers see the result. No-op without STUN
     /// servers (loopback tests).
     pub(crate) fn detect_nat(&self) {
-        if self.ctx.config.stun_servers.is_empty() {
-            return;
-        }
-        let ctx = self.ctx.clone();
-        let (server_url, token) = (self.server_url.clone(), self.token.clone());
-        std::thread::spawn(move || {
-            let kind = crate::nat::classify(&ctx.config.stun_addrs());
-            if ctx.shutdown.load(Ordering::Relaxed) {
-                return;
-            }
-            let changed = std::mem::replace(&mut *ctx.nat.lock(), kind) != kind;
-            let session = server_url.lock().clone().zip(token.lock().clone());
-            if let (true, Some((url, tok))) = (changed, session) {
-                let _ = peers::register_self(&ctx, &url, &tok);
-            }
-        });
+        let h = self.handles();
+        std::thread::spawn(move || netchange::detect_nat_now(&h.ctx, &h.server_url, &h.token));
     }
 
     /// Whether this engine is shutting down (its `Engine` was dropped).
@@ -426,8 +424,7 @@ impl<P: Platform> Engine<P> {
     }
 
     fn emit_peers(&self) {
-        let list: Vec<Peer> = self.ctx.peers.lock().values().cloned().collect();
-        self.ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });
+        peers::emit_peers(&self.ctx);
     }
 
     // --- read-only state ---

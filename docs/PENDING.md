@@ -20,31 +20,23 @@ and in [learnings/](../learnings/README.md).
 In priority order. Each item makes devices connect in more places, faster,
 or with less battery.
 
-1. **Serve the server on port 443 with HTTPS.** *(first, before everything else)*
-   - Port 6969 is blocked on many office, hotel and campus networks, and the
-     traffic is plain HTTP.
-   - Put the registry, signaling and relay behind TLS on 443: a reverse proxy
-     (Caddy, with automatic Let's Encrypt certificates) in front of the axum
-     server on `oracle-dev`. This needs a domain name pointing at
-     152.67.7.50.
-   - The relay then runs as `wss://`, which is the "relay over TLS" item
-     below.
-   - Clients default to `https://<domain>`; the old `http://…:6969` stays for
-     a while so existing installs keep working.
-2. **Detect NAT type up front, and skip what can't work.**
-   - Ask two STUN servers for our public address. Different answers mean a
-     "symmetric" NAT.
-   - Publish the result with the device's registry entry.
-   - If both peers are behind symmetric NATs, skip the hole punch and WebRTC
-     (about 40 s of guaranteed failure) and go straight to the relay.
-3. **Re-check the network when it changes.**
-   - On a Wi-Fi change, Wi-Fi → mobile data, or wake from sleep:
-     - rejoin LAN discovery
-     - refresh our addresses with the registry
-     - re-run STUN
-     - re-dial dropped links
-   - Android already reports changes (`nativeNetworkChanged`), but nothing
-     acts on them yet. On desktop, watch for interface changes.
+1. **Serve the server on port 443 with HTTPS.** *(in progress, waiting on you)*
+   - Done:
+     - The latest server is deployed on `oracle-dev` (with `/relay`).
+     - Caddy is installed with
+       [apps/server/Caddyfile](../apps/server/Caddyfile) for
+       `152-67-7-50.sslip.io`.
+     - The server reads the real client IP from the proxy.
+     - Clients support `https://` and `wss://`.
+   - **Blocked:** Oracle Cloud's VCN Security List doesn't allow inbound
+     TCP 80/443 yet, so Let's Encrypt can't verify the domain. Open them in
+     the console. Caddy then gets the certificate by itself.
+   - After that:
+     - Switch the apps' default server to `https://152-67-7-50.sslip.io`.
+     - Test the relay over `wss://` on the real devices.
+     - Later, close `:6969` to the public.
+2. ~~Detect NAT type up front~~: **done**, see [DONE.md](DONE.md).
+3. ~~Re-check the network when it changes~~: **done**, see [DONE.md](DONE.md).
 4. **IPv6.**
    - Many mobile networks (Jio, Airtel) give phones a public IPv6 address
      with no NAT, so QUIC can connect directly, with no punch and no relay.

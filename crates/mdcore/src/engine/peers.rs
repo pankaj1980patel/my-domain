@@ -23,6 +23,48 @@ pub(crate) fn register_self<P: Platform>(
     )
 }
 
+/// Register ourselves, then replace the registry peers with the server's list.
+pub(crate) fn refresh<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result<(), String> {
+    register_self(ctx, url, token)?;
+    let node_id = ctx.identity.lock().node_id.clone();
+    let devices = registry_fetch(url, token, &node_id)?;
+    apply_registry_peers(ctx, devices);
+    Ok(())
+}
+
+pub(crate) fn emit_peers<P: Platform>(ctx: &NetCtx<P>) {
+    let list: Vec<Peer> = ctx.peers.lock().values().cloned().collect();
+    ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });
+}
+
+fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, devices: Vec<RegistryDevice>) {
+    {
+        let mut map = ctx.peers.lock();
+        map.retain(|_, p| p.source != Source::Registry);
+        for d in devices {
+            map.insert(
+                d.node_id.clone(),
+                Peer {
+                    node_id: d.node_id,
+                    name: d.name,
+                    ip: d.ip,
+                    tcp_port: d.tcp_port,
+                    udp_port: d.udp_port,
+                    ws_port: d.ws_port,
+                    quic_port: d.quic_port,
+                    source: Source::Registry,
+                    ws_open: d.ws_open,
+                    inbound_blocked: d.inbound_blocked,
+                    reflexive_ip: d.reflexive_ip,
+                    reflexive_udp_port: d.reflexive_udp_port,
+                    nat: d.nat.as_deref().map(NatKind::parse).unwrap_or_default(),
+                },
+            );
+        }
+    }
+    emit_peers(ctx);
+}
+
 impl<P: Platform> Engine<P> {
     // --- discovery / peers ---
 
@@ -33,66 +75,20 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
         let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-        register_self(&self.ctx, &url, &token)?;
-        let node_id = self.ctx.identity.lock().node_id.clone();
-        let devices = registry_fetch(&url, &token, &node_id)?;
-        self.apply_registry_peers(devices);
+        refresh(&self.ctx, &url, &token)?;
         Ok(())
     }
 
-    fn apply_registry_peers(&self, devices: Vec<RegistryDevice>) {
-        {
-            let mut map = self.ctx.peers.lock();
-            map.retain(|_, p| p.source != Source::Registry);
-            for d in devices {
-                map.insert(
-                    d.node_id.clone(),
-                    Peer {
-                        node_id: d.node_id,
-                        name: d.name,
-                        ip: d.ip,
-                        tcp_port: d.tcp_port,
-                        udp_port: d.udp_port,
-                        ws_port: d.ws_port,
-                        quic_port: d.quic_port,
-                        source: Source::Registry,
-                        ws_open: d.ws_open,
-                        inbound_blocked: d.inbound_blocked,
-                        reflexive_ip: d.reflexive_ip,
-                        reflexive_udp_port: d.reflexive_udp_port,
-                        nat: d.nat.as_deref().map(NatKind::parse).unwrap_or_default(),
-                    },
-                );
-            }
-        }
-        self.emit_peers();
-    }
-
     pub fn scan_lan(&self) {
-        let id = self.ctx.identity.lock().clone();
-        let socket = self.disco_send.clone();
-        let targets = discovery::lan_targets(&self.ctx.platform.iface_mode());
-        std::thread::spawn(move || {
-            for _ in 0..3 {
-                discovery::send_beacon(&socket, &id, false, &targets);
-                std::thread::sleep(Duration::from_millis(700));
-            }
-        });
+        netchange::announce(&self.ctx, &self.disco_send);
     }
 
-    /// Update the advertised IP after a network change (android passes the new
-    /// Wi-Fi IP; desktop passes `None` to recompute). Re-registers if logged in.
+    /// The network changed (Android passes the new Wi-Fi IP; `None` means
+    /// "recompute"). Closes links if our address moved, re-announces,
+    /// re-registers, re-measures the NAT and re-dials previously connected
+    /// peers, in the background (see `netchange`).
     pub fn network_changed(&self, new_ip: Option<&str>) {
-        let ip = match new_ip {
-            Some(s) if s.parse::<Ipv4Addr>().is_ok() => s.to_string(),
-            _ => self.ctx.platform.local_ip(),
-        };
-        self.ctx.identity.lock().ip = ip;
-        if self.token.lock().is_some() {
-            let _ = self.refresh_from_server();
-        }
-        // A new network usually means a new NAT.
-        self.detect_nat();
+        netchange::on_network_change(&self.handles(), new_ip);
     }
 
     pub fn add_manual_peer(

@@ -1,7 +1,8 @@
 //! The engine's long-running loops, started once by `Engine::start`:
 //!
 //! * clipboard watcher: pushes local clipboard changes to peers (auto-sync),
-//! * IP watcher: keeps the advertised local IP current across network changes,
+//! * IP watcher (started separately, see `spawn_ip_watcher`): notices the
+//!   local IP changing and runs the network-change handling,
 //! * P2P heartbeat: keeps connectionless links (UDP/punch/WebRTC) alive and
 //!   evicts the ones that stopped answering.
 //!
@@ -22,10 +23,6 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
     if ctx.platform.clipboard().is_some() {
         let ctx = ctx.clone();
         std::thread::spawn(move || clipboard_watcher(ctx));
-    }
-    {
-        let ctx = ctx.clone();
-        std::thread::spawn(move || ip_watcher(ctx));
     }
     {
         let ctx = ctx.clone();
@@ -68,14 +65,21 @@ fn clipboard_watcher<P: Platform>(ctx: NetCtx<P>) {
     }
 }
 
-fn ip_watcher<P: Platform>(ctx: NetCtx<P>) {
-    while tick(&ctx, IP_POLL) {
-        let current = ctx.platform.local_ip();
-        let mut id = ctx.identity.lock();
-        if id.ip != current && current != "0.0.0.0" {
-            id.ip = current;
+/// Poll the platform's local IP; when it changes, handle it as a network
+/// change. Compares against the last IP the PLATFORM reported (not our
+/// advertised one), so an explicit `network_changed` call doesn't make the
+/// watcher fight it.
+pub(super) fn spawn_ip_watcher<P: Platform>(h: netchange::NetHandles<P>) {
+    std::thread::spawn(move || {
+        let mut last = h.ctx.platform.local_ip();
+        while tick(&h.ctx, IP_POLL) {
+            let current = h.ctx.platform.local_ip();
+            if current != last && current != "0.0.0.0" {
+                last = current.clone();
+                netchange::on_network_change(&h, Some(&current));
+            }
         }
-    }
+    });
 }
 
 fn heartbeat<P: Platform>(ctx: NetCtx<P>) {

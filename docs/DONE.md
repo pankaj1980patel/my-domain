@@ -8,9 +8,9 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **84** core tests (37 unit tests and 47 integration tests), plus **3** server tests |
+| Tests | **93** core tests, plus **5** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
-| Where the server tests pass | macOS and Linux |
+| Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
 | Running right now | Mac desktop, Linux desktop, Android app, all logged in as the test account `mdtest` |
 
@@ -128,6 +128,37 @@ The engine tries each method in order, cheapest first, until one works
 | 4 | STUN + hole punch, then QUIC on the punched socket | signal + STUN | connect_ladder.rs |
 | 5 | WebRTC | signal | connect_ladder.rs |
 | 6 | Relay through the server | yes | [relay.rs](../crates/mdcore/tests/relay.rs) |
+
+## Connectivity improvements (started 2026-11-02)
+
+- **HTTPS groundwork** (the certificate itself still waits on Oracle's
+  firewall; see PENDING):
+  - The relay client speaks `wss://` (rustls).
+  - The server takes the real client IP from `X-Forwarded-For`, but only when
+    the request comes from the local proxy, so it can't be spoofed.
+  - Caddy is installed on `oracle-dev`.
+  - `deploy.sh` gained `BIN_SOURCE=docker`, a fast cross-compile, and keeps
+    the previous binary as `.prev` for rollback.
+- **NAT type detection** ([nat/mod.rs](../crates/mdcore/src/nat/mod.rs)):
+  - Two STUN servers (Google + Cloudflare) are asked for our public address
+    from one socket:
+    - same answer: **easy** NAT
+    - different answers: **symmetric**
+  - The type is measured at start and after network changes, and published
+    through the registry.
+  - When both devices are symmetric, the ladder skips the hole punch and
+    WebRTC (`nat_skip`) and goes straight on. Before, that took ~40 s of
+    guaranteed timeouts.
+- **Network changes handled**
+  ([engine/netchange.rs](../crates/mdcore/src/engine/netchange.rs)):
+  - If our address moved, links on the old network are closed at once
+    instead of after a ~20 s timeout.
+  - We re-announce on the LAN, re-register, refresh the peer list and
+    re-measure the NAT.
+  - Every peer that was connected before is re-dialed through the ladder.
+  - Desktop notices IP changes by itself; Android reports them.
+  - A QUIC link from a peer that moved (same device, new address) replaces
+    its stale link instead of being rejected as a duplicate.
 
 ## Device lab and dev tools
 
