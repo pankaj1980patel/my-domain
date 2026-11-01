@@ -491,7 +491,7 @@ pub fn run() {
                 }
                 Err(e) => {
                     eprintln!("failed to start networking: {e}");
-                    return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, e)));
+                    return Err(Box::new(std::io::Error::other(e)));
                 }
             }
             // Start the FCM receiver (needs the managed Engine for on_signal).

@@ -1,9 +1,12 @@
-name: Build (amd64)
+# Builds the registry server's x86_64 Linux binary. apps/server/deploy.sh
+# (BIN_SOURCE=gh) downloads the artifact from the latest successful run.
+name: Server release (amd64)
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
+    paths: ["apps/server/**", "Cargo.toml", "Cargo.lock", ".github/workflows/server-release.yml"]
   workflow_dispatch:
 
 env:
@@ -17,19 +20,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-linux-gnu
 
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@v2
 
+      # The server is one member of the workspace: build only that package.
       - name: Build release binary
-        run: cargo build --release --locked --target x86_64-unknown-linux-gnu
+        run: cargo build --release --locked -p ${{ env.BIN_NAME }} --target x86_64-unknown-linux-gnu
 
-      - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ env.BIN_NAME }}-amd64
           path: target/x86_64-unknown-linux-gnu/release/${{ env.BIN_NAME }}

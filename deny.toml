@@ -1,0 +1,17 @@
+# cargo-deny config (run in CI by the `deny` job; locally: `cargo deny check`).
+# advisories: fail on known-vulnerable crates (RustSec database).
+# bans:       flag duplicate versions of the same crate (warn only for now).
+# sources:    only allow crates from crates.io (no random git deps).
+
+[advisories]
+version = 2
+yanked = "warn"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "allow"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
