@@ -1,66 +1,55 @@
 # my-domain
 
-A cross-platform, **end-to-end-encrypted** messenger. Devices log into a shared
-**registry** server to find each other's endpoints (or discover each other on the
-LAN), then message **directly** over UDP / TCP / WebSocket. This repository is the
-umbrella **superproject**; each component lives in its own repo, wired in as a git
-**submodule**.
+Control and share your devices with each other: phone ⇄ laptop ⇄ desktop, and
+later TV and watch. Devices talk **directly and end-to-end encrypted**. A small
+registry server only introduces them.
 
-| Component | Path | Repository | Status |
-|-----------|------|-----------|--------|
-| Registry server (axum + MongoDB) | [`server/`](server) | [my-domain-server](https://github.com/pankaj1980patel/my-domain-server) | ✅ working |
-| Desktop (Tauri + Rust) | [`desktop/`](desktop) | [my-domain-desktop](https://github.com/pankaj1980patel/my-domain-desktop) | ✅ working |
-| Android (Rust core + Compose) | [`android/`](android) | [my-domain-android](https://github.com/pankaj1980patel/my-domain-android) | ✅ working |
-| macOS (native) | [`mac/`](mac) | [my-domain-mac](https://github.com/pankaj1980patel/my-domain-mac) | 🚧 placeholder |
-| iOS (native) | [`ios/`](ios) | [my-domain-ios](https://github.com/pankaj1980patel/my-domain-ios) | 🚧 placeholder |
+Devices are grouped into **domains**. Any device can be shared inside or outside
+a domain with per-feature permission flags (`off` / `ask` / `on`). See the full
+feature catalogue in [docs/features.md](docs/features.md).
 
-## How it works
+> **New here, or new to Rust?** Start with [learnings/](learnings/README.md). It
+> explains every folder and decision, with Node.js comparisons.
 
-1. **Accounts** — log in (username/password → JWT) and set an **encryption key**
-   (a passphrase). Both are required before anything else is allowed.
-2. **Discovery** — on login (and on network change) a device registers its endpoints
-   with the server and fetches the user's other devices. No polling. **LAN discovery**
-   (UDP multicast/broadcast/unicast beacons) is still available as a manual "Scan LAN".
-3. **Messaging** — peer-to-peer over **UDP**, **TCP**, or a persistent LAN **WebSocket**
-   (handy when one side's inbound is firewalled — either side can trigger the single
-   bidirectional socket).
-4. **E2EE** — message bodies are encrypted client-side (passphrase → Argon2id →
-   XChaCha20-Poly1305). The server stores only endpoints; it never sees plaintext or keys.
+## Layout
 
-### Wire formats
+| Path | What | Status |
+|---|---|---|
+| [crates/mdcore](crates/mdcore) | Shared Rust core: discovery, transports, crypto, features | ✅ working; being split and rebuilt (see plan) |
+| [apps/server](apps/server) | Registry + signaling server (axum, MongoDB, FCM) | ✅ working |
+| [apps/desktop](apps/desktop) | Desktop app, macOS / Linux / Windows (Tauri) | ✅ working |
+| [apps/android](apps/android) | Android app (Compose + Rust core) | ✅ working |
+| [apps/apple](apps/apple) | iOS / native macOS | 🚧 placeholder |
+| [docs](docs) | Feature catalogue, signaling protocol | |
+| [learnings](learnings) | Why everything is the way it is | |
+| [scripts/lab](scripts/lab) | Real-device testing (Mac ⇄ Arch laptop ⇄ Android phone) | |
 
-- **Registry**: REST (`/auth/*`, `/devices/*`) — see [`server/README.md`](server/README.md).
-- **LAN beacon** (UDP `239.255.42.98:45678`): `{node_id,name,tcp_port,udp_port,ws_port,reply}`.
-- **Message** (TCP body / UDP datagram / WS `msg` frame): the encrypted envelope
-  `{nonce,ciphertext}` whose plaintext is `{from,text}`.
+This used to be six git submodules. It's now one Cargo workspace, with every
+repo's history preserved ([ADR-0001](learnings/decisions/ADR-0001-monorepo.md)).
 
-## Clone
-
-Because the clients are submodules, clone recursively:
+## Build and test
 
 ```bash
-git clone --recurse-submodules https://github.com/pankaj1980patel/my-domain.git
-# already cloned without --recurse-submodules?
-git submodule update --init --recursive
+cargo check --workspace          # type-check everything
+cargo test --workspace           # run all Rust tests
+cargo run -p my-domain-server    # run the server (needs apps/server/.env)
+
+cd apps/desktop && npm install && npm run tauri dev   # desktop app
+scripts/lab/android.sh install   # build the APK on the lab laptop and install it on the phone
 ```
 
-## Working with submodules
+CI (`.github/workflows/ci.yml`) runs fmt, clippy, tests on Linux and macOS, the
+Android build, and a dependency audit on every PR.
 
-```bash
-# Pull latest for every client
-git submodule update --remote --merge
+## How it works today
 
-# Make a change inside a client, then record the new pointer in the superproject
-cd desktop && git add -A && git commit -m "…" && git push && cd ..
-git add desktop && git commit -m "desktop: bump pointer" && git push
-```
+1. **Accounts**: log in (username/password → JWT) and set an encryption passphrase.
+2. **Discovery**: devices register their endpoints with the server and fetch the
+   user's other devices. LAN discovery (UDP multicast) also works with no server.
+3. **Connecting**: same LAN → direct; otherwise a ladder of direct WebSocket →
+   reverse WebSocket via push signal → UDP hole punch → WebRTC.
+4. **E2EE**: passphrase → Argon2id → XChaCha20-Poly1305. The server never sees
+   plaintext or keys.
 
-## Running the desktop client
-
-```bash
-cd desktop
-npm install
-npm run tauri dev
-```
-
-See [`desktop/README.md`](desktop/README.md) for details.
+Details: [learnings/01-architecture.md](learnings/01-architecture.md). The
+signaling protocol is in [docs/SIGNALING.md](docs/SIGNALING.md).
