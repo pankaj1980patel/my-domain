@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>my-domain</title>
+    <script type="module" src="/main.js" defer></script>
+  </head>
+
+  <body>
+    <!-- ============ Login ============ -->
+    <div id="login" class="login-overlay">
+      <form id="login-form" class="login-card">
+        <div class="brand"><span class="logo">◆</span><h1>my-domain</h1></div>
+        <p class="muted small">Connect and control all your devices.</p>
+        <label>Server URL<input id="a-server" placeholder="http://192.168.0.10:6969" required /></label>
+        <label>Username<input id="a-user" autocomplete="username" required /></label>
+        <label>Password<input id="a-pass" type="password" autocomplete="current-password" required /></label>
+        <label>Encryption key
+          <div class="keyrow">
+            <input id="a-key" placeholder="shared secret for E2EE" required />
+            <button type="button" id="a-genkey" class="ghost sm">Generate</button>
+          </div>
+        </label>
+        <div class="row gap">
+          <button type="submit" id="a-login" class="primary grow">Log in</button>
+          <button type="button" id="a-register" class="secondary">Register</button>
+        </div>
+        <p id="a-status" class="status"></p>
+        <p class="muted xsmall">Use the <strong>same encryption key</strong> on every device, or they can't read each other's data.</p>
+      </form>
+    </div>
+
+    <!-- ============ App ============ -->
+    <div id="app" class="app hidden">
+      <!-- Sidebar -->
+      <aside class="sidebar">
+        <div class="side-head">
+          <div class="brand sm"><span class="logo">◆</span><span>my-domain</span></div>
+          <div class="me-chip" id="me-chip" title="This device">
+            <span class="dot online"></span>
+            <span class="me-name" id="me-name">…</span>
+          </div>
+        </div>
+
+        <div class="side-section">
+          <div class="side-section-head">
+            <span>Devices</span>
+            <button id="btn-add" class="icon" title="Add device manually">＋</button>
+          </div>
+          <ul id="device-list" class="device-list">
+            <li class="empty">No devices yet.</li>
+          </ul>
+        </div>
+
+        <div class="side-tools">
+          <button id="btn-scan" class="ghost block">⟳ Scan LAN</button>
+          <button id="btn-refresh" class="ghost block">⤓ Refresh from server</button>
+        </div>
+
+        <nav class="side-nav">
+          <button id="nav-settings" class="navbtn">⚙ Settings</button>
+        </nav>
+      </aside>
+
+      <!-- Content -->
+      <main class="content">
+        <!-- Empty state -->
+        <section id="view-empty" class="view view-center">
+          <div class="empty-hero">
+            <div class="empty-logo">◆</div>
+            <h2>Select a device</h2>
+            <p class="muted">Pick a device on the left to share clipboard, send messages and notifications. Use <strong>Scan LAN</strong> or <strong>Refresh</strong> to find them.</p>
+          </div>
+        </section>
+
+        <!-- Device view -->
+        <section id="view-device" class="view hidden">
+          <header class="dv-head">
+            <div class="dv-id">
+              <span class="dv-avatar" id="dv-avatar">?</span>
+              <div>
+                <h2 id="dv-name">Device</h2>
+                <p class="muted small" id="dv-sub"></p>
+              </div>
+            </div>
+            <div class="dv-head-actions">
+              <span id="dv-status" class="pill">offline</span>
+              <button id="btn-connect" class="primary sm">Connect</button>
+              <button id="btn-remove" class="ghost sm hidden">Remove</button>
+            </div>
+          </header>
+
+          <div class="cards">
+            <!-- Messaging -->
+            <article class="card">
+              <div class="card-head"><span class="card-ic">✉</span><h3>Send message</h3></div>
+              <form id="send-form" class="card-body">
+                <p class="hint" id="send-transport">Sends over the active connection automatically.</p>
+                <textarea id="msg-input" rows="2" placeholder="Type a message…" required></textarea>
+                <div class="row end"><button type="submit" id="send-btn" class="primary sm">Send</button></div>
+                <p id="send-status" class="status"></p>
+              </form>
+            </article>
+
+            <!-- Clipboard -->
+            <article class="card">
+              <div class="card-head"><span class="card-ic">📋</span><h3>Clipboard</h3></div>
+              <div class="card-body">
+                <div class="toggle-row">
+                  <div>
+                    <strong>Auto-sync</strong>
+                    <p class="muted xsmall">Broadcast clipboard changes to all devices.</p>
+                  </div>
+                  <button type="button" id="clip-toggle" class="switch" role="switch" aria-checked="false"><span></span></button>
+                </div>
+                <button type="button" id="clip-get-btn" class="ghost block">⤓ Get this device's clipboard</button>
+                <p id="clip-status" class="status"></p>
+              </div>
+            </article>
+
+            <!-- Notification -->
+            <article class="card">
+              <div class="card-head"><span class="card-ic">🔔</span><h3>Send notification</h3></div>
+              <form id="notif-form" class="card-body">
+                <input id="n-title" placeholder="Title" required />
+                <input id="n-body" placeholder="Message" />
+                <div class="row end"><button type="submit" class="primary sm">Send</button></div>
+                <p class="muted xsmall">Broadcasts to all your devices.</p>
+                <p id="notif-status" class="status"></p>
+              </form>
+            </article>
+          </div>
+
+          <!-- App notification sharing (pub/sub) -->
+          <article class="card apps-card">
+            <div class="card-head between">
+              <div><span class="card-ic">📥</span><h3>App notifications</h3></div>
+              <button type="button" id="apps-refresh" class="ghost xsm">Refresh</button>
+            </div>
+            <div class="card-body">
+              <p class="muted xsmall">Choose which of this device's apps mirror their notifications to you.</p>
+              <input id="apps-search" placeholder="Search apps…" />
+              <ul id="apps-list" class="apps-list"><li class="empty">Tap Refresh to load this device's apps.</li></ul>
+              <p id="apps-status" class="status"></p>
+            </div>
+          </article>
+
+          <!-- Activity thread for this device -->
+          <article class="card thread-card">
+            <div class="card-head between">
+              <div><span class="card-ic">≡</span><h3>Activity</h3></div>
+              <button type="button" id="clear-log" class="ghost xsm">Clear</button>
+            </div>
+            <ul id="thread" class="thread"><li class="empty">No activity yet.</li></ul>
+          </article>
+        </section>
+
+        <!-- Settings view -->
+        <section id="view-settings" class="view hidden">
+          <header class="dv-head"><div class="dv-id"><span class="dv-avatar">⚙</span><div><h2>Settings</h2><p class="muted small" id="set-who"></p></div></div></header>
+
+          <div class="cards">
+            <article class="card">
+              <div class="card-head"><span class="card-ic">🔑</span><h3>Encryption key</h3></div>
+              <form id="settings-form" class="card-body">
+                <label>New key
+                  <div class="keyrow">
+                    <input id="s-key" placeholder="new shared secret" required />
+                    <button type="button" id="s-genkey" class="ghost sm">Generate</button>
+                  </div>
+                </label>
+                <label>Confirm password<input id="s-pass" type="password" autocomplete="current-password" required /></label>
+                <div class="row end"><button type="submit" class="primary sm">Update key</button></div>
+                <p id="s-status" class="status"></p>
+              </form>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><span class="card-ic">🛡</span><h3>Connectivity</h3></div>
+              <div class="card-body">
+                <label class="muted small" for="set-transport">Direct transport (when no live connection)</label>
+                <div class="seg" id="transport-seg">
+                  <input type="radio" name="dtransport" id="dt-udp" value="UDP" checked /><label for="dt-udp">UDP</label>
+                  <input type="radio" name="dtransport" id="dt-tcp" value="TCP" /><label for="dt-tcp">TCP</label>
+                </div>
+                <p class="hint">Messages always use an active P2P connection when one exists; this only applies to one-off sends to peers you aren't connected to.</p>
+                <button type="button" id="btn-firewall" class="ghost block">Run firewall check</button>
+                <p id="fw-status" class="status"></p>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><span class="card-ic">🖥</span><h3>This device</h3></div>
+              <div class="card-body">
+                <dl class="kv" id="me-details"></dl>
+              </div>
+            </article>
+
+            <article class="card">
+              <div class="card-head"><span class="card-ic">⎋</span><h3>Account</h3></div>
+              <div class="card-body">
+                <p class="muted small" id="acct-line"></p>
+                <button type="button" id="s-logout" class="danger block">Log out</button>
+              </div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <!-- ============ Add-device modal ============ -->
+    <div id="modal-add" class="modal hidden">
+      <form id="manual-form" class="modal-card">
+        <h2>Add device manually</h2>
+        <label>Name (optional)<input id="m-name" placeholder="My phone" /></label>
+        <label>IP address<input id="m-ip" placeholder="192.168.0.105" required /></label>
+        <div class="ports">
+          <label class="grow">TCP<input id="m-tcp" type="number" min="0" max="65535" /></label>
+          <label class="grow">UDP<input id="m-udp" type="number" min="0" max="65535" /></label>
+          <label class="grow">WS<input id="m-ws" type="number" min="0" max="65535" /></label>
+        </div>
+        <div class="row end gap">
+          <button type="button" id="m-cancel" class="secondary">Cancel</button>
+          <button type="submit" class="primary">Add</button>
+        </div>
+        <p id="manual-status" class="status"></p>
+      </form>
+    </div>
+
+    <!-- ============ Debug panel ============ -->
+    <button id="debug-fab" type="button" title="Toggle debug log (⌘`)">
+      <span class="dbg-ic">🐞</span><span>Debug</span><span id="debug-badge" class="dbg-badge hidden"></span>
+    </button>
+    <section id="debug-panel" class="debug-panel hidden">
+      <header class="debug-head">
+        <strong>Debug log</strong>
+        <div id="debug-filters" class="debug-filters">
+          <button type="button" class="dbg-chip active" data-filter="all">All</button>
+          <button type="button" class="dbg-chip" data-filter="calls">Calls</button>
+          <button type="button" class="dbg-chip" data-filter="events">Events</button>
+          <button type="button" class="dbg-chip" data-filter="errors">Errors</button>
+        </div>
+        <div class="debug-actions">
+          <button type="button" id="debug-copy" class="ghost xsm">Copy</button>
+          <button type="button" id="debug-clear" class="ghost xsm">Clear</button>
+          <button type="button" id="debug-close" class="ghost xsm" title="Close (Esc)">✕</button>
+        </div>
+      </header>
+      <ul id="debug-log" class="debug-log"><li class="dbg-empty">No log entries.</li></ul>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+  </body>
+</html>

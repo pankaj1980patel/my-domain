@@ -1,0 +1,615 @@
+const _core = window.__TAURI__.core;
+const _event = window.__TAURI__.event;
+
+const el = (id) => document.getElementById(id);
+const esc = (s) =>
+  String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------- debug log ----------
+// Every backend call and every core event flows through these wrappers, so the
+// debug panel is a faithful, timestamped trace of the connection process and
+// all other activity without sprinkling log() calls across the codebase.
+const debugLog = []; // { ts, kind, label, detail }  kind: invoke|result|error|event|info
+let debugFilter = "all"; // all | calls | events | errors
+let debugOpen = false;
+
+const fmtDetail = (d) => {
+  if (d === undefined || d === null) return "";
+  if (typeof d === "string") return d;
+  try { return JSON.stringify(d); } catch { return String(d); }
+};
+function dlog(kind, label, detail) {
+  const entry = { ts: Date.now(), kind, label, detail: fmtDetail(detail) };
+  debugLog.push(entry);
+  if (debugLog.length > 1000) debugLog.shift();
+  if (debugOpen) renderDebug();
+  else updateDebugBadge();
+}
+
+const wsAddr = (p) => (p ? `ws://${p.ip}:${p.ws_port}` : "");
+
+// Wrapped Tauri bridge — used everywhere below instead of the raw handles.
+const invoke = async (cmd, args) => {
+  dlog("invoke", cmd, args);
+  if (cmd === "connect_ws" && args && args.nodeId) {
+    const p = peers.find((x) => x.node_id === args.nodeId);
+    dlog("ws", "ws", `dialing ${p ? `${wsAddr(p)} (${p.name})` : args.nodeId}…`);
+  }
+  try {
+    const r = await _core.invoke(cmd, args);
+    dlog("result", cmd, r);
+    return r;
+  } catch (err) {
+    dlog("error", cmd, err);
+    throw err;
+  }
+};
+const listen = (name, cb) =>
+  _event.listen(name, (ev) => { dlog("event", name, ev.payload); return cb(ev); });
+
+// ---------- state ----------
+let peers = [];
+const connected = new Map(); // node_id -> transport ("ws"|"udp"|"punch"|"webrtc") for live P2P links
+let selected = null; // selected node_id
+let view = "empty"; // empty | device | settings
+let identity = null;
+const activity = []; // { node?, dir, name, ip, protocol, text, ok, ts }
+const appsByNode = {}; // node_id -> { apps: [{pkg,label}], subscribed: Set<pkg> }
+let appsSearch = "";
+let fcmPingTimer = null; // pending FCM self-test pong timeout
+
+// ---------- helpers ----------
+function setStatus(id, msg, ok) {
+  const s = el(id);
+  if (!s) return;
+  s.textContent = msg || "";
+  s.className = "status " + (ok ? "ok" : msg ? "err" : "");
+}
+let toastTimer;
+function toast(msg) {
+  const t = el("toast");
+  t.textContent = msg;
+  t.classList.remove("hidden");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.add("hidden"), 2200);
+}
+const selectedPeer = () => peers.find((p) => p.node_id === selected) || null;
+const avatarText = (name) => (name || "?").trim().charAt(0).toUpperCase() || "?";
+
+// ---------- auth ----------
+async function onAuth(e, isRegister) {
+  if (e) e.preventDefault();
+  const server = el("a-server").value.trim();
+  const user = el("a-user").value.trim();
+  const pass = el("a-pass").value;
+  const key = el("a-key").value;
+  if (!server || !user || !pass || !key) return setStatus("a-status", "All fields are required.", false);
+  setStatus("a-status", "Connecting…", true);
+  try {
+    await invoke(isRegister ? "auth_register" : "auth_login", { serverUrl: server, username: user, password: pass });
+    await invoke("set_encryption_key", { passphrase: key });
+    await enterApp();
+  } catch (err) {
+    setStatus("a-status", String(err), false);
+  }
+}
+
+async function enterApp() {
+  el("login").classList.add("hidden");
+  el("app").classList.remove("hidden");
+  identity = await invoke("get_identity");
+  el("me-name").textContent = identity.name;
+  const info = await invoke("session_info");
+  el("set-who").textContent = `${info.username ?? ""} @ ${info.server_url ?? ""}`;
+  el("acct-line").textContent = `Signed in as ${info.username ?? "?"} · ${info.server_url ?? ""}`;
+  renderMeDetails();
+  try { await invoke("refresh_from_server"); } catch (e) { console.warn(e); }
+  await loadPeers();
+  await refreshClipToggle();
+  await refreshDirectedTransport();
+  // Self-report our inbound firewall status so siblings see our reachability.
+  try { await invoke("report_firewall"); } catch (e) { console.warn(e); }
+  // Verify FCM end-to-end once the token has had a moment to register server-side.
+  setTimeout(fcmSelfTest, 3000);
+}
+
+// Round-trip FCM check: push a ping to our own token; the pong returns via the
+// FCM receiver as an fcm-event. No pong within the window => FCM isn't delivering.
+async function fcmSelfTest() {
+  try {
+    const sid = await invoke("fcm_selftest");
+    dlog("fcm", "fcm", `self-test: ping sent (${String(sid).slice(0, 8)}…) — awaiting pong…`);
+    clearTimeout(fcmPingTimer);
+    fcmPingTimer = setTimeout(() => {
+      fcmPingTimer = null;
+      dlog("error", "fcm", "self-test: no pong within 12s — FCM is NOT delivering pushes");
+      toast("⚠ FCM self-test failed (no pong)");
+    }, 12000);
+  } catch (err) {
+    dlog("error", "fcm", `self-test ping failed: ${err}`);
+  }
+}
+
+function renderMeDetails() {
+  if (!identity) return;
+  el("me-details").innerHTML = `
+    <dt>Name</dt><dd>${esc(identity.name)}</dd>
+    <dt>IP</dt><dd>${esc(identity.ip)}</dd>
+    <dt>TCP</dt><dd>${identity.tcp_port}</dd>
+    <dt>UDP</dt><dd>${identity.udp_port}</dd>
+    <dt>WS</dt><dd>${identity.ws_port}</dd>
+    <dt>Node</dt><dd>${esc(identity.node_id)}</dd>`;
+}
+
+// ---------- peers / sidebar ----------
+async function loadPeers() {
+  try { peers = await invoke("get_peers"); renderDevices(); } catch (e) { console.error(e); }
+}
+
+function renderDevices() {
+  const list = el("device-list");
+  if (!peers.length) {
+    list.innerHTML = '<li class="empty">No devices yet.<br/>Scan LAN or Refresh.</li>';
+  } else {
+    list.innerHTML = peers
+      .map((p) => {
+        const tx = connected.get(p.node_id);
+        const dotCls = tx ? "connected" : "neutral";
+        const fw = p.inbound_blocked ? ' · <span class="badge fw-blocked" title="cannot receive inbound (needs relay)">🔒</span>' : "";
+        return `<li class="device ${p.node_id === selected ? "active" : ""}" data-id="${esc(p.node_id)}">
+          <span class="avatar">${esc(avatarText(p.name))}</span>
+          <span class="info">
+            <span class="nm"><span class="dot ${dotCls}" title="${tx ? "connected via " + tx : "not connected"}"></span><strong>${esc(p.name)}</strong></span>
+            <span class="sub">${esc(p.ip)} · <span class="badge src-${esc(p.source)}">${esc(p.source)}</span>${fw}</span>
+          </span>
+        </li>`;
+      })
+      .join("");
+  }
+  if (selected && view === "device") renderDevice();
+}
+
+function selectDevice(id) {
+  selected = id;
+  view = "device";
+  el("nav-settings").classList.remove("active");
+  showView();
+  renderDevices();
+  renderDevice();
+}
+
+function showView() {
+  el("view-empty").classList.toggle("hidden", view !== "empty");
+  el("view-device").classList.toggle("hidden", view !== "device");
+  el("view-settings").classList.toggle("hidden", view !== "settings");
+}
+
+// ---------- device view ----------
+function renderDevice() {
+  const p = selectedPeer();
+  if (!p) { view = "empty"; showView(); return; }
+  const tx = connected.get(p.node_id);
+  const isConn = !!tx;
+  el("dv-avatar").textContent = avatarText(p.name);
+  el("dv-name").textContent = p.name;
+  el("dv-sub").textContent = `${p.ip} · tcp ${p.tcp_port} · udp ${p.udp_port} · ws ${p.ws_port}`;
+  const status = el("dv-status");
+  status.textContent = isConn ? `connected · ${tx}` : "not connected";
+  status.className = "pill " + (isConn ? "connected" : "");
+  const cbtn = el("btn-connect");
+  cbtn.textContent = isConn ? "Connected ✓" : "Connect";
+  cbtn.disabled = isConn;
+  el("btn-remove").classList.toggle("hidden", p.source !== "manual");
+  updateSendTransport();
+  renderThread();
+  renderApps();
+}
+
+// ---------- app-notification pub/sub ----------
+function renderApps() {
+  const p = selectedPeer();
+  const list = el("apps-list");
+  const data = p ? appsByNode[p.node_id] : null;
+  if (!data) { list.innerHTML = '<li class="empty">Tap Refresh to load this device\'s apps.</li>'; return; }
+  const q = appsSearch.toLowerCase();
+  const apps = data.apps.filter((a) => !q || (a.label || a.pkg).toLowerCase().includes(q));
+  if (!apps.length) { list.innerHTML = '<li class="empty">No apps match.</li>'; return; }
+  list.innerHTML = apps
+    .map((a) => {
+      const on = data.subscribed.has(a.pkg);
+      return `<li class="app-row">
+        <span class="app-label"><strong>${esc(a.label || a.pkg)}</strong><br/><span class="app-pkg">${esc(a.pkg)}</span></span>
+        <button type="button" class="switch app-toggle" role="switch" aria-checked="${on}" data-pkg="${esc(a.pkg)}"><span></span></button>
+      </li>`;
+    })
+    .join("");
+}
+
+async function onAppToggle(pkg) {
+  const p = selectedPeer();
+  const data = p && appsByNode[p.node_id];
+  if (!data) return;
+  if (data.subscribed.has(pkg)) data.subscribed.delete(pkg);
+  else data.subscribed.add(pkg);
+  renderApps();
+  try {
+    await invoke("subscribe_apps", { nodeId: p.node_id, appsJson: JSON.stringify([...data.subscribed]) });
+    setStatus("apps-status", "Subscription updated.", true);
+  } catch (err) {
+    setStatus("apps-status", String(err), false);
+  }
+}
+
+async function onAppsRefresh() {
+  const p = selectedPeer();
+  if (!p) return;
+  setStatus("apps-status", "Requesting app list…", true);
+  try { await invoke("request_apps", { nodeId: p.node_id }); }
+  catch (err) { setStatus("apps-status", String(err), false); }
+}
+
+function relevant(entry, p) {
+  return entry.node === p.node_id || entry.ip === p.ip || entry.name === p.name;
+}
+
+function renderThread() {
+  const p = selectedPeer();
+  const t = el("thread");
+  const items = activity.filter((e) => relevant(e, p));
+  if (!items.length) { t.innerHTML = '<li class="empty">No activity yet.</li>'; return; }
+  t.innerHTML = items
+    .map(
+      (e) => `<li class="entry ${e.dir} ${e.ok ? "" : "bad"}">
+        <div class="entry-head">
+          <span class="badge ${esc((e.protocol || "").toLowerCase())}">${esc(e.protocol || "")}</span>
+          <span>${e.dir === "in" ? "from" : "to"} <strong>${esc(e.name || "peer")}</strong></span>
+        </div>
+        <div class="entry-text">${esc(e.text)}</div>
+      </li>`
+    )
+    .join("");
+}
+
+function logActivity(entry) {
+  activity.unshift({ ok: true, ts: Date.now(), ...entry });
+  if (activity.length > 500) activity.pop();
+  if (view === "device") renderThread();
+}
+
+// ---------- actions ----------
+async function onSend(e) {
+  e.preventDefault();
+  const p = selectedPeer();
+  if (!p) return;
+  const text = el("msg-input").value.trim();
+  if (!text) return setStatus("send-status", "Message is empty.", false);
+  el("send-btn").disabled = true;
+  try {
+    // Core auto-selects the transport: the active P2P connection if one is
+    // live, else the directed transport (UDP/TCP). It returns what it used.
+    const protocol = await invoke("send_message", { nodeId: p.node_id, text });
+    logActivity({ node: p.node_id, dir: "out", name: p.name, ip: p.ip, protocol, text });
+    el("msg-input").value = "";
+    setStatus("send-status", `Sent over ${protocol}.`, true);
+  } catch (err) {
+    setStatus("send-status", String(err), false);
+  } finally {
+    el("send-btn").disabled = false;
+  }
+}
+
+// Reflect which transport the next message will use for the selected device.
+let directedTransport = "UDP";
+function updateSendTransport() {
+  const hint = el("send-transport");
+  if (!hint) return;
+  const p = selectedPeer();
+  const tx = p && connected.get(p.node_id);
+  hint.textContent = tx
+    ? `Sends over the active ${tx.toUpperCase()} connection.`
+    : `No live connection — sends directly over ${directedTransport}.`;
+}
+
+async function refreshClipToggle() {
+  const on = await invoke("clipboard_sync_enabled");
+  el("clip-toggle").setAttribute("aria-checked", on ? "true" : "false");
+}
+async function onClipToggle() {
+  const on = await invoke("clipboard_sync_enabled");
+  await invoke(on ? "disable_clipboard_sync" : "enable_clipboard_sync");
+  await refreshClipToggle();
+  toast(on ? "Clipboard auto-sync off" : "Clipboard auto-sync on");
+}
+async function onClipGet() {
+  const p = selectedPeer();
+  if (!p) return;
+  el("clip-get-btn").disabled = true;
+  setStatus("clip-status", "Requesting…", true);
+  try {
+    const text = await invoke("get_clipboard", { nodeId: p.node_id });
+    setStatus("clip-status", "Copied to your clipboard.", true);
+    logActivity({ node: p.node_id, dir: "in", name: p.name, ip: p.ip, protocol: "CLIP", text: `📋 ${text}` });
+  } catch (err) {
+    setStatus("clip-status", String(err), false);
+  } finally {
+    el("clip-get-btn").disabled = false;
+  }
+}
+
+async function onNotif(e) {
+  e.preventDefault();
+  const title = el("n-title").value.trim();
+  const body = el("n-body").value.trim();
+  if (!title) return setStatus("notif-status", "Title required.", false);
+  try {
+    await invoke("share_notification", { title, body, app: "my-domain" });
+    setStatus("notif-status", "Notification sent to your devices.", true);
+    el("n-title").value = el("n-body").value = "";
+  } catch (err) {
+    setStatus("notif-status", String(err), false);
+  }
+}
+
+// ---------- settings ----------
+async function openSettings() {
+  view = "settings";
+  selected = null;
+  el("nav-settings").classList.add("active");
+  showView();
+  renderDevices();
+  await refreshDirectedTransport();
+}
+async function refreshDirectedTransport() {
+  try {
+    directedTransport = (await invoke("directed_transport")) || "UDP";
+  } catch {
+    directedTransport = "UDP";
+  }
+  const radio = document.querySelector(`input[name="dtransport"][value="${directedTransport}"]`);
+  if (radio) radio.checked = true;
+}
+async function onTransportChange(e) {
+  const transport = e.target.value;
+  try {
+    await invoke("set_directed_transport", { transport });
+    directedTransport = transport;
+    updateSendTransport();
+    toast(`Direct transport set to ${transport}`);
+  } catch (err) {
+    setStatus("fw-status", String(err), false);
+  }
+}
+async function onUpdateKey(e) {
+  e.preventDefault();
+  const key = el("s-key").value, pass = el("s-pass").value;
+  if (!key || !pass) return setStatus("s-status", "Both fields required.", false);
+  try {
+    await invoke("update_encryption_key", { newPassphrase: key, password: pass });
+    setStatus("s-status", "Encryption key updated.", true);
+    el("s-key").value = el("s-pass").value = "";
+  } catch (err) {
+    setStatus("s-status", String(err), false);
+  }
+}
+async function onFirewall() {
+  setStatus("fw-status", "Checking…", true);
+  try {
+    const fs = await invoke("firewall_check");
+    const out = fs.outbound_ok ? "outbound OK" : "outbound BLOCKED";
+    const inb = fs.inbound_blocked ? "inbound blocked (needs relay)" : "inbound reachable";
+    setStatus("fw-status", `${out} · ${inb}`, fs.outbound_ok);
+  } catch (err) {
+    setStatus("fw-status", String(err), false);
+  }
+}
+
+// ---------- manual add ----------
+function openAdd() { el("modal-add").classList.remove("hidden"); }
+function closeAdd() { el("modal-add").classList.add("hidden"); setStatus("manual-status", "", false); }
+async function onAddManual(e) {
+  e.preventDefault();
+  const name = el("m-name").value.trim();
+  const ip = el("m-ip").value.trim();
+  const tcpPort = parseInt(el("m-tcp").value, 10) || 0;
+  const udpPort = parseInt(el("m-udp").value, 10) || 0;
+  const wsPort = parseInt(el("m-ws").value, 10) || 0;
+  if (!ip) return setStatus("manual-status", "Enter an IP.", false);
+  try {
+    await invoke("add_manual_peer", { name, ip, tcpPort, udpPort, wsPort });
+    await loadPeers();
+    el("m-name").value = el("m-ip").value = el("m-tcp").value = el("m-udp").value = el("m-ws").value = "";
+    closeAdd();
+    toast(`Added ${ip}`);
+  } catch (err) {
+    setStatus("manual-status", String(err), false);
+  }
+}
+
+// ---------- debug panel ----------
+function fmtTs(ts) {
+  const d = new Date(ts);
+  const p = (n, l = 2) => String(n).padStart(l, "0");
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+}
+function debugVisible(e) {
+  if (debugFilter === "calls") return e.kind === "invoke" || e.kind === "result";
+  if (debugFilter === "events") return e.kind === "event" || e.kind === "ws" || e.kind === "fcm";
+  if (debugFilter === "errors") return e.kind === "error";
+  return true; // all
+}
+function debugRow(e) {
+  const arrow = { invoke: "→", result: "←", error: "✕", event: "◆", ws: "⇄", fcm: "🔔", info: "·" }[e.kind] || "·";
+  const d = e.detail.length > 400 ? e.detail.slice(0, 400) + "…" : e.detail;
+  const detail = d ? `<span class="dbg-detail">${esc(d)}</span>` : "";
+  return `<li class="dbg-row dbg-${e.kind}"><span class="dbg-ts">${fmtTs(e.ts)}</span><span class="dbg-k">${arrow}</span><span class="dbg-label">${esc(e.label)}</span>${detail}</li>`;
+}
+function renderDebug() {
+  const box = el("debug-log");
+  if (!box) return;
+  const rows = debugLog.filter(debugVisible);
+  box.innerHTML = rows.length ? rows.map(debugRow).join("") : '<li class="dbg-empty">No log entries.</li>';
+  box.scrollTop = box.scrollHeight;
+  updateDebugBadge();
+}
+function updateDebugBadge() {
+  const b = el("debug-badge");
+  if (!b) return;
+  const errs = debugLog.filter((e) => e.kind === "error").length;
+  b.textContent = errs ? String(errs) : "";
+  b.classList.toggle("hidden", !errs || debugOpen);
+}
+function toggleDebug(force) {
+  debugOpen = force !== undefined ? force : !debugOpen;
+  el("debug-panel").classList.toggle("hidden", !debugOpen);
+  el("debug-fab").classList.toggle("active", debugOpen);
+  if (debugOpen) renderDebug();
+  else updateDebugBadge();
+}
+function setDebugFilter(f) {
+  debugFilter = f;
+  document.querySelectorAll(".dbg-chip").forEach((c) => c.classList.toggle("active", c.dataset.filter === f));
+  renderDebug();
+}
+function debugAsText() {
+  return debugLog.map((e) => `${fmtTs(e.ts)} [${e.kind}] ${e.label}${e.detail ? " " + e.detail : ""}`).join("\n");
+}
+
+// ---------- init ----------
+async function init() {
+  const saved = await invoke("get_saved_session");
+  if (saved.server_url) el("a-server").value = saved.server_url;
+  if (saved.username) el("a-user").value = saved.username;
+
+  el("login-form").addEventListener("submit", (e) => onAuth(e, false));
+  el("a-register").addEventListener("click", (e) => onAuth(e, true));
+  el("a-genkey").addEventListener("click", async () => { el("a-key").value = await invoke("generate_key"); });
+
+  // sidebar
+  el("device-list").addEventListener("click", (e) => {
+    const row = e.target.closest(".device");
+    if (row) selectDevice(row.dataset.id);
+  });
+  el("btn-scan").addEventListener("click", () => { invoke("scan_lan"); toast("Scanning LAN…"); });
+  el("btn-refresh").addEventListener("click", async () => { try { await invoke("refresh_from_server"); toast("Refreshed"); } catch (e) { toast(String(e)); } });
+  el("btn-add").addEventListener("click", openAdd);
+  el("nav-settings").addEventListener("click", openSettings);
+
+  // device view
+  el("send-form").addEventListener("submit", onSend);
+  el("clip-toggle").addEventListener("click", onClipToggle);
+  el("clip-get-btn").addEventListener("click", onClipGet);
+  el("notif-form").addEventListener("submit", onNotif);
+  el("apps-refresh").addEventListener("click", onAppsRefresh);
+  el("apps-search").addEventListener("input", (e) => { appsSearch = e.target.value; renderApps(); });
+  el("apps-list").addEventListener("click", (e) => { const t = e.target.closest(".app-toggle"); if (t) onAppToggle(t.dataset.pkg); });
+  el("clear-log").addEventListener("click", () => { const p = selectedPeer(); for (let i = activity.length - 1; i >= 0; i--) if (relevant(activity[i], p)) activity.splice(i, 1); renderThread(); });
+  el("btn-connect").addEventListener("click", async () => {
+    const p = selectedPeer(); if (!p) return;
+    el("btn-connect").textContent = "Connecting…";
+    el("btn-connect").disabled = true;
+    // The ladder (connect) runs in the background and reports via connect-progress
+    // + peer-connected; it tries same-LAN UDP, direct/FCM WS, punch, then WebRTC.
+    try { await invoke("connect", { nodeId: p.node_id }); } catch (err) { toast(String(err)); renderDevice(); }
+  });
+  el("btn-remove").addEventListener("click", async () => {
+    const p = selectedPeer(); if (!p) return;
+    await invoke("remove_peer", { nodeId: p.node_id });
+    selected = null; view = "empty"; showView();
+    await loadPeers();
+  });
+
+  // settings
+  el("settings-form").addEventListener("submit", onUpdateKey);
+  el("s-genkey").addEventListener("click", async () => { el("s-key").value = await invoke("generate_key"); });
+  el("btn-firewall").addEventListener("click", onFirewall);
+  el("transport-seg").addEventListener("change", onTransportChange);
+  el("s-logout").addEventListener("click", async () => { await invoke("logout"); location.reload(); });
+
+  // modal
+  el("manual-form").addEventListener("submit", onAddManual);
+  el("m-cancel").addEventListener("click", closeAdd);
+  el("modal-add").addEventListener("click", (e) => { if (e.target.id === "modal-add") closeAdd(); });
+
+  // debug panel
+  el("debug-fab").addEventListener("click", () => toggleDebug());
+  el("debug-close").addEventListener("click", () => toggleDebug(false));
+  el("debug-clear").addEventListener("click", () => { debugLog.length = 0; renderDebug(); });
+  el("debug-copy").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(debugAsText()); toast("Debug log copied"); }
+    catch { toast("Copy failed"); }
+  });
+  el("debug-filters").addEventListener("click", (e) => { const c = e.target.closest(".dbg-chip"); if (c) setDebugFilter(c.dataset.filter); });
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "`" || e.key === "~")) { e.preventDefault(); toggleDebug(); }
+    else if (e.key === "Escape" && debugOpen) toggleDebug(false);
+  });
+  dlog("info", "app", "debug panel ready");
+
+  // events
+  await listen("peers-updated", (ev) => { peers = ev.payload; renderDevices(); });
+  // Unified live-connection events (any transport) drive the green dot.
+  await listen("peer-connected", (ev) => {
+    const m = ev.payload || {};
+    connected.set(m.node_id, m.transport);
+    const p = peers.find((x) => x.node_id === m.node_id);
+    dlog("ws", "p2p", `connected via ${m.transport} ${p ? `${p.ip} (${p.name})` : m.node_id}`);
+    renderDevices(); if (view === "device") renderDevice();
+    updateSendTransport();
+  });
+  await listen("peer-disconnected", (ev) => {
+    connected.delete(ev.payload);
+    const p = peers.find((x) => x.node_id === ev.payload);
+    dlog("ws", "p2p", `disconnected ${p ? `${p.ip} (${p.name})` : ev.payload}`);
+    renderDevices(); if (view === "device") renderDevice();
+    updateSendTransport();
+  });
+  await listen("connect-progress", (ev) => {
+    const m = ev.payload || {};
+    dlog("ws", "ladder", `${m.stage}${m.detail ? " · " + m.detail : ""}`);
+    const p = selectedPeer();
+    if (p && p.node_id === m.node_id && view === "device" && !connected.has(m.node_id)) {
+      const label = { udp_ping: "Trying LAN…", direct_ws: "Trying direct…", via_signal: "Via signal…", punching: "Punching…", webrtc: "WebRTC…", failed: "Connect", connected: "Connected ✓" }[m.stage];
+      if (label) { el("btn-connect").textContent = label; el("btn-connect").disabled = m.stage !== "failed"; }
+    }
+  });
+  // FCM push signals (raw listen: emit our own clean line instead of the generic event dump).
+  _event.listen("fcm-event", (ev) => {
+    const m = ev.payload || {};
+    const text = `${m.text || ""}${m.from ? ` · from ${m.from}` : ""}`;
+    dlog(m.kind === "error" ? "error" : "fcm", "fcm", text);
+    if ((m.text || "").includes("pong received")) {
+      clearTimeout(fcmPingTimer);
+      fcmPingTimer = null;
+      toast("FCM working ✓");
+    }
+  });
+  await listen("message-received", (ev) => {
+    const m = ev.payload;
+    logActivity({ dir: "in", name: m.from, ip: m.ip, protocol: m.protocol, text: m.text, ok: m.ok });
+  });
+  await listen("clipboard-event", (ev) => {
+    const m = ev.payload;
+    logActivity({ dir: "in", name: m.from, ip: m.ip, protocol: "CLIP", text: "📋 Clipboard synced" });
+  });
+  await listen("notification-event", (ev) => {
+    const m = ev.payload;
+    logActivity({ dir: "in", name: m.from, protocol: "NOTIF", text: `🔔 ${m.title}${m.body ? " — " + m.body : ""}` });
+    toast(`🔔 ${m.title}`);
+  });
+  await listen("call-notification-event", (ev) => {
+    const m = ev.payload;
+    logActivity({ dir: "in", name: m.from, protocol: "CALL", text: `📞 ${m.caller || ""} (${m.state})` });
+  });
+  await listen("call-history-event", (ev) => {
+    const m = ev.payload;
+    logActivity({ dir: "in", name: m.from, protocol: "CALL", text: "📞 Call history synced" });
+  });
+  await listen("apps-list-event", (ev) => {
+    const m = ev.payload; // { from, apps:[{pkg,label}], subscribed:[pkg] }
+    appsByNode[m.from] = { apps: m.apps || [], subscribed: new Set(m.subscribed || []) };
+    const p = selectedPeer();
+    if (p && p.node_id === m.from) { setStatus("apps-status", `${(m.apps || []).length} apps`, true); renderApps(); }
+  });
+}
+
+window.addEventListener("DOMContentLoaded", init);
