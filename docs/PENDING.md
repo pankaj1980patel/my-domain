@@ -108,6 +108,59 @@ like QUIC/RELAY, and a debug log.
 Planned with the Phase 3 UI rewrite (SolidJS desktop, Compose Android) and
 kept up in every later phase.
 
+### Start fresh: rebuild the UI, don't restyle it
+
+The current screens were built to **debug the networking**, so they expose
+internals everywhere. Restyling them would keep the clutter, so both apps get
+**new screens built from scratch** on the design system below:
+- **Desktop:** a new SolidJS app replaces `apps/desktop/src/index.html`,
+  `main.js` and `styles.css` (about 1,100 lines of vanilla JS).
+- **Android:** new Compose screens replace `MainScreen.kt`,
+  `LoginScreen.kt` and `SettingsDialog.kt`.
+
+The old UI is deleted, not kept alongside. The core API stays the same; only
+the screens change.
+
+| Today's element | New home |
+|---|---|
+| Per-message transport picker, UDP/TCP "directed transport" toggle | **Removed**: the engine picks the best path itself |
+| Manual peer entry (IP + TCP/UDP/WS ports) | **Removed**: QR pairing replaces it (kept on the Developer screen) |
+| "Scan LAN" and "Refresh" buttons | **Removed**: discovery and refresh run automatically (pull-to-refresh on Android) |
+| Firewall check button | **Removed**: an automatic "This Mac can't be reached. Fix it" hint with steps |
+| FCM self-test toast | **Developer screen** |
+| Floating debug panel (log, filters, copy, clear) | **Developer screen** |
+| Protocol tags in the activity log (`[UDP]`, `[QUIC]`) | **Removed**: plain sentences ("You sent 'hi' to Pixel") |
+| IP addresses and node ids on device cards and in settings | **Developer screen** |
+| Raw server URL on the login screen | Pre-filled; editable only under "Advanced" |
+| "Encryption key" field and "Generate" button | Replaced by device keys and QR pairing (Phase 4) |
+| "Skip login (LAN only)" | **Developer screen** |
+| Device list, message, clipboard, notifications, app list, account settings | **Kept, redesigned** as device cards and feature tiles |
+
+**Developer screen:** hidden, shown in debug builds or unlocked by tapping the
+version number 7 times. It collects everything a developer needs:
+- the debug log, with filters and export
+- the connection path for each device
+- the FCM self-test
+- the firewall check
+- manual peers
+- the transport override
+
+**Screen map for the new app:**
+1. Welcome / sign in
+2. Pair a device (QR)
+3. Home: device cards
+4. Device detail: one tile per feature
+5. Activity, in plain words
+6. Settings: account, devices, permissions
+7. Developer (hidden)
+
+**Done when:**
+- A non-technical tester can sign in, pair a device and send a file without
+  seeing a single technical term.
+- The old desktop and Android UI files are deleted.
+- `scripts/lab/start-all.sh` still logs every device in with the test
+  account.
+
 - **Design system first**, shared by desktop and Android so they feel like one product:
   - Colour palette: a calm brand colour, plus success, warning and error colours.
   - Light and dark themes. Every colour pair meets WCAG AA contrast.
