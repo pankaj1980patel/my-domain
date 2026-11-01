@@ -149,6 +149,24 @@ assert_eq!(hub.kinds(), vec!["punch_offer", "punch_answer"]);
 `..ConnectRungs::none()` is **struct update syntax**: "every other field from
 this value". It's like `{ ...ConnectRungs.none(), punch: true }` in JS.
 
+## Testing server calls: `FakeRegistry`
+
+`md_testkit::FakeRegistry` is a **real HTTP server** (built on the small
+`tiny_http` crate) on an ephemeral loopback port, with the same routes and
+JSON as `apps/server`. Users and devices are kept in memory. There's no
+MongoDB, JWT or FCM.
+
+Why a fake server instead of a mock trait? A trait mock would replace the
+engine's HTTP client, so a bug in URL building, auth headers or JSON field
+names would pass the tests. With a fake server, the real `ureq` client code
+runs on every test. (Node: the difference between stubbing `fetch` and running
+supertest against an in-memory Express app.)
+
+**The catch: drift.** If `apps/server` changes a route or field and the fake
+doesn't, tests pass while production breaks. Phase 4 adds contract tests that
+run the *same* scenarios against the real server, with a throwaway MongoDB
+container.
+
 ## Current inventory (Phase 1, 2026-11-01)
 
 | File | Tests | Covers |
@@ -163,13 +181,13 @@ this value". It's like `{ ...ConnectRungs.none(), punch: true }` in JS.
 | `wire/frame.rs` | 1 | v2 frame round trip |
 | `tests/messaging.rs` | 16 | chat over UDP/TCP/WS, typed errors, wrong key + flood, clipboard, notifications, TCP hardening |
 | `tests/connect_ladder.rs` | 6 | each rung alone: LAN UDP, signaled WS, **hole punch**, **WebRTC**, all-off, unknown peer |
+| `kv.rs` | 6 | persistence across restarts, corruption recovery, atomic write, concurrent writers |
+| `tests/registry.rs` | 11 | login/register, saved session, server errors, unreachable server, registry discovery + chat, user isolation, key rotation, logout, firewall check, HTTP signal relay |
 
-**60 tests, green on macOS, Linux (Manjaro) and Android 16 (ARM64).** The ladder
+**78 tests, green on macOS, Linux (Manjaro) and Android 16 (ARM64).** The ladder
 suite passed 10 consecutive runs (flakiness check).
 
 Not yet covered:
 - The WebRTC "lost race" path (a session opening while another link owns the
   slot). It needs a hand-crafted SDP offer.
 - Real NAT traversal through actual NAT routers: Linux network namespaces in Phase 2.
-- Login, registry refresh and firewall checks (HTTP to the server). A `Registry`
-  trait comes with the server work.

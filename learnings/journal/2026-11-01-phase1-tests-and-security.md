@@ -114,3 +114,48 @@ punch and WebRTC.
   helper functions in `tests/*.rs`. Those files get `#![allow(clippy::unwrap_used)]`.
 - `sed` with several `-e 'NNNs/…/'` line edits in one pass is safe, because
   addresses refer to the *input* line numbers even after an earlier edit inserts lines.
+
+
+## Part 3 (same day): finishing Phase 1
+
+| Commit | Change |
+|---|---|
+| `refactor: split engine.rs into engine/ modules…` | 1,288-line file split into `mod.rs` + session, peers, messaging, sharing, signaling, ladder, background. Background loops stop when the `Engine` is dropped |
+| `refactor: SendPath/Directed enums…` | No more `"WS"`/`"TCP"` strings or `to_uppercase()` per send |
+| `kv: atomic FileKv in mdcore…` | One settings store for every platform; **Android now remembers the session** |
+| `md-testkit FakeRegistry + registry tests` | Login, refresh, firewall and signal relay tested through real HTTP |
+
+### Rust concepts met
+- **Several `impl` blocks for one type, spread across modules.** `impl Engine<P>`
+  appears in seven files. A child module (`engine::session`) can read its
+  parent's private fields: privacy in Rust is per *module tree*, not per file
+  or per class.
+- **`use super::*`** pulls in everything the parent module can see, including
+  the parent's own `use` imports. It's handy for splitting one module into a folder.
+- **`Drop`** is Rust's destructor, called automatically when a value goes out of
+  scope. `Engine`'s sets a shutdown flag. (Node has no equivalent: the closest is
+  remembering to call `close()`.)
+- **Atomic file replace**: write `x.tmp`, then `rename` over `x`.
+- **`bool::then(|| …)`**: `(!dir.is_empty()).then(|| FileKv::in_dir(&dir))` gives
+  `Some(store)` only when there's a directory.
+- **Exhaustive `match` without `unreachable!()`.** A library shouldn't panic, so an
+  arm that "can't happen" returns an error instead.
+
+### Gotchas
+- **JNI signatures aren't type-checked across the language boundary.** JNI finds
+  `Java_com_mydomain_android_RustNet_nativeStart` *by name only*. If Kotlin
+  passes 4 arguments and Rust expects 3, nothing fails at build time; it's
+  undefined behaviour at runtime. Both sides were changed in the same commit, and
+  the APK was built and launched on the phone. UniFFI (Phase 3) generates both
+  sides from one definition and removes this whole class of bug.
+- **zsh doesn't word-split `$VAR`**, so `A="adb -s X"; $A shell …` tries to run a
+  program literally named `adb -s X`. Call the command directly, or use an array.
+- Still to check by hand: log in on the phone, then confirm `files/session.json`
+  exists (`adb shell run-as com.mydomain.android ls files`).
+
+### Phase 1 result
+- **78 tests**, green on macOS, Linux and Android; ladder stable over 10 runs.
+- 8 security fixes, each with a regression test.
+- No `unwrap()` and no lock poisoning in mdcore; typed errors; one shared context;
+  `engine.rs` split; configurable STUN and ladder; pluggable signaling; one
+  settings store; event JSON owned by the core.

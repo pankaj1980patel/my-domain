@@ -38,6 +38,20 @@ Three ideas carry the whole design:
 
 ---
 
+## Then → Now (after Phase 1)
+
+The table below describes the original layout. Since Phase 1:
+- `engine.rs` became the folder [crates/mdcore/src/engine/](../crates/mdcore/src/engine):
+  `mod.rs` (shared state + `start`), `session.rs` (login, key), `peers.rs`,
+  `messaging.rs` (chat, clipboard), `sharing.rs` (notifications, calls, apps),
+  `signaling.rs` (firewall checks, `on_signal`), `ladder.rs` (connect ladder),
+  `background.rs` (clipboard watcher, IP watcher, heartbeat).
+- New: `config.rs` (`CoreConfig`, `ConnectRungs`), `kv.rs` (`FileKv`), a real
+  `error.rs` (`CoreError`), and a `Signaler` trait in `signal.rs`.
+- `CoreEvent` serializes itself. The apps no longer build event JSON by hand.
+- Undecryptable messages are rate-limited (step 5 below now shows one notice
+  per sender per minute instead of one per message).
+
 ## The core, `mdcore`, file by file
 
 | File | Job | Node analogy |
