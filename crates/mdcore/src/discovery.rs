@@ -16,6 +16,10 @@ pub const DISCOVERY_PORT: u16 = 45678;
 
 pub type PeerMap = Arc<Mutex<HashMap<String, Peer>>>;
 
+/// Most LAN-learned peers we keep. A real LAN has a handful of your devices;
+/// the cap stops a beacon flood with random node ids from growing memory.
+pub const MAX_LAN_PEERS: usize = 256;
+
 /// Bind the always-listening discovery socket and join the multicast group per
 /// the platform's interface strategy.
 pub fn bind_multicast(mode: &crate::platform::IfaceMode) -> std::io::Result<UdpSocket> {
@@ -119,6 +123,9 @@ pub fn merge_beacon(peers: &mut HashMap<String, Peer>, beacon: &Beacon, src: IpA
         existing.udp_port = beacon.udp_port;
         existing.ws_port = beacon.ws_port;
         return *existing != before;
+    }
+    if peers.values().filter(|p| p.source == Source::Lan).count() >= MAX_LAN_PEERS {
+        return false;
     }
     peers.insert(
         beacon.node_id.clone(),
@@ -293,6 +300,19 @@ mod tests {
         ));
         assert_eq!(peers["phone"].tcp_port, 7000);
         assert_eq!(peers["phone"].source, Source::Registry, "source is kept");
+    }
+
+    #[test]
+    fn lan_peer_count_is_capped() {
+        let mut peers = HashMap::new();
+        for i in 0..(MAX_LAN_PEERS + 50) {
+            merge_beacon(
+                &mut peers,
+                &beacon(&format!("fake-{i}"), 5000),
+                ip("10.0.0.9"),
+            );
+        }
+        assert_eq!(peers.len(), MAX_LAN_PEERS);
     }
 
     #[test]
