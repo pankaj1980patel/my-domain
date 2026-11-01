@@ -1,0 +1,27 @@
+# Device-lab inventory. Every script in scripts/lab/ reads its hosts from the
+# environment (see common.sh); this file is the human-readable source of truth
+# for which device plays which role, and what each one can test.
+# Add new devices here (second phone, TV, watch, …) as they join the lab.
+
+[[device]]
+name = "mac"
+role = ["dev", "desktop-macos"]
+host = "local"
+os = "macos"
+capabilities = ["clipboard", "notifications", "media", "screen", "input"]
+
+[[device]]
+name = "arch"
+role = ["desktop-linux", "mdctl-daemon", "android-build-host"]
+host = "pankaj@192.168.0.176"   # override with MD_ARCH_HOST
+os = "manjaro (arch)"
+arch = "x86_64"
+capabilities = ["clipboard", "notifications", "media", "screen", "input", "wifi", "bluetooth"]
+
+[[device]]
+name = "phone-1"
+role = ["android"]
+attached_to = "arch"             # USB; adb runs on the arch host
+serial = "10BF5N0JQH000ZA"       # override with MD_ANDROID_SERIAL
+model = "I2405"
+capabilities = ["clipboard", "notifications", "media", "calls", "sms", "contacts", "camera", "screen"]
