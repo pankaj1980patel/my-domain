@@ -14,6 +14,7 @@ use mdcore::engine::{Engine, FirewallStatus, SavedSession, SessionInfo};
 use mdcore::events::{CoreEvent, EventSink};
 use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
+use mdcore::CoreError;
 
 mod fcm;
 
@@ -291,7 +292,7 @@ fn auth_register(
     username: String,
     password: String,
     engine: State<Eng>,
-) -> Result<(), String> {
+) -> Result<(), CoreError> {
     engine.auth_register(&server_url, &username, &password)
 }
 
@@ -301,12 +302,12 @@ fn auth_login(
     username: String,
     password: String,
     engine: State<Eng>,
-) -> Result<(), String> {
+) -> Result<(), CoreError> {
     engine.auth_login(&server_url, &username, &password)
 }
 
 #[tauri::command]
-fn set_encryption_key(passphrase: String, engine: State<Eng>) -> Result<(), String> {
+fn set_encryption_key(passphrase: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.set_encryption_key(&passphrase)
 }
 
@@ -315,7 +316,7 @@ fn update_encryption_key(
     new_passphrase: String,
     password: String,
     engine: State<Eng>,
-) -> Result<(), String> {
+) -> Result<(), CoreError> {
     engine.update_encryption_key(&new_passphrase, &password)
 }
 
@@ -330,7 +331,7 @@ fn logout(engine: State<Eng>) {
 }
 
 #[tauri::command]
-fn refresh_from_server(engine: State<Eng>) -> Result<(), String> {
+fn refresh_from_server(engine: State<Eng>) -> Result<(), CoreError> {
     engine.refresh_from_server()
 }
 
@@ -340,12 +341,12 @@ fn scan_lan(engine: State<Eng>) {
 }
 
 #[tauri::command]
-fn connect_ws(node_id: String, engine: State<Eng>) -> Result<(), String> {
+fn connect_ws(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.connect_ws(&node_id)
 }
 
 #[tauri::command]
-fn send_message(node_id: String, text: String, engine: State<Eng>) -> Result<String, String> {
+fn send_message(node_id: String, text: String, engine: State<Eng>) -> Result<String, CoreError> {
     engine.send(&node_id, &text)
 }
 
@@ -375,7 +376,7 @@ fn clipboard_sync_enabled(engine: State<Eng>) -> bool {
 }
 
 #[tauri::command]
-fn get_clipboard(node_id: String, engine: State<Eng>) -> Result<String, String> {
+fn get_clipboard(node_id: String, engine: State<Eng>) -> Result<String, CoreError> {
     engine.get_clipboard(&node_id)
 }
 
@@ -387,7 +388,7 @@ fn add_manual_peer(
     udp_port: u16,
     ws_port: u16,
     engine: State<Eng>,
-) -> Result<(), String> {
+) -> Result<(), CoreError> {
     engine.add_manual_peer(&name, &ip, tcp_port, udp_port, ws_port)
 }
 
@@ -419,19 +420,19 @@ fn share_call_history(entries_json: String, engine: State<Eng>) {
 // --- signaling / connection setup ---
 
 #[tauri::command]
-fn connect(node_id: String, engine: State<Eng>) -> Result<(), String> {
+fn connect(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.connect(&node_id)
 }
 
 #[tauri::command]
-fn firewall_check(engine: State<Eng>) -> Result<FirewallStatus, String> {
+fn firewall_check(engine: State<Eng>) -> Result<FirewallStatus, CoreError> {
     engine.firewall_check()
 }
 
 /// Round-trip FCM self-test: pushes a ping to our own token via the server. The
 /// pong arrives through the FCM receiver (see `fcm.rs`) as an `fcm-event`.
 #[tauri::command]
-fn fcm_selftest(engine: State<Eng>) -> Result<String, String> {
+fn fcm_selftest(engine: State<Eng>) -> Result<String, CoreError> {
     engine.fcm_selftest()
 }
 
@@ -443,7 +444,7 @@ fn report_firewall(engine: State<Eng>) {
 }
 
 #[tauri::command]
-fn update_ws_open(open: bool, engine: State<Eng>) -> Result<(), String> {
+fn update_ws_open(open: bool, engine: State<Eng>) -> Result<(), CoreError> {
     engine.update_ws_open(open)
 }
 
@@ -456,12 +457,12 @@ fn on_signal(from: String, payload: String, engine: State<Eng>) {
 // --- app-notification pub/sub (consumer side) ---
 
 #[tauri::command]
-fn request_apps(node_id: String, engine: State<Eng>) -> Result<(), String> {
+fn request_apps(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.request_apps(&node_id)
 }
 
 #[tauri::command]
-fn subscribe_apps(node_id: String, apps_json: String, engine: State<Eng>) -> Result<(), String> {
+fn subscribe_apps(node_id: String, apps_json: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.subscribe_apps(&node_id, &apps_json)
 }
 

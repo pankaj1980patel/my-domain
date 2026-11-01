@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use md_testkit::{MockPlatform, TestNode, WAIT};
-use mdcore::CoreEvent;
+use mdcore::{CoreError, CoreEvent};
 
 /// Pair two fresh nodes. Ids are unique per test so parallel tests never clash.
 fn pair(test: &str) -> (TestNode, TestNode) {
@@ -78,9 +78,36 @@ fn chat_over_websocket_once_connected() {
 }
 
 #[test]
-fn send_to_unknown_peer_fails() {
+fn send_to_unknown_peer_fails_with_peer_not_found() {
     let a = TestNode::start("unknown-peer-a");
-    assert!(a.engine.send("nobody", "hi").is_err());
+    let err = a.engine.send("nobody", "hi").unwrap_err();
+    assert!(matches!(err, CoreError::PeerNotFound), "got {err:?}");
+}
+
+#[test]
+fn sending_before_a_key_is_set_fails_with_no_key() {
+    // Started without dev_login, so no username and no key.
+    let a = mdcore::Engine::start(
+        MockPlatform::new("no-key-a"),
+        std::sync::Arc::new(md_testkit::RecordingSink::default()),
+    )
+    .unwrap();
+    let b = TestNode::start("no-key-b");
+    a.upsert_peer(b.as_peer());
+    let err = a.send(&b.node_id(), "hi").unwrap_err();
+    assert!(matches!(err, CoreError::NoKey), "got {err:?}");
+    assert_eq!(err.to_string(), "set your encryption key first");
+}
+
+#[test]
+fn setting_a_key_requires_login() {
+    let a = mdcore::Engine::start(
+        MockPlatform::new("no-login-a"),
+        std::sync::Arc::new(md_testkit::RecordingSink::default()),
+    )
+    .unwrap();
+    let err = a.set_encryption_key("pass").unwrap_err();
+    assert!(matches!(err, CoreError::NotLoggedIn), "got {err:?}");
 }
 
 // ---------------------------------------------------------------------------

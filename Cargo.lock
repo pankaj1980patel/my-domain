@@ -3472,6 +3472,7 @@ dependencies = [
  "serde_json",
  "socket2 0.5.10",
  "str0m",
+ "thiserror 2.0.18",
  "tungstenite",
  "ureq",
  "uuid",

@@ -15,6 +15,7 @@ use serde::Serialize;
 
 use crate::crypto::derive_key;
 use crate::discovery::{self, PeerMap, DISCOVERY_PORT};
+use crate::error::CoreError;
 use crate::events::{CoreEvent, EventSink};
 use crate::features::ControlRegistry;
 use crate::model::{Identity, Peer, Source};
@@ -126,7 +127,7 @@ pub struct Engine<P: Platform> {
 impl<P: Platform> Engine<P> {
     /// Bind sockets, build identity, and spawn the discovery / tcp / udp / ws /
     /// clipboard / network-change threads.
-    pub fn start(platform: P, sink: Arc<dyn EventSink>) -> Result<Engine<P>, String> {
+    pub fn start(platform: P, sink: Arc<dyn EventSink>) -> crate::Result<Engine<P>> {
         let platform = Arc::new(platform);
 
         let raw_id = platform.device_id();
@@ -341,7 +342,7 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Send an already-built control-message JSON to one peer (active connection).
-    fn send_control(&self, node_id: &str, json: &str) -> Result<(), String> {
+    fn send_control(&self, node_id: &str, json: &str) -> crate::Result<()> {
         let from = self.ctx.identity.lock().unwrap().name.clone();
         let proto = self.proto_for(node_id);
         transport::send_payload(
@@ -424,7 +425,7 @@ impl<P: Platform> Engine<P> {
         server_url: &str,
         username: &str,
         password: &str,
-    ) -> Result<(), String> {
+    ) -> crate::Result<()> {
         if server_url.trim().is_empty() {
             return Err("server URL is required".into());
         }
@@ -443,7 +444,7 @@ impl<P: Platform> Engine<P> {
         server_url: &str,
         username: &str,
         password: &str,
-    ) -> Result<(), String> {
+    ) -> crate::Result<()> {
         self.do_auth("/auth/login", server_url, username, password)
     }
 
@@ -452,13 +453,13 @@ impl<P: Platform> Engine<P> {
         server_url: &str,
         username: &str,
         password: &str,
-    ) -> Result<(), String> {
+    ) -> crate::Result<()> {
         self.do_auth("/auth/register", server_url, username, password)
     }
 
     /// DEV / LAN-only: skip the registry. Set a local username + key so LAN
     /// discovery and messaging work between devices sharing the same credentials.
-    pub fn dev_login(&self, username: &str, passphrase: &str) -> Result<(), String> {
+    pub fn dev_login(&self, username: &str, passphrase: &str) -> crate::Result<()> {
         let username = username.trim();
         if username.is_empty() || passphrase.trim().is_empty() {
             return Err("username and encryption key required".into());
@@ -469,13 +470,13 @@ impl<P: Platform> Engine<P> {
         Ok(())
     }
 
-    pub fn set_encryption_key(&self, passphrase: &str) -> Result<(), String> {
+    pub fn set_encryption_key(&self, passphrase: &str) -> crate::Result<()> {
         let username = self
             .username
             .lock()
             .unwrap()
             .clone()
-            .ok_or("log in first")?;
+            .ok_or(CoreError::NotLoggedIn)?;
         if passphrase.trim().is_empty() {
             return Err("encryption key is required".into());
         }
@@ -484,17 +485,13 @@ impl<P: Platform> Engine<P> {
         Ok(())
     }
 
-    pub fn update_encryption_key(
-        &self,
-        new_passphrase: &str,
-        password: &str,
-    ) -> Result<(), String> {
+    pub fn update_encryption_key(&self, new_passphrase: &str, password: &str) -> crate::Result<()> {
         let username = self
             .username
             .lock()
             .unwrap()
             .clone()
-            .ok_or("log in first")?;
+            .ok_or(CoreError::NotLoggedIn)?;
         let url = self.server_url.lock().unwrap().clone().ok_or("no server")?;
         if !verify_password_call(&url, &username, password)? {
             return Err("incorrect password".into());
@@ -518,14 +515,19 @@ impl<P: Platform> Engine<P> {
 
     // --- discovery / peers ---
 
-    pub fn refresh_from_server(&self) -> Result<(), String> {
+    pub fn refresh_from_server(&self) -> crate::Result<()> {
         let url = self
             .server_url
             .lock()
             .unwrap()
             .clone()
-            .ok_or("not logged in")?;
-        let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
+            .ok_or(CoreError::NotLoggedIn)?;
+        let token = self
+            .token
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
         let id = self.ctx.identity.lock().unwrap().clone();
         registry_register(
             &url,
@@ -598,7 +600,7 @@ impl<P: Platform> Engine<P> {
         tcp_port: u16,
         udp_port: u16,
         ws_port: u16,
-    ) -> Result<(), String> {
+    ) -> crate::Result<()> {
         let parsed: Ipv4Addr = ip
             .trim()
             .parse()
@@ -650,7 +652,7 @@ impl<P: Platform> Engine<P> {
 
     // --- messaging ---
 
-    pub fn connect_ws(&self, node_id: &str) -> Result<(), String> {
+    pub fn connect_ws(&self, node_id: &str) -> crate::Result<()> {
         let peer = self
             .ctx
             .peers
@@ -658,20 +660,20 @@ impl<P: Platform> Engine<P> {
             .unwrap()
             .get(node_id)
             .cloned()
-            .ok_or("peer not found")?;
+            .ok_or(CoreError::PeerNotFound)?;
         if peer.ws_port == 0 {
             return Err("peer has no WebSocket port".into());
         }
         if self.ctx.ws_conns.lock().unwrap().contains_key(node_id) {
             return Ok(());
         }
-        ws::ws_connect(self.net_ctx(), &peer.ip, peer.ws_port)
+        ws::ws_connect(self.net_ctx(), &peer.ip, peer.ws_port).map_err(Into::into)
     }
 
     /// Send a chat message, auto-selecting the transport: the active persistent
     /// connection (WS/punch/WebRTC) if one is live, else the directed transport
     /// (UDP/TCP). Returns the protocol used so the UI can report it.
-    pub fn send(&self, node_id: &str, text: &str) -> Result<String, String> {
+    pub fn send(&self, node_id: &str, text: &str) -> crate::Result<String> {
         let from = self
             .username
             .lock()
@@ -711,12 +713,10 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Pull a peer's clipboard once, write it locally, and return it.
-    pub fn get_clipboard(&self, node_id: &str) -> Result<String, String> {
-        let clip = self
-            .ctx
-            .platform
-            .clipboard()
-            .ok_or("clipboard not supported on this device")?;
+    pub fn get_clipboard(&self, node_id: &str) -> crate::Result<String> {
+        let clip = self.ctx.platform.clipboard().ok_or(CoreError::Unsupported(
+            "clipboard not supported on this device",
+        ))?;
         let (tx, rx) = mpsc::channel::<String>();
         self.ctx
             .clip_pending
@@ -794,14 +794,14 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Consumer: ask a producer for its app list (reply arrives as CoreEvent::AppsList).
-    pub fn request_apps(&self, node_id: &str) -> Result<(), String> {
+    pub fn request_apps(&self, node_id: &str) -> crate::Result<()> {
         let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let m = serde_json::json!({ "type": "apps_request", "from": me }).to_string();
         self.send_control(node_id, &m)
     }
 
     /// Consumer: set the full enabled package set on a producer.
-    pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> Result<(), String> {
+    pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> crate::Result<()> {
         let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let apps: serde_json::Value =
             serde_json::from_str(apps_json).unwrap_or(serde_json::Value::Array(vec![]));
@@ -837,13 +837,13 @@ impl<P: Platform> Engine<P> {
     /// Outbound + inbound reachability check. Outbound = the server is reachable;
     /// inbound = the server can dial back to our advertised ports. Persists the
     /// inbound result via `/devices/state`.
-    pub fn firewall_check(&self) -> Result<FirewallStatus, String> {
+    pub fn firewall_check(&self) -> crate::Result<FirewallStatus> {
         let url = self
             .server_url
             .lock()
             .unwrap()
             .clone()
-            .ok_or("not logged in")?;
+            .ok_or(CoreError::NotLoggedIn)?;
         let outbound_ok = crate::registry::health_ok(&url);
         if !outbound_ok {
             return Ok(FirewallStatus {
@@ -851,7 +851,12 @@ impl<P: Platform> Engine<P> {
                 inbound_blocked: true,
             });
         }
-        let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
+        let token = self
+            .token
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
         let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         let probe = crate::registry::probe_inbound(&url, &token, &node_id, &["tcp", "ws"])?;
         let inbound_blocked = !(probe.tcp_reachable || probe.ws_reachable);
@@ -904,44 +909,60 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Tell the registry whether our WS server is currently reachable.
-    pub fn update_ws_open(&self, open: bool) -> Result<(), String> {
+    pub fn update_ws_open(&self, open: bool) -> crate::Result<()> {
         let url = self
             .server_url
             .lock()
             .unwrap()
             .clone()
-            .ok_or("not logged in")?;
-        let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
+            .ok_or(CoreError::NotLoggedIn)?;
+        let token = self
+            .token
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
         let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
+            .map_err(Into::into)
     }
 
     /// Relay a typed signal to a sibling device (via the server's FCM relay).
-    pub fn send_signal(&self, to: &str, sig: &Signal) -> Result<(), String> {
+    pub fn send_signal(&self, to: &str, sig: &Signal) -> crate::Result<()> {
         let url = self
             .server_url
             .lock()
             .unwrap()
             .clone()
-            .ok_or("not logged in")?;
-        let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
+            .ok_or(CoreError::NotLoggedIn)?;
+        let token = self
+            .token
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
         let me = self.ctx.identity.lock().unwrap().node_id.clone();
         let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
-        crate::registry::send_signal(&url, &token, &me, to, "signal", data)
+        crate::registry::send_signal(&url, &token, &me, to, "signal", data).map_err(Into::into)
     }
 
     /// Round-trip FCM self-test: ask the server to push a `ping` to our own
     /// device token. Returns the correlation id; the pong arrives via the
     /// platform's FCM receiver (which the adapter surfaces to the UI). Verifies
     /// the full push path end to end (server FCM send → device receive).
-    pub fn fcm_selftest(&self) -> Result<String, String> {
+    pub fn fcm_selftest(&self) -> crate::Result<String> {
         let url = self
             .server_url
             .lock()
             .unwrap()
             .clone()
-            .ok_or("not logged in")?;
-        let token = self.token.lock().unwrap().clone().ok_or("not logged in")?;
+            .ok_or(CoreError::NotLoggedIn)?;
+        let token = self
+            .token
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
         let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
         let sid = uuid::Uuid::new_v4().to_string();
         crate::registry::send_selfping(&url, &token, &node_id, &sid)?;
@@ -1050,10 +1071,10 @@ impl<P: Platform> Engine<P> {
     /// Kick off the connection ladder on a background thread (returns at once).
     /// Progress is reported via `CoreEvent::ConnectProgress`; success lands as a
     /// `PeerConnected` event when any rung establishes a live link.
-    pub fn connect(&self, node_id: &str) -> Result<(), String> {
+    pub fn connect(&self, node_id: &str) -> crate::Result<()> {
         // Validate the peer exists up front so the button gets immediate feedback.
         if !self.ctx.peers.lock().unwrap().contains_key(node_id) {
-            return Err("peer not found".into());
+            return Err(CoreError::PeerNotFound);
         }
         let ctx = self.net_ctx();
         let server_url = self.server_url.clone();
@@ -1142,12 +1163,20 @@ fn send_signal_via<P: Platform>(
     ctx: &NetCtx<P>,
     to: &str,
     sig: &Signal,
-) -> Result<(), String> {
-    let url = server_url.lock().unwrap().clone().ok_or("not logged in")?;
-    let tok = token.lock().unwrap().clone().ok_or("not logged in")?;
+) -> crate::Result<()> {
+    let url = server_url
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or(CoreError::NotLoggedIn)?;
+    let tok = token
+        .lock()
+        .unwrap()
+        .clone()
+        .ok_or(CoreError::NotLoggedIn)?;
     let me = ctx.identity.lock().unwrap().node_id.clone();
     let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
-    crate::registry::send_signal(&url, &tok, &me, to, "signal", data)
+    crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(Into::into)
 }
 
 fn run_connect_ladder<P: Platform>(

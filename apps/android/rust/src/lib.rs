@@ -164,14 +164,14 @@ fn ret(env: &mut JNIEnv, s: String) -> jstring {
         .unwrap_or(std::ptr::null_mut())
 }
 
-fn ok_or_err(r: Result<(), String>) -> String {
+fn ok_or_err(r: mdcore::Result<()>) -> String {
     match r {
         Ok(()) => String::new(),
         Err(e) => format!("ERROR: {e}"),
     }
 }
 
-fn with_engine<F: FnOnce(&Engine<AndroidPlatform>) -> Result<(), String>>(f: F) -> String {
+fn with_engine<F: FnOnce(&Engine<AndroidPlatform>) -> mdcore::Result<()>>(f: F) -> String {
     match engine() {
         Some(e) => ok_or_err(f(e)),
         None => "ERROR: not started".into(),

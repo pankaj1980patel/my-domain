@@ -21,6 +21,7 @@ use serde::Serialize;
 use crate::crypto::{decrypt, encrypt};
 use crate::discovery::PeerMap;
 use crate::engine::{KeyHolder, NetCtx, WsConns};
+use crate::error::CoreError;
 use crate::events::CoreEvent;
 use crate::model::{Envelope, IncomingMessage, Plaintext, WsFrame};
 use crate::platform::Platform;
@@ -266,8 +267,8 @@ pub fn send_payload(
     node_id: &str,
     protocol: &str,
     text: &str,
-) -> Result<(), String> {
-    let k = key.lock().unwrap().ok_or("set your encryption key first")?;
+) -> crate::Result<()> {
+    let k = key.lock().unwrap().ok_or(CoreError::NoKey)?;
     let plaintext = serde_json::to_vec(&Plaintext {
         from: from.to_string(),
         text: text.to_string(),
@@ -288,10 +289,12 @@ pub fn send_payload(
             .unwrap()
             .get(node_id)
             .map(|(_, s)| s.clone())
-            .ok_or("no WebSocket connection — trigger 'Connect (WS)' first")?;
+            .ok_or_else(|| {
+                CoreError::NoLink("no WebSocket connection — trigger 'Connect (WS)' first".into())
+            })?;
         sender
             .send(frame)
-            .map_err(|_| "WebSocket connection closed".to_string())?;
+            .map_err(|_| CoreError::NoLink("WebSocket connection closed".into()))?;
         return Ok(());
     }
 
@@ -300,7 +303,7 @@ pub fn send_payload(
         .unwrap()
         .get(node_id)
         .cloned()
-        .ok_or("peer not found")?;
+        .ok_or(CoreError::PeerNotFound)?;
     let ip: Ipv4Addr = peer.ip.parse().map_err(|_| "bad peer ip")?;
     match proto.as_str() {
         "TCP" => {
@@ -322,7 +325,9 @@ pub fn send_payload(
                 .map_err(|e| format!("UDP send failed: {e}"))?;
             Ok(())
         }
-        other => Err(format!("unknown protocol: {other}")),
+        other => Err(CoreError::InvalidInput(format!(
+            "unknown protocol: {other}"
+        ))),
     }
 }
 
