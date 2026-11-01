@@ -153,11 +153,15 @@ fn fcm_token_cell() -> &'static Arc<Mutex<Option<String>>> {
 // ---------------------------------------------------------------------------
 
 fn jstr(env: &mut JNIEnv, s: &JString, fallback: &str) -> String {
-    env.get_string(s).map(|v| v.into()).unwrap_or_else(|_| fallback.to_string())
+    env.get_string(s)
+        .map(|v| v.into())
+        .unwrap_or_else(|_| fallback.to_string())
 }
 
 fn ret(env: &mut JNIEnv, s: String) -> jstring {
-    env.new_string(s).map(|o| o.into_raw()).unwrap_or(std::ptr::null_mut())
+    env.new_string(s)
+        .map(|o| o.into_raw())
+        .unwrap_or(std::ptr::null_mut())
 }
 
 fn ok_or_err(r: Result<(), String>) -> String {
@@ -226,7 +230,11 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeStart<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthLogin<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, url: JString<'l>, user: JString<'l>, pass: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    url: JString<'l>,
+    user: JString<'l>,
+    pass: JString<'l>,
 ) -> jstring {
     let url = jstr(&mut env, &url, "");
     let user = jstr(&mut env, &user, "");
@@ -237,7 +245,11 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthLogin<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthRegister<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, url: JString<'l>, user: JString<'l>, pass: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    url: JString<'l>,
+    user: JString<'l>,
+    pass: JString<'l>,
 ) -> jstring {
     let url = jstr(&mut env, &url, "");
     let user = jstr(&mut env, &user, "");
@@ -248,7 +260,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthRegister<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetEncryptionKey<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, passphrase: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    passphrase: JString<'l>,
 ) -> jstring {
     let passphrase = jstr(&mut env, &passphrase, "");
     let out = with_engine(|e| e.set_encryption_key(&passphrase));
@@ -258,7 +272,10 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetEncryptionKey<
 /// DEV / LAN-only: skip the registry login (see `Engine::dev_login`).
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeDevLogin<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, username: JString<'l>, passphrase: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    username: JString<'l>,
+    passphrase: JString<'l>,
 ) -> jstring {
     let username = jstr(&mut env, &username, "");
     let passphrase = jstr(&mut env, &passphrase, "");
@@ -268,7 +285,10 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeDevLogin<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeUpdateEncryptionKey<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, new_pass: JString<'l>, password: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    new_pass: JString<'l>,
+    password: JString<'l>,
 ) -> jstring {
     let new_pass = jstr(&mut env, &new_pass, "");
     let password = jstr(&mut env, &password, "");
@@ -278,7 +298,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeUpdateEncryptionK
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeLogout<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     if let Some(e) = engine() {
         e.logout();
@@ -288,14 +309,16 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeLogout<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeGenerateKey<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     ret(&mut env, mdcore::crypto::generate_key())
 }
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeIsReady<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let ready = engine().map(|e| e.is_ready()).unwrap_or(false);
     ret(&mut env, if ready { "true".into() } else { "false".into() })
@@ -303,7 +326,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeIsReady<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRefresh<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let out = with_engine(|e| e.refresh_from_server());
     ret(&mut env, out)
@@ -311,7 +335,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRefresh<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeNetworkChanged<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, wifi_ip: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    wifi_ip: JString<'l>,
 ) -> jstring {
     let wifi_ip = jstr(&mut env, &wifi_ip, "");
     if let Some(w) = WIFI_IP.get() {
@@ -327,7 +353,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeNetworkChanged<'l
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeScanLan<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     if let Some(e) = engine() {
         e.scan_lan();
@@ -337,7 +364,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeScanLan<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectWs<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, node_id: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    node_id: JString<'l>,
 ) -> jstring {
     let node_id = jstr(&mut env, &node_id, "");
     let out = with_engine(|e| e.connect_ws(&node_id));
@@ -349,7 +378,10 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectWs<'l>(
 /// "ERROR: …" on failure.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSend<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, node_id: JString<'l>, text: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    node_id: JString<'l>,
+    text: JString<'l>,
 ) -> jstring {
     let node_id = jstr(&mut env, &node_id, "");
     let text = jstr(&mut env, &text, "");
@@ -366,15 +398,20 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSend<'l>(
 /// Directed transport ("UDP" | "TCP") used when no live connection exists.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeDirectedTransport<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
-    let out = engine().map(|e| e.directed_transport()).unwrap_or_else(|| "UDP".into());
+    let out = engine()
+        .map(|e| e.directed_transport())
+        .unwrap_or_else(|| "UDP".into());
     ret(&mut env, out)
 }
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetDirectedTransport<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, transport: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    transport: JString<'l>,
 ) -> jstring {
     let transport = jstr(&mut env, &transport, "UDP");
     if let Some(e) = engine() {
@@ -385,7 +422,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetDirectedTransp
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeGetPeers<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let json = engine()
         .map(|e| serde_json::to_string(&e.get_peers()).unwrap_or_else(|_| "[]".into()))
@@ -395,7 +433,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeGetPeers<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollMessages<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let json = SINK
         .get()
@@ -407,7 +446,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollMessages<'l>(
 /// node_ids of peers with a live WebSocket (true on the accepting side too).
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectedPeers<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let json = engine()
         .map(|e| serde_json::to_string(&e.connected_peers()).unwrap_or_else(|_| "[]".into()))
@@ -419,7 +459,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectedPeers<'l
 /// JSON array; each object has a `kind` discriminator.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollEvents<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let json = SINK
         .get()
@@ -430,13 +471,21 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollEvents<'l>(
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareNotification<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, title: JString<'l>, body: JString<'l>, app: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    title: JString<'l>,
+    body: JString<'l>,
+    app: JString<'l>,
 ) -> jstring {
     let title = jstr(&mut env, &title, "");
     let body = jstr(&mut env, &body, "");
     let app = jstr(&mut env, &app, "");
     if let Some(e) = engine() {
-        let app = if app.is_empty() { None } else { Some(app.as_str()) };
+        let app = if app.is_empty() {
+            None
+        } else {
+            Some(app.as_str())
+        };
         e.share_notification(&title, &body, app);
     }
     ret(&mut env, String::new())
@@ -444,13 +493,21 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareNotification
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallNotification<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, caller: JString<'l>, number: JString<'l>, state: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    caller: JString<'l>,
+    number: JString<'l>,
+    state: JString<'l>,
 ) -> jstring {
     let caller = jstr(&mut env, &caller, "");
     let number = jstr(&mut env, &number, "");
     let state = jstr(&mut env, &state, "");
     if let Some(e) = engine() {
-        let number = if number.is_empty() { None } else { Some(number.as_str()) };
+        let number = if number.is_empty() {
+            None
+        } else {
+            Some(number.as_str())
+        };
         e.share_call_notification(&caller, number, &state);
     }
     ret(&mut env, String::new())
@@ -458,7 +515,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallNotifica
 
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallHistory<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, entries_json: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    entries_json: JString<'l>,
 ) -> jstring {
     let entries_json = jstr(&mut env, &entries_json, "[]");
     if let Some(e) = engine() {
@@ -473,7 +532,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallHistory<
 /// it. Order-independent vs `nativeStart`.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetFcmToken<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, token: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    token: JString<'l>,
 ) -> jstring {
     let token = jstr(&mut env, &token, "");
     *fcm_token_cell().lock().unwrap() = if token.is_empty() { None } else { Some(token) };
@@ -486,7 +547,10 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetFcmToken<'l>(
 /// Feed an inbound FCM signal (from Kotlin's FirebaseMessagingService).
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeOnSignal<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, from: JString<'l>, payload: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    from: JString<'l>,
+    payload: JString<'l>,
 ) -> jstring {
     let from = jstr(&mut env, &from, "");
     let payload = jstr(&mut env, &payload, "");
@@ -499,7 +563,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeOnSignal<'l>(
 /// Connect to a peer along the fallback ladder.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnect<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, node_id: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    node_id: JString<'l>,
 ) -> jstring {
     let node_id = jstr(&mut env, &node_id, "");
     let out = with_engine(|e| e.connect(&node_id));
@@ -510,7 +576,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnect<'l>(
 /// or `ERROR: ...`.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeFirewallCheck<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
 ) -> jstring {
     let out = match engine() {
         Some(e) => match e.firewall_check() {
@@ -527,7 +594,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeFirewallCheck<'l>
 /// Producer: publish this device's shareable app list (JSON array of {pkg,label}).
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetInstalledApps<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, apps_json: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    apps_json: JString<'l>,
 ) -> jstring {
     let apps_json = jstr(&mut env, &apps_json, "[]");
     if let Some(e) = engine() {
@@ -539,7 +608,9 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetInstalledApps<
 /// Consumer: request a producer's app list (reply arrives via nativePollEvents).
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRequestApps<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, node_id: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    node_id: JString<'l>,
 ) -> jstring {
     let node_id = jstr(&mut env, &node_id, "");
     let out = with_engine(|e| e.request_apps(&node_id));
@@ -549,7 +620,10 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRequestApps<'l>(
 /// Consumer: set the enabled package set (JSON array of pkg strings) on a producer.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSubscribeApps<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, node_id: JString<'l>, apps_json: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    node_id: JString<'l>,
+    apps_json: JString<'l>,
 ) -> jstring {
     let node_id = jstr(&mut env, &node_id, "");
     let apps_json = jstr(&mut env, &apps_json, "[]");
@@ -560,7 +634,12 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSubscribeApps<'l>
 /// Producer: a captured app notification — forwarded to subscribers of `pkg`.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareAppNotification<'l>(
-    mut env: JNIEnv<'l>, _c: JClass<'l>, pkg: JString<'l>, app: JString<'l>, title: JString<'l>, body: JString<'l>,
+    mut env: JNIEnv<'l>,
+    _c: JClass<'l>,
+    pkg: JString<'l>,
+    app: JString<'l>,
+    title: JString<'l>,
+    body: JString<'l>,
 ) -> jstring {
     let pkg = jstr(&mut env, &pkg, "");
     let app = jstr(&mut env, &app, "");

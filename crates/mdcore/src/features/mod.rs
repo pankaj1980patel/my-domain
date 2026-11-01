@@ -35,15 +35,25 @@ pub struct ControlMsg<'a> {
 
 impl<'a> ControlMsg<'a> {
     pub fn kind(&self) -> &str {
-        self.value.get("type").and_then(|t| t.as_str()).unwrap_or("")
+        self.value
+            .get("type")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
     }
     /// String field, or "" if absent.
     pub fn str(&self, key: &str) -> String {
-        self.value.get(key).and_then(|x| x.as_str()).unwrap_or("").to_string()
+        self.value
+            .get(key)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string()
     }
     /// Optional string field.
     pub fn opt(&self, key: &str) -> Option<String> {
-        self.value.get(key).and_then(|x| x.as_str()).map(String::from)
+        self.value
+            .get(key)
+            .and_then(|x| x.as_str())
+            .map(String::from)
     }
     /// Raw JSON field (for opaque passthrough payloads).
     pub fn json(&self, key: &str) -> Value {
@@ -70,7 +80,9 @@ impl<P: Platform> ControlRegistry<P> {
     /// so those control messages pass through to the host instead of being
     /// swallowed here.
     pub fn with_defaults(has_clipboard: bool) -> Self {
-        let mut r = ControlRegistry { handlers: HashMap::new() };
+        let mut r = ControlRegistry {
+            handlers: HashMap::new(),
+        };
         if has_clipboard {
             r.register(Arc::new(clipboard::ClipboardHandler));
         }
@@ -90,7 +102,14 @@ impl<P: Platform> ControlRegistry<P> {
 
     /// Dispatch `text` to its handler. Returns `true` if it was a recognized
     /// control message (handled in-band; the caller must NOT show it as chat).
-    pub fn dispatch(&self, ctx: &NetCtx<P>, from: &str, ip: &str, protocol: &str, text: &str) -> bool {
+    pub fn dispatch(
+        &self,
+        ctx: &NetCtx<P>,
+        from: &str,
+        ip: &str,
+        protocol: &str,
+        text: &str,
+    ) -> bool {
         let Ok(value) = serde_json::from_str::<Value>(text) else {
             return false;
         };
@@ -101,7 +120,12 @@ impl<P: Platform> ControlRegistry<P> {
         let Some(handler) = self.handlers.get(kind.as_str()).cloned() else {
             return false;
         };
-        let msg = ControlMsg { from, ip, protocol, value };
+        let msg = ControlMsg {
+            from,
+            ip,
+            protocol,
+            value,
+        };
         handler.handle(ctx, &msg);
         true
     }

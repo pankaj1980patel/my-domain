@@ -79,7 +79,10 @@ impl FcmClient {
                 return Ok(t.clone());
             }
         }
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
         let claims = JwtClaims {
             iss: &self.sa.client_email,
             scope: "https://www.googleapis.com/auth/firebase.messaging",
@@ -90,8 +93,8 @@ impl FcmClient {
         let key = jsonwebtoken::EncodingKey::from_rsa_pem(self.sa.private_key.as_bytes())
             .map_err(|e| FcmError::Auth(format!("bad SA private_key: {e}")))?;
         let header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::RS256);
-        let assertion =
-            jsonwebtoken::encode(&header, &claims, &key).map_err(|e| FcmError::Auth(e.to_string()))?;
+        let assertion = jsonwebtoken::encode(&header, &claims, &key)
+            .map_err(|e| FcmError::Auth(e.to_string()))?;
 
         #[derive(Deserialize)]
         struct TokenResp {
@@ -111,7 +114,10 @@ impl FcmClient {
         if !resp.status().is_success() {
             return Err(FcmError::Auth(format!("token endpoint {}", resp.status())));
         }
-        let tr: TokenResp = resp.json().await.map_err(|e| FcmError::Auth(e.to_string()))?;
+        let tr: TokenResp = resp
+            .json()
+            .await
+            .map_err(|e| FcmError::Auth(e.to_string()))?;
         let exp = Instant::now() + Duration::from_secs(tr.expires_in.saturating_sub(300));
         *self.token.lock().await = Some((tr.access_token.clone(), exp));
         Ok(tr.access_token)

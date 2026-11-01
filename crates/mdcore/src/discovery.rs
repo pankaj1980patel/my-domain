@@ -58,12 +58,18 @@ pub fn lan_targets(mode: &crate::platform::IfaceMode) -> Vec<SocketAddr> {
             continue;
         }
         let o = ip.octets();
-        v.push(SocketAddr::new(Ipv4Addr::new(o[0], o[1], o[2], 255).into(), DISCOVERY_PORT));
+        v.push(SocketAddr::new(
+            Ipv4Addr::new(o[0], o[1], o[2], 255).into(),
+            DISCOVERY_PORT,
+        ));
         for host in 1..=254u8 {
             if host == o[3] {
                 continue;
             }
-            v.push(SocketAddr::new(Ipv4Addr::new(o[0], o[1], o[2], host).into(), DISCOVERY_PORT));
+            v.push(SocketAddr::new(
+                Ipv4Addr::new(o[0], o[1], o[2], host).into(),
+                DISCOVERY_PORT,
+            ));
         }
     }
     v
@@ -132,7 +138,12 @@ pub fn discovery_recv_loop(
         // Reply to announces (not to replies) so the scanner is discovered too.
         if !beacon.reply {
             let id = identity.lock().unwrap().clone();
-            send_beacon(&send, &id, true, &[SocketAddr::new(src.ip(), DISCOVERY_PORT)]);
+            send_beacon(
+                &send,
+                &id,
+                true,
+                &[SocketAddr::new(src.ip(), DISCOVERY_PORT)],
+            );
         }
     }
 }

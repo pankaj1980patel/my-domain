@@ -41,7 +41,11 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
                 let requester = msg.str("from");
                 if !requester.is_empty() {
                     let me = ctx.identity.lock().unwrap().node_id.clone();
-                    let current = ctx.platform.clipboard().and_then(|c| c.get()).unwrap_or_default();
+                    let current = ctx
+                        .platform
+                        .clipboard()
+                        .and_then(|c| c.get())
+                        .unwrap_or_default();
                     let resp = serde_json::json!({
                         "type": "clipboard_response",
                         "content": current,

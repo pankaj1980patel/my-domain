@@ -19,11 +19,11 @@ use std::time::Duration;
 use serde::Serialize;
 
 use crate::crypto::{decrypt, encrypt};
+use crate::discovery::PeerMap;
 use crate::engine::{KeyHolder, NetCtx, WsConns};
 use crate::events::CoreEvent;
 use crate::model::{Envelope, IncomingMessage, Plaintext, WsFrame};
 use crate::platform::Platform;
-use crate::discovery::PeerMap;
 
 fn now_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -65,7 +65,12 @@ pub type P2pConns = Arc<Mutex<HashMap<String, P2pConn>>>;
 /// refresh (e.g. a heartbeat ping) only bumps `last_seen` and never downgrades
 /// the kind. Emits `PeerConnected` only on first appearance. Never emits under
 /// the lock.
-pub fn mark_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str, kind: TransportKind, addr: Option<SocketAddr>) {
+pub fn mark_live<P: Platform>(
+    ctx: &NetCtx<P>,
+    node_id: &str,
+    kind: TransportKind,
+    addr: Option<SocketAddr>,
+) {
     let newly = {
         let mut m = ctx.p2p_conns.lock().unwrap();
         match m.get_mut(node_id) {
@@ -77,13 +82,23 @@ pub fn mark_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str, kind: TransportKin
                 false
             }
             None => {
-                m.insert(node_id.to_string(), P2pConn { kind, last_seen: now_secs(), addr });
+                m.insert(
+                    node_id.to_string(),
+                    P2pConn {
+                        kind,
+                        last_seen: now_secs(),
+                        addr,
+                    },
+                );
                 true
             }
         }
     };
     if newly {
-        ctx.sink.emit(CoreEvent::PeerConnected { node_id: node_id.to_string(), transport: kind });
+        ctx.sink.emit(CoreEvent::PeerConnected {
+            node_id: node_id.to_string(),
+            transport: kind,
+        });
     }
 }
 
@@ -98,12 +113,16 @@ pub fn touch_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
 pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let removed = ctx.p2p_conns.lock().unwrap().remove(node_id).is_some();
     if removed {
-        ctx.sink.emit(CoreEvent::PeerDisconnected { node_id: node_id.to_string() });
+        ctx.sink.emit(CoreEvent::PeerDisconnected {
+            node_id: node_id.to_string(),
+        });
     }
 }
 
 /// Snapshot of live peers and their transports.
-pub fn live_peers<P: Platform>(ctx: &NetCtx<P>) -> Vec<(String, TransportKind, Option<SocketAddr>)> {
+pub fn live_peers<P: Platform>(
+    ctx: &NetCtx<P>,
+) -> Vec<(String, TransportKind, Option<SocketAddr>)> {
     ctx.p2p_conns
         .lock()
         .unwrap()
@@ -124,7 +143,12 @@ pub fn live_snapshot<P: Platform>(ctx: &NetCtx<P>) -> Vec<(String, TransportKind
 
 /// Decrypt an envelope into a UI message; undecryptable messages are surfaced
 /// (not silently dropped).
-fn envelope_to_message(key: &KeyHolder, env: &Envelope, ip: String, protocol: &str) -> IncomingMessage {
+fn envelope_to_message(
+    key: &KeyHolder,
+    env: &Envelope,
+    ip: String,
+    protocol: &str,
+) -> IncomingMessage {
     if let Some(k) = key.lock().unwrap().as_ref() {
         if let Some(pt) = decrypt(k, env) {
             if let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) {
@@ -177,7 +201,15 @@ fn clip_proto<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> &'static str {
 pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
     let from = ctx.identity.lock().unwrap().name.clone();
     let proto = clip_proto(ctx, node_id);
-    let _ = send_payload(&ctx.peers, &ctx.ws_conns, &ctx.key, &from, node_id, proto, text);
+    let _ = send_payload(
+        &ctx.peers,
+        &ctx.ws_conns,
+        &ctx.key,
+        &from,
+        node_id,
+        proto,
+        text,
+    );
 }
 
 /// Broadcast a control-message JSON to all known peers.
@@ -198,7 +230,9 @@ pub fn handle_incoming<P: Platform>(ctx: &NetCtx<P>, env: &Envelope, ip: String,
     };
     let Some(pt) = pt else {
         ctx.sink
-            .emit(CoreEvent::MessageReceived(envelope_to_message(&ctx.key, env, ip, protocol)));
+            .emit(CoreEvent::MessageReceived(envelope_to_message(
+                &ctx.key, env, ip, protocol,
+            )));
         return;
     };
     let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) else {
@@ -233,8 +267,11 @@ pub fn send_payload(
     text: &str,
 ) -> Result<(), String> {
     let k = key.lock().unwrap().ok_or("set your encryption key first")?;
-    let plaintext = serde_json::to_vec(&Plaintext { from: from.to_string(), text: text.to_string() })
-        .map_err(|e| e.to_string())?;
+    let plaintext = serde_json::to_vec(&Plaintext {
+        from: from.to_string(),
+        text: text.to_string(),
+    })
+    .map_err(|e| e.to_string())?;
     let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
     let body = serde_json::to_vec(&env).map_err(|e| e.to_string())?;
 
@@ -251,19 +288,30 @@ pub fn send_payload(
             .get(node_id)
             .map(|(_, s)| s.clone())
             .ok_or("no WebSocket connection — trigger 'Connect (WS)' first")?;
-        sender.send(frame).map_err(|_| "WebSocket connection closed".to_string())?;
+        sender
+            .send(frame)
+            .map_err(|_| "WebSocket connection closed".to_string())?;
         return Ok(());
     }
 
-    let peer = peers.lock().unwrap().get(node_id).cloned().ok_or("peer not found")?;
+    let peer = peers
+        .lock()
+        .unwrap()
+        .get(node_id)
+        .cloned()
+        .ok_or("peer not found")?;
     let ip: Ipv4Addr = peer.ip.parse().map_err(|_| "bad peer ip")?;
     match proto.as_str() {
         "TCP" => {
             let addr = SocketAddr::new(ip.into(), peer.tcp_port);
             let mut stream = TcpStream::connect_timeout(&addr, Duration::from_secs(3))
                 .map_err(|e| format!("TCP connect failed: {e}"))?;
-            stream.write_all(&body).map_err(|e| format!("TCP send failed: {e}"))?;
-            stream.shutdown(std::net::Shutdown::Write).map_err(|e| e.to_string())?;
+            stream
+                .write_all(&body)
+                .map_err(|e| format!("TCP send failed: {e}"))?;
+            stream
+                .shutdown(std::net::Shutdown::Write)
+                .map_err(|e| e.to_string())?;
             Ok(())
         }
         "UDP" => {
@@ -282,7 +330,10 @@ pub fn tcp_recv_loop<P: Platform>(listener: TcpListener, ctx: NetCtx<P>) {
         let Ok(mut stream) = stream else { continue };
         let ctx = ctx.clone();
         std::thread::spawn(move || {
-            let ip = stream.peer_addr().map(|a| a.ip().to_string()).unwrap_or_default();
+            let ip = stream
+                .peer_addr()
+                .map(|a| a.ip().to_string())
+                .unwrap_or_default();
             let mut buf = Vec::new();
             if stream.read_to_end(&mut buf).is_err() {
                 return;

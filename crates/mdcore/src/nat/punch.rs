@@ -17,7 +17,9 @@ pub fn hole_punch(
     magic: &[u8],
     total: Duration,
 ) -> Option<SocketAddr> {
-    socket.set_read_timeout(Some(Duration::from_millis(50))).ok()?;
+    socket
+        .set_read_timeout(Some(Duration::from_millis(50)))
+        .ok()?;
     let deadline = Instant::now() + total;
     let mut buf = [0u8; 64];
     let mut last_send = Instant::now()

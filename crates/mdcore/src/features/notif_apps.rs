@@ -35,7 +35,13 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                 let me = ctx.identity.lock().unwrap().node_id.clone();
                 let apps: Value = serde_json::from_str(&ctx.installed_apps.lock().unwrap())
                     .unwrap_or_else(|_| Value::Array(vec![]));
-                let subscribed = ctx.subs.lock().unwrap().get(&from).cloned().unwrap_or_default();
+                let subscribed = ctx
+                    .subs
+                    .lock()
+                    .unwrap()
+                    .get(&from)
+                    .cloned()
+                    .unwrap_or_default();
                 let reply = serde_json::json!({
                     "type": "apps_list", "from": me, "apps": apps, "subscribed": subscribed,
                 })
@@ -51,7 +57,11 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                 let apps: Vec<String> = msg
                     .json("apps")
                     .as_array()
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(String::from))
+                            .collect()
+                    })
                     .unwrap_or_default();
                 ctx.subs.lock().unwrap().insert(from, apps);
             }

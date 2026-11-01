@@ -15,7 +15,7 @@ use crate::events::CoreEvent;
 use crate::model::{Envelope, WsFrame};
 use crate::platform::Platform;
 
-use super::{handle_incoming, mark_live, drop_live, TransportKind};
+use super::{drop_live, handle_incoming, mark_live, TransportKind};
 
 static WS_CONN_SEQ: AtomicU64 = AtomicU64::new(1);
 
@@ -30,7 +30,10 @@ pub fn ws_server_loop<P: Platform>(listener: TcpListener, ctx: NetCtx<P>) {
     }
 }
 
-pub fn handle_ws_conn<S: Read + Write, P: Platform>(mut ws: tungstenite::WebSocket<S>, ctx: NetCtx<P>) {
+pub fn handle_ws_conn<S: Read + Write, P: Platform>(
+    mut ws: tungstenite::WebSocket<S>,
+    ctx: NetCtx<P>,
+) {
     // Announce ourselves.
     {
         let id = ctx.identity.lock().unwrap();
@@ -58,7 +61,9 @@ pub fn handle_ws_conn<S: Read + Write, P: Platform>(mut ws: tungstenite::WebSock
                             }
                             guard.insert(node_id.clone(), (my_conn_id, tx.clone()));
                             drop(guard);
-                            ctx.sink.emit(CoreEvent::WsConnected { node_id: node_id.clone() });
+                            ctx.sink.emit(CoreEvent::WsConnected {
+                                node_id: node_id.clone(),
+                            });
                             mark_live(&ctx, &node_id, TransportKind::Ws, None);
                             peer_id = Some(node_id);
                         }
@@ -90,10 +95,15 @@ pub fn handle_ws_conn<S: Read + Write, P: Platform>(mut ws: tungstenite::WebSock
     // Only remove our own entry (a newer connection may have replaced it).
     if let Some(pid) = peer_id {
         let mut g = ctx.ws_conns.lock().unwrap();
-        if g.get(&pid).map(|(id, _)| *id == my_conn_id).unwrap_or(false) {
+        if g.get(&pid)
+            .map(|(id, _)| *id == my_conn_id)
+            .unwrap_or(false)
+        {
             g.remove(&pid);
             drop(g);
-            ctx.sink.emit(CoreEvent::WsDisconnected { node_id: pid.clone() });
+            ctx.sink.emit(CoreEvent::WsDisconnected {
+                node_id: pid.clone(),
+            });
             drop_live(&ctx, &pid);
         }
     }
@@ -111,8 +121,8 @@ pub fn ws_connect<P: Platform>(ctx: NetCtx<P>, ip: &str, ws_port: u16) -> Result
         .set_read_timeout(Some(Duration::from_millis(200)))
         .map_err(|e| e.to_string())?;
     let req = format!("ws://{ip}:{ws_port}/");
-    let (ws, _resp) =
-        tungstenite::client(req.as_str(), stream).map_err(|e| format!("WS handshake failed: {e}"))?;
+    let (ws, _resp) = tungstenite::client(req.as_str(), stream)
+        .map_err(|e| format!("WS handshake failed: {e}"))?;
     std::thread::spawn(move || handle_ws_conn(ws, ctx));
     Ok(())
 }

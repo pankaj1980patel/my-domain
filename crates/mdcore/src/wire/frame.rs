@@ -62,7 +62,13 @@ mod tests {
 
     #[test]
     fn round_trip() {
-        let f = Frame { service: 4, channel: 7, flags: FLAG_DATAGRAM, seq: 42, payload: vec![1, 2, 3] };
+        let f = Frame {
+            service: 4,
+            channel: 7,
+            flags: FLAG_DATAGRAM,
+            seq: 42,
+            payload: vec![1, 2, 3],
+        };
         assert_eq!(Frame::decode(&f.encode()), Some(f));
     }
 }

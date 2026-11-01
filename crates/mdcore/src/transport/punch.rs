@@ -43,7 +43,12 @@ const REASM_MAX: usize = 256;
 
 /// Split `data` into chunk datagrams and send each to `peer`. Always emits at
 /// least one datagram (so empty payloads still arrive).
-fn send_chunked(socket: &UdpSocket, peer: SocketAddr, msg_id: u32, data: &[u8]) -> std::io::Result<()> {
+fn send_chunked(
+    socket: &UdpSocket,
+    peer: SocketAddr,
+    msg_id: u32,
+    data: &[u8],
+) -> std::io::Result<()> {
     let chunks: Vec<&[u8]> = if data.is_empty() {
         vec![&[][..]]
     } else {
@@ -123,11 +128,19 @@ pub fn gather_candidates<P: Platform>(ctx: &NetCtx<P>) -> Option<(UdpSocket, Vec
     let my_ip = ctx.identity.lock().unwrap().ip.clone();
     let mut cands = Vec::new();
     if !my_ip.is_empty() && my_ip != "0.0.0.0" {
-        cands.push(Candidate { ip: my_ip, port, kind: "host".into() });
+        cands.push(Candidate {
+            ip: my_ip,
+            port,
+            kind: "host".into(),
+        });
     }
     if let Some(server) = resolve_stun() {
         if let Some(refl) = stun_binding(&socket, server) {
-            cands.push(Candidate { ip: refl.ip().to_string(), port: refl.port(), kind: "srflx".into() });
+            cands.push(Candidate {
+                ip: refl.ip().to_string(),
+                port: refl.port(),
+                kind: "srflx".into(),
+            });
         }
     }
     if cands.is_empty() {
@@ -151,7 +164,12 @@ fn to_addrs(cands: &[Candidate]) -> Vec<SocketAddr> {
 /// Spawn a thread that punches toward `peer_cands` on `socket` and, on success,
 /// runs the driver loop. Returns immediately; the link appears as a
 /// `PeerConnected` event when it comes up.
-pub fn punch_and_run<P: Platform>(ctx: NetCtx<P>, socket: UdpSocket, peer_cands: Vec<Candidate>, node_id: String) {
+pub fn punch_and_run<P: Platform>(
+    ctx: NetCtx<P>,
+    socket: UdpSocket,
+    peer_cands: Vec<Candidate>,
+    node_id: String,
+) {
     std::thread::spawn(move || {
         let addrs = to_addrs(&peer_cands);
         if addrs.is_empty() {
@@ -202,7 +220,12 @@ fn confirm_round_trip(socket: &UdpSocket, mut peer_addr: SocketAddr) -> Option<S
 /// outgoing sender in `ws_conns` and ferries `WsFrame::Msg` frames over the bound
 /// UDP path, replying to keepalive probes and tracking the peer's live address.
 /// Exits (and cleans up) when the heartbeat evicts the peer or a newer link wins.
-fn run_punch_conn<P: Platform>(ctx: NetCtx<P>, socket: UdpSocket, peer_addr: SocketAddr, node_id: String) {
+fn run_punch_conn<P: Platform>(
+    ctx: NetCtx<P>,
+    socket: UdpSocket,
+    peer_addr: SocketAddr,
+    node_id: String,
+) {
     let Some(mut peer_addr) = confirm_round_trip(&socket, peer_addr) else {
         return; // one-way path only — let the ladder advance to WebRTC
     };
@@ -256,7 +279,9 @@ fn run_punch_conn<P: Platform>(ctx: NetCtx<P>, socket: UdpSocket, peer_addr: Soc
                 // and dispatch it as the WsFrame it is.
                 peer_addr = src;
                 touch_live(&ctx, &node_id);
-                if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&frame) {
+                if let Ok(WsFrame::Msg { nonce, ciphertext }) =
+                    serde_json::from_slice::<WsFrame>(&frame)
+                {
                     let env = Envelope { nonce, ciphertext };
                     handle_incoming(&ctx, &env, src.ip().to_string(), "UDP");
                 }
@@ -277,7 +302,10 @@ fn run_punch_conn<P: Platform>(ctx: NetCtx<P>, socket: UdpSocket, peer_addr: Soc
     }
     {
         let mut g = ctx.ws_conns.lock().unwrap();
-        if g.get(&node_id).map(|(id, _)| *id == my_conn_id).unwrap_or(false) {
+        if g.get(&node_id)
+            .map(|(id, _)| *id == my_conn_id)
+            .unwrap_or(false)
+        {
             g.remove(&node_id);
         }
     }

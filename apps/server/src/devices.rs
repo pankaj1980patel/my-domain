@@ -130,13 +130,12 @@ pub async fn list(
     if let Some(ex) = q.exclude.filter(|v| !v.is_empty()) {
         filter.insert("node_id", doc! { "$ne": ex });
     }
-    let devices: Vec<Device> = s
-        .db
-        .collection::<Device>(crate::models::DEVICES_COLL)
-        .find(filter)
-        .await?
-        .try_collect()
-        .await?;
+    let devices: Vec<Device> =
+        s.db.collection::<Device>(crate::models::DEVICES_COLL)
+            .find(filter)
+            .await?
+            .try_collect()
+            .await?;
     let out = devices
         .into_iter()
         .map(|d| DeviceOut {
@@ -203,14 +202,13 @@ pub async fn state(
     if let Some(v) = req.reflexive_udp_port {
         set.insert("reflexive_udp_port", v);
     }
-    let res = s
-        .db
-        .collection::<Device>(crate::models::DEVICES_COLL)
-        .update_one(
-            doc! { "user_id": &user.user_id, "node_id": &req.node_id },
-            doc! { "$set": set },
-        )
-        .await?;
+    let res =
+        s.db.collection::<Device>(crate::models::DEVICES_COLL)
+            .update_one(
+                doc! { "user_id": &user.user_id, "node_id": &req.node_id },
+                doc! { "$set": set },
+            )
+            .await?;
     if res.matched_count == 0 {
         return Err(AppError::BadRequest("device not found".into()));
     }
@@ -272,5 +270,9 @@ pub async fn probe(
         )
         .await;
 
-    Ok(Json(ProbeOut { tcp_reachable, ws_reachable, udp_reachable }))
+    Ok(Json(ProbeOut {
+        tcp_reachable,
+        ws_reachable,
+        udp_reachable,
+    }))
 }

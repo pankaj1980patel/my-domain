@@ -17,7 +17,9 @@ pub struct ChannelAllocator {
 
 impl ChannelAllocator {
     pub fn new() -> Self {
-        ChannelAllocator { next: AtomicU16::new(1) }
+        ChannelAllocator {
+            next: AtomicU16::new(1),
+        }
     }
 
     pub fn alloc(&self, _reliability: Reliability) -> u16 {

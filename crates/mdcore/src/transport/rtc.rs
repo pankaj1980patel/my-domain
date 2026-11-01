@@ -63,7 +63,9 @@ fn new_rtc<P: Platform>(ctx: &NetCtx<P>) -> Option<(Rtc, UdpSocket)> {
 
 /// Initiator: create an offer with a data channel. Returns the rtc/socket to
 /// keep, the pending state, and the serialized offer SDP to signal.
-pub fn create_offer<P: Platform>(ctx: &NetCtx<P>) -> Option<(Rtc, UdpSocket, SdpPendingOffer, String)> {
+pub fn create_offer<P: Platform>(
+    ctx: &NetCtx<P>,
+) -> Option<(Rtc, UdpSocket, SdpPendingOffer, String)> {
     let (mut rtc, socket) = new_rtc(ctx)?;
     let mut api = rtc.sdp_api();
     api.add_channel("data".to_string());
@@ -92,7 +94,11 @@ pub fn apply_answer_and_run<P: Platform>(
 }
 
 /// Responder: accept an offer SDP, spawn the driver, and return the answer SDP.
-pub fn accept_offer_and_run<P: Platform>(ctx: NetCtx<P>, offer_sdp: &str, node_id: String) -> Option<String> {
+pub fn accept_offer_and_run<P: Platform>(
+    ctx: NetCtx<P>,
+    offer_sdp: &str,
+    node_id: String,
+) -> Option<String> {
     let offer: SdpOffer = serde_json::from_str(offer_sdp).ok()?;
     let (mut rtc, socket) = new_rtc(&ctx)?;
     let answer = rtc.sdp_api().accept_offer(offer).ok()?;
@@ -137,12 +143,17 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                         cid = Some(id);
                         if !registered {
                             registered = true;
-                            ctx.ws_conns.lock().unwrap().insert(node_id.clone(), (my_conn_id, tx.clone()));
+                            ctx.ws_conns
+                                .lock()
+                                .unwrap()
+                                .insert(node_id.clone(), (my_conn_id, tx.clone()));
                             mark_live(&ctx, &node_id, TransportKind::WebRtc, None);
                         }
                     }
                     Event::ChannelData(data) => {
-                        if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&data.data) {
+                        if let Ok(WsFrame::Msg { nonce, ciphertext }) =
+                            serde_json::from_slice::<WsFrame>(&data.data)
+                        {
                             let env = Envelope { nonce, ciphertext };
                             handle_incoming(&ctx, &env, String::new(), "UDP");
                         }
@@ -186,7 +197,12 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                 if let Ok(contents) = (&buf[..n]).try_into() {
                     let _ = rtc.handle_input(Input::Receive(
                         Instant::now(),
-                        Receive { proto: Protocol::Udp, source, destination: dest, contents },
+                        Receive {
+                            proto: Protocol::Udp,
+                            source,
+                            destination: dest,
+                            contents,
+                        },
                     ));
                 }
             }
@@ -205,7 +221,10 @@ fn cleanup<P: Platform>(ctx: &NetCtx<P>, node_id: &str, my_conn_id: u64, registe
     }
     {
         let mut g = ctx.ws_conns.lock().unwrap();
-        if g.get(node_id).map(|(id, _)| *id == my_conn_id).unwrap_or(false) {
+        if g.get(node_id)
+            .map(|(id, _)| *id == my_conn_id)
+            .unwrap_or(false)
+        {
             g.remove(node_id);
         }
     }

@@ -86,7 +86,11 @@ impl FcmConfig {
         let cfg = FcmConfig {
             api_key: pick("MYDOMAIN_FCM_API_KEY", &file.api_key, DEFAULT_API_KEY),
             app_id: pick("MYDOMAIN_FCM_APP_ID", &file.app_id, DEFAULT_APP_ID),
-            project_id: pick("MYDOMAIN_FCM_PROJECT_ID", &file.project_id, DEFAULT_PROJECT_ID),
+            project_id: pick(
+                "MYDOMAIN_FCM_PROJECT_ID",
+                &file.project_id,
+                DEFAULT_PROJECT_ID,
+            ),
             vapid_key: pick("MYDOMAIN_FCM_VAPID_KEY", &file.vapid_key, DEFAULT_VAPID_KEY),
         };
         if cfg.app_id.trim().is_empty() || cfg.vapid_key.trim().is_empty() {
@@ -169,7 +173,12 @@ fn run(
                 // Receiving it proves the full push path works; don't forward it
                 // to the Engine (it isn't a real Signal).
                 if let Some(sid) = sig.strip_prefix("selfping:") {
-                    emit_fcm(&handle, "info", &from, &format!("self-test pong received — FCM round-trip OK ✓ ({sid})"));
+                    emit_fcm(
+                        &handle,
+                        "info",
+                        &from,
+                        &format!("self-test pong received — FCM round-trip OK ✓ ({sid})"),
+                    );
                 } else {
                     emit_fcm(&handle, "message", &from, &preview(&sig));
                     if let Some(engine) = handle.try_state::<Eng>() {
@@ -179,7 +188,12 @@ fn run(
             }
             None => {
                 let raw = String::from_utf8_lossy(&payload);
-                emit_fcm(&handle, "message", "", &format!("unparsed payload: {}", preview(&raw)));
+                emit_fcm(
+                    &handle,
+                    "message",
+                    "",
+                    &format!("unparsed payload: {}", preview(&raw)),
+                );
             }
         }
     }));
@@ -223,7 +237,12 @@ fn run(
     // the registry. If we aren't logged in yet, the refresh is a no-op; the
     // frontend refreshes again after login, by which point `fcm_token()` is set.
     let token_preview: String = token.chars().take(12).collect();
-    emit_fcm(&app, "token", "", &format!("FCM token acquired ({token_preview}…)"));
+    emit_fcm(
+        &app,
+        "token",
+        "",
+        &format!("FCM token acquired ({token_preview}…)"),
+    );
     *token_cell.lock().unwrap() = Some(token);
     if let Some(engine) = app.try_state::<Eng>() {
         let _ = engine.refresh_from_server();
@@ -231,9 +250,19 @@ fn run(
 
     // Listen forever; reconnect with a fixed backoff on any drop.
     loop {
-        emit_fcm(&app, "info", "", "MTalk connected — listening for push signals");
+        emit_fcm(
+            &app,
+            "info",
+            "",
+            "MTalk connected — listening for push signals",
+        );
         if let Err(e) = client.start_listening() {
-            emit_fcm(&app, "error", "", &format!("listen ended: {e}; reconnecting in 10s"));
+            emit_fcm(
+                &app,
+                "error",
+                "",
+                &format!("listen ended: {e}; reconnecting in 10s"),
+            );
             eprintln!("[fcm] listen ended: {e}; reconnecting in 10s");
         }
         std::thread::sleep(Duration::from_secs(10));

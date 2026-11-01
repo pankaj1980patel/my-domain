@@ -38,7 +38,11 @@ fn hash_password(pw: &str) -> Result<String, AppError> {
 
 fn verify_password(pw: &str, hash: &str) -> bool {
     PasswordHash::new(hash)
-        .map(|parsed| Argon2::default().verify_password(pw.as_bytes(), &parsed).is_ok())
+        .map(|parsed| {
+            Argon2::default()
+                .verify_password(pw.as_bytes(), &parsed)
+                .is_ok()
+        })
         .unwrap_or(false)
 }
 
@@ -72,7 +76,10 @@ pub struct AuthUser {
 impl FromRequestParts<AppState> for AuthUser {
     type Rejection = AppError;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let token = parts
             .headers
             .get(AUTHORIZATION)
@@ -115,7 +122,11 @@ pub async fn register(
         ));
     }
     let users = s.db.collection::<User>(crate::models::USERS_COLL);
-    if users.find_one(doc! { "username": &username }).await?.is_some() {
+    if users
+        .find_one(doc! { "username": &username })
+        .await?
+        .is_some()
+    {
         return Err(AppError::Conflict("username already taken".into()));
     }
     let password_hash = hash_password(&req.password)?;

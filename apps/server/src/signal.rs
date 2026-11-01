@@ -52,10 +52,9 @@ pub async fn relay(
         .fcm
         .as_ref()
         .ok_or(AppError::Internal("FCM not configured on server".into()))?;
-    let token = target
-        .fcm_token
-        .clone()
-        .ok_or(AppError::Conflict("target has no FCM token (offline)".into()))?;
+    let token = target.fcm_token.clone().ok_or(AppError::Conflict(
+        "target has no FCM token (offline)".into(),
+    ))?;
 
     // FCM data payloads are string→string; the typed body is stringified.
     // NB: `from` is an FCM-reserved data key (rejected with INVALID_ARGUMENT),
@@ -76,7 +75,9 @@ pub async fn relay(
                     doc! { "$unset": { "fcm_token": "" } },
                 )
                 .await;
-            Err(AppError::Conflict("target FCM token invalid (cleared)".into()))
+            Err(AppError::Conflict(
+                "target FCM token invalid (cleared)".into(),
+            ))
         }
         Err(e) => Err(AppError::Internal(format!("FCM send failed: {e:?}"))),
     }
@@ -109,10 +110,9 @@ pub async fn selfping(
         .fcm
         .as_ref()
         .ok_or(AppError::Internal("FCM not configured on server".into()))?;
-    let token = device
-        .fcm_token
-        .clone()
-        .ok_or(AppError::Conflict("device has no FCM token (offline)".into()))?;
+    let token = device.fcm_token.clone().ok_or(AppError::Conflict(
+        "device has no FCM token (offline)".into(),
+    ))?;
 
     let data = serde_json::json!({
         "type": "ping",

@@ -64,7 +64,12 @@ pub fn http_err(e: ureq::Error) -> String {
     }
 }
 
-pub fn auth_call(url: &str, path: &str, username: &str, password: &str) -> Result<TokenResp, String> {
+pub fn auth_call(
+    url: &str,
+    path: &str,
+    username: &str,
+    password: &str,
+) -> Result<TokenResp, String> {
     ureq::post(&format!("{}{}", base(url), path))
         .timeout(Duration::from_secs(10))
         .send_json(serde_json::json!({ "username": username, "password": password }))
@@ -172,7 +177,12 @@ pub struct ProbeResult {
 }
 
 /// Ask the server to dial back to our advertised ports (inbound firewall check).
-pub fn probe_inbound(url: &str, token: &str, node_id: &str, checks: &[&str]) -> Result<ProbeResult, String> {
+pub fn probe_inbound(
+    url: &str,
+    token: &str,
+    node_id: &str,
+    checks: &[&str],
+) -> Result<ProbeResult, String> {
     ureq::post(&format!("{}/devices/probe", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
@@ -190,7 +200,11 @@ pub fn health_ok(url: &str) -> bool {
         .is_ok()
 }
 
-pub fn registry_fetch(url: &str, token: &str, exclude: &str) -> Result<Vec<RegistryDevice>, String> {
+pub fn registry_fetch(
+    url: &str,
+    token: &str,
+    exclude: &str,
+) -> Result<Vec<RegistryDevice>, String> {
     ureq::get(&format!("{}/devices?exclude={}", base(url), exclude))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))

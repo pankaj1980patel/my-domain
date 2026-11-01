@@ -37,7 +37,9 @@ struct DesktopClipboard {
 
 impl DesktopClipboard {
     fn new() -> Self {
-        DesktopClipboard { inner: std::sync::Mutex::new(arboard::Clipboard::new().ok()) }
+        DesktopClipboard {
+            inner: std::sync::Mutex::new(arboard::Clipboard::new().ok()),
+        }
     }
 }
 
@@ -88,7 +90,10 @@ impl DesktopPlatform {
 /// one machine register as distinct devices instead of clobbering the same
 /// machine-uid row. Trimmed; empty/unset => no suffix.
 fn test_suffix() -> Option<String> {
-    std::env::var("TEST").ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+    std::env::var("TEST")
+        .ok()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
 }
 
 impl Platform for DesktopPlatform {
@@ -136,7 +141,10 @@ impl Platform for DesktopPlatform {
 
     fn kv_set(&self, key: &str, value: &str) {
         let mut map = self.read_map();
-        map.insert(key.to_string(), serde_json::Value::String(value.to_string()));
+        map.insert(
+            key.to_string(),
+            serde_json::Value::String(value.to_string()),
+        );
         if let Some(p) = self.config_file() {
             if let Ok(bytes) = serde_json::to_vec_pretty(&map) {
                 let _ = std::fs::write(p, bytes);
@@ -185,25 +193,44 @@ impl EventSink for TauriSink {
             CoreEvent::PeerDisconnected { node_id } => {
                 let _ = self.app.emit("peer-disconnected", node_id);
             }
-            CoreEvent::ConnectProgress { node_id, stage, detail } => {
+            CoreEvent::ConnectProgress {
+                node_id,
+                stage,
+                detail,
+            } => {
                 let _ = self.app.emit(
                     "connect-progress",
                     serde_json::json!({ "node_id": node_id, "stage": stage, "detail": detail }),
                 );
             }
-            CoreEvent::Clipboard { from, ip, protocol, action } => {
+            CoreEvent::Clipboard {
+                from,
+                ip,
+                protocol,
+                action,
+            } => {
                 let _ = self.app.emit(
                     "clipboard-event",
                     serde_json::json!({ "from": from, "ip": ip, "protocol": protocol, "action": action }),
                 );
             }
-            CoreEvent::Notification { from, title, body, app } => {
+            CoreEvent::Notification {
+                from,
+                title,
+                body,
+                app,
+            } => {
                 let _ = self.app.emit(
                     "notification-event",
                     serde_json::json!({ "from": from, "title": title, "body": body, "app": app }),
                 );
             }
-            CoreEvent::CallNotification { from, caller, number, state } => {
+            CoreEvent::CallNotification {
+                from,
+                caller,
+                number,
+                state,
+            } => {
                 let _ = self.app.emit(
                     "call-notification-event",
                     serde_json::json!({ "from": from, "caller": caller, "number": number, "state": state }),
@@ -215,7 +242,11 @@ impl EventSink for TauriSink {
                     serde_json::json!({ "from": from, "entries": entries }),
                 );
             }
-            CoreEvent::AppsList { from, apps, subscribed } => {
+            CoreEvent::AppsList {
+                from,
+                apps,
+                subscribed,
+            } => {
                 let _ = self.app.emit(
                     "apps-list-event",
                     serde_json::json!({ "from": from, "apps": apps, "subscribed": subscribed }),
@@ -255,12 +286,22 @@ fn session_info(engine: State<Eng>) -> SessionInfo {
 }
 
 #[tauri::command]
-fn auth_register(server_url: String, username: String, password: String, engine: State<Eng>) -> Result<(), String> {
+fn auth_register(
+    server_url: String,
+    username: String,
+    password: String,
+    engine: State<Eng>,
+) -> Result<(), String> {
     engine.auth_register(&server_url, &username, &password)
 }
 
 #[tauri::command]
-fn auth_login(server_url: String, username: String, password: String, engine: State<Eng>) -> Result<(), String> {
+fn auth_login(
+    server_url: String,
+    username: String,
+    password: String,
+    engine: State<Eng>,
+) -> Result<(), String> {
     engine.auth_login(&server_url, &username, &password)
 }
 
@@ -270,7 +311,11 @@ fn set_encryption_key(passphrase: String, engine: State<Eng>) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn update_encryption_key(new_passphrase: String, password: String, engine: State<Eng>) -> Result<(), String> {
+fn update_encryption_key(
+    new_passphrase: String,
+    password: String,
+    engine: State<Eng>,
+) -> Result<(), String> {
     engine.update_encryption_key(&new_passphrase, &password)
 }
 
@@ -357,7 +402,12 @@ fn share_notification(title: String, body: String, app: Option<String>, engine: 
 }
 
 #[tauri::command]
-fn share_call_notification(caller: String, number: Option<String>, state: String, engine: State<Eng>) {
+fn share_call_notification(
+    caller: String,
+    number: Option<String>,
+    state: String,
+    engine: State<Eng>,
+) {
     engine.share_call_notification(&caller, number.as_deref(), &state)
 }
 
@@ -432,7 +482,9 @@ pub fn run() {
                 clipboard: DesktopClipboard::new(),
                 fcm_token: fcm_token.clone(),
             };
-            let sink: Arc<dyn EventSink> = Arc::new(TauriSink { app: handle.clone() });
+            let sink: Arc<dyn EventSink> = Arc::new(TauriSink {
+                app: handle.clone(),
+            });
             match Engine::start(platform, sink) {
                 Ok(engine) => {
                     app.manage(engine);

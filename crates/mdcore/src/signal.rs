@@ -21,30 +21,67 @@ pub struct Candidate {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Signal {
     /// "open your WS server and tell me when it's reachable".
-    StartWs { sid: String },
+    StartWs {
+        sid: String,
+    },
     /// Sent after `ws_open` is live; the initiator dials this endpoint.
-    WsReady { sid: String, ip: String, ws_port: u16 },
+    WsReady {
+        sid: String,
+        ip: String,
+        ws_port: u16,
+    },
     /// Couldn't open a reachable WS (e.g. also firewalled).
-    WsUnavailable { sid: String, reason: String },
+    WsUnavailable {
+        sid: String,
+        reason: String,
+    },
 
     /// UDP hole punch: exchange candidates and a relative start time.
-    PunchOffer { sid: String, candidates: Vec<Candidate>, start_in_ms: u64 },
-    PunchAnswer { sid: String, candidates: Vec<Candidate>, start_in_ms: u64 },
+    PunchOffer {
+        sid: String,
+        candidates: Vec<Candidate>,
+        start_in_ms: u64,
+    },
+    PunchAnswer {
+        sid: String,
+        candidates: Vec<Candidate>,
+        start_in_ms: u64,
+    },
     /// Both sides saw each other's probes; promote to the data channel.
-    PunchReady { sid: String },
+    PunchReady {
+        sid: String,
+    },
     /// Punch failed → escalate to TURN.
-    PunchFailed { sid: String, reason: String },
+    PunchFailed {
+        sid: String,
+        reason: String,
+    },
 
     /// TURN relay fallback with ephemeral credentials.
-    RelayOffer { sid: String, turn_uri: String, username: String, credential: String },
-    RelayAnswer { sid: String },
+    RelayOffer {
+        sid: String,
+        turn_uri: String,
+        username: String,
+        credential: String,
+    },
+    RelayAnswer {
+        sid: String,
+    },
 
     /// WebRTC data-channel offer/answer. The `sdp` is a serialized str0m
     /// SdpOffer/SdpAnswer that already embeds the host + reflexive candidates
     /// (no trickle ICE), so the exchange is one message each way.
-    SdpOffer { sid: String, sdp: String },
-    SdpAnswer { sid: String, sdp: String },
+    SdpOffer {
+        sid: String,
+        sdp: String,
+    },
+    SdpAnswer {
+        sid: String,
+        sdp: String,
+    },
 
     /// Abort / teardown.
-    Bye { sid: String },
+    Bye {
+        sid: String,
+    },
 }

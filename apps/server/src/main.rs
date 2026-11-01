@@ -18,10 +18,10 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use serde_json::json;
 use mongodb::bson::doc;
 use mongodb::options::IndexOptions;
-use mongodb::{IndexModel};
+use mongodb::IndexModel;
+use serde_json::json;
 use std::net::SocketAddr;
 use tower_http::cors::CorsLayer;
 
@@ -90,7 +90,11 @@ async fn main() -> anyhow::Result<()> {
     if fcm.is_none() {
         tracing::warn!("FCM not configured (set FCM_SA_JSON or GOOGLE_APPLICATION_CREDENTIALS); /signal disabled");
     }
-    let state = AppState { db, jwt_secret, fcm };
+    let state = AppState {
+        db,
+        jwt_secret,
+        fcm,
+    };
 
     let app = Router::new()
         .route("/health", get(health))
