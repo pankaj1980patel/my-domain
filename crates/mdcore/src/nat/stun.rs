@@ -73,3 +73,70 @@ fn parse_mapped(msg: &[u8]) -> Option<SocketAddr> {
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a Binding Success Response carrying one address attribute.
+    fn response(attr_type: u16, port: u16, ip: [u8; 4]) -> Vec<u8> {
+        let magic = MAGIC.to_be_bytes();
+        let (port, ip) = if attr_type == 0x0020 {
+            (
+                port ^ 0x2112,
+                [
+                    ip[0] ^ magic[0],
+                    ip[1] ^ magic[1],
+                    ip[2] ^ magic[2],
+                    ip[3] ^ magic[3],
+                ],
+            )
+        } else {
+            (port, ip)
+        };
+        let mut m = Vec::new();
+        m.extend_from_slice(&0x0101u16.to_be_bytes()); // Binding Success
+        m.extend_from_slice(&12u16.to_be_bytes()); // attrs length
+        m.extend_from_slice(&magic);
+        m.extend_from_slice(&[0u8; 12]); // transaction id
+        m.extend_from_slice(&attr_type.to_be_bytes());
+        m.extend_from_slice(&8u16.to_be_bytes());
+        m.extend_from_slice(&[0, 0x01]); // reserved, family IPv4
+        m.extend_from_slice(&port.to_be_bytes());
+        m.extend_from_slice(&ip);
+        m
+    }
+
+    #[test]
+    fn parses_xor_mapped_address() {
+        let got = parse_mapped(&response(0x0020, 54321, [203, 0, 113, 7])).unwrap();
+        assert_eq!(got, "203.0.113.7:54321".parse().unwrap());
+    }
+
+    #[test]
+    fn parses_legacy_mapped_address() {
+        let got = parse_mapped(&response(0x0001, 4000, [198, 51, 100, 2])).unwrap();
+        assert_eq!(got, "198.51.100.2:4000".parse().unwrap());
+    }
+
+    #[test]
+    fn rejects_non_success_and_truncated_messages() {
+        let mut not_success = response(0x0020, 1, [1, 2, 3, 4]);
+        not_success[1] = 0x11; // 0x0111 = Binding Error Response
+        assert!(parse_mapped(&not_success).is_none());
+        assert!(parse_mapped(&[0u8; 10]).is_none());
+        let full = response(0x0020, 1, [1, 2, 3, 4]);
+        assert!(parse_mapped(&full[..full.len() - 3]).is_none());
+    }
+
+    #[test]
+    fn known_gap_transaction_id_is_not_checked() {
+        // KNOWN GAP (fixed with the QUIC rewrite in Phase 2): the response's
+        // transaction id is never compared with the request's, so any datagram
+        // shaped like a STUN success response is believed. This test documents
+        // that parse_mapped accepts a response with an arbitrary txid.
+        let mut spoofed = response(0x0020, 9, [6, 6, 6, 6]);
+        spoofed[8..20].copy_from_slice(&[0xAB; 12]);
+        assert!(parse_mapped(&spoofed).is_some());
+    }
+}

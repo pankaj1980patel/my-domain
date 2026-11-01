@@ -311,3 +311,111 @@ fn run_punch_conn<P: Platform>(
     }
     drop_live(&ctx, &node_id);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Send `data` through `send_chunked` over real loopback sockets and
+    /// collect the datagrams the receiver sees.
+    fn chunk_on_the_wire(data: &[u8]) -> Vec<Vec<u8>> {
+        let rx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let tx = UdpSocket::bind("127.0.0.1:0").unwrap();
+        rx.set_read_timeout(Some(std::time::Duration::from_millis(200)))
+            .unwrap();
+        send_chunked(&tx, rx.local_addr().unwrap(), 42, data).unwrap();
+        let mut out = Vec::new();
+        let mut buf = [0u8; 2048];
+        while let Ok(n) = rx.recv(&mut buf) {
+            out.push(buf[..n].to_vec());
+        }
+        out
+    }
+
+    fn reassemble(pkts: &[Vec<u8>]) -> Option<Vec<u8>> {
+        let mut pending = HashMap::new();
+        pkts.iter().find_map(|p| reasm_feed(&mut pending, p))
+    }
+
+    #[test]
+    fn small_message_is_one_datagram() {
+        let pkts = chunk_on_the_wire(b"hi");
+        assert_eq!(pkts.len(), 1);
+        assert_eq!(reassemble(&pkts).unwrap(), b"hi");
+    }
+
+    #[test]
+    fn empty_message_still_arrives() {
+        let pkts = chunk_on_the_wire(b"");
+        assert_eq!(pkts.len(), 1);
+        assert_eq!(reassemble(&pkts).unwrap(), b"");
+    }
+
+    #[test]
+    fn large_message_splits_into_mtu_safe_chunks_and_reassembles() {
+        let data: Vec<u8> = (0..5000u32).map(|i| (i % 251) as u8).collect();
+        let pkts = chunk_on_the_wire(&data);
+        assert_eq!(pkts.len(), 5); // ceil(5000 / 1024)
+        assert!(pkts.iter().all(|p| p.len() <= CHUNK_HDR + CHUNK_PAYLOAD));
+        assert_eq!(reassemble(&pkts).unwrap(), data);
+    }
+
+    #[test]
+    fn out_of_order_and_duplicate_chunks_still_reassemble() {
+        let data = vec![9u8; 3000];
+        let mut pkts = chunk_on_the_wire(&data);
+        pkts.reverse();
+        pkts.insert(1, pkts[0].clone()); // duplicate
+        assert_eq!(reassemble(&pkts).unwrap(), data);
+    }
+
+    #[test]
+    fn a_lost_chunk_loses_the_whole_message() {
+        // CURRENT BEHAVIOUR: no retransmission. QUIC (Phase 2) replaces this.
+        let mut pkts = chunk_on_the_wire(&[1u8; 3000]);
+        pkts.remove(1);
+        assert!(reassemble(&pkts).is_none());
+    }
+
+    #[test]
+    fn non_chunk_and_malformed_datagrams_are_ignored() {
+        let mut pending = HashMap::new();
+        assert!(reasm_feed(&mut pending, b"mdpong01").is_none());
+        assert!(reasm_feed(&mut pending, b"mdck").is_none()); // too short
+                                                              // total = 0 and index >= total are rejected
+        let mut bad = b"mdck".to_vec();
+        bad.extend_from_slice(&[0, 0, 0, 1, 0, 0, 0, 0]);
+        assert!(reasm_feed(&mut pending, &bad).is_none());
+        let mut bad = b"mdck".to_vec();
+        bad.extend_from_slice(&[0, 0, 0, 1, 0, 2, 0, 2]);
+        assert!(reasm_feed(&mut pending, &bad).is_none());
+        assert!(pending.is_empty());
+    }
+
+    #[test]
+    fn pending_reassemblies_are_capped() {
+        let mut pending = HashMap::new();
+        for id in 0..(REASM_MAX as u32 + 10) {
+            let mut pkt = b"mdck".to_vec();
+            pkt.extend_from_slice(&id.to_be_bytes());
+            pkt.extend_from_slice(&2u16.to_be_bytes()); // total 2, send only #0
+            pkt.extend_from_slice(&0u16.to_be_bytes());
+            reasm_feed(&mut pending, &pkt);
+        }
+        assert!(pending.len() <= REASM_MAX);
+    }
+
+    #[test]
+    fn known_gap_claimed_chunk_count_is_preallocated() {
+        // KNOWN GAP (fixed in Phase 1 security work): one 12-byte datagram
+        // claiming total = 65535 makes the reassembler allocate 65535 slots.
+        // With REASM_MAX ids that is ~16.7M slots from tiny packets.
+        let mut pending = HashMap::new();
+        let mut pkt = b"mdck".to_vec();
+        pkt.extend_from_slice(&7u32.to_be_bytes());
+        pkt.extend_from_slice(&u16::MAX.to_be_bytes());
+        pkt.extend_from_slice(&0u16.to_be_bytes());
+        reasm_feed(&mut pending, &pkt);
+        assert_eq!(pending[&7].parts.len(), u16::MAX as usize);
+    }
+}

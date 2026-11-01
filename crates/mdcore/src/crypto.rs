@@ -49,3 +49,72 @@ pub fn generate_key() -> String {
     OsRng.fill_bytes(&mut bytes);
     STANDARD.encode(bytes)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypt_then_decrypt_round_trips() {
+        let key = derive_key("pass", "alice").unwrap();
+        let env = encrypt(&key, b"hello").unwrap();
+        assert_eq!(decrypt(&key, &env).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn same_passphrase_and_user_give_same_key_on_every_device() {
+        assert_eq!(derive_key("pass", "alice"), derive_key("pass", "alice"));
+    }
+
+    #[test]
+    fn username_is_part_of_the_salt() {
+        assert_ne!(derive_key("pass", "alice"), derive_key("pass", "bob"));
+    }
+
+    #[test]
+    fn wrong_key_fails_to_decrypt() {
+        let env = encrypt(&derive_key("pass", "alice").unwrap(), b"secret").unwrap();
+        assert!(decrypt(&derive_key("other", "alice").unwrap(), &env).is_none());
+    }
+
+    #[test]
+    fn every_encryption_uses_a_fresh_nonce() {
+        let key = [7u8; 32];
+        let a = encrypt(&key, b"same").unwrap();
+        let b = encrypt(&key, b"same").unwrap();
+        assert_ne!(a.nonce, b.nonce);
+        assert_ne!(a.ciphertext, b.ciphertext);
+    }
+
+    #[test]
+    fn tampered_ciphertext_is_rejected() {
+        let key = [7u8; 32];
+        let mut env = encrypt(&key, b"pay 10").unwrap();
+        let mut raw = STANDARD.decode(&env.ciphertext).unwrap();
+        raw[0] ^= 1; // flip one bit
+        env.ciphertext = STANDARD.encode(raw);
+        assert!(decrypt(&key, &env).is_none(), "Poly1305 tag must catch it");
+    }
+
+    #[test]
+    fn malformed_envelopes_are_rejected_not_panicking() {
+        let key = [7u8; 32];
+        let bad = [
+            Envelope {
+                nonce: "not base64!".into(),
+                ciphertext: "AAAA".into(),
+            },
+            Envelope {
+                nonce: STANDARD.encode([0u8; 12]),
+                ciphertext: "AAAA".into(),
+            },
+            Envelope {
+                nonce: STANDARD.encode([0u8; 24]),
+                ciphertext: String::new(),
+            },
+        ];
+        for env in &bad {
+            assert!(decrypt(&key, env).is_none());
+        }
+    }
+}

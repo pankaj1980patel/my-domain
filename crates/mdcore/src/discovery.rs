@@ -147,3 +147,33 @@ pub fn discovery_recv_loop(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::IfaceMode;
+
+    #[test]
+    fn lan_targets_cover_multicast_broadcast_and_the_whole_slash_24() {
+        let me = Ipv4Addr::new(192, 168, 1, 20);
+        let t = lan_targets(&IfaceMode::Single(me));
+        let has =
+            |ip: [u8; 4]| t.contains(&SocketAddr::new(Ipv4Addr::from(ip).into(), DISCOVERY_PORT));
+        assert!(has([239, 255, 42, 98]), "multicast group");
+        assert!(has([255, 255, 255, 255]), "global broadcast");
+        assert!(has([192, 168, 1, 255]), "subnet broadcast");
+        assert!(
+            has([192, 168, 1, 1]) && has([192, 168, 1, 254]),
+            "unicast sweep"
+        );
+        assert!(!has([192, 168, 1, 20]), "never ourselves");
+        // 2 global + subnet broadcast + 253 other hosts
+        assert_eq!(t.len(), 2 + 1 + 253);
+    }
+
+    #[test]
+    fn loopback_interfaces_get_no_sweep() {
+        let t = lan_targets(&IfaceMode::Single(Ipv4Addr::LOCALHOST));
+        assert_eq!(t.len(), 2, "only multicast + broadcast");
+    }
+}

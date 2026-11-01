@@ -357,3 +357,26 @@ pub fn udp_recv_loop<P: Platform>(socket: UdpSocket, ctx: NetCtx<P>) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn best_proto_prefers_a_live_link_then_the_directed_choice() {
+        let conns: WsConns = Arc::default();
+        assert_eq!(best_proto(&conns, "UDP", "peer"), "UDP");
+        assert_eq!(best_proto(&conns, "tcp", "peer"), "TCP", "case-insensitive");
+        assert_eq!(best_proto(&conns, " TCP ", "peer"), "TCP", "trimmed");
+        assert_eq!(
+            best_proto(&conns, "anything", "peer"),
+            "UDP",
+            "unknown -> UDP"
+        );
+
+        let (tx, _rx) = std::sync::mpsc::channel();
+        conns.lock().unwrap().insert("peer".into(), (1, tx));
+        assert_eq!(best_proto(&conns, "TCP", "peer"), "WS", "live link wins");
+        assert_eq!(best_proto(&conns, "TCP", "other"), "TCP");
+    }
+}
