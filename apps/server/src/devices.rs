@@ -44,6 +44,18 @@ pub struct DeviceReq {
     pub supports_ipv6: bool,
     #[serde(default)]
     pub platform: Option<String>,
+    /// Client-measured NAT type: "easy" | "symmetric" | "unknown".
+    #[serde(default)]
+    pub nat: Option<String>,
+}
+
+/// Only the known NAT values are stored; anything else becomes "unknown".
+fn clean_nat(v: Option<&str>) -> &'static str {
+    match v.map(str::trim) {
+        Some("easy") => "easy",
+        Some("symmetric") => "symmetric",
+        _ => "unknown",
+    }
 }
 
 #[derive(Serialize)]
@@ -63,6 +75,7 @@ pub struct DeviceOut {
     pub ipv6: Option<String>,
     pub reflexive_ip: Option<String>,
     pub reflexive_udp_port: Option<i32>,
+    pub nat: String,
 }
 
 /// The caller's real IP. Behind the local reverse proxy (Caddy on :443) every
@@ -111,6 +124,7 @@ pub async fn register(
         "quic_port": req.quic_port,
         "last_seen": now(),
         "supports_ipv6": req.supports_ipv6,
+        "nat": clean_nat(req.nat.as_deref()),
     };
     if let Some(t) = req.fcm_token.as_ref().filter(|v| !v.trim().is_empty()) {
         set.insert("fcm_token", t);
@@ -178,6 +192,7 @@ pub async fn list(
             ipv6: d.ipv6,
             reflexive_ip: d.reflexive_ip,
             reflexive_udp_port: d.reflexive_udp_port,
+            nat: d.nat.unwrap_or_else(|| "unknown".into()),
         })
         .collect();
     Ok(Json(out))
@@ -331,5 +346,13 @@ mod tests {
         // Missing or garbage header: fall back to the socket address.
         assert_eq!(client_ip(proxy, &HeaderMap::new()), proxy.ip());
         assert_eq!(client_ip(proxy, &xff("not-an-ip")), proxy.ip());
+    }
+
+    #[test]
+    fn only_known_nat_values_are_stored() {
+        assert_eq!(clean_nat(Some("easy")), "easy");
+        assert_eq!(clean_nat(Some(" symmetric ")), "symmetric");
+        assert_eq!(clean_nat(Some("<script>")), "unknown");
+        assert_eq!(clean_nat(None), "unknown");
     }
 }

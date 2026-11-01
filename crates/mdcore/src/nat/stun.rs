@@ -87,6 +87,30 @@ fn parse_mapped(msg: &[u8], txid: &[u8; 12]) -> Option<SocketAddr> {
     None
 }
 
+/// A Binding Success Response for `txid` carrying `mapped` (IPv4) as an
+/// XOR-MAPPED-ADDRESS. Test-only: lets tests stand up fake STUN servers.
+#[cfg(test)]
+pub(crate) fn binding_response(txid: &[u8], mapped: SocketAddr) -> Vec<u8> {
+    let magic = MAGIC.to_be_bytes();
+    let (ip, port) = match mapped {
+        SocketAddr::V4(v4) => (v4.ip().octets(), v4.port()),
+        SocketAddr::V6(_) => ([0; 4], 0),
+    };
+    let mut m = Vec::with_capacity(32);
+    m.extend_from_slice(&0x0101u16.to_be_bytes());
+    m.extend_from_slice(&12u16.to_be_bytes());
+    m.extend_from_slice(&magic);
+    m.extend_from_slice(txid);
+    m.extend_from_slice(&0x0020u16.to_be_bytes());
+    m.extend_from_slice(&8u16.to_be_bytes());
+    m.extend_from_slice(&[0, 0x01]);
+    m.extend_from_slice(&(port ^ 0x2112).to_be_bytes());
+    for (i, b) in ip.iter().enumerate() {
+        m.push(b ^ magic[i]);
+    }
+    m
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

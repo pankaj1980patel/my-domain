@@ -24,8 +24,10 @@
 
 mod registry;
 mod relay;
+mod stun;
 pub use registry::FakeRegistry;
 pub use relay::FakeRelay;
+pub use stun::FakeStun;
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
@@ -379,6 +381,21 @@ impl TestNode {
             inbound_blocked: false,
             reflexive_ip: None,
             reflexive_udp_port: None,
+            nat: self.engine.nat_kind(),
+        }
+    }
+
+    /// Wait until this node has classified its NAT as `kind` (STUN runs in
+    /// the background at start).
+    pub fn wait_nat(&self, kind: mdcore::nat::NatKind, timeout: Duration) {
+        let deadline = std::time::Instant::now() + timeout;
+        while self.engine.nat_kind() != kind {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "NAT stayed {:?}, wanted {kind:?}",
+                self.engine.nat_kind()
+            );
+            std::thread::sleep(Duration::from_millis(20));
         }
     }
 

@@ -35,6 +35,9 @@ pub struct RegistryDevice {
     pub reflexive_ip: Option<String>,
     #[serde(default)]
     pub reflexive_udp_port: Option<u16>,
+    /// "easy" | "symmetric" | "unknown"; absent from older servers.
+    #[serde(default)]
+    pub nat: Option<String>,
 }
 
 /// Normalize a user-entered server URL to just `scheme://host[:port]`, dropping
@@ -98,6 +101,7 @@ pub fn registry_register(
     fcm_token: Option<&str>,
     platform: &str,
     supports_ipv6: bool,
+    nat: crate::nat::NatKind,
 ) -> Result<(), String> {
     ureq::post(&format!("{}/devices/register", base(url)))
         .timeout(Duration::from_secs(10))
@@ -113,6 +117,7 @@ pub fn registry_register(
             "fcm_token": fcm_token,
             "platform": platform,
             "supports_ipv6": supports_ipv6,
+            "nat": nat.as_str(),
         }))
         .map_err(http_err)?;
     Ok(())

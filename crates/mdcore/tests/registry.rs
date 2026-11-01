@@ -220,3 +220,43 @@ fn registry_peers_carry_their_quic_port_and_connect_over_quic() {
         Some("quic")
     );
 }
+
+#[test]
+fn the_measured_nat_type_reaches_the_other_devices() {
+    use md_testkit::{test_config, FakeStun, MockPlatform};
+    use mdcore::nat::NatKind;
+    use std::time::Duration;
+
+    let reg = FakeRegistry::start();
+    reg.add_user("alice", "hunter22");
+    // Two STUN servers that see different public ports: a symmetric NAT.
+    let stuns = [
+        FakeStun::start("203.0.113.9:40000"),
+        FakeStun::start("203.0.113.9:40001"),
+    ];
+    let config = mdcore::CoreConfig {
+        stun_servers: stuns.iter().map(FakeStun::server).collect(),
+        ..test_config()
+    };
+    let phone = TestNode::start_logged_out_with(MockPlatform::new("reg-nat-phone"), config);
+    phone
+        .engine
+        .auth_login(&reg.url(), "alice", "hunter22")
+        .unwrap();
+    phone.wait_nat(NatKind::Symmetric, Duration::from_secs(10));
+    phone.engine.refresh_from_server().unwrap();
+    assert_eq!(
+        reg.device("alice", &phone.node_id()).unwrap()["nat"],
+        "symmetric"
+    );
+
+    let laptop = alice_on(&reg, "reg-nat-laptop");
+    laptop.engine.refresh_from_server().unwrap();
+    let seen = laptop
+        .engine
+        .get_peers()
+        .into_iter()
+        .find(|p| p.node_id == phone.node_id())
+        .unwrap();
+    assert_eq!(seen.nat, NatKind::Symmetric);
+}

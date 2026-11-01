@@ -11,7 +11,8 @@
 
 use std::time::Duration;
 
-use md_testkit::{test_config, SignalHub, TestNode};
+use md_testkit::{test_config, FakeStun, SignalHub, TestNode};
+use mdcore::nat::NatKind;
 use mdcore::{ConnectRungs, CoreConfig};
 
 fn only(rungs: ConnectRungs) -> CoreConfig {
@@ -235,4 +236,84 @@ fn a_peer_without_quic_falls_through_to_the_next_rung() {
     a.engine.connect(&b.node_id()).unwrap();
     assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("udp"));
     assert!(!a.ladder_stages(&b).contains(&"quic".to_string()));
+}
+
+/// A node whose NAT looks `kind` to it: two fake STUN servers that report
+/// the same (easy) or a different (symmetric) public port.
+fn node_behind(
+    test: &str,
+    hub: &std::sync::Arc<SignalHub>,
+    kind: NatKind,
+    rungs: ConnectRungs,
+) -> (TestNode, Vec<FakeStun>) {
+    let second = if kind == NatKind::Symmetric {
+        "203.0.113.9:40001"
+    } else {
+        "203.0.113.9:40000"
+    };
+    let stuns = vec![
+        FakeStun::start("203.0.113.9:40000"),
+        FakeStun::start(second),
+    ];
+    let config = CoreConfig {
+        stun_servers: stuns.iter().map(FakeStun::server).collect(),
+        rungs,
+        ..test_config()
+    };
+    let node = TestNode::start_on_hub(test, hub, config);
+    node.wait_nat(kind, Duration::from_secs(10));
+    (node, stuns)
+}
+
+fn wait_for_stage(a: &TestNode, b: &TestNode, stage: &str) {
+    let deadline = std::time::Instant::now() + LADDER_WAIT;
+    while !a.ladder_stages(b).iter().any(|s| s == stage) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "no {stage:?} in {:?}",
+            a.ladder_stages(b)
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+const PUNCH_AND_RTC: ConnectRungs = ConnectRungs {
+    punch: true,
+    webrtc: true,
+    ..ConnectRungs::NONE
+};
+
+#[test]
+fn both_symmetric_nats_skip_punch_and_webrtc() {
+    let hub = SignalHub::new();
+    let (a, _sa) = node_behind("nat-sym-a", &hub, NatKind::Symmetric, PUNCH_AND_RTC);
+    let (b, _sb) = node_behind("nat-sym-b", &hub, NatKind::Symmetric, PUNCH_AND_RTC);
+    TestNode::pair(&a, &b);
+
+    let started = std::time::Instant::now();
+    a.engine.connect(&b.node_id()).unwrap();
+    wait_for_stage(&a, &b, "failed");
+    let stages = a.ladder_stages(&b);
+    assert!(stages.contains(&"nat_skip".to_string()), "{stages:?}");
+    assert!(
+        !stages.iter().any(|s| s == "punching" || s == "webrtc"),
+        "{stages:?}"
+    );
+    assert!(hub.log().is_empty(), "no signal is wasted: {:?}", hub.log());
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "skipping is instant"
+    );
+}
+
+#[test]
+fn one_easy_nat_still_tries_the_hole_punch() {
+    let hub = SignalHub::new();
+    let (a, _sa) = node_behind("nat-mix-a", &hub, NatKind::Symmetric, PUNCH_AND_RTC);
+    let (b, _sb) = node_behind("nat-mix-b", &hub, NatKind::Easy, PUNCH_AND_RTC);
+    TestNode::pair(&a, &b);
+
+    a.engine.connect(&b.node_id()).unwrap();
+    wait_for_stage(&a, &b, "punching");
+    assert!(!a.ladder_stages(&b).contains(&"nat_skip".to_string()));
 }

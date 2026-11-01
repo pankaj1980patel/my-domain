@@ -95,6 +95,9 @@ pub struct NetCtx<P: Platform> {
     pub quic: transport::quic::QuicLink,
     /// The relay WebSocket to the server, when open (last-resort path).
     pub relay: Arc<Mutex<Option<transport::relay::RelayConn>>>,
+    /// Our NAT's mapping behaviour, measured with STUN at start and after
+    /// network changes; published to the registry for the connect ladder.
+    pub nat: Arc<Mutex<crate::nat::NatKind>>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -123,6 +126,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             shutdown: self.shutdown.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
+            nat: self.nat.clone(),
         }
     }
 }
@@ -262,6 +266,7 @@ impl<P: Platform> Engine<P> {
             shutdown: Arc::default(),
             quic: quic.link(),
             relay: Arc::default(),
+            nat: Arc::default(),
         };
 
         // Direct messaging receivers.
@@ -282,7 +287,7 @@ impl<P: Platform> Engine<P> {
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
         background::spawn_all(&ctx);
 
-        Ok(Engine {
+        let engine = Engine {
             ctx,
             server_url: Arc::new(Mutex::new(None)),
             token: Arc::new(Mutex::new(None)),
@@ -290,7 +295,36 @@ impl<P: Platform> Engine<P> {
             disco_send,
             _quic: quic,
             quic_failed: Mutex::default(),
-        })
+        };
+        engine.detect_nat();
+        Ok(engine)
+    }
+
+    /// Our NAT type as last measured (`Unknown` until the first STUN check).
+    pub fn nat_kind(&self) -> crate::nat::NatKind {
+        *self.ctx.nat.lock()
+    }
+
+    /// Measure our NAT type in the background (two STUN servers, a few
+    /// seconds), then re-register so peers see the result. No-op without STUN
+    /// servers (loopback tests).
+    pub(crate) fn detect_nat(&self) {
+        if self.ctx.config.stun_servers.is_empty() {
+            return;
+        }
+        let ctx = self.ctx.clone();
+        let (server_url, token) = (self.server_url.clone(), self.token.clone());
+        std::thread::spawn(move || {
+            let kind = crate::nat::classify(&ctx.config.stun_addrs());
+            if ctx.shutdown.load(Ordering::Relaxed) {
+                return;
+            }
+            let changed = std::mem::replace(&mut *ctx.nat.lock(), kind) != kind;
+            let session = server_url.lock().clone().zip(token.lock().clone());
+            if let (true, Some((url, tok))) = (changed, session) {
+                let _ = peers::register_self(&ctx, &url, &tok);
+            }
+        });
     }
 
     /// Whether this engine is shutting down (its `Engine` was dropped).

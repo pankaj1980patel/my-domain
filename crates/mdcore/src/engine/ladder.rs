@@ -164,9 +164,20 @@ fn run_connect_ladder<P: Platform>(
         }
     }
 
+    // Both behind symmetric NATs: STUN addresses are useless to the other
+    // side, so punching and WebRTC's direct path can only time out (~40 s).
+    // Skip straight to the relay.
+    let hopeless = ctx.nat.lock().hopeless_with(peer.nat);
+    if hopeless && (rungs.punch || rungs.webrtc) {
+        emit(
+            "nat_skip",
+            Some("both devices are behind symmetric NATs; skipping hole punch and WebRTC".into()),
+        );
+    }
+
     // Rung 4 — UDP hole punch. Gather our candidates up front, offer them in one
     // signal, and punch toward the peer's answered candidates (1 FCM round trip).
-    if rungs.punch {
+    if rungs.punch && !hopeless {
         emit("punching", None);
         if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();
@@ -202,7 +213,7 @@ fn run_connect_ladder<P: Platform>(
     // Rung 5 — WebRTC data channel. Gather candidates into one SDP offer, send
     // it, and on the single answer drive ICE/DTLS/SCTP peer-to-peer (1 FCM RTT).
     #[cfg(feature = "webrtc")]
-    if rungs.webrtc {
+    if rungs.webrtc && !hopeless {
         emit("webrtc", None);
         if let Some((rtc, socket, pending, offer_sdp)) = transport::rtc::create_offer(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();

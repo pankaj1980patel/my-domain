@@ -2,6 +2,26 @@
 //! manual peers.
 
 use super::*;
+use crate::nat::NatKind;
+
+/// Publish this device (endpoints, FCM token, NAT type) to the registry.
+pub(crate) fn register_self<P: Platform>(
+    ctx: &NetCtx<P>,
+    url: &str,
+    token: &str,
+) -> Result<(), String> {
+    let id = ctx.identity.lock().clone();
+    let nat = *ctx.nat.lock();
+    registry_register(
+        url,
+        token,
+        &id,
+        ctx.platform.fcm_token().as_deref(),
+        ctx.platform.platform_kind(),
+        false,
+        nat,
+    )
+}
 
 impl<P: Platform> Engine<P> {
     // --- discovery / peers ---
@@ -13,16 +33,9 @@ impl<P: Platform> Engine<P> {
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
         let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-        let id = self.ctx.identity.lock().clone();
-        registry_register(
-            &url,
-            &token,
-            &id,
-            self.ctx.platform.fcm_token().as_deref(),
-            self.ctx.platform.platform_kind(),
-            false,
-        )?;
-        let devices = registry_fetch(&url, &token, &id.node_id)?;
+        register_self(&self.ctx, &url, &token)?;
+        let node_id = self.ctx.identity.lock().node_id.clone();
+        let devices = registry_fetch(&url, &token, &node_id)?;
         self.apply_registry_peers(devices);
         Ok(())
     }
@@ -47,6 +60,7 @@ impl<P: Platform> Engine<P> {
                         inbound_blocked: d.inbound_blocked,
                         reflexive_ip: d.reflexive_ip,
                         reflexive_udp_port: d.reflexive_udp_port,
+                        nat: d.nat.as_deref().map(NatKind::parse).unwrap_or_default(),
                     },
                 );
             }
@@ -77,6 +91,8 @@ impl<P: Platform> Engine<P> {
         if self.token.lock().is_some() {
             let _ = self.refresh_from_server();
         }
+        // A new network usually means a new NAT.
+        self.detect_nat();
     }
 
     pub fn add_manual_peer(
@@ -112,6 +128,7 @@ impl<P: Platform> Engine<P> {
                 inbound_blocked: false,
                 reflexive_ip: None,
                 reflexive_udp_port: None,
+                nat: NatKind::Unknown,
             },
         );
         self.emit_peers();

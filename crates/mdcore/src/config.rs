@@ -45,17 +45,20 @@ impl Default for ConnectRungs {
 }
 
 impl ConnectRungs {
+    /// Every rung off; switch on the ones you want (usable in `const`s).
+    pub const NONE: Self = ConnectRungs {
+        quic: false,
+        lan_udp: false,
+        direct_ws: false,
+        signaled_ws: false,
+        punch: false,
+        webrtc: false,
+        relay: false,
+    };
+
     /// Every rung off; switch on the ones you want.
     pub fn none() -> Self {
-        ConnectRungs {
-            quic: false,
-            lan_udp: false,
-            direct_ws: false,
-            signaled_ws: false,
-            punch: false,
-            webrtc: false,
-            relay: false,
-        }
+        Self::NONE
     }
 }
 
@@ -79,7 +82,12 @@ pub struct CoreConfig {
 impl Default for CoreConfig {
     fn default() -> Self {
         CoreConfig {
-            stun_servers: vec!["stun.l.google.com:19302".into()],
+            // Two independent providers: NAT classification needs answers
+            // from two different destinations.
+            stun_servers: vec![
+                "stun.l.google.com:19302".into(),
+                "stun.cloudflare.com:3478".into(),
+            ],
             rungs: ConnectRungs::default(),
             auto_quic: true,
             relay_url: None,
@@ -90,11 +98,25 @@ impl Default for CoreConfig {
 impl CoreConfig {
     /// The first configured STUN server that resolves to an IPv4 address.
     pub fn stun_server(&self) -> Option<std::net::SocketAddr> {
+        self.stun_addrs().into_iter().next()
+    }
+
+    /// Every configured STUN server, resolved: one IPv4 address per entry,
+    /// duplicates dropped (NAT classification needs distinct destinations).
+    pub fn stun_addrs(&self) -> Vec<std::net::SocketAddr> {
         use std::net::ToSocketAddrs;
-        self.stun_servers
-            .iter()
-            .filter_map(|s| s.to_socket_addrs().ok())
-            .flatten()
-            .find(|a| a.is_ipv4())
+        let mut out = Vec::new();
+        for s in &self.stun_servers {
+            let first_v4 = s
+                .to_socket_addrs()
+                .ok()
+                .and_then(|mut it| it.find(|a| a.is_ipv4()));
+            if let Some(a) = first_v4 {
+                if !out.contains(&a) {
+                    out.push(a);
+                }
+            }
+        }
+        out
     }
 }

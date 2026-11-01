@@ -65,6 +65,9 @@ pub struct Peer {
     pub reflexive_ip: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reflexive_udp_port: Option<u16>,
+    /// The peer's NAT type from the registry (`Unknown` for LAN/manual peers).
+    #[serde(default)]
+    pub nat: crate::nat::NatKind,
 }
 
 /// Decrypted message body.

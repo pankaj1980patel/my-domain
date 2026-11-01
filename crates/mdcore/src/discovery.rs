@@ -145,6 +145,7 @@ pub fn merge_beacon(peers: &mut HashMap<String, Peer>, beacon: &Beacon, src: IpA
             inbound_blocked: false,
             reflexive_ip: None,
             reflexive_udp_port: None,
+            nat: Default::default(), // irrelevant on the LAN: no punching needed
         },
     );
     true

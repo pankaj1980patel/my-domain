@@ -57,6 +57,9 @@ pub struct Device {
     pub reflexive_ip: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reflexive_udp_port: Option<i32>,
+    /// Client-measured NAT type ("easy" | "symmetric" | "unknown").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nat: Option<String>,
     /// "android" | "desktop" | "ios" | "mac"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
