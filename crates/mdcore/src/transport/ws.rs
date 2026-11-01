@@ -36,7 +36,7 @@ pub fn handle_ws_conn<S: Read + Write, P: Platform>(
 ) {
     // Announce ourselves.
     {
-        let id = ctx.identity.lock().unwrap();
+        let id = ctx.identity.lock();
         let hello = serde_json::to_string(&WsFrame::Hello {
             node_id: id.node_id.clone(),
             name: id.name.clone(),
@@ -55,7 +55,7 @@ pub fn handle_ws_conn<S: Read + Write, P: Platform>(
                     match frame {
                         WsFrame::Hello { node_id, .. } => {
                             // One socket per peer: drop a duplicate connection.
-                            let mut guard = ctx.ws_conns.lock().unwrap();
+                            let mut guard = ctx.ws_conns.lock();
                             if guard.contains_key(&node_id) {
                                 break;
                             }
@@ -94,7 +94,7 @@ pub fn handle_ws_conn<S: Read + Write, P: Platform>(
     }
     // Only remove our own entry (a newer connection may have replaced it).
     if let Some(pid) = peer_id {
-        let mut g = ctx.ws_conns.lock().unwrap();
+        let mut g = ctx.ws_conns.lock();
         if g.get(&pid)
             .map(|(id, _)| *id == my_conn_id)
             .unwrap_or(false)

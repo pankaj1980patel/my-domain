@@ -1,0 +1,4 @@
+# Clippy settings for the whole workspace.
+# In tests, unwrap()/expect() panicking IS the failure report, so allow them there.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

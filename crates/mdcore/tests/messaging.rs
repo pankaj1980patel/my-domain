@@ -6,6 +6,9 @@
 //! real crypto) through `md_testkit`. Ports are ephemeral, so tests can run in
 //! parallel.
 
+// Test-only file: helpers unwrap freely, a panic IS the failure report.
+#![allow(clippy::unwrap_used)]
+
 use std::time::Duration;
 
 use md_testkit::{MockPlatform, TestNode, WAIT};

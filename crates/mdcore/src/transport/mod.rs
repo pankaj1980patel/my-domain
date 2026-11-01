@@ -10,10 +10,11 @@ pub mod punch;
 pub mod rtc;
 pub mod ws;
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream, UdpSocket};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -73,7 +74,7 @@ pub fn mark_live<P: Platform>(
     addr: Option<SocketAddr>,
 ) {
     let newly = {
-        let mut m = ctx.p2p_conns.lock().unwrap();
+        let mut m = ctx.p2p_conns.lock();
         match m.get_mut(node_id) {
             Some(c) => {
                 c.last_seen = now_secs();
@@ -105,14 +106,14 @@ pub fn mark_live<P: Platform>(
 
 /// Refresh `last_seen` for an existing live peer (e.g. on pong/keepalive).
 pub fn touch_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
-    if let Some(c) = ctx.p2p_conns.lock().unwrap().get_mut(node_id) {
+    if let Some(c) = ctx.p2p_conns.lock().get_mut(node_id) {
         c.last_seen = now_secs();
     }
 }
 
 /// Drop a peer's live link. Emits `PeerDisconnected` if it was present.
 pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
-    let removed = ctx.p2p_conns.lock().unwrap().remove(node_id).is_some();
+    let removed = ctx.p2p_conns.lock().remove(node_id).is_some();
     if removed {
         ctx.sink.emit(CoreEvent::PeerDisconnected {
             node_id: node_id.to_string(),
@@ -126,7 +127,6 @@ pub fn live_peers<P: Platform>(
 ) -> Vec<(String, TransportKind, Option<SocketAddr>)> {
     ctx.p2p_conns
         .lock()
-        .unwrap()
         .iter()
         .map(|(k, v)| (k.clone(), v.kind, v.addr))
         .collect()
@@ -136,7 +136,6 @@ pub fn live_peers<P: Platform>(
 pub fn live_snapshot<P: Platform>(ctx: &NetCtx<P>) -> Vec<(String, TransportKind, u64)> {
     ctx.p2p_conns
         .lock()
-        .unwrap()
         .iter()
         .map(|(k, v)| (k.clone(), v.kind, v.last_seen))
         .collect()
@@ -157,7 +156,7 @@ fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) 
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let now = now_secs();
     {
-        let mut last = ctx.decrypt_fail_last.lock().unwrap();
+        let mut last = ctx.decrypt_fail_last.lock();
         if let Some(t) = last.get(&ip) {
             if now.saturating_sub(*t) < UNDECRYPTABLE_NOTICE_EVERY_SECS {
                 return;
@@ -185,7 +184,7 @@ fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) 
 /// transport preference (`UDP` default, or `TCP`). This is the single chooser
 /// used by chat send and every discrete feature.
 pub fn best_proto(ws_conns: &WsConns, directed: &str, node_id: &str) -> &'static str {
-    if ws_conns.lock().unwrap().contains_key(node_id) {
+    if ws_conns.lock().contains_key(node_id) {
         "WS"
     } else if directed.trim().eq_ignore_ascii_case("tcp") {
         "TCP"
@@ -196,7 +195,7 @@ pub fn best_proto(ws_conns: &WsConns, directed: &str, node_id: &str) -> &'static
 
 /// `best_proto` for a `NetCtx` (reads the engine's directed-transport setting).
 fn clip_proto<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> &'static str {
-    let directed = ctx.directed_transport.lock().unwrap().clone();
+    let directed = ctx.directed_transport.lock().clone();
     best_proto(&ctx.ws_conns, &directed, node_id)
 }
 
@@ -204,7 +203,7 @@ fn clip_proto<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> &'static str {
 /// connection (live WS/punch/WebRTC), else the directed transport. Shared by
 /// every discrete feature.
 pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
-    let from = ctx.identity.lock().unwrap().name.clone();
+    let from = ctx.identity.lock().name.clone();
     let proto = clip_proto(ctx, node_id);
     let _ = send_payload(
         &ctx.peers,
@@ -219,7 +218,7 @@ pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text:
 
 /// Broadcast a control-message JSON to all known peers.
 pub fn broadcast_control<P: Platform>(ctx: &NetCtx<P>, text: &str) {
-    let ids: Vec<String> = ctx.peers.lock().unwrap().keys().cloned().collect();
+    let ids: Vec<String> = ctx.peers.lock().keys().cloned().collect();
     for id in ids {
         send_control_to(ctx, &id, text);
     }
@@ -230,7 +229,7 @@ pub fn broadcast_control<P: Platform>(ctx: &NetCtx<P>, text: &str) {
 /// normal `MessageReceived`.
 pub fn handle_incoming<P: Platform>(ctx: &NetCtx<P>, env: &Envelope, ip: String, protocol: &str) {
     let pt = {
-        let guard = ctx.key.lock().unwrap();
+        let guard = ctx.key.lock();
         guard.as_ref().and_then(|k| decrypt(k, env))
     };
     let Some(pt) = pt else {
@@ -268,7 +267,7 @@ pub fn send_payload(
     protocol: &str,
     text: &str,
 ) -> crate::Result<()> {
-    let k = key.lock().unwrap().ok_or(CoreError::NoKey)?;
+    let k = key.lock().ok_or(CoreError::NoKey)?;
     let plaintext = serde_json::to_vec(&Plaintext {
         from: from.to_string(),
         text: text.to_string(),
@@ -286,7 +285,6 @@ pub fn send_payload(
         .map_err(|e| e.to_string())?;
         let sender = ws_conns
             .lock()
-            .unwrap()
             .get(node_id)
             .map(|(_, s)| s.clone())
             .ok_or_else(|| {
@@ -300,7 +298,6 @@ pub fn send_payload(
 
     let peer = peers
         .lock()
-        .unwrap()
         .get(node_id)
         .cloned()
         .ok_or(CoreError::PeerNotFound)?;
@@ -424,7 +421,7 @@ mod tests {
         );
 
         let (tx, _rx) = std::sync::mpsc::channel();
-        conns.lock().unwrap().insert("peer".into(), (1, tx));
+        conns.lock().insert("peer".into(), (1, tx));
         assert_eq!(best_proto(&conns, "TCP", "peer"), "WS", "live link wins");
         assert_eq!(best_proto(&conns, "TCP", "other"), "TCP");
     }

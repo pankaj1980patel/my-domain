@@ -25,7 +25,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
                 if ctx.clip_active.load(Ordering::Relaxed) {
                     if let Some(clip) = ctx.platform.clipboard() {
                         let c = msg.str("content");
-                        *ctx.clip_last.lock().unwrap() = c.clone();
+                        *ctx.clip_last.lock() = c.clone();
                         clip.set(&c);
                         ctx.sink.emit(CoreEvent::Clipboard {
                             from: msg.from.to_string(),
@@ -40,7 +40,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
             "clipboard_request" => {
                 let requester = msg.str("from");
                 if !requester.is_empty() {
-                    let me = ctx.identity.lock().unwrap().node_id.clone();
+                    let me = ctx.identity.lock().node_id.clone();
                     let current = ctx
                         .platform
                         .clipboard()
@@ -57,7 +57,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
             }
             // Reply to a pull we initiated: hand it to the waiting command.
             "clipboard_response" => {
-                if let Some(tx) = ctx.clip_pending.lock().unwrap().remove(&msg.str("from")) {
+                if let Some(tx) = ctx.clip_pending.lock().remove(&msg.str("from")) {
                     let _ = tx.send(msg.str("content"));
                 }
             }

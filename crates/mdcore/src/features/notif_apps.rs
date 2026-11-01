@@ -32,16 +32,10 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                 if from.is_empty() {
                     return;
                 }
-                let me = ctx.identity.lock().unwrap().node_id.clone();
-                let apps: Value = serde_json::from_str(&ctx.installed_apps.lock().unwrap())
+                let me = ctx.identity.lock().node_id.clone();
+                let apps: Value = serde_json::from_str(&ctx.installed_apps.lock())
                     .unwrap_or_else(|_| Value::Array(vec![]));
-                let subscribed = ctx
-                    .subs
-                    .lock()
-                    .unwrap()
-                    .get(&from)
-                    .cloned()
-                    .unwrap_or_default();
+                let subscribed = ctx.subs.lock().get(&from).cloned().unwrap_or_default();
                 let reply = serde_json::json!({
                     "type": "apps_list", "from": me, "apps": apps, "subscribed": subscribed,
                 })
@@ -63,7 +57,7 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                             .collect()
                     })
                     .unwrap_or_default();
-                ctx.subs.lock().unwrap().insert(from, apps);
+                ctx.subs.lock().insert(from, apps);
             }
             // Consumer: surface the producer's app list to the UI.
             "apps_list" => {

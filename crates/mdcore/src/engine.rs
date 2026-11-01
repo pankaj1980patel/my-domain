@@ -5,10 +5,11 @@
 //! Threading model: blocking thread-per-connection (a small fixed set of loops
 //! plus short-lived per-message threads) — chosen for low cpu/battery.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, TcpListener, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{mpsc, Arc};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -242,7 +243,7 @@ impl<P: Platform> Engine<P> {
                     continue;
                 }
                 let changed = {
-                    let mut last = ctx.clip_last.lock().unwrap();
+                    let mut last = ctx.clip_last.lock();
                     if *last != cur {
                         *last = cur.clone();
                         true
@@ -251,7 +252,7 @@ impl<P: Platform> Engine<P> {
                     }
                 };
                 if changed {
-                    let me = ctx.identity.lock().unwrap().node_id.clone();
+                    let me = ctx.identity.lock().node_id.clone();
                     let msg =
                         serde_json::json!({ "type": "clipboard", "content": cur, "from": me })
                             .to_string();
@@ -267,7 +268,7 @@ impl<P: Platform> Engine<P> {
             std::thread::spawn(move || loop {
                 std::thread::sleep(Duration::from_secs(5));
                 let current = platform.local_ip();
-                let mut id = identity.lock().unwrap();
+                let mut id = identity.lock();
                 if id.ip != current && current != "0.0.0.0" {
                     id.ip = current;
                 }
@@ -283,7 +284,7 @@ impl<P: Platform> Engine<P> {
                 const TIMEOUT: u64 = 15;
                 loop {
                     std::thread::sleep(INTERVAL);
-                    let me = ctx.identity.lock().unwrap().node_id.clone();
+                    let me = ctx.identity.lock().node_id.clone();
                     let now = std::time::SystemTime::now()
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_secs())
@@ -319,7 +320,7 @@ impl<P: Platform> Engine<P> {
     /// The transport a message to `node_id` should use right now: the active
     /// persistent link (WS/punch/WebRTC) if any, else the directed transport.
     fn proto_for(&self, node_id: &str) -> &'static str {
-        let directed = self.ctx.directed_transport.lock().unwrap().clone();
+        let directed = self.ctx.directed_transport.lock().clone();
         transport::best_proto(&self.ctx.ws_conns, &directed, node_id)
     }
 
@@ -329,7 +330,7 @@ impl<P: Platform> Engine<P> {
     /// UI shows "punch"/"webrtc" rather than the internal send-path name.
     fn display_transport(&self, node_id: &str, proto: &'static str) -> String {
         use transport::TransportKind::*;
-        if let Some(c) = self.ctx.p2p_conns.lock().unwrap().get(node_id) {
+        if let Some(c) = self.ctx.p2p_conns.lock().get(node_id) {
             return match c.kind {
                 Ws => "WS",
                 Udp => "UDP",
@@ -343,7 +344,7 @@ impl<P: Platform> Engine<P> {
 
     /// Send an already-built control-message JSON to one peer (active connection).
     fn send_control(&self, node_id: &str, json: &str) -> crate::Result<()> {
-        let from = self.ctx.identity.lock().unwrap().name.clone();
+        let from = self.ctx.identity.lock().name.clone();
         let proto = self.proto_for(node_id);
         transport::send_payload(
             &self.ctx.peers,
@@ -358,7 +359,7 @@ impl<P: Platform> Engine<P> {
 
     /// Directed transport setting ("UDP" | "TCP") for peers with no live link.
     pub fn directed_transport(&self) -> String {
-        self.ctx.directed_transport.lock().unwrap().clone()
+        self.ctx.directed_transport.lock().clone()
     }
 
     /// Set the directed transport ("UDP" default, or "TCP"); anything else maps
@@ -369,11 +370,11 @@ impl<P: Platform> Engine<P> {
         } else {
             "UDP"
         };
-        *self.ctx.directed_transport.lock().unwrap() = v.to_string();
+        *self.ctx.directed_transport.lock() = v.to_string();
     }
 
     fn emit_peers(&self) {
-        let list: Vec<Peer> = self.ctx.peers.lock().unwrap().values().cloned().collect();
+        let list: Vec<Peer> = self.ctx.peers.lock().values().cloned().collect();
         self.ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });
     }
 
@@ -387,26 +388,26 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn identity(&self) -> Identity {
-        self.ctx.identity.lock().unwrap().clone()
+        self.ctx.identity.lock().clone()
     }
 
     pub fn get_peers(&self) -> Vec<Peer> {
-        self.ctx.peers.lock().unwrap().values().cloned().collect()
+        self.ctx.peers.lock().values().cloned().collect()
     }
 
     pub fn connected_peers(&self) -> Vec<String> {
-        self.ctx.p2p_conns.lock().unwrap().keys().cloned().collect()
+        self.ctx.p2p_conns.lock().keys().cloned().collect()
     }
 
     pub fn is_ready(&self) -> bool {
-        self.token.lock().unwrap().is_some() && self.ctx.key.lock().unwrap().is_some()
+        self.token.lock().is_some() && self.ctx.key.lock().is_some()
     }
 
     pub fn session_info(&self) -> SessionInfo {
         SessionInfo {
-            username: self.username.lock().unwrap().clone(),
-            server_url: self.server_url.lock().unwrap().clone(),
-            has_key: self.ctx.key.lock().unwrap().is_some(),
+            username: self.username.lock().clone(),
+            server_url: self.server_url.lock().clone(),
+            has_key: self.ctx.key.lock().is_some(),
         }
     }
 
@@ -431,9 +432,9 @@ impl<P: Platform> Engine<P> {
         }
         let resp = auth_call(server_url, path, username.trim(), password)?;
         let url = base(server_url);
-        *self.server_url.lock().unwrap() = Some(url.clone());
-        *self.token.lock().unwrap() = Some(resp.token);
-        *self.username.lock().unwrap() = Some(resp.username.clone());
+        *self.server_url.lock() = Some(url.clone());
+        *self.token.lock() = Some(resp.token);
+        *self.username.lock() = Some(resp.username.clone());
         self.ctx.platform.kv_set("server_url", &url);
         self.ctx.platform.kv_set("username", &resp.username);
         Ok(())
@@ -465,34 +466,24 @@ impl<P: Platform> Engine<P> {
             return Err("username and encryption key required".into());
         }
         let key = derive_key(passphrase, username).ok_or("failed to derive key")?;
-        *self.username.lock().unwrap() = Some(username.to_string());
-        *self.ctx.key.lock().unwrap() = Some(key);
+        *self.username.lock() = Some(username.to_string());
+        *self.ctx.key.lock() = Some(key);
         Ok(())
     }
 
     pub fn set_encryption_key(&self, passphrase: &str) -> crate::Result<()> {
-        let username = self
-            .username
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
+        let username = self.username.lock().clone().ok_or(CoreError::NotLoggedIn)?;
         if passphrase.trim().is_empty() {
             return Err("encryption key is required".into());
         }
         let key = derive_key(passphrase, &username).ok_or("failed to derive key")?;
-        *self.ctx.key.lock().unwrap() = Some(key);
+        *self.ctx.key.lock() = Some(key);
         Ok(())
     }
 
     pub fn update_encryption_key(&self, new_passphrase: &str, password: &str) -> crate::Result<()> {
-        let username = self
-            .username
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let url = self.server_url.lock().unwrap().clone().ok_or("no server")?;
+        let username = self.username.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let url = self.server_url.lock().clone().ok_or("no server")?;
         if !verify_password_call(&url, &username, password)? {
             return Err("incorrect password".into());
         }
@@ -500,7 +491,7 @@ impl<P: Platform> Engine<P> {
             return Err("new encryption key is required".into());
         }
         let key = derive_key(new_passphrase, &username).ok_or("failed to derive key")?;
-        *self.ctx.key.lock().unwrap() = Some(key);
+        *self.ctx.key.lock() = Some(key);
         Ok(())
     }
 
@@ -509,8 +500,8 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn logout(&self) {
-        *self.token.lock().unwrap() = None;
-        *self.ctx.key.lock().unwrap() = None;
+        *self.token.lock() = None;
+        *self.ctx.key.lock() = None;
     }
 
     // --- discovery / peers ---
@@ -519,16 +510,10 @@ impl<P: Platform> Engine<P> {
         let url = self
             .server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
-        let token = self
-            .token
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let id = self.ctx.identity.lock().unwrap().clone();
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let id = self.ctx.identity.lock().clone();
         registry_register(
             &url,
             &token,
@@ -544,7 +529,7 @@ impl<P: Platform> Engine<P> {
 
     fn apply_registry_peers(&self, devices: Vec<RegistryDevice>) {
         {
-            let mut map = self.ctx.peers.lock().unwrap();
+            let mut map = self.ctx.peers.lock();
             map.retain(|_, p| p.source != Source::Registry);
             for d in devices {
                 map.insert(
@@ -569,7 +554,7 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn scan_lan(&self) {
-        let id = self.ctx.identity.lock().unwrap().clone();
+        let id = self.ctx.identity.lock().clone();
         let socket = self.disco_send.clone();
         let targets = discovery::lan_targets(&self.ctx.platform.iface_mode());
         std::thread::spawn(move || {
@@ -587,8 +572,8 @@ impl<P: Platform> Engine<P> {
             Some(s) if s.parse::<Ipv4Addr>().is_ok() => s.to_string(),
             _ => self.ctx.platform.local_ip(),
         };
-        self.ctx.identity.lock().unwrap().ip = ip;
-        if self.token.lock().unwrap().is_some() {
+        self.ctx.identity.lock().ip = ip;
+        if self.token.lock().is_some() {
             let _ = self.refresh_from_server();
         }
     }
@@ -611,7 +596,7 @@ impl<P: Platform> Engine<P> {
         } else {
             name.trim().to_string()
         };
-        self.ctx.peers.lock().unwrap().insert(
+        self.ctx.peers.lock().insert(
             node_id.clone(),
             Peer {
                 node_id,
@@ -637,16 +622,12 @@ impl<P: Platform> Engine<P> {
     /// routed by node_id, so they reach a peer added this way. Used by tests
     /// today and by QR/code pairing later.
     pub fn upsert_peer(&self, peer: Peer) {
-        self.ctx
-            .peers
-            .lock()
-            .unwrap()
-            .insert(peer.node_id.clone(), peer);
+        self.ctx.peers.lock().insert(peer.node_id.clone(), peer);
         self.emit_peers();
     }
 
     pub fn remove_peer(&self, node_id: &str) {
-        self.ctx.peers.lock().unwrap().remove(node_id);
+        self.ctx.peers.lock().remove(node_id);
         self.emit_peers();
     }
 
@@ -657,14 +638,13 @@ impl<P: Platform> Engine<P> {
             .ctx
             .peers
             .lock()
-            .unwrap()
             .get(node_id)
             .cloned()
             .ok_or(CoreError::PeerNotFound)?;
         if peer.ws_port == 0 {
             return Err("peer has no WebSocket port".into());
         }
-        if self.ctx.ws_conns.lock().unwrap().contains_key(node_id) {
+        if self.ctx.ws_conns.lock().contains_key(node_id) {
             return Ok(());
         }
         ws::ws_connect(self.net_ctx(), &peer.ip, peer.ws_port).map_err(Into::into)
@@ -677,9 +657,8 @@ impl<P: Platform> Engine<P> {
         let from = self
             .username
             .lock()
-            .unwrap()
             .clone()
-            .unwrap_or_else(|| self.ctx.identity.lock().unwrap().name.clone());
+            .unwrap_or_else(|| self.ctx.identity.lock().name.clone());
         let proto = self.proto_for(node_id);
         transport::send_payload(
             &self.ctx.peers,
@@ -698,7 +677,7 @@ impl<P: Platform> Engine<P> {
     pub fn enable_clipboard_sync(&self) {
         if let Some(clip) = self.ctx.platform.clipboard() {
             if let Some(cur) = clip.get() {
-                *self.ctx.clip_last.lock().unwrap() = cur;
+                *self.ctx.clip_last.lock() = cur;
             }
         }
         self.ctx.clip_active.store(true, Ordering::Relaxed);
@@ -718,14 +697,10 @@ impl<P: Platform> Engine<P> {
             "clipboard not supported on this device",
         ))?;
         let (tx, rx) = mpsc::channel::<String>();
-        self.ctx
-            .clip_pending
-            .lock()
-            .unwrap()
-            .insert(node_id.to_string(), tx);
+        self.ctx.clip_pending.lock().insert(node_id.to_string(), tx);
 
-        let me = self.ctx.identity.lock().unwrap().node_id.clone();
-        let from = self.ctx.identity.lock().unwrap().name.clone();
+        let me = self.ctx.identity.lock().node_id.clone();
+        let from = self.ctx.identity.lock().name.clone();
         let req = serde_json::json!({ "type": "clipboard_request", "from": me }).to_string();
         let proto = self.proto_for(node_id);
 
@@ -738,17 +713,17 @@ impl<P: Platform> Engine<P> {
             proto,
             &req,
         ) {
-            self.ctx.clip_pending.lock().unwrap().remove(node_id);
+            self.ctx.clip_pending.lock().remove(node_id);
             return Err(e);
         }
 
         let result = rx.recv_timeout(Duration::from_secs(6));
-        self.ctx.clip_pending.lock().unwrap().remove(node_id);
+        self.ctx.clip_pending.lock().remove(node_id);
         let content = result.map_err(|_| {
             "no clipboard response from peer (is it reachable and using the same key?)".to_string()
         })?;
         clip.set(&content);
-        *self.ctx.clip_last.lock().unwrap() = content.clone();
+        *self.ctx.clip_last.lock() = content.clone();
         Ok(content)
     }
 
@@ -756,7 +731,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share an OS notification with all of the user's other devices.
     pub fn share_notification(&self, title: &str, body: &str, app: Option<&str>) {
-        let from = self.ctx.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().node_id.clone();
         let msg = serde_json::json!({
             "type": "notification", "title": title, "body": body, "app": app, "from": from,
         })
@@ -766,7 +741,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share an incoming/missed/ended call notification.
     pub fn share_call_notification(&self, caller: &str, number: Option<&str>, state: &str) {
-        let from = self.ctx.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().node_id.clone();
         let msg = serde_json::json!({
             "type": "call_notification", "caller": caller, "number": number, "state": state, "from": from,
         })
@@ -776,7 +751,7 @@ impl<P: Platform> Engine<P> {
 
     /// Share call-history entries (an opaque JSON array, passed through as-is).
     pub fn share_call_history(&self, entries_json: &str) {
-        let from = self.ctx.identity.lock().unwrap().node_id.clone();
+        let from = self.ctx.identity.lock().node_id.clone();
         let entries: serde_json::Value =
             serde_json::from_str(entries_json).unwrap_or(serde_json::Value::Null);
         let msg = serde_json::json!({ "type": "call_history", "entries": entries, "from": from })
@@ -790,19 +765,19 @@ impl<P: Platform> Engine<P> {
     /// by the host (e.g. android PackageManager). Producers answer `apps_request`
     /// with this.
     pub fn set_installed_apps(&self, apps_json: &str) {
-        *self.ctx.installed_apps.lock().unwrap() = apps_json.to_string();
+        *self.ctx.installed_apps.lock() = apps_json.to_string();
     }
 
     /// Consumer: ask a producer for its app list (reply arrives as CoreEvent::AppsList).
     pub fn request_apps(&self, node_id: &str) -> crate::Result<()> {
-        let me = self.ctx.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().node_id.clone();
         let m = serde_json::json!({ "type": "apps_request", "from": me }).to_string();
         self.send_control(node_id, &m)
     }
 
     /// Consumer: set the full enabled package set on a producer.
     pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> crate::Result<()> {
-        let me = self.ctx.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().node_id.clone();
         let apps: serde_json::Value =
             serde_json::from_str(apps_json).unwrap_or(serde_json::Value::Array(vec![]));
         let m =
@@ -813,12 +788,11 @@ impl<P: Platform> Engine<P> {
     /// Producer: a local app posted a notification — forward it to every peer
     /// subscribed to that package (as a normal `notification`).
     pub fn share_app_notification(&self, pkg: &str, app: &str, title: &str, body: &str) {
-        let me = self.ctx.identity.lock().unwrap().node_id.clone();
+        let me = self.ctx.identity.lock().node_id.clone();
         let targets: Vec<String> = self
             .ctx
             .subs
             .lock()
-            .unwrap()
             .iter()
             .filter(|(_, pkgs)| pkgs.iter().any(|p| p == pkg))
             .map(|(n, _)| n.clone())
@@ -841,7 +815,6 @@ impl<P: Platform> Engine<P> {
         let url = self
             .server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
         let outbound_ok = crate::registry::health_ok(&url);
@@ -851,13 +824,8 @@ impl<P: Platform> Engine<P> {
                 inbound_blocked: true,
             });
         }
-        let token = self
-            .token
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let node_id = self.ctx.identity.lock().node_id.clone();
         let probe = crate::registry::probe_inbound(&url, &token, &node_id, &["tcp", "ws"])?;
         let inbound_blocked = !(probe.tcp_reachable || probe.ws_reachable);
         // Persist so siblings see our reachability via `GET /devices` and the
@@ -881,9 +849,9 @@ impl<P: Platform> Engine<P> {
     /// other devices see our reachability. Called once after login (the probe
     /// does a blocking server dial-back, so it must not run on the UI thread).
     pub fn report_firewall(&self) {
-        let url = self.server_url.lock().unwrap().clone();
-        let token = self.token.lock().unwrap().clone();
-        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
+        let url = self.server_url.lock().clone();
+        let token = self.token.lock().clone();
+        let node_id = self.ctx.identity.lock().node_id.clone();
         let (Some(url), Some(token)) = (url, token) else {
             return;
         };
@@ -913,16 +881,10 @@ impl<P: Platform> Engine<P> {
         let url = self
             .server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
-        let token = self
-            .token
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let node_id = self.ctx.identity.lock().node_id.clone();
         crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
             .map_err(Into::into)
     }
@@ -932,16 +894,10 @@ impl<P: Platform> Engine<P> {
         let url = self
             .server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
-        let token = self
-            .token
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let me = self.ctx.identity.lock().unwrap().node_id.clone();
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let me = self.ctx.identity.lock().node_id.clone();
         let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
         crate::registry::send_signal(&url, &token, &me, to, "signal", data).map_err(Into::into)
     }
@@ -954,16 +910,10 @@ impl<P: Platform> Engine<P> {
         let url = self
             .server_url
             .lock()
-            .unwrap()
             .clone()
             .ok_or(CoreError::NotLoggedIn)?;
-        let token = self
-            .token
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let node_id = self.ctx.identity.lock().unwrap().node_id.clone();
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let node_id = self.ctx.identity.lock().node_id.clone();
         let sid = uuid::Uuid::new_v4().to_string();
         crate::registry::send_selfping(&url, &token, &node_id, &sid)?;
         Ok(sid)
@@ -979,7 +929,7 @@ impl<P: Platform> Engine<P> {
             // Initiator wants us reachable: our WS server is already listening,
             // so mark it open and tell them where to dial.
             Signal::StartWs { sid } => {
-                let id = self.ctx.identity.lock().unwrap().clone();
+                let id = self.ctx.identity.lock().clone();
                 let _ = self.update_ws_open(true);
                 let _ = self.send_signal(
                     from,
@@ -1025,7 +975,7 @@ impl<P: Platform> Engine<P> {
             Signal::PunchAnswer {
                 sid, candidates, ..
             } => {
-                let waiter = self.ctx.punch_waiters.lock().unwrap().remove(&sid);
+                let waiter = self.ctx.punch_waiters.lock().remove(&sid);
                 if let Some(tx) = waiter {
                     let _ = tx.send(candidates);
                 }
@@ -1054,7 +1004,7 @@ impl<P: Platform> Engine<P> {
             // WebRTC: hand the answer SDP to the waiting initiator thread.
             #[cfg(feature = "webrtc")]
             Signal::SdpAnswer { sid, sdp } => {
-                let waiter = self.ctx.rtc_waiters.lock().unwrap().remove(&sid);
+                let waiter = self.ctx.rtc_waiters.lock().remove(&sid);
                 if let Some(tx) = waiter {
                     let _ = tx.send(sdp);
                 }
@@ -1073,7 +1023,7 @@ impl<P: Platform> Engine<P> {
     /// `PeerConnected` event when any rung establishes a live link.
     pub fn connect(&self, node_id: &str) -> crate::Result<()> {
         // Validate the peer exists up front so the button gets immediate feedback.
-        if !self.ctx.peers.lock().unwrap().contains_key(node_id) {
+        if !self.ctx.peers.lock().contains_key(node_id) {
             return Err(CoreError::PeerNotFound);
         }
         let ctx = self.net_ctx();
@@ -1109,7 +1059,7 @@ fn same_lan<P: Platform>(ctx: &NetCtx<P>, peer: &Peer) -> bool {
     if peer.source == Source::Lan {
         return true;
     }
-    let my_ip = ctx.identity.lock().unwrap().ip.clone();
+    let my_ip = ctx.identity.lock().ip.clone();
     match (my_ip.parse::<Ipv4Addr>(), peer.ip.parse::<Ipv4Addr>()) {
         (Ok(a), Ok(b)) => a.octets()[..3] == b.octets()[..3],
         _ => false,
@@ -1117,7 +1067,7 @@ fn same_lan<P: Platform>(ctx: &NetCtx<P>, peer: &Peer) -> bool {
 }
 
 fn is_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
-    ctx.p2p_conns.lock().unwrap().contains_key(node_id)
+    ctx.p2p_conns.lock().contains_key(node_id)
 }
 
 /// Poll for the peer to become live, up to `ms` milliseconds.
@@ -1135,7 +1085,7 @@ fn wait_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str, ms: u64) -> bool {
 /// Send one UDP ping and wait briefly for the pong to flip the peer live.
 fn udp_ping_connect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     let (me, name) = {
-        let id = ctx.identity.lock().unwrap();
+        let id = ctx.identity.lock();
         (id.node_id.clone(), id.name.clone())
     };
     let ping = serde_json::json!({ "type": "p2p_ping", "from": me }).to_string();
@@ -1164,17 +1114,9 @@ fn send_signal_via<P: Platform>(
     to: &str,
     sig: &Signal,
 ) -> crate::Result<()> {
-    let url = server_url
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or(CoreError::NotLoggedIn)?;
-    let tok = token
-        .lock()
-        .unwrap()
-        .clone()
-        .ok_or(CoreError::NotLoggedIn)?;
-    let me = ctx.identity.lock().unwrap().node_id.clone();
+    let url = server_url.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+    let tok = token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+    let me = ctx.identity.lock().node_id.clone();
     let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
     crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(Into::into)
 }
@@ -1197,7 +1139,7 @@ fn run_connect_ladder<P: Platform>(
         emit("connected", None);
         return;
     }
-    let Some(peer) = ctx.peers.lock().unwrap().get(&node_id).cloned() else {
+    let Some(peer) = ctx.peers.lock().get(&node_id).cloned() else {
         emit("failed", Some("peer not found".into()));
         return;
     };
@@ -1244,7 +1186,7 @@ fn run_connect_ladder<P: Platform>(
     if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
         let sid = uuid::Uuid::new_v4().to_string();
         let (tx, rx) = mpsc::channel::<Vec<crate::signal::Candidate>>();
-        ctx.punch_waiters.lock().unwrap().insert(sid.clone(), tx);
+        ctx.punch_waiters.lock().insert(sid.clone(), tx);
         let offer = Signal::PunchOffer {
             sid: sid.clone(),
             candidates: my_cands,
@@ -1252,17 +1194,17 @@ fn run_connect_ladder<P: Platform>(
         };
         if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
             if let Ok(peer_cands) = rx.recv_timeout(Duration::from_secs(8)) {
-                ctx.punch_waiters.lock().unwrap().remove(&sid);
+                ctx.punch_waiters.lock().remove(&sid);
                 transport::punch::punch_and_run(ctx.clone(), socket, peer_cands, node_id.clone());
                 // hole_punch (≤8s) + bidirectional confirmation (≤3s).
                 if wait_live(&ctx, &node_id, 12000) {
                     return;
                 }
             } else {
-                ctx.punch_waiters.lock().unwrap().remove(&sid);
+                ctx.punch_waiters.lock().remove(&sid);
             }
         } else {
-            ctx.punch_waiters.lock().unwrap().remove(&sid);
+            ctx.punch_waiters.lock().remove(&sid);
         }
     }
 
@@ -1274,14 +1216,14 @@ fn run_connect_ladder<P: Platform>(
         if let Some((rtc, socket, pending, offer_sdp)) = transport::rtc::create_offer(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();
             let (tx, rx) = mpsc::channel::<String>();
-            ctx.rtc_waiters.lock().unwrap().insert(sid.clone(), tx);
+            ctx.rtc_waiters.lock().insert(sid.clone(), tx);
             let offer = Signal::SdpOffer {
                 sid: sid.clone(),
                 sdp: offer_sdp,
             };
             if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
                 if let Ok(answer_sdp) = rx.recv_timeout(Duration::from_secs(10)) {
-                    ctx.rtc_waiters.lock().unwrap().remove(&sid);
+                    ctx.rtc_waiters.lock().remove(&sid);
                     if transport::rtc::apply_answer_and_run(
                         ctx.clone(),
                         rtc,
@@ -1294,10 +1236,10 @@ fn run_connect_ladder<P: Platform>(
                         return;
                     }
                 } else {
-                    ctx.rtc_waiters.lock().unwrap().remove(&sid);
+                    ctx.rtc_waiters.lock().remove(&sid);
                 }
             } else {
-                ctx.rtc_waiters.lock().unwrap().remove(&sid);
+                ctx.rtc_waiters.lock().remove(&sid);
             }
         }
     }

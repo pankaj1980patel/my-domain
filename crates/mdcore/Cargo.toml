@@ -21,6 +21,7 @@ webrtc = ["dep:str0m"]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = { workspace = true }
+parking_lot = { workspace = true }
 socket2 = { version = "0.5", features = ["all"] }
 uuid = { version = "1", features = ["v4"] }
 argon2 = "0.5"
@@ -37,3 +38,6 @@ str0m = { version = "0.21", default-features = false, features = ["rust-crypto"]
 
 [dev-dependencies]
 md-testkit = { workspace = true }
+
+[lints]
+workspace = true

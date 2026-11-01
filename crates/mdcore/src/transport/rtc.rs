@@ -42,7 +42,7 @@ fn resolve(s: &str) -> Option<SocketAddr> {
 /// candidates already added (so the generated SDP carries them — no trickle).
 fn new_rtc<P: Platform>(ctx: &NetCtx<P>) -> Option<(Rtc, UdpSocket)> {
     ensure_crypto();
-    let my_ip = ctx.identity.lock().unwrap().ip.clone();
+    let my_ip = ctx.identity.lock().ip.clone();
     let socket = UdpSocket::bind(format!("{my_ip}:0"))
         .or_else(|_| UdpSocket::bind("0.0.0.0:0"))
         .ok()?;
@@ -146,7 +146,7 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                             // Like the punch path: never clobber a link that
                             // already exists (e.g. WS); if we lost the race,
                             // close this session instead.
-                            let mut g = ctx.ws_conns.lock().unwrap();
+                            let mut g = ctx.ws_conns.lock();
                             if let std::collections::hash_map::Entry::Vacant(slot) =
                                 g.entry(node_id.clone())
                             {
@@ -187,11 +187,10 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
             let still = ctx
                 .ws_conns
                 .lock()
-                .unwrap()
                 .get(&node_id)
                 .map(|(id, _)| *id == my_conn_id)
                 .unwrap_or(false);
-            if !still || !ctx.p2p_conns.lock().unwrap().contains_key(&node_id) {
+            if !still || !ctx.p2p_conns.lock().contains_key(&node_id) {
                 break;
             }
         }
@@ -234,7 +233,7 @@ fn cleanup<P: Platform>(ctx: &NetCtx<P>, node_id: &str, my_conn_id: u64, registe
         return;
     }
     {
-        let mut g = ctx.ws_conns.lock().unwrap();
+        let mut g = ctx.ws_conns.lock();
         if g.get(node_id)
             .map(|(id, _)| *id == my_conn_id)
             .unwrap_or(false)

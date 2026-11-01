@@ -136,7 +136,7 @@ static PUNCH_CONN_SEQ: AtomicU64 = AtomicU64::new(1_000_000);
 pub fn gather_candidates<P: Platform>(ctx: &NetCtx<P>) -> Option<(UdpSocket, Vec<Candidate>)> {
     let socket = UdpSocket::bind("0.0.0.0:0").ok()?;
     let port = socket.local_addr().ok()?.port();
-    let my_ip = ctx.identity.lock().unwrap().ip.clone();
+    let my_ip = ctx.identity.lock().ip.clone();
     let mut cands = Vec::new();
     if !my_ip.is_empty() && my_ip != "0.0.0.0" {
         cands.push(Candidate {
@@ -244,7 +244,7 @@ fn run_punch_conn<P: Platform>(
     let (tx, rx) = mpsc::channel::<String>();
     let my_conn_id = PUNCH_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     {
-        let mut g = ctx.ws_conns.lock().unwrap();
+        let mut g = ctx.ws_conns.lock();
         if g.contains_key(&node_id) {
             return; // a link already exists (e.g. WS) — don't clobber it
         }
@@ -303,16 +303,15 @@ fn run_punch_conn<P: Platform>(
         let still_ours = ctx
             .ws_conns
             .lock()
-            .unwrap()
             .get(&node_id)
             .map(|(id, _)| *id == my_conn_id)
             .unwrap_or(false);
-        if !still_ours || !ctx.p2p_conns.lock().unwrap().contains_key(&node_id) {
+        if !still_ours || !ctx.p2p_conns.lock().contains_key(&node_id) {
             break;
         }
     }
     {
-        let mut g = ctx.ws_conns.lock().unwrap();
+        let mut g = ctx.ws_conns.lock();
         if g.get(&node_id)
             .map(|(id, _)| *id == my_conn_id)
             .unwrap_or(false)

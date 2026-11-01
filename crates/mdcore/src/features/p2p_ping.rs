@@ -27,7 +27,7 @@ impl<P: Platform> ControlHandler<P> for P2pPingHandler {
         // `last_seen`, so a pong doubles as a heartbeat ack.
         mark_live(ctx, &from, TransportKind::Udp, None);
         if msg.kind() == "p2p_ping" {
-            let me = ctx.identity.lock().unwrap().node_id.clone();
+            let me = ctx.identity.lock().node_id.clone();
             let pong = serde_json::json!({ "type": "p2p_pong", "from": me }).to_string();
             send_control_to(ctx, &from, &pong);
         }

@@ -2,9 +2,10 @@
 //! interface strategy (`IfaceMode`) is supplied by the platform so the desktop
 //! "all interfaces" and android "single Wi-Fi interface" behaviors share code.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use socket2::{Domain, Protocol, Socket, Type};
 
@@ -167,11 +168,11 @@ pub fn discovery_recv_loop(
             Ok(b) => b,
             Err(_) => continue,
         };
-        if beacon.node_id == identity.lock().unwrap().node_id {
+        if beacon.node_id == identity.lock().node_id {
             continue;
         }
         let snapshot = {
-            let mut map = peers.lock().unwrap();
+            let mut map = peers.lock();
             merge_beacon(&mut map, &beacon, src.ip()).then(|| map.values().cloned().collect())
         };
         if let Some(list) = snapshot {
@@ -179,7 +180,7 @@ pub fn discovery_recv_loop(
         }
         // Reply to announces (not to replies) so the scanner is discovered too.
         if !beacon.reply {
-            let id = identity.lock().unwrap().clone();
+            let id = identity.lock().clone();
             send_beacon(
                 &send,
                 &id,
