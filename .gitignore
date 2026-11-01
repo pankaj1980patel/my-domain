@@ -1,6 +1,15 @@
 .DS_Store
 
-
-# Added by cargo
-
+# Rust: one shared build dir for the whole workspace (+ old per-crate ones).
 /target
+**/target/
+**/target-linux/
+
+# JS
+node_modules/
+
+# Secrets / machine-local config — never commit.
+.env
+fcm-sa.json
+google-services*.json
+apps/server/my-domain-server-amd64

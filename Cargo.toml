@@ -1,0 +1,51 @@
+# my-domain Cargo workspace.
+#
+# One workspace = one Cargo.lock and one target/ dir for every Rust crate in the
+# repo (like an npm/pnpm workspace with a single lockfile). Members inherit the
+# shared dependency versions below with `dep = { workspace = true }`, so a crate
+# can never drift onto a different version of serde/tokio/etc. than its siblings.
+# See learnings/decisions/ADR-0001-monorepo.md.
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/mdcore",
+    "apps/server",
+    "apps/desktop/src-tauri",
+    "apps/android/rust",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "MIT"
+repository = "https://github.com/pankaj1980patel/my-domain"
+
+[workspace.dependencies]
+mdcore = { path = "crates/mdcore" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+socket2 = { version = "0.5", features = ["all"] }
+uuid = { version = "1", features = ["v4"] }
+argon2 = "0.5"
+rand_core = { version = "0.6", features = ["getrandom"] }
+tungstenite = { version = "0.24", default-features = false, features = ["handshake"] }
+
+# Lints every member opts into with `[lints] workspace = true`.
+[workspace.lints.rust]
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+# `.unwrap()` panics; a panic while holding a Mutex poisons it and wedges the
+# engine. Warn now, tighten to deny once Phase 1 removes the existing ones.
+unwrap_used = "warn"
+
+# Profiles can only live in the workspace root.
+[profile.release]
+strip = true
+
+# The Android .so is size-sensitive (it ships inside the APK for 4 ABIs), so its
+# own code is optimised for size. This used to be a per-crate [profile.release]
+# with lto=true; workspaces only allow per-package opt-level overrides.
+[profile.release.package.mydomain_net]
+opt-level = "z"

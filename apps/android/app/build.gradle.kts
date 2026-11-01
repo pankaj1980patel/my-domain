@@ -64,6 +64,9 @@ cargo {
     // The plugin's generated linker-wrapper.sh invokes `python`; modern macOS
     // only ships `python3`, so point it there (override with -Prust.python=...).
     pythonCommand = (project.findProperty("rust.python") as String?) ?: "python3"
+    // The crate is a member of the repo-root Cargo workspace, so Cargo writes to
+    // <repo>/target, not ../rust/target. rootDir = apps/android.
+    targetDirectory = "${rootDir}/../../target"
 }
 
 // Make sure the Rust libs are built before Gradle packages the JNI libs.
