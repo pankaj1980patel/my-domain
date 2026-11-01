@@ -66,3 +66,10 @@ cargo fmt --all
 RUSTFLAGS="-D warnings" cargo clippy --workspace --all-targets --locked
 cargo test --workspace --locked
 ```
+
+## Update — device lab live (same day)
+- The owner installed the SSH key and ran `setup-arch.sh`. The laptop now has JDK 17, SDK 35, NDK 30.0.14904198 and all four Rust Android targets.
+- `scripts/lab/linux.sh test`: the whole workspace builds and tests pass on Linux (Manjaro).
+- `scripts/lab/android.sh install`: **BUILD SUCCESSFUL in 13m 17s**. That's a cold build: the Rust core compiled for 4 ABIs, and the x86/x86_64 ones also compile C code with clang. The APK was installed on the I2405 and launched. Later builds reuse `target/` and are much faster.
+- Added a live log. Every lab command appends to `~/my-domain-lab.log` on the laptop. Follow it with `tail -f` there, or with `scripts/lab/watch.sh` from the Mac.
+- Gotcha: `node` on the laptop fails with `libabsl_raw_hash_set.so… not found`. That's a partial upgrade on Manjaro; `sudo pacman -Syu` fixes it. It only matters for running the desktop app on Linux.

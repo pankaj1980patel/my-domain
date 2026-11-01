@@ -18,7 +18,13 @@ export PATH="$HOME/.cargo/bin:$ANDROID_HOME/platform-tools:$ANDROID_HOME/cmdline
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 
-# Run a command on the arch host inside the repo checkout.
+# Run a command on the arch host inside the repo checkout. Output is also
+# appended to ~/my-domain-lab.log on the laptop (outside the rsync'd dir, so
+# sync --delete never wipes it). Watch live progress from anywhere:
+#   on the laptop:  tail -f ~/my-domain-lab.log
+#   from the Mac:   scripts/lab/watch.sh
 remote() {
-  ssh -o ConnectTimeout=10 "$MD_ARCH_HOST" "$MD_REMOTE_ENV cd \"\$HOME/$MD_ARCH_DIR\" && $*"
+  ssh -o ConnectTimeout=10 "$MD_ARCH_HOST" "$MD_REMOTE_ENV cd \"\$HOME/$MD_ARCH_DIR\" &&
+    { echo; echo \"===== \$(date '+%F %T')  $* \"; } >> \$HOME/my-domain-lab.log &&
+    set -o pipefail && { $*; } 2>&1 | tee -a \$HOME/my-domain-lab.log"
 }
