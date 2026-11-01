@@ -59,6 +59,7 @@ fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, devices: Vec<RegistryDevic
                     reflexive_udp_port: d.reflexive_udp_port,
                     nat: d.nat.as_deref().map(NatKind::parse).unwrap_or_default(),
                     ipv6: d.ipv6,
+                    mapped_quic: d.mapped_quic,
                 },
             );
         }
@@ -127,6 +128,7 @@ impl<P: Platform> Engine<P> {
                 reflexive_udp_port: None,
                 nat: NatKind::Unknown,
                 ipv6: None,
+                mapped_quic: None,
             },
         );
         self.emit_peers();

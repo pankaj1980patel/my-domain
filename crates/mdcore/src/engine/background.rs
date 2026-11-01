@@ -30,6 +30,64 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
     }
 }
 
+/// Renew the router's port mapping this often (well inside its lease).
+const MAP_RENEW: Duration = Duration::from_secs(20 * 60);
+/// Retry this often while the router refuses (or there's no UPnP router).
+const MAP_RETRY: Duration = Duration::from_secs(10 * 60);
+
+/// Keep the home router forwarding our QUIC port (UPnP), if a port mapper is
+/// configured: map at start, renew before the lease runs out, re-map when
+/// the LAN address changes, unmap on shutdown. The public address is
+/// published to the registry as `mapped_quic`.
+pub(super) fn spawn_port_mapper<P: Platform>(h: netchange::NetHandles<P>) {
+    use crate::nat::portmap::LEASE_SECS;
+    use std::net::SocketAddrV4;
+    let Some(mapper) = h.ctx.config.port_mapper.clone() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        // (local address the mapping points at, public address)
+        let mut mapped: Option<(SocketAddrV4, SocketAddrV4)> = None;
+        let mut next_try = std::time::Instant::now();
+        while !h.ctx.shutdown.load(Ordering::Relaxed) {
+            let local = {
+                let id = h.ctx.identity.lock();
+                id.ip
+                    .parse::<Ipv4Addr>()
+                    .ok()
+                    .filter(|ip| !ip.is_unspecified() && id.quic_port != 0)
+                    .map(|ip| SocketAddrV4::new(ip, id.quic_port))
+            };
+            let moved = mapped.is_some_and(|(l, _)| Some(l) != local);
+            if moved || std::time::Instant::now() >= next_try {
+                if let (true, Some((_, public))) = (moved, mapped) {
+                    mapper.unmap_udp(public.port());
+                }
+                mapped = local.and_then(|l| mapper.map_udp(l, LEASE_SECS).map(|p| (l, p)));
+                let published = mapped.map(|(_, p)| p.to_string());
+                let changed = {
+                    let mut id = h.ctx.identity.lock();
+                    std::mem::replace(&mut id.mapped_quic, published.clone()) != published
+                };
+                let session = h.server_url.lock().clone().zip(h.token.lock().clone());
+                if let (true, Some((url, tok))) = (changed, session) {
+                    let _ = peers::register_self(&h.ctx, &url, &tok);
+                }
+                next_try = std::time::Instant::now()
+                    + if mapped.is_some() {
+                        MAP_RENEW
+                    } else {
+                        MAP_RETRY
+                    };
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
+        if let Some((_, public)) = mapped {
+            mapper.unmap_udp(public.port());
+        }
+    });
+}
+
 /// Sleep for `d`; returns `false` once the engine is shutting down.
 fn tick<P: Platform>(ctx: &NetCtx<P>, d: Duration) -> bool {
     std::thread::sleep(d);

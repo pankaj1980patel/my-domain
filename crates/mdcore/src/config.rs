@@ -77,6 +77,9 @@ pub struct CoreConfig {
     /// (`http://host:port` -> `ws://host:port/relay`). Tests point this at a
     /// fake relay.
     pub relay_url: Option<String>,
+    /// Ask the home router to forward our QUIC port (UPnP). `None` = don't
+    /// (tests, or networks where it's unwanted).
+    pub port_mapper: Option<std::sync::Arc<dyn crate::nat::portmap::PortMapper>>,
 }
 
 impl Default for CoreConfig {
@@ -91,6 +94,7 @@ impl Default for CoreConfig {
             rungs: ConnectRungs::default(),
             auto_quic: true,
             relay_url: None,
+            port_mapper: Some(std::sync::Arc::new(crate::nat::portmap::UpnpMapper)),
         }
     }
 }

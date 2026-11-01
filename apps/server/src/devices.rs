@@ -47,6 +47,24 @@ pub struct DeviceReq {
     /// Client-measured NAT type: "easy" | "symmetric" | "unknown".
     #[serde(default)]
     pub nat: Option<String>,
+    /// Public `ip:port` the device's router forwards to its QUIC port (UPnP).
+    #[serde(default)]
+    pub mapped_quic: Option<String>,
+}
+
+/// A public IPv4 `ip:port` (what a UPnP mapping must look like), else `None`.
+fn clean_mapped(v: Option<&str>) -> Option<String> {
+    let sa: std::net::SocketAddrV4 = v?.trim().parse().ok()?;
+    let ip = sa.ip();
+    let o = ip.octets();
+    let private = ip.is_private()
+        || ip.is_loopback()
+        || ip.is_link_local()
+        || ip.is_unspecified()
+        || ip.is_broadcast()
+        || ip.is_documentation()
+        || (o[0] == 100 && (o[1] & 0xc0) == 64);
+    (sa.port() != 0 && !private).then(|| sa.to_string())
 }
 
 /// A global unicast IPv6 address (2000::/3) in canonical form, else `None`.
@@ -82,6 +100,7 @@ pub struct DeviceOut {
     pub reflexive_ip: Option<String>,
     pub reflexive_udp_port: Option<i32>,
     pub nat: String,
+    pub mapped_quic: Option<String>,
 }
 
 /// The caller's real IP. Behind the local reverse proxy (Caddy on :443) every
@@ -131,6 +150,7 @@ pub async fn register(
         "last_seen": now(),
         "supports_ipv6": req.supports_ipv6,
         "nat": clean_nat(req.nat.as_deref()),
+        "mapped_quic": clean_mapped(req.mapped_quic.as_deref()),
     };
     if let Some(t) = req.fcm_token.as_ref().filter(|v| !v.trim().is_empty()) {
         set.insert("fcm_token", t);
@@ -206,6 +226,7 @@ pub async fn list(
             reflexive_ip: d.reflexive_ip,
             reflexive_udp_port: d.reflexive_udp_port,
             nat: d.nat.unwrap_or_else(|| "unknown".into()),
+            mapped_quic: d.mapped_quic,
         })
         .collect();
     Ok(Json(out))
@@ -372,6 +393,23 @@ mod tests {
         assert_eq!(clean_ipv6(Some("::1")), None);
         assert_eq!(clean_ipv6(Some("1.2.3.4")), None);
         assert_eq!(clean_ipv6(None), None);
+    }
+
+    #[test]
+    fn only_public_router_mappings_are_stored() {
+        assert_eq!(
+            clean_mapped(Some("152.67.7.50:41000")).as_deref(),
+            Some("152.67.7.50:41000")
+        );
+        assert_eq!(clean_mapped(Some("192.168.0.5:41000")), None, "private");
+        assert_eq!(
+            clean_mapped(Some("100.70.1.2:41000")),
+            None,
+            "carrier-grade NAT"
+        );
+        assert_eq!(clean_mapped(Some("152.67.7.50:0")), None, "no port");
+        assert_eq!(clean_mapped(Some("garbage")), None);
+        assert_eq!(clean_mapped(None), None);
     }
 
     #[test]

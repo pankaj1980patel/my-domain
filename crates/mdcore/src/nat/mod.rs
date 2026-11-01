@@ -5,6 +5,7 @@
 //! coturn ephemeral creds) is wired during the streaming/NAT phase. These
 //! primitives are the building blocks and require live multi-network testing.
 
+pub mod portmap;
 pub mod punch;
 pub mod stun;
 

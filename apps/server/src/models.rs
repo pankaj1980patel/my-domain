@@ -60,6 +60,9 @@ pub struct Device {
     /// Client-measured NAT type ("easy" | "symmetric" | "unknown").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nat: Option<String>,
+    /// Public `ip:port` forwarded by the device's router (UPnP), if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapped_quic: Option<String>,
     /// "android" | "desktop" | "ios" | "mac"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,

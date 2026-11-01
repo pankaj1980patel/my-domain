@@ -19,6 +19,9 @@ pub struct Identity {
     /// (many mobile networks give phones public IPv6 with no NAT).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ipv6: Option<String>,
+    /// Public `ip:port` the home router forwards to our QUIC port (UPnP).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapped_quic: Option<String>,
 }
 
 /// LAN discovery beacon (UDP datagram body).
@@ -76,18 +79,35 @@ pub struct Peer {
     /// with `ip`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ipv6: Option<String>,
+    /// Public `ip:port` the peer's router forwards to its QUIC port (UPnP).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapped_quic: Option<String>,
 }
 
 impl Peer {
-    /// Addresses to dial for this peer's QUIC port, IPv6 first (no NAT in
-    /// the way, when it exists). Unparseable or duplicate entries are skipped.
-    pub fn quic_targets(&self) -> Vec<std::net::IpAddr> {
-        let mut out = Vec::new();
-        for s in self.ipv6.iter().chain(std::iter::once(&self.ip)) {
-            if let Ok(ip) = s.trim().parse::<std::net::IpAddr>() {
-                if !out.contains(&ip) {
-                    out.push(ip);
-                }
+    /// Where to dial this peer's QUIC endpoint, all raced in parallel: its
+    /// IPv6 address (no NAT in the way, when it exists), the port its router
+    /// forwards for it (UPnP), then its LAN/registry IPv4 address.
+    /// Unparseable or duplicate entries are skipped.
+    pub fn quic_targets(&self) -> Vec<std::net::SocketAddr> {
+        use std::net::{IpAddr, SocketAddr};
+        let with_port = |s: &str| {
+            s.trim()
+                .parse::<IpAddr>()
+                .ok()
+                .map(|ip| SocketAddr::new(ip, self.quic_port))
+        };
+        let candidates = [
+            self.ipv6.as_deref().and_then(with_port),
+            self.mapped_quic
+                .as_deref()
+                .and_then(|s| s.trim().parse().ok()),
+            with_port(&self.ip),
+        ];
+        let mut out: Vec<SocketAddr> = Vec::new();
+        for a in candidates.into_iter().flatten() {
+            if a.port() != 0 && !out.contains(&a) {
+                out.push(a);
             }
         }
         out
@@ -132,7 +152,7 @@ pub enum WsFrame {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::net::IpAddr;
+    use std::net::SocketAddr;
 
     fn peer(ip: &str, ipv6: Option<&str>) -> Peer {
         Peer {
@@ -150,22 +170,29 @@ mod tests {
             reflexive_udp_port: None,
             nat: Default::default(),
             ipv6: ipv6.map(String::from),
+            mapped_quic: None,
         }
     }
 
-    fn ips(v: &[&str]) -> Vec<IpAddr> {
+    fn addrs(v: &[&str]) -> Vec<SocketAddr> {
         v.iter().map(|s| s.parse().unwrap()).collect()
     }
 
     #[test]
-    fn quic_targets_try_ipv6_first_then_ipv4() {
+    fn quic_targets_try_ipv6_then_the_router_mapping_then_ipv4() {
+        let mut p = peer("192.168.1.5", Some("2409:4040::7"));
         assert_eq!(
-            peer("192.168.1.5", Some("2409:4040::7")).quic_targets(),
-            ips(&["2409:4040::7", "192.168.1.5"])
+            p.quic_targets(),
+            addrs(&["[2409:4040::7]:4", "192.168.1.5:4"])
+        );
+        p.mapped_quic = Some("152.67.7.50:41000".into());
+        assert_eq!(
+            p.quic_targets(),
+            addrs(&["[2409:4040::7]:4", "152.67.7.50:41000", "192.168.1.5:4"])
         );
         assert_eq!(
             peer("192.168.1.5", None).quic_targets(),
-            ips(&["192.168.1.5"])
+            addrs(&["192.168.1.5:4"])
         );
     }
 
@@ -173,9 +200,17 @@ mod tests {
     fn quic_targets_skip_garbage_and_duplicates() {
         assert_eq!(
             peer("not-an-ip", Some(" ::1 ")).quic_targets(),
-            ips(&["::1"])
+            addrs(&["[::1]:4"])
         );
-        assert_eq!(peer("::1", Some("::1")).quic_targets(), ips(&["::1"]));
-        assert!(peer("", None).quic_targets().is_empty());
+        assert_eq!(peer("::1", Some("::1")).quic_targets(), addrs(&["[::1]:4"]));
+        let mut p = peer("", None);
+        p.mapped_quic = Some("garbage".into());
+        assert!(p.quic_targets().is_empty());
+        let mut no_quic = peer("10.0.0.1", None);
+        no_quic.quic_port = 0;
+        assert!(
+            no_quic.quic_targets().is_empty(),
+            "no QUIC port, nothing to dial"
+        );
     }
 }

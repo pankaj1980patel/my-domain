@@ -203,7 +203,7 @@ impl QuicLink {
     /// Dial one address (see `connect_any`).
     pub fn connect<P: Platform>(&self, ctx: NetCtx<P>, ip: &str, port: u16) -> Result<(), String> {
         let ip: IpAddr = ip.trim().parse().map_err(|_| "bad peer ip")?;
-        self.connect_any(ctx, &[ip], port)
+        self.connect_any(ctx, &[SocketAddr::new(ip, port)])
     }
 
     /// Dial the peer at every address at once (e.g. its IPv6 and its IPv4)
@@ -212,13 +212,12 @@ impl QuicLink {
     pub fn connect_any<P: Platform>(
         &self,
         ctx: NetCtx<P>,
-        ips: &[IpAddr],
-        port: u16,
+        addrs: &[SocketAddr],
     ) -> Result<(), String> {
-        if ips.is_empty() {
+        if addrs.is_empty() {
             return Err("no address to dial".into());
         }
-        let addrs: Vec<SocketAddr> = ips.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
+        let addrs = addrs.to_vec();
         let endpoint = self.endpoint.clone();
         let conn = self.rt.block_on(async move {
             let mut attempts = tokio::task::JoinSet::new();

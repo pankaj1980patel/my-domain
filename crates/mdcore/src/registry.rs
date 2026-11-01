@@ -40,6 +40,8 @@ pub struct RegistryDevice {
     pub nat: Option<String>,
     #[serde(default)]
     pub ipv6: Option<String>,
+    #[serde(default)]
+    pub mapped_quic: Option<String>,
 }
 
 /// Normalize a user-entered server URL to just `scheme://host[:port]`, dropping
@@ -120,6 +122,7 @@ pub fn registry_register(
             "platform": platform,
             "supports_ipv6": supports_ipv6,
             "ipv6": id.ipv6,
+            "mapped_quic": id.mapped_quic,
             "nat": nat.as_str(),
         }))
         .map_err(http_err)?;

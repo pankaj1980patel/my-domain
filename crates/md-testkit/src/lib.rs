@@ -22,9 +22,11 @@
 // report, so unwrap/expect are fine here.
 #![allow(clippy::unwrap_used)]
 
+mod portmap;
 mod registry;
 mod relay;
 mod stun;
+pub use portmap::FakeRouter;
 pub use registry::FakeRegistry;
 pub use relay::FakeRelay;
 pub use stun::FakeStun;
@@ -237,6 +239,7 @@ impl RecordingSink {
 pub fn test_config() -> CoreConfig {
     CoreConfig {
         stun_servers: vec![],
+        port_mapper: None, // never touch the real router from tests
         ..CoreConfig::default()
     }
 }
@@ -386,6 +389,7 @@ impl TestNode {
             reflexive_udp_port: None,
             nat: self.engine.nat_kind(),
             ipv6: None,
+            mapped_quic: None,
         }
     }
 

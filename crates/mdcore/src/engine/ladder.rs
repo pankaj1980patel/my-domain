@@ -119,7 +119,7 @@ pub(super) fn run_connect_ladder<P: Platform>(
         emit("quic", None);
         if ctx
             .quic
-            .connect_any(ctx.clone(), &peer.quic_targets(), peer.quic_port)
+            .connect_any(ctx.clone(), &peer.quic_targets())
             .is_ok()
             && wait_live(&ctx, &node_id, 3000)
         {
