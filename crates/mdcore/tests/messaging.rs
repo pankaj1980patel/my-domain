@@ -97,19 +97,46 @@ fn different_passphrase_cannot_read_messages() {
 
     a.engine.send(&b.node_id(), "secret").unwrap();
 
-    // CURRENT BEHAVIOUR (a known weakness, fixed in Phase 1): an undecryptable
-    // message is still surfaced to the UI, flagged `ok: false`, with a
-    // placeholder text. Any LAN host can therefore spam the chat.
+    // The user gets ONE visible hint that keys don't match (ok: false,
+    // placeholder text, never the plaintext).
     let undecryptable = b
         .sink
         .wait_until(WAIT, |e| match e {
             CoreEvent::MessageReceived(m) if !m.ok => Some(m.clone()),
             _ => None,
         })
-        .expect("an ok:false message is emitted");
+        .expect("an ok:false notice is emitted");
     assert_ne!(undecryptable.text, "secret", "plaintext must never leak");
     b.sink
         .assert_no_message("secret", Duration::from_millis(300));
+}
+
+#[test]
+fn undecryptable_flood_produces_one_notice_but_is_fully_counted() {
+    // Regression: every undecryptable envelope used to become a chat entry, so
+    // any LAN host could flood the UI. Now: one notice per sender IP per
+    // minute, and every failure is counted.
+    let (a, b) = pair("wrong-key-flood");
+    b.engine.set_encryption_key("another key").unwrap();
+
+    for i in 0..20 {
+        a.engine.send(&b.node_id(), &format!("junk {i}")).unwrap();
+    }
+    let deadline = std::time::Instant::now() + WAIT;
+    while b.engine.decrypt_failures() < 20 {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "not all failures counted"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let notices = b
+        .sink
+        .all()
+        .iter()
+        .filter(|e| matches!(e, CoreEvent::MessageReceived(m) if !m.ok))
+        .count();
+    assert_eq!(notices, 1);
 }
 
 // ---------------------------------------------------------------------------

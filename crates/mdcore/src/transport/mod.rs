@@ -143,34 +143,38 @@ pub fn live_snapshot<P: Platform>(ctx: &NetCtx<P>) -> Vec<(String, TransportKind
 
 /// Decrypt an envelope into a UI message; undecryptable messages are surfaced
 /// (not silently dropped).
-fn envelope_to_message(
-    key: &KeyHolder,
-    env: &Envelope,
-    ip: String,
-    protocol: &str,
-) -> IncomingMessage {
-    if let Some(k) = key.lock().unwrap().as_ref() {
-        if let Some(pt) = decrypt(k, env) {
-            if let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) {
-                return IncomingMessage {
-                    from: msg.from,
-                    ip,
-                    protocol: protocol.into(),
-                    text: msg.text,
-                    ts: now_secs(),
-                    ok: true,
-                };
+/// How often one sender IP may produce a visible "could not decrypt" notice.
+const UNDECRYPTABLE_NOTICE_EVERY_SECS: u64 = 60;
+/// Cap on tracked sender IPs, so a flood from many addresses can't grow memory.
+const UNDECRYPTABLE_MAX_TRACKED: usize = 1024;
+
+/// An envelope from `ip` failed to decrypt. Count it, and surface at most one
+/// notice per sender IP per minute: enough to tell a user their passphrase
+/// doesn't match, without letting any LAN host flood the chat with junk.
+fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) {
+    ctx.decrypt_fail_count
+        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let now = now_secs();
+    {
+        let mut last = ctx.decrypt_fail_last.lock().unwrap();
+        if let Some(t) = last.get(&ip) {
+            if now.saturating_sub(*t) < UNDECRYPTABLE_NOTICE_EVERY_SECS {
+                return;
             }
         }
+        if last.len() >= UNDECRYPTABLE_MAX_TRACKED {
+            last.clear();
+        }
+        last.insert(ip.clone(), now);
     }
-    IncomingMessage {
+    ctx.sink.emit(CoreEvent::MessageReceived(IncomingMessage {
         from: "(unknown)".into(),
         ip,
         protocol: protocol.into(),
         text: "🔒 message could not be decrypted (wrong encryption key)".into(),
-        ts: now_secs(),
+        ts: now,
         ok: false,
-    }
+    }));
 }
 
 /// Pick the transport for a message to `node_id`. Any live persistent channel —
@@ -229,10 +233,7 @@ pub fn handle_incoming<P: Platform>(ctx: &NetCtx<P>, env: &Envelope, ip: String,
         guard.as_ref().and_then(|k| decrypt(k, env))
     };
     let Some(pt) = pt else {
-        ctx.sink
-            .emit(CoreEvent::MessageReceived(envelope_to_message(
-                &ctx.key, env, ip, protocol,
-            )));
+        note_undecryptable(ctx, ip, protocol);
         return;
     };
     let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) else {

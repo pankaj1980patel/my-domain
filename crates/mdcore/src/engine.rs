@@ -39,6 +39,10 @@ pub type PunchWaiters = Arc<Mutex<HashMap<String, mpsc::Sender<Vec<crate::signal
 /// In-flight WebRTC negotiations: sid -> sender delivering the answer SDP string.
 pub type RtcWaiters = Arc<Mutex<HashMap<String, mpsc::Sender<String>>>>;
 
+/// Undecryptable-message notices: sender IP -> unix secs of the last notice we
+/// surfaced for it (rate limiting; see `transport::note_undecryptable`).
+pub type DecryptFailures = Arc<Mutex<HashMap<String, u64>>>;
+
 /// Shared handles the receive loops + clipboard watcher need.
 pub struct NetCtx<P: Platform> {
     pub platform: Arc<P>,
@@ -64,6 +68,10 @@ pub struct NetCtx<P: Platform> {
     /// Directed transport for peers with no live persistent channel: "UDP"
     /// (default) or "TCP". A live WS/punch/WebRTC link always wins over this.
     pub directed_transport: Arc<Mutex<String>>,
+    /// Rate limiter for "could not decrypt" notices, keyed by sender IP.
+    pub decrypt_fail_last: DecryptFailures,
+    /// Every envelope that failed to decrypt, notified or not.
+    pub decrypt_fail_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -85,6 +93,8 @@ impl<P: Platform> Clone for NetCtx<P> {
             installed_apps: self.installed_apps.clone(),
             subs: self.subs.clone(),
             directed_transport: self.directed_transport.clone(),
+            decrypt_fail_last: self.decrypt_fail_last.clone(),
+            decrypt_fail_count: self.decrypt_fail_count.clone(),
         }
     }
 }
@@ -197,6 +207,8 @@ impl<P: Platform> Engine<P> {
             installed_apps: installed_apps.clone(),
             subs: subs.clone(),
             directed_transport: directed_transport.clone(),
+            decrypt_fail_last: Arc::default(),
+            decrypt_fail_count: Arc::default(),
         };
 
         // Direct messaging receivers.
@@ -365,6 +377,13 @@ impl<P: Platform> Engine<P> {
     }
 
     // --- read-only state ---
+
+    /// How many incoming envelopes failed to decrypt since start (wrong key,
+    /// corruption, or junk from another host). Only the first per sender IP per
+    /// minute is shown to the UI; this counts all of them.
+    pub fn decrypt_failures(&self) -> u64 {
+        self.ctx.decrypt_fail_count.load(Ordering::Relaxed)
+    }
 
     pub fn identity(&self) -> Identity {
         self.ctx.identity.lock().unwrap().clone()
