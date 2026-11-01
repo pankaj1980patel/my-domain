@@ -22,6 +22,9 @@
 // report, so unwrap/expect are fine here.
 #![allow(clippy::unwrap_used)]
 
+mod registry;
+pub use registry::FakeRegistry;
+
 use std::collections::HashMap;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Condvar, Mutex, Weak};
@@ -326,15 +329,26 @@ impl TestNode {
     }
 
     pub fn start_full(platform: MockPlatform, config: CoreConfig) -> Self {
+        let node = Self::start_logged_out_with(platform, config);
+        node.engine
+            .dev_login(TEST_USER, TEST_PASSPHRASE)
+            .expect("offline login");
+        node
+    }
+
+    /// A node with no username and no key, e.g. to test the login flow
+    /// against a [`FakeRegistry`].
+    pub fn start_logged_out(id: &str) -> Self {
+        Self::start_logged_out_with(MockPlatform::new(id), test_config())
+    }
+
+    pub fn start_logged_out_with(platform: MockPlatform, config: CoreConfig) -> Self {
         let clipboard = platform.clipboard.clone();
         let notifier = platform.notifier.clone();
         let sink = Arc::new(RecordingSink::default());
         let engine = Arc::new(
             Engine::start_with_config(platform, sink.clone(), config).expect("engine starts"),
         );
-        engine
-            .dev_login(TEST_USER, TEST_PASSPHRASE)
-            .expect("offline login");
         TestNode {
             engine,
             sink,
