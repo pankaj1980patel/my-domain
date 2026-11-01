@@ -219,3 +219,65 @@ fn shared_notification_is_posted_on_peer() {
     b.sink
         .assert_no_message("Battery low", Duration::from_millis(200));
 }
+
+// ---------------------------------------------------------------------------
+// TCP receiver hardening
+// ---------------------------------------------------------------------------
+
+/// A correctly encrypted envelope for `text`, as JSON bytes, using the key
+/// every TestNode shares.
+fn valid_envelope_json(text: &str) -> Vec<u8> {
+    let key =
+        mdcore::crypto::derive_key(md_testkit::TEST_PASSPHRASE, md_testkit::TEST_USER).unwrap();
+    let pt = serde_json::to_vec(&mdcore::model::Plaintext {
+        from: "raw".into(),
+        text: text.into(),
+    })
+    .unwrap();
+    serde_json::to_vec(&mdcore::crypto::encrypt(&key, &pt).unwrap()).unwrap()
+}
+
+fn raw_tcp_send(to: &TestNode, body: &[u8]) {
+    use std::io::Write;
+    let port = to.engine.identity().tcp_port;
+    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    // The receiver may close early once it has read past the cap.
+    let _ = s.write_all(body);
+}
+
+#[test]
+fn raw_tcp_envelope_is_delivered() {
+    // Sanity check for the helpers below.
+    let b = TestNode::start("tcp-raw-b");
+    raw_tcp_send(&b, &valid_envelope_json("via raw tcp"));
+    assert_eq!(b.sink.wait_for_message("via raw tcp").protocol, "TCP");
+}
+
+#[test]
+fn oversized_tcp_message_is_rejected() {
+    // Regression: the receiver used read_to_end with no limit. A valid
+    // envelope followed by >4 MiB of JSON whitespace parses fine, so before
+    // the cap this WAS delivered (after buffering everything in memory).
+    let b = TestNode::start("tcp-big-b");
+    let mut body = valid_envelope_json("too big");
+    body.resize(body.len() + 4 * 1024 * 1024 + 16, b' ');
+    raw_tcp_send(&b, &body);
+    b.sink
+        .assert_no_message("too big", Duration::from_millis(1500));
+
+    // ...and the receiver still works afterwards.
+    raw_tcp_send(&b, &valid_envelope_json("still alive"));
+    b.sink.wait_for_message("still alive");
+}
+
+#[test]
+fn idle_tcp_connections_do_not_block_other_senders() {
+    let b = TestNode::start("tcp-idle-b");
+    let port = b.engine.identity().tcp_port;
+    // Ten connections that never send anything (and never close).
+    let _idle: Vec<_> = (0..10)
+        .map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).unwrap())
+        .collect();
+    raw_tcp_send(&b, &valid_envelope_json("not blocked"));
+    b.sink.wait_for_message("not blocked");
+}

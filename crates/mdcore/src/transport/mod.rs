@@ -326,23 +326,66 @@ pub fn send_payload(
     }
 }
 
+/// Largest TCP message body we accept. A message is one JSON envelope (base64
+/// ciphertext), so 4 MiB leaves room for a ~2.9 MiB plaintext.
+pub(crate) const MAX_TCP_MESSAGE: u64 = 4 * 1024 * 1024;
+/// A sender must deliver its whole message within this time.
+const TCP_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+/// At most this many inbound TCP messages are read concurrently; extra
+/// connections are closed immediately instead of each getting a thread.
+const MAX_TCP_IN_FLIGHT: usize = 128;
+
+/// Accept loop for directed-TCP messages: one short-lived connection per
+/// message (the sender writes one envelope, then closes).
+///
+/// Defences (each used to be missing): a size cap on the body, a read timeout
+/// so an idle connection can't hold a thread forever, and a cap on concurrent
+/// readers so a connection flood can't exhaust threads.
 pub fn tcp_recv_loop<P: Platform>(listener: TcpListener, ctx: NetCtx<P>) {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let in_flight = Arc::new(AtomicUsize::new(0));
     for stream in listener.incoming() {
-        let Ok(mut stream) = stream else { continue };
+        let mut stream = match stream {
+            Ok(s) => s,
+            // e.g. EMFILE (out of file descriptors): back off instead of spinning.
+            Err(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                continue;
+            }
+        };
+        if in_flight.fetch_add(1, Ordering::AcqRel) >= MAX_TCP_IN_FLIGHT {
+            in_flight.fetch_sub(1, Ordering::AcqRel);
+            continue; // dropping `stream` closes it
+        }
         let ctx = ctx.clone();
+        let in_flight = in_flight.clone();
         std::thread::spawn(move || {
-            let ip = stream
-                .peer_addr()
-                .map(|a| a.ip().to_string())
-                .unwrap_or_default();
-            let mut buf = Vec::new();
-            if stream.read_to_end(&mut buf).is_err() {
-                return;
-            }
-            if let Ok(env) = serde_json::from_slice::<Envelope>(&buf) {
-                handle_incoming(&ctx, &env, ip, "TCP");
-            }
+            read_tcp_message(&mut stream, &ctx);
+            in_flight.fetch_sub(1, Ordering::AcqRel);
         });
+    }
+}
+
+fn read_tcp_message<P: Platform>(stream: &mut TcpStream, ctx: &NetCtx<P>) {
+    let ip = stream
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or_default();
+    if stream.set_read_timeout(Some(TCP_READ_TIMEOUT)).is_err() {
+        return;
+    }
+    // Read at most one byte past the cap so an oversized body is detectable.
+    let mut buf = Vec::new();
+    if (&mut *stream)
+        .take(MAX_TCP_MESSAGE + 1)
+        .read_to_end(&mut buf)
+        .is_err()
+        || buf.len() as u64 > MAX_TCP_MESSAGE
+    {
+        return;
+    }
+    if let Ok(env) = serde_json::from_slice::<Envelope>(&buf) {
+        handle_incoming(ctx, &env, ip, "TCP");
     }
 }
 
