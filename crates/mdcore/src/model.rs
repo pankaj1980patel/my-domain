@@ -4,7 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 /// This device's own endpoints, advertised to peers and the registry.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Identity {
     pub node_id: String,
     pub name: String,
@@ -37,7 +37,7 @@ pub enum Source {
 }
 
 /// A known peer device.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct Peer {
     pub node_id: String,
     pub name: String,
@@ -73,7 +73,7 @@ pub struct Envelope {
 }
 
 /// A message surfaced to the UI.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Debug, Serialize)]
 pub struct IncomingMessage {
     pub from: String,
     pub ip: String,

@@ -1,0 +1,13 @@
+[package]
+name = "md-testkit"
+description = "Test helpers for my-domain: a fake Platform, an event recorder, and multi-node harnesses. Only used from tests (dev-dependency)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+mdcore = { workspace = true }
+
+[lints]
+workspace = true

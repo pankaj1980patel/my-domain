@@ -3453,12 +3453,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-testkit"
+version = "0.1.0"
+dependencies = [
+ "mdcore",
+]
+
+[[package]]
 name = "mdcore"
 version = "0.1.0"
 dependencies = [
  "argon2",
  "base64 0.22.1",
  "chacha20poly1305",
+ "md-testkit",
  "rand_core 0.6.4",
  "serde",
  "serde_json",

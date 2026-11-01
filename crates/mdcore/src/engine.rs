@@ -654,6 +654,19 @@ impl<P: Platform> Engine<P> {
         Ok(())
     }
 
+    /// Insert or replace a fully-described peer, keyed by its real `node_id`.
+    /// Unlike `add_manual_peer` (which only knows an IP and keys the entry
+    /// `manual:<ip>`), replies such as clipboard responses and WS links are
+    /// routed by node_id, so they reach a peer added this way. Used by tests
+    /// today and by QR/code pairing later.
+    pub fn upsert_peer(&self, peer: Peer) {
+        self.peers
+            .lock()
+            .unwrap()
+            .insert(peer.node_id.clone(), peer);
+        self.emit_peers();
+    }
+
     pub fn remove_peer(&self, node_id: &str) {
         self.peers.lock().unwrap().remove(node_id);
         self.emit_peers();

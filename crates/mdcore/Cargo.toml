@@ -33,3 +33,6 @@ tungstenite = { version = "0.24", default-features = false, features = ["handsha
 # Lightweight, sans-IO WebRTC for the final connect rung. RustCrypto backend
 # only (no aws-lc/openssl) so it cross-compiles cleanly (incl. android NDK).
 str0m = { version = "0.21", default-features = false, features = ["rust-crypto"], optional = true }
+
+[dev-dependencies]
+md-testkit = { workspace = true }

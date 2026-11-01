@@ -9,7 +9,7 @@
 use crate::model::{IncomingMessage, Peer};
 use crate::transport::TransportKind;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum CoreEvent {
     /// The peer list changed (discovery, registry refresh, manual add/remove).
     PeersUpdated { peers: Vec<Peer> },
