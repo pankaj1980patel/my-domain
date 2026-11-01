@@ -73,3 +73,11 @@ cargo test --workspace --locked
 - `scripts/lab/android.sh install`: **BUILD SUCCESSFUL in 13m 17s**. That's a cold build: the Rust core compiled for 4 ABIs, and the x86/x86_64 ones also compile C code with clang. The APK was installed on the I2405 and launched. Later builds reuse `target/` and are much faster.
 - Added a live log. Every lab command appends to `~/my-domain-lab.log` on the laptop. Follow it with `tail -f` there, or with `scripts/lab/watch.sh` from the Mac.
 - Gotcha: `node` on the laptop fails with `libabsl_raw_hash_set.so… not found`. That's a partial upgrade on Manjaro; `sudo pacman -Syu` fixes it. It only matters for running the desktop app on Linux.
+
+## Update — laptop system upgrade (same day)
+- `node` was broken by a **partial upgrade**: `nodejs` 26 had been upgraded on its own and needed glibc 2.44 and a newer abseil than the rest of the system had. On Arch/Manjaro, never upgrade one package alone (`pacman -S pkg`); always `pacman -Syu`.
+- The first `-Syu` failed during dependency resolution (nothing was changed): `lib32-audit` was pinned to `audit=4.1.4`. The `lib32-libcap → lib32-pam → lib32-audit` chain (plus `lib32-libnsl`, `lib32-libtirpc`) had been dropped from Manjaro's repos, and nothing installed used them. Removed with `pacman -Rs` after a `--print` dry run.
+- Faster downloads: Manjaro has no mirror in India. Response-time ranking (`pacman-mirrors --country …`) isn't download speed, so the candidates were measured with `curl -w %{speed_download}`. The global CDN mirrors ran at ~2.4 MB/s against 0.4 MB/s for the previous first mirror (Bangladesh). The mirrorlist is now in speed order, and `ParallelDownloads = 10`. Backups: `*.bak-mydomain` in `/etc`.
+- Interrupting pacman is safe **only during the download phase**. Downloads resume from the package cache; killing it mid-install can leave a broken system.
+- The new kernel 6.12.112 needed `linux612-headers` so the `openrazer-driver` DKMS module could build.
+- Left for the owner: `/etc/default/grub.pacnew` and `/etc/lightdm/lightdm.conf.pacnew` (new default configs to merge by hand), and a **reboot** into the new kernel.
