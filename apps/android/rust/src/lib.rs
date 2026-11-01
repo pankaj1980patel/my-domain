@@ -96,8 +96,11 @@ impl InboxSink {
 
 impl EventSink for InboxSink {
     fn emit(&self, ev: CoreEvent) {
-        // Peers/WS-state are read directly off the Engine by the poll shims; chat
-        // goes to the message inbox; feature events go to the events inbox.
+        // Chat goes to the message inbox; feature events go to the events inbox
+        // as mdcore's kind-tagged JSON. Peers/WS state are read directly off the
+        // Engine by the poll shims, and clipboard sync is handled in Kotlin, so
+        // those events aren't queued. (Phase 3 replaces polling with UniFFI
+        // callbacks that deliver every event.)
         match ev {
             CoreEvent::MessageReceived(m) => {
                 let mut q = self.messages.lock().unwrap();
@@ -106,19 +109,10 @@ impl EventSink for InboxSink {
                 }
                 q.push_back(m);
             }
-            CoreEvent::Notification { from, title, body, app } => self.push_event(serde_json::json!({
-                "kind": "notification", "from": from, "title": title, "body": body, "app": app,
-            })),
-            CoreEvent::CallNotification { from, caller, number, state } => self.push_event(serde_json::json!({
-                "kind": "call_notification", "from": from, "caller": caller, "number": number, "state": state,
-            })),
-            CoreEvent::CallHistory { from, entries } => self.push_event(serde_json::json!({
-                "kind": "call_history", "from": from, "entries": entries,
-            })),
-            CoreEvent::AppsList { from, apps, subscribed } => self.push_event(serde_json::json!({
-                "kind": "apps_list", "from": from, "apps": apps, "subscribed": subscribed,
-            })),
-            // Clipboard sync + peer/WS changes are not used on android today.
+            CoreEvent::Notification { .. }
+            | CoreEvent::CallNotification { .. }
+            | CoreEvent::CallHistory { .. }
+            | CoreEvent::AppsList { .. } => self.push_event(ev.to_json()),
             _ => {}
         }
     }

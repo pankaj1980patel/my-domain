@@ -172,88 +172,9 @@ struct TauriSink {
 
 impl EventSink for TauriSink {
     fn emit(&self, ev: CoreEvent) {
-        match ev {
-            CoreEvent::PeersUpdated { peers } => {
-                let _ = self.app.emit("peers-updated", peers);
-            }
-            CoreEvent::MessageReceived(msg) => {
-                let _ = self.app.emit("message-received", msg);
-            }
-            CoreEvent::WsConnected { node_id } => {
-                let _ = self.app.emit("ws-connected", node_id);
-            }
-            CoreEvent::WsDisconnected { node_id } => {
-                let _ = self.app.emit("ws-disconnected", node_id);
-            }
-            CoreEvent::PeerConnected { node_id, transport } => {
-                let _ = self.app.emit(
-                    "peer-connected",
-                    serde_json::json!({ "node_id": node_id, "transport": transport }),
-                );
-            }
-            CoreEvent::PeerDisconnected { node_id } => {
-                let _ = self.app.emit("peer-disconnected", node_id);
-            }
-            CoreEvent::ConnectProgress {
-                node_id,
-                stage,
-                detail,
-            } => {
-                let _ = self.app.emit(
-                    "connect-progress",
-                    serde_json::json!({ "node_id": node_id, "stage": stage, "detail": detail }),
-                );
-            }
-            CoreEvent::Clipboard {
-                from,
-                ip,
-                protocol,
-                action,
-            } => {
-                let _ = self.app.emit(
-                    "clipboard-event",
-                    serde_json::json!({ "from": from, "ip": ip, "protocol": protocol, "action": action }),
-                );
-            }
-            CoreEvent::Notification {
-                from,
-                title,
-                body,
-                app,
-            } => {
-                let _ = self.app.emit(
-                    "notification-event",
-                    serde_json::json!({ "from": from, "title": title, "body": body, "app": app }),
-                );
-            }
-            CoreEvent::CallNotification {
-                from,
-                caller,
-                number,
-                state,
-            } => {
-                let _ = self.app.emit(
-                    "call-notification-event",
-                    serde_json::json!({ "from": from, "caller": caller, "number": number, "state": state }),
-                );
-            }
-            CoreEvent::CallHistory { from, entries } => {
-                let _ = self.app.emit(
-                    "call-history-event",
-                    serde_json::json!({ "from": from, "entries": entries }),
-                );
-            }
-            CoreEvent::AppsList {
-                from,
-                apps,
-                subscribed,
-            } => {
-                let _ = self.app.emit(
-                    "apps-list-event",
-                    serde_json::json!({ "from": from, "apps": apps, "subscribed": subscribed }),
-                );
-            }
-        }
+        // Event names and payload shapes are defined (and contract-tested) in
+        // mdcore::events, so this adapter no longer hand-builds JSON per event.
+        let _ = self.app.emit(ev.name(), ev.ui_payload());
     }
 }
 

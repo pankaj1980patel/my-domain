@@ -6,10 +6,18 @@
 //! The Engine only ever calls `EventSink::emit`; the adapter decides how it
 //! reaches the UI.
 
+use serde::Serialize;
+use serde_json::Value;
+
 use crate::model::{IncomingMessage, Peer};
 use crate::transport::TransportKind;
 
-#[derive(Clone, Debug)]
+/// Serializes as an *internally tagged* object: the variant name goes into a
+/// `"kind"` field next to the variant's own fields, e.g.
+/// `{"kind":"notification","from":"…","title":"…","body":"…","app":null}`.
+/// (Node analogy: a discriminated union with `kind` as the discriminant.)
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CoreEvent {
     /// The peer list changed (discovery, registry refresh, manual add/remove).
     PeersUpdated { peers: Vec<Peer> },
@@ -69,6 +77,116 @@ pub enum CoreEvent {
     },
 }
 
+impl CoreEvent {
+    /// The tagged JSON form (`{"kind": ..., ...}`). This is what the Android
+    /// app consumes.
+    pub fn to_json(&self) -> Value {
+        serde_json::to_value(self).unwrap_or(Value::Null)
+    }
+
+    /// Event name the desktop UI listens for (`listen("peers-updated", …)`).
+    pub fn name(&self) -> &'static str {
+        match self {
+            CoreEvent::PeersUpdated { .. } => "peers-updated",
+            CoreEvent::MessageReceived(_) => "message-received",
+            CoreEvent::WsConnected { .. } => "ws-connected",
+            CoreEvent::WsDisconnected { .. } => "ws-disconnected",
+            CoreEvent::PeerConnected { .. } => "peer-connected",
+            CoreEvent::PeerDisconnected { .. } => "peer-disconnected",
+            CoreEvent::ConnectProgress { .. } => "connect-progress",
+            CoreEvent::Clipboard { .. } => "clipboard-event",
+            CoreEvent::Notification { .. } => "notification-event",
+            CoreEvent::CallNotification { .. } => "call-notification-event",
+            CoreEvent::CallHistory { .. } => "call-history-event",
+            CoreEvent::AppsList { .. } => "apps-list-event",
+        }
+    }
+
+    /// Payload shape the desktop UI expects for `name()`. Mostly the variant's
+    /// fields as an object (no `kind`), except a few events that have always
+    /// carried a bare value: the peer list, the message, or a node id string.
+    pub fn ui_payload(&self) -> Value {
+        match self {
+            CoreEvent::PeersUpdated { peers } => serde_json::to_value(peers).unwrap_or(Value::Null),
+            CoreEvent::MessageReceived(m) => serde_json::to_value(m).unwrap_or(Value::Null),
+            CoreEvent::WsConnected { node_id }
+            | CoreEvent::WsDisconnected { node_id }
+            | CoreEvent::PeerDisconnected { node_id } => Value::String(node_id.clone()),
+            _ => {
+                let mut v = self.to_json();
+                if let Value::Object(fields) = &mut v {
+                    fields.remove("kind");
+                }
+                v
+            }
+        }
+    }
+}
+
 pub trait EventSink: Send + Sync + 'static {
     fn emit(&self, ev: CoreEvent);
+}
+
+#[cfg(test)]
+mod tests {
+    //! These JSON shapes are a contract with the desktop JS (`listen(...)`) and
+    //! the Android Kotlin (`o.optString("kind")`). Change them only together
+    //! with those apps.
+    use super::*;
+    use serde_json::json;
+
+    fn notification() -> CoreEvent {
+        CoreEvent::Notification {
+            from: "phone".into(),
+            title: "Hi".into(),
+            body: "there".into(),
+            app: None,
+        }
+    }
+
+    #[test]
+    fn android_gets_a_kind_tagged_object() {
+        assert_eq!(
+            notification().to_json(),
+            json!({"kind": "notification", "from": "phone", "title": "Hi", "body": "there", "app": null})
+        );
+        let call = CoreEvent::CallNotification {
+            from: "p".into(),
+            caller: "Mom".into(),
+            number: Some("+1".into()),
+            state: "ringing".into(),
+        };
+        assert_eq!(call.to_json()["kind"], "call_notification");
+    }
+
+    #[test]
+    fn desktop_gets_the_same_fields_without_kind() {
+        assert_eq!(notification().name(), "notification-event");
+        assert_eq!(
+            notification().ui_payload(),
+            json!({"from": "phone", "title": "Hi", "body": "there", "app": null})
+        );
+    }
+
+    #[test]
+    fn desktop_bare_value_events_keep_their_shape() {
+        let ev = CoreEvent::WsConnected {
+            node_id: "n1".into(),
+        };
+        assert_eq!((ev.name(), ev.ui_payload()), ("ws-connected", json!("n1")));
+        let ev = CoreEvent::PeersUpdated { peers: vec![] };
+        assert_eq!((ev.name(), ev.ui_payload()), ("peers-updated", json!([])));
+    }
+
+    #[test]
+    fn peer_connected_carries_a_lowercase_transport() {
+        let ev = CoreEvent::PeerConnected {
+            node_id: "n1".into(),
+            transport: TransportKind::WebRtc,
+        };
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"node_id": "n1", "transport": "webrtc"})
+        );
+    }
 }
