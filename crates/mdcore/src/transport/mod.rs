@@ -7,6 +7,7 @@
 
 pub mod punch;
 pub mod quic;
+pub mod relay;
 #[cfg(feature = "webrtc")]
 pub mod rtc;
 pub mod ws;
@@ -50,6 +51,7 @@ pub enum TransportKind {
     Punch,
     WebRtc,
     Quic,
+    Relay,
 }
 
 /// A live peer-to-peer link. `last_seen` drives heartbeat staleness for the

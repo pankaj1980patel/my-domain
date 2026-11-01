@@ -23,7 +23,9 @@
 #![allow(clippy::unwrap_used)]
 
 mod registry;
+mod relay;
 pub use registry::FakeRegistry;
+pub use relay::FakeRelay;
 
 use std::collections::HashMap;
 use std::net::Ipv4Addr;

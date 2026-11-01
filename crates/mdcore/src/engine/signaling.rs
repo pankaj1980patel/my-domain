@@ -205,6 +205,20 @@ impl<P: Platform> Engine<P> {
                     let _ = tx.send(sdp);
                 }
             }
+            // Peer can't reach us directly: meet it on the server relay.
+            Signal::RelayOffer { .. } => {
+                let ctx = self.net_ctx();
+                let from = from.to_string();
+                let target = relay_target(&ctx, &self.server_url, &self.token);
+                std::thread::spawn(move || {
+                    if let Some((url, token)) = target {
+                        if transport::relay::ensure_relay(&ctx, &url, &token).is_ok() {
+                            transport::relay::add_relay_link(&ctx, &from);
+                            transport::relay::send_hello(&ctx, &from);
+                        }
+                    }
+                });
+            }
             // Teardown.
             Signal::Bye { .. } => {
                 transport::drop_live(&self.net_ctx(), from);
@@ -239,4 +253,19 @@ pub(super) fn send_signal_via<P: Platform>(
     let tok = token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
     let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
     crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(Into::into)
+}
+
+/// Where to reach the relay and with which session token, or `None` if we
+/// aren't logged in to a server (or its URL can't carry a relay).
+pub(super) fn relay_target<P: Platform>(
+    ctx: &NetCtx<P>,
+    server_url: &Arc<Mutex<Option<String>>>,
+    token: &Arc<Mutex<Option<String>>>,
+) -> Option<(String, String)> {
+    let token = token.lock().clone()?;
+    let url = match &ctx.config.relay_url {
+        Some(u) => u.clone(),
+        None => transport::relay::relay_url_for(&server_url.lock().clone()?).ok()?,
+    };
+    Some((url, token))
 }

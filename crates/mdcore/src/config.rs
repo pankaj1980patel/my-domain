@@ -26,6 +26,8 @@ pub struct ConnectRungs {
     pub punch: bool,
     /// 5. WebRTC data channel (needs the `webrtc` cargo feature).
     pub webrtc: bool,
+    /// 6. Relay through the registry server's WebSocket `/relay`.
+    pub relay: bool,
 }
 
 impl Default for ConnectRungs {
@@ -37,6 +39,7 @@ impl Default for ConnectRungs {
             signaled_ws: true,
             punch: true,
             webrtc: true,
+            relay: true,
         }
     }
 }
@@ -51,6 +54,7 @@ impl ConnectRungs {
             signaled_ws: false,
             punch: false,
             webrtc: false,
+            relay: false,
         }
     }
 }
@@ -66,6 +70,10 @@ pub struct CoreConfig {
     /// (if it advertises a QUIC port) and send over that, instead of a lone
     /// UDP datagram / TCP connection. The link is then reused.
     pub auto_quic: bool,
+    /// Relay WebSocket URL. `None` = derive from the server URL
+    /// (`http://host:port` -> `ws://host:port/relay`). Tests point this at a
+    /// fake relay.
+    pub relay_url: Option<String>,
 }
 
 impl Default for CoreConfig {
@@ -74,6 +82,7 @@ impl Default for CoreConfig {
             stun_servers: vec!["stun.l.google.com:19302".into()],
             rungs: ConnectRungs::default(),
             auto_quic: true,
+            relay_url: None,
         }
     }
 }

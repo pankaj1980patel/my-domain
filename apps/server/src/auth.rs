@@ -86,17 +86,30 @@ impl FromRequestParts<AppState> for AuthUser {
             .and_then(|h| h.to_str().ok())
             .and_then(|h| h.strip_prefix("Bearer "))
             .ok_or(AppError::Unauthorized)?;
-        let data = decode::<Claims>(
-            token,
-            &DecodingKey::from_secret(state.jwt_secret.as_bytes()),
-            &Validation::default(),
-        )
-        .map_err(|_| AppError::Unauthorized)?;
-        Ok(AuthUser {
-            user_id: data.claims.sub,
-            username: data.claims.username,
-        })
+        verify_token(&state.jwt_secret, token).ok_or(AppError::Unauthorized)
     }
+}
+
+/// Check a session token (signature + expiry) and return who it belongs to.
+/// Shared by the HTTP `Authorization` extractor and the WebSocket relay, where
+/// the token arrives in the first frame instead of a header.
+pub fn verify_token(secret: &str, token: &str) -> Option<AuthUser> {
+    let data = decode::<Claims>(
+        token,
+        &DecodingKey::from_secret(secret.as_bytes()),
+        &Validation::default(),
+    )
+    .ok()?;
+    Some(AuthUser {
+        user_id: data.claims.sub,
+        username: data.claims.username,
+    })
+}
+
+/// Issue a token (for tests that need a valid session without MongoDB).
+#[cfg(test)]
+pub fn issue_token(secret: &str, user_id: &str, username: &str) -> Option<String> {
+    make_token(secret, user_id, username).ok()
 }
 
 #[derive(Deserialize)]

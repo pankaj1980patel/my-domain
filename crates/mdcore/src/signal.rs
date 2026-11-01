@@ -65,14 +65,10 @@ pub enum Signal {
         reason: String,
     },
 
-    /// TURN relay fallback with ephemeral credentials.
+    /// "Join the server relay and say hello to me": the last-resort path when
+    /// nothing direct works (see transport/relay.rs). The reply is the peer's
+    /// `Hello` arriving through the relay, not another signal.
     RelayOffer {
-        sid: String,
-        turn_uri: String,
-        username: String,
-        credential: String,
-    },
-    RelayAnswer {
         sid: String,
     },
 

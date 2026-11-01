@@ -9,6 +9,7 @@ mod devices;
 mod error;
 mod fcm;
 mod models;
+mod relay;
 mod signal;
 mod state;
 
@@ -90,6 +91,7 @@ async fn main() -> anyhow::Result<()> {
     if fcm.is_none() {
         tracing::warn!("FCM not configured (set FCM_SA_JSON or GOOGLE_APPLICATION_CREDENTIALS); /signal disabled");
     }
+    let relay = relay::router(relay::RelayState::new(jwt_secret.clone()));
     let state = AppState {
         db,
         jwt_secret,
@@ -108,8 +110,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/devices/probe", post(devices::probe))
         .route("/signal", post(signal::relay))
         .route("/signal/selfping", post(signal::selfping))
-        .layer(CorsLayer::permissive())
-        .with_state(state);
+        .with_state(state)
+        // WebSocket relay (own state: needs only the JWT secret).
+        .merge(relay)
+        .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(addr).await?;

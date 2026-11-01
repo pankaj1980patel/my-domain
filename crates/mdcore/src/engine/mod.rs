@@ -93,6 +93,8 @@ pub struct NetCtx<P: Platform> {
     pub shutdown: Arc<AtomicBool>,
     /// Dial/accept QUIC connections (the runtime itself is owned by `Engine`).
     pub quic: transport::quic::QuicLink,
+    /// The relay WebSocket to the server, when open (last-resort path).
+    pub relay: Arc<Mutex<Option<transport::relay::RelayConn>>>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -120,6 +122,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             signaler: self.signaler.clone(),
             shutdown: self.shutdown.clone(),
             quic: self.quic.clone(),
+            relay: self.relay.clone(),
         }
     }
 }
@@ -258,6 +261,7 @@ impl<P: Platform> Engine<P> {
             signaler: Arc::default(),
             shutdown: Arc::default(),
             quic: quic.link(),
+            relay: Arc::default(),
         };
 
         // Direct messaging receivers.
@@ -354,6 +358,7 @@ impl<P: Platform> Engine<P> {
                 Punch => "punch",
                 WebRtc => "webrtc",
                 Quic => "QUIC",
+                Relay => "relay",
             }
             .to_string();
         }

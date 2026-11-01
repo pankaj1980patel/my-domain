@@ -2,7 +2,7 @@
 //! rung by rung (LAN UDP, direct WS, signaled WS, hole punch, WebRTC).
 //! See learnings/01-architecture.md.
 
-use super::signaling::send_signal_via;
+use super::signaling::{relay_target, send_signal_via};
 use super::*;
 
 impl<P: Platform> Engine<P> {
@@ -231,6 +231,30 @@ fn run_connect_ladder<P: Platform>(
                 }
             } else {
                 ctx.rtc_waiters.lock().remove(&sid);
+            }
+        }
+    }
+
+    // Rung 6 — relay through the server: always reachable if the server is.
+    // Both sides open a WebSocket to /relay; the server forwards frames
+    // (ciphertext) between them.
+    if rungs.relay {
+        if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
+            emit("relay", None);
+            if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
+                transport::relay::add_relay_link(&ctx, &node_id);
+                let sid = uuid::Uuid::new_v4().to_string();
+                let _ = send_signal_via(
+                    &server_url,
+                    &token,
+                    &ctx,
+                    &node_id,
+                    &Signal::RelayOffer { sid },
+                );
+                transport::relay::send_hello(&ctx, &node_id);
+                if wait_live(&ctx, &node_id, 8000) {
+                    return;
+                }
             }
         }
     }
