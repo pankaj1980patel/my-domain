@@ -27,7 +27,7 @@
 //! engine's synchronous outgoing queue (`std::sync::mpsc`) into an async one.
 
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -90,6 +90,34 @@ pub struct QuicLink {
     conns: PeerConns,
 }
 
+/// One UDP socket for both IP versions: IPv6 with IPv4-mapped addresses
+/// allowed (`[::]:0`, v6only off), so we can dial and accept IPv4 and IPv6
+/// peers on one port. Falls back to IPv4-only where IPv6 is disabled.
+fn bind_udp() -> std::io::Result<std::net::UdpSocket> {
+    use socket2::{Domain, Protocol, Socket, Type};
+    let dual = (|| {
+        let s = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
+        s.set_only_v6(false)?;
+        s.bind(&SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0).into())?;
+        Ok::<_, std::io::Error>(s)
+    })();
+    let sock = match dual {
+        Ok(s) => s,
+        Err(_) => {
+            let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+            s.bind(&SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0).into())?;
+            s
+        }
+    };
+    sock.set_nonblocking(true)?;
+    Ok(sock.into())
+}
+
+/// `::ffff:1.2.3.4` (how a dual-stack socket sees IPv4 peers) -> `1.2.3.4`.
+fn canonical(addr: SocketAddr) -> SocketAddr {
+    SocketAddr::new(addr.ip().to_canonical(), addr.port())
+}
+
 impl QuicNode {
     /// Create the runtime, a self-signed cert, and an endpoint bound to an
     /// ephemeral UDP port on all interfaces.
@@ -101,9 +129,11 @@ impl QuicNode {
             .build()?;
         let endpoint = {
             let _guard = runtime.enter(); // quinn needs a runtime context to bind
-            let mut ep = Endpoint::server(
-                server_config().map_err(std::io::Error::other)?,
-                SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0),
+            let mut ep = Endpoint::new(
+                quinn::EndpointConfig::default(),
+                Some(server_config().map_err(std::io::Error::other)?),
+                bind_udp()?,
+                Arc::new(quinn::TokioRuntime),
             )?;
             ep.set_default_client_config(client_config().map_err(std::io::Error::other)?);
             ep
@@ -170,18 +200,52 @@ impl QuicLink {
     /// Dial `ip:port` and run the link in the background. Blocks only for the
     /// handshake (at most `CONNECT_TIMEOUT`), so callers learn whether it
     /// worked. Call from a normal thread, not from inside the runtime.
+    /// Dial one address (see `connect_any`).
     pub fn connect<P: Platform>(&self, ctx: NetCtx<P>, ip: &str, port: u16) -> Result<(), String> {
-        let ip: Ipv4Addr = ip.parse().map_err(|_| "bad peer ip")?;
-        let addr = SocketAddr::new(ip.into(), port);
+        let ip: IpAddr = ip.trim().parse().map_err(|_| "bad peer ip")?;
+        self.connect_any(ctx, &[ip], port)
+    }
+
+    /// Dial the peer at every address at once (e.g. its IPv6 and its IPv4)
+    /// and keep the first connection that completes the handshake; the other
+    /// attempts are dropped. Blocks for at most `CONNECT_TIMEOUT`.
+    pub fn connect_any<P: Platform>(
+        &self,
+        ctx: NetCtx<P>,
+        ips: &[IpAddr],
+        port: u16,
+    ) -> Result<(), String> {
+        if ips.is_empty() {
+            return Err("no address to dial".into());
+        }
+        let addrs: Vec<SocketAddr> = ips.iter().map(|ip| SocketAddr::new(*ip, port)).collect();
         let endpoint = self.endpoint.clone();
         let conn = self.rt.block_on(async move {
-            let connecting = endpoint
-                .connect(addr, "mydomain")
-                .map_err(|e| format!("QUIC connect failed: {e}"))?;
-            tokio::time::timeout(CONNECT_TIMEOUT, connecting)
-                .await
-                .map_err(|_| "QUIC connect timed out".to_string())?
-                .map_err(|e| format!("QUIC handshake failed: {e}"))
+            let mut attempts = tokio::task::JoinSet::new();
+            for addr in addrs {
+                let ep = endpoint.clone();
+                attempts.spawn(async move {
+                    let connecting = ep
+                        .connect(addr, "mydomain")
+                        .map_err(|e| format!("QUIC connect to {addr} failed: {e}"))?;
+                    tokio::time::timeout(CONNECT_TIMEOUT, connecting)
+                        .await
+                        .map_err(|_| format!("QUIC connect to {addr} timed out"))?
+                        .map_err(|e| format!("QUIC handshake with {addr} failed: {e}"))
+                });
+            }
+            let mut last_err = String::from("QUIC connect failed");
+            while let Some(done) = attempts.join_next().await {
+                match done {
+                    Ok(Ok(conn)) => {
+                        attempts.abort_all(); // the losers are dropped (closed)
+                        return Ok(conn);
+                    }
+                    Ok(Err(e)) => last_err = e,
+                    Err(_) => {}
+                }
+            }
+            Err(last_err)
         })?;
         self.rt
             .spawn(run_connection(conn, ctx, true, TransportKind::Quic));
@@ -278,7 +342,7 @@ async fn run_connection<P: Platform>(
     // different address: then the peer moved networks and the old link is
     // stale, so the new one replaces it.
     let my_conn_id = QUIC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
-    let remote = conn.remote_address();
+    let remote = canonical(conn.remote_address());
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     {
         let mut g = ctx.ws_conns.lock();

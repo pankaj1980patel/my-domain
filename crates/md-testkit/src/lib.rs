@@ -142,6 +142,9 @@ impl Platform for MockPlatform {
     fn local_ip(&self) -> String {
         Ipv4Addr::LOCALHOST.to_string()
     }
+    fn local_ipv6(&self) -> Option<String> {
+        None // deterministic tests: never publish the host's real IPv6
+    }
     fn kv_get(&self, key: &str) -> Option<String> {
         self.kv.lock().unwrap().get(key).cloned()
     }
@@ -382,6 +385,7 @@ impl TestNode {
             reflexive_ip: None,
             reflexive_udp_port: None,
             nat: self.engine.nat_kind(),
+            ipv6: None,
         }
     }
 

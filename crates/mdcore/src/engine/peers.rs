@@ -18,7 +18,7 @@ pub(crate) fn register_self<P: Platform>(
         &id,
         ctx.platform.fcm_token().as_deref(),
         ctx.platform.platform_kind(),
-        false,
+        id.ipv6.is_some(),
         nat,
     )
 }
@@ -58,6 +58,7 @@ fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, devices: Vec<RegistryDevic
                     reflexive_ip: d.reflexive_ip,
                     reflexive_udp_port: d.reflexive_udp_port,
                     nat: d.nat.as_deref().map(NatKind::parse).unwrap_or_default(),
+                    ipv6: d.ipv6,
                 },
             );
         }
@@ -125,6 +126,7 @@ impl<P: Platform> Engine<P> {
                 reflexive_ip: None,
                 reflexive_udp_port: None,
                 nat: NatKind::Unknown,
+                ipv6: None,
             },
         );
         self.emit_peers();

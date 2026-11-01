@@ -15,6 +15,10 @@ pub struct Identity {
     /// QUIC endpoint (UDP) port. 0 = no QUIC (older builds).
     #[serde(default)]
     pub quic_port: u16,
+    /// Global IPv6 address, if this device has one. Often directly reachable
+    /// (many mobile networks give phones public IPv6 with no NAT).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ipv6: Option<String>,
 }
 
 /// LAN discovery beacon (UDP datagram body).
@@ -68,6 +72,26 @@ pub struct Peer {
     /// The peer's NAT type from the registry (`Unknown` for LAN/manual peers).
     #[serde(default)]
     pub nat: crate::nat::NatKind,
+    /// The peer's global IPv6 address (from the registry), dialed in parallel
+    /// with `ip`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ipv6: Option<String>,
+}
+
+impl Peer {
+    /// Addresses to dial for this peer's QUIC port, IPv6 first (no NAT in
+    /// the way, when it exists). Unparseable or duplicate entries are skipped.
+    pub fn quic_targets(&self) -> Vec<std::net::IpAddr> {
+        let mut out = Vec::new();
+        for s in self.ipv6.iter().chain(std::iter::once(&self.ip)) {
+            if let Ok(ip) = s.trim().parse::<std::net::IpAddr>() {
+                if !out.contains(&ip) {
+                    out.push(ip);
+                }
+            }
+        }
+        out
+    }
 }
 
 /// Decrypted message body.
@@ -103,4 +127,55 @@ pub enum WsFrame {
     Hello { node_id: String, name: String },
     #[serde(rename = "msg")]
     Msg { nonce: String, ciphertext: String },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::IpAddr;
+
+    fn peer(ip: &str, ipv6: Option<&str>) -> Peer {
+        Peer {
+            node_id: "n".into(),
+            name: "n".into(),
+            ip: ip.into(),
+            tcp_port: 1,
+            udp_port: 2,
+            ws_port: 3,
+            quic_port: 4,
+            source: Source::Registry,
+            ws_open: false,
+            inbound_blocked: false,
+            reflexive_ip: None,
+            reflexive_udp_port: None,
+            nat: Default::default(),
+            ipv6: ipv6.map(String::from),
+        }
+    }
+
+    fn ips(v: &[&str]) -> Vec<IpAddr> {
+        v.iter().map(|s| s.parse().unwrap()).collect()
+    }
+
+    #[test]
+    fn quic_targets_try_ipv6_first_then_ipv4() {
+        assert_eq!(
+            peer("192.168.1.5", Some("2409:4040::7")).quic_targets(),
+            ips(&["2409:4040::7", "192.168.1.5"])
+        );
+        assert_eq!(
+            peer("192.168.1.5", None).quic_targets(),
+            ips(&["192.168.1.5"])
+        );
+    }
+
+    #[test]
+    fn quic_targets_skip_garbage_and_duplicates() {
+        assert_eq!(
+            peer("not-an-ip", Some(" ::1 ")).quic_targets(),
+            ips(&["::1"])
+        );
+        assert_eq!(peer("::1", Some("::1")).quic_targets(), ips(&["::1"]));
+        assert!(peer("", None).quic_targets().is_empty());
+    }
 }

@@ -2,7 +2,7 @@
 //! `Platform`; the Engine is generic over it. This hides every real divergence
 //! between platforms behind one trait so the networking/feature code is shared.
 
-use std::net::{Ipv4Addr, UdpSocket};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, UdpSocket};
 
 use crate::capabilities::{Clipboard, Notifier};
 
@@ -28,6 +28,24 @@ pub fn detect_local_ip() -> String {
         .unwrap_or_else(|_| "0.0.0.0".to_string())
 }
 
+/// This device's global IPv6 address, if it has one: the source address the OS
+/// would pick to reach a public IPv6 host (a UDP "connect" sends nothing).
+/// Only global unicast (2000::/3) counts: link-local and ULA addresses can't
+/// be reached from another network.
+pub fn detect_local_ipv6() -> Option<String> {
+    let s = UdpSocket::bind("[::]:0").ok()?;
+    s.connect("[2001:4860:4860::8888]:80").ok()?;
+    match s.local_addr().ok()?.ip() {
+        IpAddr::V6(v6) if is_global_v6(&v6) => Some(v6.to_string()),
+        _ => None,
+    }
+}
+
+/// Global unicast IPv6 (2000::/3), the only kind worth publishing.
+pub fn is_global_v6(ip: &Ipv6Addr) -> bool {
+    (ip.segments()[0] & 0xe000) == 0x2000
+}
+
 /// Everything the Engine needs from its host platform. Capability accessors
 /// return `None` when the platform doesn't support that feature.
 pub trait Platform: Send + Sync + 'static {
@@ -50,6 +68,10 @@ pub trait Platform: Send + Sync + 'static {
     fn local_ip(&self) -> String {
         detect_local_ip()
     }
+    /// Current global IPv6 address, if any (see `detect_local_ipv6`).
+    fn local_ipv6(&self) -> Option<String> {
+        detect_local_ipv6()
+    }
 
     // --- session persistence (server_url + username only) ---
     fn kv_get(&self, _key: &str) -> Option<String> {
@@ -68,5 +90,21 @@ pub trait Platform: Send + Sync + 'static {
     }
     fn notifier(&self) -> Option<&dyn Notifier> {
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_global_unicast_ipv6_counts() {
+        let g = |s: &str| is_global_v6(&s.parse().unwrap());
+        assert!(g("2409:4040:1234::1"));
+        assert!(g("2001:db8::1")); // documentation range, but 2000::/3
+        assert!(!g("fe80::1"), "link-local");
+        assert!(!g("fd12::1"), "unique-local");
+        assert!(!g("::1"), "loopback");
+        assert!(!g("::ffff:1.2.3.4"), "v4-mapped");
     }
 }

@@ -42,10 +42,12 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
         Some(s) if s.parse::<Ipv4Addr>().is_ok() => s.to_string(),
         _ => ctx.platform.local_ip(),
     };
+    let ipv6 = ctx.platform.local_ipv6();
     let moved = {
         let mut id = ctx.identity.lock();
-        let moved = id.ip != ip;
+        let moved = id.ip != ip || id.ipv6 != ipv6;
         id.ip = ip;
+        id.ipv6 = ipv6;
         moved
     };
     let was_live: Vec<String> = ctx.p2p_conns.lock().keys().cloned().collect();

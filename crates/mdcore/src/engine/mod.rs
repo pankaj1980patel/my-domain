@@ -207,6 +207,7 @@ impl<P: Platform> Engine<P> {
             udp_port,
             ws_port,
             quic_port: quic.link().port(),
+            ipv6: platform.local_ipv6(),
         }));
 
         let peers: PeerMap = Arc::new(Mutex::new(HashMap::new()));
@@ -355,7 +356,7 @@ impl<P: Platform> Engine<P> {
         let ok = self
             .ctx
             .quic
-            .connect(self.net_ctx(), &peer.ip, peer.quic_port)
+            .connect_any(self.net_ctx(), &peer.quic_targets(), peer.quic_port)
             .is_ok()
             && wait_for_link(&self.ctx, node_id, Duration::from_secs(2));
         if ok {

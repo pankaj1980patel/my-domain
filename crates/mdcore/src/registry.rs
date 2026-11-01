@@ -38,6 +38,8 @@ pub struct RegistryDevice {
     /// "easy" | "symmetric" | "unknown"; absent from older servers.
     #[serde(default)]
     pub nat: Option<String>,
+    #[serde(default)]
+    pub ipv6: Option<String>,
 }
 
 /// Normalize a user-entered server URL to just `scheme://host[:port]`, dropping
@@ -117,6 +119,7 @@ pub fn registry_register(
             "fcm_token": fcm_token,
             "platform": platform,
             "supports_ipv6": supports_ipv6,
+            "ipv6": id.ipv6,
             "nat": nat.as_str(),
         }))
         .map_err(http_err)?;

@@ -49,6 +49,12 @@ pub struct DeviceReq {
     pub nat: Option<String>,
 }
 
+/// A global unicast IPv6 address (2000::/3) in canonical form, else `None`.
+fn clean_ipv6(v: Option<&str>) -> Option<String> {
+    let ip: std::net::Ipv6Addr = v?.trim().parse().ok()?;
+    ((ip.segments()[0] & 0xe000) == 0x2000).then(|| ip.to_string())
+}
+
 /// Only the known NAT values are stored; anything else becomes "unknown".
 fn clean_nat(v: Option<&str>) -> &'static str {
     match v.map(str::trim) {
@@ -129,8 +135,15 @@ pub async fn register(
     if let Some(t) = req.fcm_token.as_ref().filter(|v| !v.trim().is_empty()) {
         set.insert("fcm_token", t);
     }
-    if let Some(v) = req.ipv6.as_ref().filter(|v| !v.trim().is_empty()) {
-        set.insert("ipv6", v);
+    // Only a real global IPv6 address is stored; a device that lost IPv6
+    // clears it (otherwise peers would keep dialing a dead address).
+    match clean_ipv6(req.ipv6.as_deref()) {
+        Some(v) => {
+            set.insert("ipv6", v);
+        }
+        None => {
+            set.insert("ipv6", mongodb::bson::Bson::Null);
+        }
     }
     if let Some(p) = req.platform.as_ref().filter(|v| !v.trim().is_empty()) {
         set.insert("platform", p);
@@ -346,6 +359,19 @@ mod tests {
         // Missing or garbage header: fall back to the socket address.
         assert_eq!(client_ip(proxy, &HeaderMap::new()), proxy.ip());
         assert_eq!(client_ip(proxy, &xff("not-an-ip")), proxy.ip());
+    }
+
+    #[test]
+    fn only_global_ipv6_is_stored() {
+        assert_eq!(
+            clean_ipv6(Some(" 2409:4040::1 ")).as_deref(),
+            Some("2409:4040::1")
+        );
+        assert_eq!(clean_ipv6(Some("fe80::1")), None, "link-local");
+        assert_eq!(clean_ipv6(Some("fd00::1")), None, "unique-local");
+        assert_eq!(clean_ipv6(Some("::1")), None);
+        assert_eq!(clean_ipv6(Some("1.2.3.4")), None);
+        assert_eq!(clean_ipv6(None), None);
     }
 
     #[test]
