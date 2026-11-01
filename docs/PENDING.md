@@ -51,7 +51,58 @@ and in [learnings/](../learnings/README.md).
 - **Lab scenario tests** (`scripts/lab/scenarios/*.toml`), run across the
   Mac, the laptop and the phone.
 
-## 4. Phase 4: Identity, domains, permissions
+## 4. UX for everyone (design, colour, polish)
+
+Goal: someone who isn't technical can install it, pair their devices and use
+every feature without help, and enjoy doing it. Today the apps are
+developer-facing: raw server URLs, "encryption key" fields, transport names
+like QUIC/RELAY, and a debug log.
+
+Planned with the Phase 3 UI rewrite (SolidJS desktop, Compose Android) and
+kept up in every later phase.
+
+- **Design system first**, shared by desktop and Android so they feel like one product:
+  - Colour palette: a calm brand colour, plus success, warning and error colours.
+  - Light and dark themes. Every colour pair meets WCAG AA contrast.
+  - Type scale, spacing, rounded corners and elevation, kept as design tokens.
+  - One icon set, and friendly illustrations for empty states.
+  - Subtle motion, such as devices "popping in" when they're found. It
+    respects "reduce motion".
+- **No jargon on screen:**
+  - "Connected directly", "Connected via internet" and "Connected via relay"
+    replace QUIC/WS/RELAY. The technical details go behind an "Advanced" or
+    debug panel.
+  - Clear error messages that tell people what to do, e.g. "Your phone is
+    offline. Open my-domain on it.", not `connect failed: os error 61`.
+- **Onboarding in minutes:**
+  - A welcome flow with sign-in and the server pre-filled. Nobody types a
+    server URL.
+  - Pair a new device by **scanning a QR code**, not by typing a shared
+    encryption key.
+  - Ask for each permission when its feature is first used, with a
+    one-line "why".
+- **Home screen built around devices:**
+  - Cards with device type icons, battery, online status and last seen.
+  - One-tap actions on each card: send file, ring, share clipboard, control
+    media.
+- **Simple sharing and permissions:**
+  - Presets ("Family", "Guest", "Just me") instead of raw flags.
+  - A clear `ask` prompt: "Laptop wants to see your notifications. Allow
+    once / always / no."
+- **Accessibility:**
+  - Screen-reader labels on everything.
+  - Large touch targets.
+  - Keyboard navigation on desktop.
+  - Works with system font scaling.
+- **Localisation-ready:** all strings in resource files, so other languages
+  (Hindi first?) can be added.
+- **How it's checked:**
+  - A clickable prototype (Figma) reviewed before building.
+  - Usability tests with 3–5 non-technical people per release: can they
+    pair two devices and send a file unaided?
+  - Screenshot tests for both themes, so visual regressions are caught in CI.
+
+## 5. Phase 4: Identity, domains, permissions
 
 Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 
@@ -82,7 +133,7 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
   - A permission test matrix for every method.
   - Forged-certificate and replay tests.
 
-## 5. Phase 5: Feature waves (see [features.md](features.md))
+## 6. Phase 5: Feature waves (see [features.md](features.md))
 
 | Wave | Features |
 |---|---|
@@ -101,7 +152,7 @@ A feature counts as done when it has:
 - its row ticked in features.md
 - a learnings journal entry
 
-## 6. Phase 6: More devices
+## 7. Phase 6: More devices
 
 - **Android TV / Google TV / Fire TV:** an `:app-tv` module. Fire TV has no
   Google Play Services, so no FCM there.
