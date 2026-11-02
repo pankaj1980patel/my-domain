@@ -657,6 +657,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
           </button>
         </div>
       </Show>
+      <Show when={has("dial")}>
+        <DialRow node={props.node} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -674,5 +677,36 @@ function Controls(props: { node: string; st: DeviceStatus }) {
         </div>
       </Show>
     </div>
+  );
+}
+
+/** Type a number; the phone opens its dialer with it (it doesn't call). */
+function DialRow(props: { node: string }) {
+  const [number, setNumber] = createSignal("");
+  const name = () => niceName(peerName(props.node));
+  const send = (e: Event) => {
+    e.preventDefault();
+    const n = number().replace(/[^0-9+*#]/g, "");
+    if (!n) return;
+    runAction(props.node, "dial", { number: n })
+      .then((via) => {
+        toast(via === "queued" ? t("control.dialQueued", { name: name() }) : t("control.dialSent", { name: name() }), "ok");
+        setNumber("");
+      })
+      .catch((err) => toast(friendlyError(err), "error"));
+  };
+  return (
+    <form class="composer" onSubmit={send}>
+      <input
+        type="tel"
+        placeholder={t("control.dialPlaceholder")}
+        value={number()}
+        onInput={(e) => setNumber(e.currentTarget.value)}
+        aria-label={t("control.dialLabel")}
+      />
+      <button class="btn btn-soft" type="submit" disabled={!number().trim()}>
+        {t("control.dial")}
+      </button>
+    </form>
   );
 }

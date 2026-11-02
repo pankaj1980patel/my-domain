@@ -21,6 +21,7 @@ import org.json.JSONObject
  *   media      {key: "play_pause" | "next" | "previous"}
  *   ringer     {mode: "normal" | "vibrate" | "silent"}
  *   launch     {pkg}                     open an app (from the apps list)
+ *   dial       {number}                  open the dialer with it (no call)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -32,7 +33,10 @@ object Controls {
     private var torchId: String? = null
     var onChange: () -> Unit = {}
 
+    private var hasPhone = false
+
     fun init(ctx: Context) {
+        hasPhone = ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_TELEPHONY)
         if (!ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_FLASH)) return
         val cm = ctx.getSystemService(CameraManager::class.java) ?: return
         torchId = runCatching {
@@ -52,6 +56,7 @@ object Controls {
     fun actions(): JSONArray = JSONArray().apply {
         if (torchId != null) put("flashlight")
         put("volume"); put("media"); put("ringer"); put("launch")
+        if (hasPhone) put("dial")
     }
 
     fun state(ctx: Context): JSONObject {
@@ -114,6 +119,7 @@ object Controls {
                     am != null
                 }
                 "launch" -> DeviceActions.launchApp(ctx, fromName, args.optString("pkg"))
+                "dial" -> DeviceActions.dial(ctx, fromName, args.optString("number"))
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

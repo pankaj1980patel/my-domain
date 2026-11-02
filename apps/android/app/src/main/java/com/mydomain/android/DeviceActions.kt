@@ -160,6 +160,29 @@ object DeviceActions {
      * otherwise Android forbids starting an activity from the background, so
      * post a notification that opens it when tapped.
      */
+    /** Open the dialer with [number] filled in (another device's `dial`
+     *  action). It never calls by itself: you press Call on the phone.
+     *  At once if this app is on screen, else a notification to tap. */
+    fun dial(ctx: Context, fromName: String, number: String): Boolean {
+        val clean = number.filter { it.isDigit() || it in "+*#" }
+        if (clean.isEmpty() || clean.length > 20) return false
+        val app = ctx.applicationContext
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(clean))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (Core.visible && runCatching { app.startActivity(intent) }.isSuccess) return true
+        val id = linkId.incrementAndGet()
+        val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(app, CH_LINKS)
+            .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setContentTitle(app.getString(R.string.dial_title, fromName, clean))
+            .setContentText(app.getString(R.string.dial_body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
+        return true
+    }
+
     /** Open app [pkg] (another device's `launch` action). Like a link: at
      *  once if this app is on screen, else a notification to tap (Android
      *  doesn't let a background app start another one). */

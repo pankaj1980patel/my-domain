@@ -234,4 +234,6 @@
     <string name="ctl_ring_silent">Silent</string>
     <string name="launch_title">%1$s wants to open %2$s</string>
     <string name="launch_body">Tap to open it.</string>
+    <string name="dial_title">%1$s wants you to call %2$s</string>
+    <string name="dial_body">Tap to open the dialer.</string>
 </resources>
