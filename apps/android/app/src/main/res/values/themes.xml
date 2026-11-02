@@ -5,5 +5,5 @@
     <style name="Theme.App" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/space_bg</item>
     </style>
-    <color name="space_bg">#05070F</color>
+    <color name="space_bg">#02080F</color>
 </resources>

@@ -1,5 +1,9 @@
-# Deep-space app background: dark navy, soft nebula clouds, a star field.
+# App background in the style of the logo source image (logo-source.png):
+# a near-black blue-teal sky, a faint central glow, a soft diagonal Milky Way
+# band with dark dust lanes, and sparse, tiny stars.
+#
 # usage: python3 space_bg.py OUT.webp WIDTH HEIGHT SEED
+import math
 import random
 import sys
 
@@ -7,65 +11,72 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
 out, W, H, seed = sys.argv[1], int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4])
 rng = random.Random(seed)
+M = min(W, H)
 
-# Base: vertical gradient, near-black navy.
-base = Image.new("RGB", (1, 256))
-for y in range(256):
-    t = y / 255
-    base.putpixel((0, y), (int(5 + 3 * t), int(8 + 4 * t), int(20 + 6 * (1 - abs(t - 0.4)))))
-img = base.resize((W, H), Image.BICUBIC)
 
-# Nebula: blurred colour blobs, broken up by noise, drawn small then scaled.
-sw, sh = W // 8, H // 8
-def cloud(color, cx, cy, rx, ry, strength):
-    layer = Image.new("L", (sw, sh), 0)
-    d = ImageDraw.Draw(layer)
-    for _ in range(14):
-        x = cx * sw + rng.gauss(0, rx * sw * 0.45)
-        y = cy * sh + rng.gauss(0, ry * sh * 0.45)
-        r = rng.uniform(0.25, 0.6) * min(rx * sw, ry * sh)
-        d.ellipse((x - r, y - r * rng.uniform(0.5, 1), x + r, y + r * rng.uniform(0.5, 1)), fill=int(255 * strength))
-    layer = layer.filter(ImageFilter.GaussianBlur(min(sw, sh) * 0.15))
-    noise = Image.effect_noise((sw, sh), 110).filter(ImageFilter.GaussianBlur(2)).resize((sw // 2, sh // 2)).resize((sw, sh), Image.BICUBIC)
-    layer = ImageChops.multiply(layer, noise.point(lambda v: min(255, int(v * 1.6))))
-    layer = layer.filter(ImageFilter.GaussianBlur(min(sw, sh) * 0.05)).resize((W, H), Image.BICUBIC)
-    tint = Image.new("RGB", (W, H), color)
-    return ImageChops.multiply(tint, Image.merge("RGB", (layer, layer, layer)))
+def radial(w, h, inner, outer, cx=0.5, cy=0.45, scale=0.75):
+    """Radial gradient from `inner` (centre) to `outer` (edges), drawn small."""
+    sw, sh = 160, max(1, int(160 * h / w))
+    g = Image.new("RGB", (sw, sh))
+    for y in range(sh):
+        for x in range(sw):
+            d = math.hypot((x / sw - cx) * (w / M), (y / sh - cy) * (h / M)) / scale
+            t = min(1.0, d) ** 1.4
+            g.putpixel((x, y), tuple(int(a + (b - a) * t) for a, b in zip(inner, outer)))
+    return g.resize((w, h), Image.BICUBIC)
 
-for color, cx, cy, rx, ry, s in [
-    ((70, 40, 150), 0.18, 0.15, 0.55, 0.40, 0.55),   # violet, top-left
-    ((20, 90, 160), 0.85, 0.80, 0.55, 0.45, 0.55),   # blue, bottom-right
-    ((10, 110, 130), 0.70, 0.30, 0.35, 0.30, 0.30),  # teal
-    ((150, 100, 40), 0.30, 0.85, 0.30, 0.25, 0.18),  # faint amber
-]:
-    img = ImageChops.add(img, cloud(color, cx, cy, rx, ry, s))
 
-# Stars: many faint pin-pricks, fewer bright ones with a soft glow.
+def noise(size, blur, up):
+    """Smooth value noise: random field at 1/up scale, blurred, scaled up."""
+    w, h = max(2, size[0] // up), max(2, size[1] // up)
+    n = Image.effect_noise((w, h), 120).filter(ImageFilter.GaussianBlur(blur))
+    return n.resize(size, Image.BICUBIC)
+
+
+# Sky: near-black blue-teal, a touch lighter in the middle.
+img = radial(W, H, inner=(13, 25, 36), outer=(1, 7, 14))
+
+# Milky Way band: a soft diagonal haze from lower-left to upper-right.
+angle = 22 if W >= H else 58
+band = Image.new("L", (W * 2, H * 2), 0)
+bd = ImageDraw.Draw(band)
+thick = M * 0.22
+bd.rectangle((0, H - thick / 2, W * 2, H + thick / 2), fill=255)
+band = band.rotate(angle, resample=Image.BICUBIC, center=(W, H))
+band = band.crop((W // 2, H // 2, W // 2 + W, H // 2 + H)).filter(ImageFilter.GaussianBlur(M * 0.09))
+# Break it up: big soft clumps, and darker dust lanes along it.
+clumps = ImageChops.multiply(noise((W, H), 3, 24), noise((W, H), 2, 10)).point(lambda v: min(255, int(v * 2.2)))
+dust = noise((W, H), 1.5, 14).point(lambda v: 255 if v > 150 else int(80 + v))
+haze = ImageChops.multiply(ImageChops.multiply(band, clumps), dust)
+haze = haze.filter(ImageFilter.GaussianBlur(M * 0.006))
+img = ImageChops.add(img, Image.merge("RGB", [haze.point(lambda v, k=k: int(v * k)) for k in (0.21, 0.25, 0.29)]))
+
+# Stars: dense specks inside the band, sparse ones elsewhere, a few brighter.
 stars = Image.new("RGB", (W, H), 0)
 d = ImageDraw.Draw(stars)
 area = W * H / 1e6
-for _ in range(int(900 * area)):
+bandpx = band.load()
+placed = 0
+while placed < int(1400 * area):
+    x, y = rng.randrange(W), rng.randrange(H)
+    if rng.random() * 255 > bandpx[x, y]:
+        continue
+    v = int(rng.uniform(40, 140))
+    d.point((x, y), fill=(v, int(v * 1.05), int(v * 1.15)))
+    placed += 1
+for _ in range(int(260 * area)):
     x, y = rng.uniform(0, W), rng.uniform(0, H)
-    v = int(rng.uniform(60, 200))
-    tint = rng.choice([(1, 1, 1), (0.85, 0.9, 1), (1, 0.95, 0.85)])
-    r = rng.choice([0.6, 0.8, 1.0, 1.2])
-    d.ellipse((x - r, y - r, x + r, y + r), fill=tuple(int(v * c) for c in tint))
+    v = int(rng.uniform(70, 210))
+    r = rng.choice([0.5, 0.7, 0.9])
+    d.ellipse((x - r, y - r, x + r, y + r), fill=(v, v, min(255, int(v * 1.1))))
 glow = Image.new("RGB", (W, H), 0)
 g = ImageDraw.Draw(glow)
-for _ in range(int(14 * area)):
+for _ in range(int(6 * area)):
     x, y = rng.uniform(0, W), rng.uniform(0, H)
-    r = rng.uniform(1.4, 2.2)
-    col = rng.choice([(255, 255, 255), (200, 220, 255), (255, 230, 190)])
-    d.ellipse((x - r, y - r, x + r, y + r), fill=col)
-    g.ellipse((x - r * 5, y - r * 5, x + r * 5, y + r * 5), fill=tuple(c // 3 for c in col))
-glow = glow.filter(ImageFilter.GaussianBlur(6))
-img = ImageChops.add(img, ImageChops.add(stars, glow))
+    r = rng.uniform(1.1, 1.6)
+    d.ellipse((x - r, y - r, x + r, y + r), fill=(235, 242, 255))
+    g.ellipse((x - r * 4, y - r * 4, x + r * 4, y + r * 4), fill=(60, 75, 95))
+img = ImageChops.add(img, ImageChops.add(stars, glow.filter(ImageFilter.GaussianBlur(4))))
 
-# Vignette keeps the edges calm behind the UI.
-vig = Image.new("L", (W, H), 0)
-ImageDraw.Draw(vig).ellipse((-W * 0.25, -H * 0.25, W * 1.25, H * 1.25), fill=255)
-vig = vig.filter(ImageFilter.GaussianBlur(min(W, H) * 0.15))
-img = Image.composite(img, Image.new("RGB", (W, H), (3, 4, 10)), vig)
-
-img.save(out, "WEBP", quality=82, method=6)
+img.save(out, "WEBP", quality=86, method=6)
 print(out, img.size)

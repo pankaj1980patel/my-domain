@@ -19,7 +19,7 @@
   --danger-soft: rgba(248, 113, 113, 0.13);
 
   /* Deep-space theme: dark sky, frosted-glass panels, white accent */
-  --bg: #05070f;
+  --bg: #02080f;
   --bg-image: url("/space.webp");
   --surface: rgba(255, 255, 255, 0.055);
   --surface-2: rgba(255, 255, 255, 0.09);

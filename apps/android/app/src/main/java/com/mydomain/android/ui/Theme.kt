@@ -43,7 +43,7 @@ data class Tokens(
 /** Deep space: a star field behind everything (drawable/space_bg, made by
  *  docs/brand/space_bg.py), translucent glass panels, white primary actions. */
 private val Space = Tokens(
-    bg = Color(0xFF05070F), surface = Color(0x14FFFFFF), surface2 = Color(0x1FFFFFFF),
+    bg = Color(0xFF02080F), surface = Color(0x14FFFFFF), surface2 = Color(0x1FFFFFFF),
     border = Color(0x1FFFFFFF), text = Color(0xFFF4F4F6), text2 = Color(0xFFB6B8C6), text3 = Color(0xFF8D90A3),
     accent = Color.White, accentText = Color(0xFF0A0D1A),
     success = Color(0xFF4ADE80), successSoft = Color(0x244ADE80), warning = Color(0xFFFACC15),
