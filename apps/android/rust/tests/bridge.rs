@@ -190,5 +190,45 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     let delivered = events.wait_for("message-delivered", |v| v["id"] == "bridge-msg-1");
     assert_eq!(delivered["kind"], "message_delivered");
     assert_eq!(delivered["node_id"], desktop.node_id().as_str());
+
+    // Quick device actions. The desktop rings the phone: a `ring-event`.
+    desktop.engine.ring(&id.node_id).unwrap();
+    let ring = events.wait_for("ring-event", |_| true);
+    assert_eq!(ring["kind"], "ring");
+    assert_eq!(ring["from"], desktop.node_id().as_str());
+
+    // ...and sends it a link: an `open-url-event`.
+    desktop
+        .engine
+        .open_url(&id.node_id, "https://example.com/x")
+        .unwrap();
+    let open = events.wait_for("open-url-event", |_| true);
+    assert_eq!(open["kind"], "open_url");
+    assert_eq!(open["url"], "https://example.com/x");
+    // Only web links leave the phone.
+    assert!(matches!(
+        phone.open_url(desktop.node_id(), "file:///etc/passwd".into()),
+        Err(MdError::Failed(_))
+    ));
+
+    // The desktop asks the phone's status: the battery the app pushed.
+    phone.set_device_status(r#"{"battery":42,"charging":true}"#.into());
+    desktop.engine.request_status(&id.node_id).unwrap();
+    let status = desktop
+        .sink
+        .wait_until(Duration::from_secs(10), |e| match e {
+            mdcore::events::CoreEvent::DeviceStatus { status, .. } => Some(status.clone()),
+            _ => None,
+        })
+        .expect("a device-status event");
+    assert_eq!(status["battery"], 42);
+    assert_eq!(status["charging"], true);
+    assert_eq!(status["platform"], "android");
+
+    // And the phone asks the desktop's.
+    phone.request_status(desktop.node_id()).unwrap();
+    let st = events.wait_for("device-status-event", |_| true);
+    assert_eq!(st["kind"], "device_status");
+    assert_eq!(st["from"], desktop.node_id().as_str());
     let _ = std::fs::remove_dir_all(dir);
 }

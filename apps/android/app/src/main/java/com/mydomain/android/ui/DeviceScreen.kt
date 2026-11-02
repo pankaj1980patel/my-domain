@@ -22,6 +22,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -82,6 +83,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                 }
             }
             item { ChatTile(node) }
+            item { FindTile(node, niceName(peer.name)) }
             item { ClipboardTile(node) }
             item { NotifyTile() }
             item { AppsTile(node) }
@@ -193,4 +195,71 @@ private fun AppsTile(node: String) {
             }
         }
     }
+}
+
+/** Find & control: ring it, open a link on it, and its battery. */
+@Composable
+private fun FindTile(node: String, name: String) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val status = Core.deviceStatus[node]
+    val ringing = stringResource(R.string.find_ringing, name)
+    val ringQueued = stringResource(R.string.find_ring_queued, name)
+    val linkSent = stringResource(R.string.find_link_sent, name)
+    val linkQueued = stringResource(R.string.find_link_queued, name)
+    val linkInvalid = stringResource(R.string.find_link_invalid)
+
+    // Ask for its battery when the screen opens; the reply fills `status`.
+    LaunchedEffect(node) { runCatching { Core.requestStatus(node) } }
+
+    Tile(title = stringResource(R.string.find_title)) {
+        val battery = status?.battery
+        if (battery != null) {
+            Text(
+                stringResource(if (status.charging == true) R.string.find_battery_charging else R.string.find_battery, battery),
+                style = MaterialTheme.typography.bodyMedium, color = T.text,
+            )
+        }
+        Muted(stringResource(R.string.find_body))
+        SoftButton(stringResource(R.string.find_ring), {
+            scope.launch {
+                try {
+                    val via = Core.ring(node)
+                    toast(if (via == "queued") ringQueued else ringing)
+                } catch (e: Exception) { toast(friendlyError(e)) }
+            }
+        }, Modifier.fillMaxWidth())
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Field(url, { url = it }, stringResource(R.string.find_link_hint), Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
+            PrimaryButton(stringResource(R.string.send), {
+                val link = withScheme(url)
+                if (!isWebLink(link)) {
+                    toast(linkInvalid)
+                } else {
+                    busy = true
+                    scope.launch {
+                        try {
+                            val via = Core.openUrl(node, link)
+                            url = ""
+                            toast(if (via == "queued") linkQueued else linkSent)
+                        } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
+                    }
+                }
+            }, enabled = !busy && url.isNotBlank())
+        }
+    }
+}
+
+/** "example.com/x" -> "https://example.com/x"; a link with a scheme is kept. */
+private fun withScheme(input: String): String {
+    val t = input.trim()
+    return if (t.contains("://")) t else "https://$t"
+}
+
+private fun isWebLink(url: String): Boolean {
+    val lower = url.lowercase()
+    return (lower.startsWith("https://") || lower.startsWith("http://")) && url.length > "https://".length
 }

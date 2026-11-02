@@ -9,6 +9,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Find my phone: keep the CPU up while the ring plays (MediaPlayer wake mode),
+         and vibrate with the ring notification. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Best-effort IMEI as a stable device id (granted apps only; falls back to ANDROID_ID). -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <!-- Enumerate installed apps for the notification-sharing picker (API 30+).
@@ -29,6 +33,11 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- The ring notification's Stop action / dismissal (find my phone). -->
+        <receiver
+            android:name=".DeviceActionReceiver"
+            android:exported="false" />
 
         <!-- FCM: connection signals (dial me back, join the relay, punch). -->
         <service

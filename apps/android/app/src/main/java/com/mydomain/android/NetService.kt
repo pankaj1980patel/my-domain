@@ -30,6 +30,9 @@ class NetService : Service() {
     private var multicastLock: WifiManager.MulticastLock? = null
     private var connectivityManager: ConnectivityManager? = null
     private var netCallback: ConnectivityManager.NetworkCallback? = null
+    private var batteryReceiver: BroadcastReceiver? = null
+    /** Last status pushed to the core, so only real changes are pushed. */
+    private var lastStatus: String? = null
     
     private val binder = LocalBinder()
     
@@ -80,7 +83,38 @@ class NetService : Service() {
         Fcm.init(this)
 
         publishInstalledApps()
+        watchBattery()
         startNetworking()
+    }
+
+    /**
+     * Keep the core's device status (asked for by `request_status`) current:
+     * battery percent and charging. ACTION_BATTERY_CHANGED is sticky (the
+     * current value arrives at once) and fires often (voltage, temperature),
+     * so only a changed percent or charging state is pushed.
+     */
+    private fun watchBattery() {
+        val r = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) = pushBattery(intent)
+        }
+        batteryReceiver = r
+        runCatching { registerReceiver(r, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }
+            .onSuccess { sticky -> sticky?.let(::pushBattery) }
+            .onFailure { Log.w("NetService", "battery watch failed", it) }
+    }
+
+    private fun pushBattery(intent: Intent) {
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        if (level < 0 || scale <= 0) return
+        val pct = (level * 100 / scale).coerceIn(0, 100)
+        val st = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val charging = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL
+        val json = JSONObject().put("battery", pct).put("charging", charging).toString()
+        if (json == lastStatus) return
+        val engine = Core.engine() ?: return
+        engine.setDeviceStatus(json)
+        lastStatus = json
     }
 
     /**
@@ -118,6 +152,7 @@ class NetService : Service() {
             manager?.createNotificationChannel(channel)
             manager?.createNotificationChannel(shared)
         }
+        DeviceActions.createChannels(this)
     }
 
     private fun createNotification(): Notification {
@@ -182,6 +217,8 @@ class NetService : Service() {
                         "message_received" -> handleIncomingMessage(o)
                         "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
+                        "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
+                        "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)
@@ -296,6 +333,7 @@ class NetService : Service() {
         serviceJob.cancel()
         multicastLock?.let { if (it.isHeld) it.release() }
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
+        batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

@@ -49,6 +49,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         Core.setVisible(true)
+        // Opening the app (or tapping the ring notification) stops a ring.
+        DeviceActions.stopRing()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
     }
 
     override fun onResume() {

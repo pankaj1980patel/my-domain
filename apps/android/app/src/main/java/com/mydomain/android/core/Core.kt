@@ -46,6 +46,10 @@ data class AppEntry(val pkg: String, val label: String)
 
 data class AppsState(val apps: List<AppEntry>, val subscribed: Set<String>)
 
+/** A device's reported status (`device_status` event); fields it didn't
+ *  report are null (a desktop has no battery). */
+data class DeviceStatus(val battery: Int?, val charging: Boolean?)
+
 /** One raw core event, for the Developer screen. */
 data class DevEvent(val ts: Long, val name: String, val payload: String)
 
@@ -77,6 +81,9 @@ object Core {
     val activity = mutableStateListOf<ActivityItem>()
     val apps = mutableStateMapOf<String, AppsState>()
     val devLog = mutableStateListOf<DevEvent>()
+
+    /** node id -> its latest reported status (battery, charging). */
+    val deviceStatus = mutableStateMapOf<String, DeviceStatus>()
 
     /** Clipboard auto-sync with the other devices (NetService acts on it). */
     var clipSync by mutableStateOf(false); private set
@@ -223,6 +230,15 @@ object Core {
             }
             "call_notification" -> addActivity(str(R.string.act_call, o.optString("caller"), o.optString("state")))
             "call_history" -> addActivity(str(R.string.act_call_history))
+            "device_status" -> {
+                val st = o.optJSONObject("status") ?: JSONObject()
+                deviceStatus[o.optString("from")] = DeviceStatus(
+                    battery = if (st.has("battery")) st.optInt("battery") else null,
+                    charging = if (st.has("charging")) st.optBoolean("charging") else null,
+                )
+            }
+            "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
+            "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
             "apps_list" -> {
                 val from = o.optString("from")
@@ -302,6 +318,18 @@ object Core {
 
     suspend fun requestApps(node: String) = call { it.requestApps(node) }
 
+    // Quick device actions: each returns the transport used, or "queued"
+    // (delivered when the device is reachable; a sleeping phone is woken).
+
+    /** Ask a device for its battery/charging (reply: `device_status`). */
+    suspend fun requestStatus(node: String): String = call { it.requestStatus(node) }
+
+    /** Ring a device (find my device). */
+    suspend fun ring(node: String): String = call { it.ring(node) }
+
+    /** Open a web link on a device. */
+    suspend fun openUrl(node: String, url: String): String = call { it.openUrl(node, url) }
+
     suspend fun toggleApp(node: String, pkg: String) {
         val cur = apps[node] ?: return
         val next = if (pkg in cur.subscribed) cur.subscribed - pkg else cur.subscribed + pkg
@@ -312,7 +340,7 @@ object Core {
     suspend fun signOut() {
         call { it.logout() }
         onMain {
-            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear()
+            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear()
         }
         reload()
     }

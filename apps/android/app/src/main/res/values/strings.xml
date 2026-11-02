@@ -74,6 +74,17 @@
     <string name="apps_show">Show its apps</string>
     <string name="apps_search">Search apps</string>
     <string name="apps_none">No apps to show.</string>
+    <string name="find_title">Find &amp; control</string>
+    <string name="find_body">Ring it to find it, or open a link on it.</string>
+    <string name="find_ring">Ring</string>
+    <string name="find_ringing">Ringing %1$s</string>
+    <string name="find_ring_queued">Will ring when %1$s is reachable</string>
+    <string name="find_link_hint">Open a link on it</string>
+    <string name="find_link_sent">Link sent to %1$s</string>
+    <string name="find_link_queued">Will open when %1$s is reachable</string>
+    <string name="find_link_invalid">Only web links (http or https) can be opened.</string>
+    <string name="find_battery">Battery %1$d%%</string>
+    <string name="find_battery_charging">Battery %1$d%%, charging</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -146,6 +157,8 @@
     <string name="act_clipboard_synced">Clipboard synced</string>
     <string name="act_notification_sent">Sent “%1$s” to your devices</string>
     <string name="act_clipboard_copied">Copied %1$s\'s clipboard</string>
+    <string name="act_ring">%1$s rang this phone</string>
+    <string name="act_link">%1$s sent a link: %2$s</string>
 
     <!-- OS notifications (NetService) -->
     <string name="channel_service">Networking Service</string>
@@ -154,4 +167,10 @@
     <string name="service_running_body">Your devices can reach this phone.</string>
     <string name="notification_default_title">Notification</string>
     <string name="notification_call">Call · %1$s</string>
+    <string name="channel_ring">Find my phone</string>
+    <string name="channel_links">Links from your devices</string>
+    <string name="ring_title">%1$s is looking for this phone</string>
+    <string name="ring_body">Tap to stop ringing.</string>
+    <string name="ring_stop">Stop</string>
+    <string name="link_title">%1$s sent a link</string>
 </resources>

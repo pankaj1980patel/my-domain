@@ -530,4 +530,30 @@ impl MdEngine {
     pub fn share_app_notification(&self, pkg: String, app: String, title: String, body: String) {
         self.inner.share_app_notification(&pkg, &app, &title, &body);
     }
+
+    // --- quick device actions ---
+
+    /// This device's status, as a JSON object (e.g.
+    /// `{"battery":80,"charging":true}`), sent when another device asks.
+    pub fn set_device_status(&self, status_json: String) {
+        self.inner.set_device_status(&status_json);
+    }
+
+    /// Ask a device for its status (reply: a `device-status-event`). Returns
+    /// the transport used, or "queued" (delivered when it is reachable).
+    pub fn request_status(&self, node_id: String) -> MdResult<String> {
+        Ok(self.inner.request_status(&node_id)?)
+    }
+
+    /// Ring a device (find my device): it gets a `ring-event`. Returns the
+    /// transport used, or "queued" (a sleeping phone is woken by push).
+    pub fn ring(&self, node_id: String) -> MdResult<String> {
+        Ok(self.inner.ring(&node_id)?)
+    }
+
+    /// Open a web link on a device (`open-url-event` there). Fails for a
+    /// link that isn't http(s). Returns the transport used, or "queued".
+    pub fn open_url(&self, node_id: String, url: String) -> MdResult<String> {
+        Ok(self.inner.open_url(&node_id, &url)?)
+    }
 }
