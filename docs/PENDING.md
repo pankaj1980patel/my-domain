@@ -62,11 +62,11 @@ or with less battery.
     - That's less code and fewer ways to fail. The ladder tests show what can
       safely go.
 
-- **Even less server dependence** (direction set 2026-11-02):
-  - Signal through a device that's already connected to both peers (e.g.
-    the laptop passes a phone's offer to the desktop) before using the
-    server.
-  - ~~Keep addresses fresh peer-to-peer~~: **done** (`addr_update`).
+- ~~Even less server dependence~~: **done** (peer cache, `addr_update`,
+  signals over our own links and through a shared neighbour). Next ideas:
+  - Neighbours forward more than one hop (needs loop protection and a hop
+    budget).
+  - A LAN device acts as "home base" for phones away from home.
 
 ## 3. Phase 2 leftovers (networking)
 

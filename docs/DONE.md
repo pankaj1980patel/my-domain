@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **121** core tests, plus **10** server tests and **1** desktop test |
+| Tests | **122** core tests, plus **10** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -214,6 +214,12 @@ The engine tries each method in order, cheapest first, until one works
     addresses (LAN, IPv6, router mapping) over its live links when a link
     comes up, after a network change, and when its mapping changes. Peers
     update their cache with no server involved.
+  - **Signals over our own links:** a signal for a peer we're linked to
+    goes straight to it, with no server. Otherwise every linked neighbour
+    that can reach the target forwards it one hop, and the server is tried
+    too. The receiver keeps the first copy and drops the rest.
+    - Example: a phone and a desktop that were never linked set up a direct
+      QUIC connection with only the laptop passing their signals, no server.
   - **On the LAN:** mDNS plus direct QUIC needs no server at all.
   - **Signals:** the server uses a device's WebSocket for a signal only if
     one happens to be open (e.g. during a relay session), and FCM otherwise.

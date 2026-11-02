@@ -107,6 +107,8 @@ pub struct NetCtx<P: Platform> {
     /// signal) can talk to the server too.
     pub server_url: Arc<Mutex<Option<String>>>,
     pub token: Arc<Mutex<Option<String>>>,
+    /// Signals seen recently (drops copies that arrive by several paths).
+    pub recent_signals: Arc<crate::features::signal_fwd::RecentSignals>,
     /// Our NAT's mapping behaviour, measured with STUN at start and after
     /// network changes; published to the registry for the connect ladder.
     pub nat: Arc<Mutex<crate::nat::NatKind>>,
@@ -142,6 +144,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             nat: self.nat.clone(),
             server_url: self.server_url.clone(),
             token: self.token.clone(),
+            recent_signals: self.recent_signals.clone(),
         }
     }
 }
@@ -287,6 +290,7 @@ impl<P: Platform> Engine<P> {
             nat: Arc::default(),
             server_url: Arc::new(Mutex::new(None)),
             token: Arc::new(Mutex::new(None)),
+            recent_signals: Arc::default(),
         };
 
         // Direct messaging receivers.

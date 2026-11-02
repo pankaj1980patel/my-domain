@@ -142,10 +142,25 @@ pub(super) fn send_signal_via<P: Platform>(
     if let Some(signaler) = custom {
         return signaler.send(&me, to, sig);
     }
-    let url = server_url.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-    let tok = token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-    let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
-    crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(Into::into)
+    // 1. Over our own links: straight to the target if we have a link to
+    //    it (no server needed), else ask our neighbours to forward it.
+    let payload = serde_json::to_string(sig).map_err(|e| e.to_string())?;
+    let (direct, forwarded) = crate::features::signal_fwd::send(ctx, to, &payload);
+    if direct {
+        return Ok(());
+    }
+    // 2. The server too (the target may be reachable only through it). The
+    //    receiver drops whichever copy arrives second.
+    let via_server = (|| {
+        let url = server_url.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let tok = token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let data = serde_json::to_value(sig).map_err(|e| e.to_string())?;
+        crate::registry::send_signal(&url, &tok, &me, to, "signal", data).map_err(CoreError::from)
+    })();
+    match via_server {
+        Err(_) if forwarded => Ok(()),
+        other => other,
+    }
 }
 
 /// Where to reach the relay and with which session token, or `None` if we
@@ -167,6 +182,11 @@ pub(super) fn relay_target<P: Platform>(
 /// server's WebSocket (see transport/relay.rs). Drives the responder side of
 /// the connection ladder.
 pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &str) {
+    // The same signal may arrive by several paths (forwarded by a neighbour,
+    // and from the server): handle it once.
+    if !crate::features::signal_fwd::first_time(ctx, from, payload) {
+        return;
+    }
     let Ok(sig) = serde_json::from_str::<Signal>(payload) else {
         return;
     };
