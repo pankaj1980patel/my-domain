@@ -17,6 +17,7 @@
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 //! `send <node> <text...>`, `status <node>`, `ring <node>`,
 //! `open <node> <url>`, `action <node> <name> [json]`,
+//! `subscribe <node> <json pkgs>`, `notifact <node> <key> <index> [text]`,
 //! `sendfile <node> <path>`, `downloads <dir>`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
@@ -399,6 +400,21 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let name = arg(words.next())?;
             let args = words.collect::<Vec<_>>().join(" ");
             Ok(json!({ "via": engine.run_action(&to, &name, &args)? }))
+        }
+        "subscribe" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            engine.subscribe_apps(&to, &arg(words.next())?)?;
+            Ok(json!("subscribed"))
+        }
+        "notifact" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let key = arg(words.next())?;
+            let index = arg(words.next())?
+                .parse::<i64>()
+                .map_err(|_| "bad index".to_string())?;
+            let text = words.collect::<Vec<_>>().join(" ");
+            let text = (!text.is_empty()).then_some(text);
+            Ok(json!({ "via": engine.notification_action(&to, &key, index, text.as_deref())? }))
         }
         "sendfile" => {
             let to = resolve(engine, &arg(words.next())?)?;

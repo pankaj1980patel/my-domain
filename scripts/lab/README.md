@@ -44,6 +44,9 @@ printf 'peers\nsend <node_id> hello\nquit\n' | cargo run -q -p mdctl -- --name l
 Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 `send <node> <text>`, `status <node>`, `ring <node>`, `open <node> <url>`,
 `sendfile <node> <path>`, `downloads <dir>` (where received files go),
+`subscribe <node> <json pkgs>` (get that device's notifications from those
+apps), `notifact <node> <key> <index> [text]` (press a notification's button
+or reply; index -1 dismisses),
 `action <node> <name> [json]`, `add <name> <ip> <quic_port>`, `forget` (remove
 this device from the server), `quit`. `--offline USER --key K` skips the server.
 
