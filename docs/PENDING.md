@@ -58,6 +58,9 @@ or with less battery.
        finishes before the phone sleeps again.
      - Result: 13 of 14 status requests answered over 6 min with the
        screen off; the recovered ones took about 13 s.
+     - Again after the night's fixes (2026-11-03 01:14): 14 of 14, the
+       slowest in 12 s. Once asleep, the phone's link died between
+       requests, so each one recovered by reconnecting with one push.
      - The one miss: no push arrived. Most likely the server sent those
        signals over the phone's relay socket, joined earlier, instead of
        pushing; fixed on the server (redeploy needed). FCM deprioritizing
