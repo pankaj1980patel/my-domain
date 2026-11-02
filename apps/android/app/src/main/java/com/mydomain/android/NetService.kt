@@ -167,6 +167,9 @@ class NetService : Service() {
      */
     private val coreEvents = object : EventListener {
         override fun onEvent(name: String, payloadJson: String) {
+            // Debug builds log every event, so the device lab can verify
+            // delivery from logcat (tag mydomain_event).
+            if (BuildConfig.DEBUG) Log.i("mydomain_event", "$name ${payloadJson.take(200)}")
             serviceScope.launch {
                 try {
                     val o = JSONObject(payloadJson)

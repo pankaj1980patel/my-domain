@@ -102,7 +102,9 @@ cargo {
     libname = "mydomain_net"
     // rust-android-gradle target names -> Android ABIs:
     //   arm64 -> arm64-v8a, x86_64 -> x86_64, arm -> armeabi-v7a, x86 -> x86
-    targets = listOf("arm64", "x86_64", "arm", "x86")
+    // Override for quick device builds: -Prust.targets=arm64
+    targets = (project.findProperty("rust.targets") as String?)?.split(",")
+        ?: listOf("arm64", "x86_64", "arm", "x86")
     profile = "release"
     cargoCommand = "$cargoBin/cargo"
     rustcCommand = "$cargoBin/rustc"

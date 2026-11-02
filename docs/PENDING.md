@@ -95,8 +95,9 @@ or with less battery.
   to Android-mode FCM registration. See DONE.md.
 - **UniFFI bridge** (`apps/android/rust`): **built** (2026-11-02). Typed
   `MdEngine`, events pushed to Kotlin, generated bindings; NetService no
-  longer polls. Still to do:
-  - Run it on the phone (the APK builds; not yet installed).
+  longer polls. Verified on the phone (2026-11-02, mobile data): FCM
+  signals in, relay then hole-punched direct link, the message delivered to
+  Kotlin through the listener. Still to do:
   - Move the screens from the `RustNet` facade to `MdEngine` directly
     (with the UI rebuild), then delete `RustNet.kt`.
 - **Desktop UI in SolidJS + TypeScript**, with typed commands (`tauri-specta`)
