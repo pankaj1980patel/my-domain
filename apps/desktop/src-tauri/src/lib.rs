@@ -153,6 +153,13 @@ impl EventSink for TauriSink {
     fn emit(&self, ev: CoreEvent) {
         // Event names and payload shapes are defined (and contract-tested) in
         // mdcore::events, so this adapter no longer hand-builds JSON per event.
+        // Debug builds also log every event, so the device lab can verify
+        // delivery from the log without looking at the window.
+        if cfg!(debug_assertions) {
+            let payload = ev.ui_payload().to_string();
+            let short: String = payload.chars().take(200).collect();
+            eprintln!("[event] {} {short}", ev.name());
+        }
         let _ = self.app.emit(ev.name(), ev.ui_payload());
     }
 }
