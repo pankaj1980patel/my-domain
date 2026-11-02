@@ -5,7 +5,8 @@
 // Test-only file: a panic IS the failure report.
 #![allow(clippy::unwrap_used)]
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use md_testkit::{MockPlatform, TestNode};
@@ -47,4 +48,59 @@ fn after_a_restart_known_peers_are_reached_without_any_server() {
         .send(&phone.node_id(), "back after a restart")
         .unwrap();
     phone.sink.wait_for_message("back after a restart");
+}
+
+/// A restarted device comes back on the QUIC port it saved, so peers that
+/// only know its old address (no registry refresh) still reach it. A real
+/// restart is a new process; here the "previous run" is a saved port.
+#[test]
+fn a_restarted_device_reuses_its_saved_quic_port() {
+    // A port that is free right now.
+    let port = std::net::UdpSocket::bind(("::", 0))
+        .unwrap()
+        .local_addr()
+        .unwrap()
+        .port();
+    let store: Arc<Mutex<HashMap<String, String>>> = Arc::default();
+    store
+        .lock()
+        .unwrap()
+        .insert("quic_port".into(), port.to_string());
+    let mac = TestNode::start_with(MockPlatform {
+        kv: Arc::clone(&store),
+        ..MockPlatform::new("port-mac")
+    });
+    assert_eq!(mac.engine.identity().quic_port, port);
+
+    // A peer that knows only that address reaches it.
+    let phone = TestNode::start("port-phone");
+    TestNode::pair(&phone, &mac);
+    phone
+        .engine
+        .send(&mac.node_id(), "same port as before")
+        .unwrap();
+    mac.sink.wait_for_message("same port as before");
+}
+
+/// If the saved port is taken, the engine still starts, on another port, and
+/// saves that one.
+#[test]
+fn a_busy_saved_port_falls_back_to_a_free_one() {
+    let squatter = std::net::UdpSocket::bind(("::", 0)).unwrap();
+    let taken = squatter.local_addr().unwrap().port();
+    let store: Arc<Mutex<HashMap<String, String>>> = Arc::default();
+    store
+        .lock()
+        .unwrap()
+        .insert("quic_port".into(), taken.to_string());
+    let node = TestNode::start_with(MockPlatform {
+        kv: Arc::clone(&store),
+        ..MockPlatform::new("port-busy")
+    });
+    let port = node.engine.identity().quic_port;
+    assert_ne!(port, taken);
+    assert_eq!(
+        store.lock().unwrap().get("quic_port"),
+        Some(&port.to_string())
+    );
 }

@@ -182,6 +182,9 @@ pub struct Engine<P: Platform> {
 /// How long to wait before auto-dialing a peer again after a failed attempt.
 const QUIC_RETRY_AFTER: Duration = Duration::from_secs(30);
 
+/// kv key holding the QUIC port of the last run.
+const QUIC_PORT_KEY: &str = "quic_port";
+
 impl<P: Platform> Engine<P> {
     /// Bind sockets, build identity, and spawn the discovery / tcp / udp / ws /
     /// clipboard / network-change threads.
@@ -214,7 +217,14 @@ impl<P: Platform> Engine<P> {
             .port();
         let ws_listener = TcpListener::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
         let ws_port = ws_listener.local_addr().map_err(|e| e.to_string())?.port();
-        let quic = transport::quic::QuicNode::start(config.keepalive)?;
+        // Same QUIC port as last run when it's free: peers' cached addresses
+        // and the router mapping then survive a restart.
+        let last_port = platform
+            .kv_get(QUIC_PORT_KEY)
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(0);
+        let quic = transport::quic::QuicNode::start(config.keepalive, last_port)?;
+        platform.kv_set(QUIC_PORT_KEY, &quic.link().port().to_string());
 
         let identity = Arc::new(Mutex::new(Identity {
             node_id,

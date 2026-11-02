@@ -98,21 +98,31 @@ pub struct QuicLink {
 /// One UDP socket for both IP versions: IPv6 with IPv4-mapped addresses
 /// allowed (`[::]:0`, v6only off), so we can dial and accept IPv4 and IPv6
 /// peers on one port. Falls back to IPv4-only where IPv6 is disabled.
-fn bind_udp() -> std::io::Result<std::net::UdpSocket> {
+///
+/// Tries `preferred` first (the port from the last run, so peers' cached
+/// addresses and the router mapping stay valid across restarts), then any
+/// free port.
+fn bind_udp(preferred: u16) -> std::io::Result<std::net::UdpSocket> {
     use socket2::{Domain, Protocol, Socket, Type};
-    let dual = (|| {
-        let s = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
-        s.set_only_v6(false)?;
-        s.bind(&SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0).into())?;
-        Ok::<_, std::io::Error>(s)
-    })();
-    let sock = match dual {
-        Ok(s) => s,
-        Err(_) => {
-            let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-            s.bind(&SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), 0).into())?;
-            s
+    let bind = |port: u16| -> std::io::Result<Socket> {
+        let dual = (|| {
+            let s = Socket::new(Domain::IPV6, Type::DGRAM, Some(Protocol::UDP))?;
+            s.set_only_v6(false)?;
+            s.bind(&SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), port).into())?;
+            Ok::<_, std::io::Error>(s)
+        })();
+        match dual {
+            Ok(s) => Ok(s),
+            Err(_) => {
+                let s = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+                s.bind(&SocketAddr::new(Ipv4Addr::UNSPECIFIED.into(), port).into())?;
+                Ok(s)
+            }
         }
+    };
+    let sock = match preferred {
+        0 => bind(0)?,
+        p => bind(p).or_else(|_| bind(0))?,
     };
     sock.set_nonblocking(true)?;
     Ok(sock.into())
@@ -158,7 +168,7 @@ fn canonical(addr: SocketAddr) -> SocketAddr {
 impl QuicNode {
     /// Create the runtime, a self-signed cert, and an endpoint bound to an
     /// ephemeral UDP port on all interfaces.
-    pub fn start(keepalive: KeepAlive) -> std::io::Result<QuicNode> {
+    pub fn start(keepalive: KeepAlive, preferred_port: u16) -> std::io::Result<QuicNode> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("md-quic")
@@ -169,7 +179,7 @@ impl QuicNode {
             let mut ep = Endpoint::new(
                 quinn::EndpointConfig::default(),
                 Some(server_config(keepalive).map_err(std::io::Error::other)?),
-                bind_udp()?,
+                bind_udp(preferred_port)?,
                 Arc::new(quinn::TokioRuntime),
             )?;
             ep.set_default_client_config(client_config(keepalive).map_err(std::io::Error::other)?);
