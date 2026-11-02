@@ -39,8 +39,14 @@ const MAX_FRAME: usize = 5 * 1024 * 1024;
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
 
 type Key = (String, String); // (user_id, node_id)
-/// Connected devices: (user, node) -> (connection id, outgoing queue).
-type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<String>)>>>;
+/// Connected devices: (user, node) -> (connection id, outgoing queue, when
+/// we last heard from it in ms since `RelayState::epoch`).
+type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<String>, Arc<AtomicU64>)>>>;
+
+/// Clients ping every 20 s. A socket silent for longer than this belongs to
+/// a device that went to sleep (a phone with the screen off) or vanished:
+/// a signal sent over it would be lost, so it goes by push instead.
+const SIGNAL_FRESH: Duration = Duration::from_secs(30);
 
 /// Per-account token bucket: `rate` bytes/s, holding at most `burst` bytes.
 pub struct Bucket {
@@ -87,6 +93,9 @@ pub struct RelayState {
     rate: f64,
     buckets: Arc<Mutex<HashMap<String, Bucket>>>,
     stats: Arc<Stats>,
+    epoch: Instant,
+    /// See `SIGNAL_FRESH` (shorter in tests).
+    signal_fresh: Duration,
 }
 
 impl RelayState {
@@ -107,7 +116,13 @@ impl RelayState {
             rate,
             buckets: Arc::default(),
             stats: Arc::default(),
+            epoch: Instant::now(),
+            signal_fresh: SIGNAL_FRESH,
         }
+    }
+
+    fn now_ms(&self) -> u64 {
+        self.epoch.elapsed().as_millis() as u64
     }
 
     fn burst(&self) -> f64 {
@@ -115,14 +130,18 @@ impl RelayState {
     }
 
     /// Deliver a signal to one of `user_id`'s devices over its WebSocket, if
-    /// it's connected. `false` = not connected (the caller falls back to FCM).
+    /// it's connected and was heard from lately (`SIGNAL_FRESH`). `false` =
+    /// not reachable that way (the caller falls back to FCM).
     pub fn deliver_signal(&self, user_id: &str, to: &str, frame: String) -> bool {
+        let now = self.now_ms();
+        let fresh = self.signal_fresh.as_millis() as u64;
         let target = self
             .conns
             .lock()
             .unwrap()
             .get(&(user_id.to_string(), to.to_string()))
-            .map(|(_, q)| q.clone());
+            .filter(|(_, _, heard)| now.saturating_sub(heard.load(Ordering::Relaxed)) <= fresh)
+            .map(|(_, q, _)| q.clone());
         target.is_some_and(|q| q.send(frame).is_ok())
     }
 
@@ -172,8 +191,12 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     let key: Key = (user_id.clone(), node_id.clone());
     let my_id = s.next_id.fetch_add(1, Ordering::Relaxed);
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let heard = Arc::new(AtomicU64::new(s.now_ms()));
     // A reconnecting device replaces its old connection.
-    s.conns.lock().unwrap().insert(key.clone(), (my_id, tx));
+    s.conns
+        .lock()
+        .unwrap()
+        .insert(key.clone(), (my_id, tx, Arc::clone(&heard)));
     if socket
         .send(Message::Text(json!({"ok": true}).to_string()))
         .await
@@ -189,6 +212,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     loop {
         tokio::select! {
             incoming = socket.recv() => {
+                heard.store(s.now_ms(), Ordering::Relaxed);
                 let Some(Ok(Message::Text(text))) = incoming else {
                     match incoming {
                         Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => continue,
@@ -206,7 +230,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                 let (Some(to), Some(data)) = (v["to"].as_str(), v.get("data")) else { continue };
                 let target = s.conns.lock().unwrap()
                     .get(&(user_id.clone(), to.to_string()))
-                    .map(|(_, q)| q.clone());
+                    .map(|(_, q, _)| q.clone());
                 let out = json!({"from": node_id, "data": data}).to_string();
                 let delivered = target.map(|q| q.send(out).is_ok()).unwrap_or(false);
                 if delivered {
@@ -245,7 +269,11 @@ async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String,
 /// from the same device may have replaced it).
 fn remove_if_ours(s: &RelayState, key: &Key, my_id: u64) {
     let mut conns = s.conns.lock().unwrap();
-    if conns.get(key).map(|(id, _)| *id == my_id).unwrap_or(false) {
+    if conns
+        .get(key)
+        .map(|(id, _, _)| *id == my_id)
+        .unwrap_or(false)
+    {
         conns.remove(key);
     }
 }
@@ -408,6 +436,32 @@ mod tests {
             !state.deliver_signal("bob", "phone", "{}".into()),
             "another user's device"
         );
+    }
+
+    #[test]
+    fn a_silent_socket_gets_no_signals_until_it_speaks_again() {
+        let mut state = RelayState::new(SECRET.into());
+        state.signal_fresh = Duration::from_millis(300);
+        let port = start_with(state.clone());
+        let mut phone = client(port, &tok("alice"), "phone");
+        next_json(&mut phone);
+        assert!(state.deliver_signal("alice", "phone", "{}".into()), "fresh");
+        assert_eq!(next_json(&mut phone), json!({}));
+
+        // Asleep: no pings for longer than `signal_fresh`. Push instead.
+        std::thread::sleep(Duration::from_millis(600));
+        assert!(
+            !state.deliver_signal("alice", "phone", "{}".into()),
+            "stale"
+        );
+
+        // Awake again: its next ping makes it reachable.
+        phone.send(M::Ping(vec![])).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !state.deliver_signal("alice", "phone", "{}".into()) {
+            assert!(Instant::now() < deadline, "never fresh again");
+            std::thread::sleep(Duration::from_millis(20));
+        }
     }
 
     #[test]

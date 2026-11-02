@@ -8,6 +8,7 @@ and in [learnings/](../learnings/README.md).
 
 | Item | Why |
 |---|---|
+| **Redeploy the server** (`apps/server/deploy.sh`) | Signals now go by push when a device's relay socket has been silent for over 30 s. A phone that went to sleep while on the relay was getting no wake-up push. |
 | **Rotate the server `JWT_SECRET`** | The old value was in a committed file before it was redacted. Changing it logs every device out once. |
 | **Change the laptop password** | It was shared in chat. |
 | **Dirty NTFS partition** on the laptop (`/dev/nvme0n1p6`) | Was already dirty before this work; left untouched. Fix it from Windows (`chkdsk`) or with `ntfsfix`. |

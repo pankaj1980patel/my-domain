@@ -295,6 +295,18 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Server: no signals into a sleeping device's relay socket (2026-11-02)
+
+- The server delivered signals over a device's relay WebSocket whenever one
+  was registered, instead of pushing. A phone that joined the relay and
+  then went to sleep (screen off) silently lost those signals, so the
+  "missing FCM pushes" in the screen-off test were never sent at all.
+- Each relay connection now records when the server last heard from it.
+  Clients ping every 20 s, and signals use the socket only if it was heard
+  from within 30 s (`SIGNAL_FRESH`); otherwise they go by FCM. Test:
+  `a_silent_socket_gets_no_signals_until_it_speaks_again`. Live once the
+  server is redeployed.
+
 ## Lab scenario runner; first-contact and stale-link fixes (2026-11-02)
 
 - `scripts/lab/scenarios.sh`: runs the `mdctl` scenarios (receipts,
