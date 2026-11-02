@@ -295,6 +295,17 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Desktop tray; phone controls verified live (2026-11-02)
+
+- Desktop tray / menu-bar icon: Open my-domain; a submenu per device
+  (marked when connected) with Ring, Send a file…, Open; Quit. Rebuilt
+  (debounced) when devices or links change. Closing the window hides it to
+  the tray; the dock icon brings it back.
+- Verified live from `mdctl` over a direct QUIC link, each step
+  acknowledged: ring; flashlight on (status `torch: true`) and off;
+  ringer to vibrate and back to normal (status follows); dial (opens the
+  dialer with the number); launch (open Settings).
+
 ## Dial from the computer (2026-11-02)
 
 - Android `dial {number}` action (phones only): opens the dialer with the
