@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
+import com.mydomain.android.ffi.EventListener
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -67,7 +68,7 @@ class NetService : Service() {
         // device id; on Android 10+ that's unreadable for normal apps, so fall
         // back to ANDROID_ID (also stable across restarts/reinstalls).
         val ip = wifiIpv4()
-        val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip, filesDir.absolutePath)
+        val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip, filesDir.absolutePath, coreEvents)
         runCatching { myNodeId = JSONObject(identityJson).optString("node_id", "") }
         Fcm.init(this)
 
@@ -159,33 +160,23 @@ class NetService : Service() {
         runCatching { getSystemService(NotificationManager::class.java)?.notify(sharedNotifId.incrementAndGet(), n) }
     }
 
-    private fun startNetworking() {
-        serviceScope.launch {
-            while (isActive) {
+    /**
+     * Core events, pushed by the Rust core as they happen (UniFFI callback;
+     * this replaced polling every second). Called on core threads, so each
+     * event is handled on the service's scope.
+     */
+    private val coreEvents = object : EventListener {
+        override fun onEvent(name: String, payloadJson: String) {
+            serviceScope.launch {
                 try {
-                    val msgs = RustNet.nativePollMessages()
-                    if (msgs != "[]") {
-                        val arr = JSONArray(msgs)
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
+                    val o = JSONObject(payloadJson)
+                    when (o.optString("kind")) {
+                        "message_received" -> {
                             handleIncomingMessage(o)
-
                             // Broadcast for UI
-                            val intent = Intent("com.mydomain.android.NEW_MESSAGE")
-                            intent.putExtra("msg", o.toString())
-                            sendBroadcast(intent)
+                            sendBroadcast(Intent("com.mydomain.android.NEW_MESSAGE").apply { putExtra("msg", o.toString()) })
                         }
-                    }
-                } catch (e: Exception) {
-                    Log.e("NetService", "Error polling messages", e)
-                }
-                // Feature events (notification / call-notification / call-history).
-                try {
-                    val events = RustNet.nativePollEvents()
-                    if (events != "[]") {
-                        val arr = JSONArray(events)
-                        for (i in 0 until arr.length()) {
-                            val o = arr.getJSONObject(i)
+                        "notification", "call_notification", "call_history", "apps_list" -> {
                             sendBroadcast(Intent("com.mydomain.android.NEW_EVENT").apply { putExtra("event", o.toString()) })
                             when (o.optString("kind")) {
                                 "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
@@ -194,12 +185,13 @@ class NetService : Service() {
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("NetService", "Error polling events", e)
+                    Log.e("NetService", "Error handling core event $name", e)
                 }
-                delay(1000)
             }
         }
-        
+    }
+
+    private fun startNetworking() {
         // No background reconnect loop: links open on demand (a send opens a
         // QUIC link), and peers reach us through a push when we have none.
 

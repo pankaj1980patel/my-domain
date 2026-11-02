@@ -51,6 +51,12 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Kotlin bindings for the Rust core, generated from the compiled library
+    // by `generateUniffiBindings` below.
+    sourceSets {
+        getByName("main").java.srcDir("build/generated/uniffi/kotlin")
+    }
 }
 
 /**
@@ -117,6 +123,25 @@ tasks.whenTaskAdded {
         dependsOn("cargoBuild")
         outputs.upToDateWhen { false }
     }
+    if (name == "compileDebugKotlin" || name == "compileReleaseKotlin") {
+        dependsOn("generateUniffiBindings")
+    }
+}
+
+// Generate the Kotlin API (package com.mydomain.android.ffi) from the built
+// arm64 library with UniFFI's library mode: the bindings always match the
+// Rust that ships. See ADR-0003.
+tasks.register<Exec>("generateUniffiBindings") {
+    dependsOn("cargoBuild")
+    val lib = "${rootDir}/../../target/aarch64-linux-android/release/libmydomain_net.so"
+    val out = layout.buildDirectory.dir("generated/uniffi/kotlin").get().asFile
+    workingDir = file("../rust")
+    commandLine(
+        "$cargoBin/cargo", "run", "-q", "--bin", "uniffi-bindgen", "--",
+        "generate", "--library", lib, "--language", "kotlin", "--out-dir", out.path,
+    )
+    inputs.file(lib)
+    outputs.dir(out)
 }
 
 
@@ -135,6 +160,9 @@ dependencies {
 
     // Material XML theme used by the activity (Theme.Material3.*).
     implementation("com.google.android.material:material:1.12.0")
+
+    // UniFFI's generated Kotlin calls the Rust core through JNA.
+    implementation("net.java.dev.jna:jna:5.14.0@aar")
 
     // FCM: signals wake this device without a server-held connection.
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))

@@ -1,28 +1,28 @@
-// my-domain Android core — a thin JNI adapter over the shared `mdcore` Engine.
+// my-domain Android core: the shared `mdcore` Engine, exported to Kotlin with
+// UniFFI (see learnings/decisions/ADR-0003-uniffi.md).
 //
-// Platform specifics (device id + name + Wi-Fi IP passed from Kotlin, the
-// single-interface multicast strategy, and the poll-based inbox) live here; all
-// networking, crypto, discovery, and messaging live in `mdcore`.
+// The Kotlin side is generated from this file at build time
+// (`uniffi-bindgen generate --library`), so the two can't drift apart:
+// - `MdEngine`: the process-wide engine, with typed methods.
+// - `EventListener`: Kotlin receives every core event as it happens
+//   (no polling), as `(name, json)`: the desktop's event names
+//   (`CoreEvent::name`) with the kind-tagged JSON (`CoreEvent::to_json`).
+// - `MdError`: failures arrive in Kotlin as exceptions.
 //
-// Kotlin drives this by calling the `native*` functions and polling
-// `nativeGetPeers` / `nativePollMessages` / `nativeConnectedPeers`.
+// Platform specifics (device id, name and Wi-Fi IP passed from Kotlin, the
+// single-interface multicast strategy) live here; all networking, crypto,
+// discovery and messaging live in `mdcore`.
 
-use std::collections::VecDeque;
 use std::net::Ipv4Addr;
 use std::sync::{Arc, Mutex, OnceLock};
 
-use jni::objects::{JClass, JString};
-use jni::sys::jstring;
-use jni::JNIEnv;
-use log::info;
-
 use mdcore::engine::Engine;
+use mdcore::error::CoreError;
 use mdcore::events::{CoreEvent, EventSink};
 use mdcore::kv::FileKv;
-use mdcore::model::IncomingMessage;
 use mdcore::platform::{detect_local_ip, IfaceMode, Platform};
 
-const INBOX_CAP: usize = 500;
+uniffi::setup_scaffolding!();
 
 // ---------------------------------------------------------------------------
 // Platform implementation
@@ -90,539 +90,354 @@ impl Platform for AndroidPlatform {
 }
 
 // ---------------------------------------------------------------------------
-// Event sink — record incoming messages into an inbox drained by poll.
+// Types crossing the boundary
 // ---------------------------------------------------------------------------
 
-struct InboxSink {
-    messages: Mutex<VecDeque<IncomingMessage>>,
-    /// Feature events (notification / call-notification / call-history) as JSON,
-    /// drained by `nativePollEvents`.
-    events: Mutex<VecDeque<serde_json::Value>>,
+/// A failure, thrown in Kotlin as `MdException.<Variant>`.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+#[uniffi(flat_error)]
+pub enum MdError {
+    #[error("not logged in")]
+    NotLoggedIn,
+    #[error("set your encryption key first")]
+    NoKey,
+    #[error("peer not found")]
+    PeerNotFound,
+    #[error("{0}")]
+    NotConnected(String),
+    #[error("{0}")]
+    Failed(String),
 }
 
-impl InboxSink {
-    fn push_event(&self, v: serde_json::Value) {
-        let mut q = self.events.lock().unwrap();
-        if q.len() >= INBOX_CAP {
-            q.pop_front();
+impl From<CoreError> for MdError {
+    fn from(e: CoreError) -> Self {
+        match e {
+            CoreError::NotLoggedIn => MdError::NotLoggedIn,
+            CoreError::NoKey => MdError::NoKey,
+            CoreError::PeerNotFound => MdError::PeerNotFound,
+            CoreError::NoLink(m) => MdError::NotConnected(m),
+            other => MdError::Failed(other.to_string()),
         }
-        q.push_back(v);
     }
 }
 
-impl EventSink for InboxSink {
+type MdResult<T> = Result<T, MdError>;
+
+/// Receives every core event: `name` is e.g. `message-received`,
+/// `peer-connected`, `peers-updated`; `payload_json` is the event as a JSON
+/// object with a `kind` field (`message_received`, ...) and its fields.
+/// Called on core threads: hop to the main thread before touching UI.
+#[uniffi::export(callback_interface)]
+pub trait EventListener: Send + Sync {
+    fn on_event(&self, name: String, payload_json: String);
+}
+
+/// This device as the core sees it.
+#[derive(uniffi::Record)]
+pub struct DeviceIdentity {
+    pub node_id: String,
+    pub name: String,
+    pub ip: String,
+    pub quic_port: u16,
+}
+
+/// A known device of ours.
+#[derive(uniffi::Record)]
+pub struct PeerInfo {
+    pub node_id: String,
+    pub name: String,
+    pub ip: String,
+    pub quic_port: u16,
+    /// Where we learned about it: "lan", "registry" or "manual".
+    pub source: String,
+    /// Live link right now.
+    pub connected: bool,
+}
+
+#[derive(uniffi::Record)]
+pub struct FirewallStatus {
+    pub outbound_ok: bool,
+    pub inbound_blocked: bool,
+}
+
+// ---------------------------------------------------------------------------
+// Events: forward everything to the Kotlin listener
+// ---------------------------------------------------------------------------
+
+/// The listener is replaceable: NetService can be recreated in the same
+/// process (the engine lives as long as the process).
+#[derive(Default)]
+struct ListenerSink {
+    listener: Mutex<Option<Box<dyn EventListener>>>,
+}
+
+impl EventSink for ListenerSink {
     fn emit(&self, ev: CoreEvent) {
-        // Chat goes to the message inbox; feature events go to the events inbox
-        // as mdcore's kind-tagged JSON. Peers/WS state are read directly off the
-        // Engine by the poll shims, and clipboard sync is handled in Kotlin, so
-        // those events aren't queued. (Phase 3 replaces polling with UniFFI
-        // callbacks that deliver every event.)
-        match ev {
-            CoreEvent::MessageReceived(m) => {
-                let mut q = self.messages.lock().unwrap();
-                if q.len() >= INBOX_CAP {
-                    q.pop_front();
-                }
-                q.push_back(m);
-            }
-            CoreEvent::Notification { .. }
-            | CoreEvent::CallNotification { .. }
-            | CoreEvent::CallHistory { .. }
-            | CoreEvent::AppsList { .. } => self.push_event(ev.to_json()),
-            _ => {}
+        if let Some(l) = self.listener.lock().unwrap().as_ref() {
+            l.on_event(ev.name().to_string(), ev.to_json().to_string());
         }
     }
 }
 
-impl InboxSink {
-    fn drain(&self) -> Vec<IncomingMessage> {
-        self.messages.lock().unwrap().drain(..).collect()
-    }
-    fn drain_events(&self) -> Vec<serde_json::Value> {
-        self.events.lock().unwrap().drain(..).collect()
-    }
+// ---------------------------------------------------------------------------
+// The engine
+// ---------------------------------------------------------------------------
+
+/// The process-wide engine. `MdEngine.start` returns the running one if it
+/// was already started (e.g. by a push that woke the app).
+#[derive(uniffi::Object)]
+pub struct MdEngine {
+    inner: Engine<AndroidPlatform>,
+    sink: Arc<ListenerSink>,
+    wifi_ip: Arc<Mutex<String>>,
 }
 
-static ENGINE: OnceLock<Engine<AndroidPlatform>> = OnceLock::new();
-static SINK: OnceLock<Arc<InboxSink>> = OnceLock::new();
-static WIFI_IP: OnceLock<Arc<Mutex<String>>> = OnceLock::new();
+static ENGINE: OnceLock<Arc<MdEngine>> = OnceLock::new();
 static FCM_TOKEN: OnceLock<Arc<Mutex<Option<String>>>> = OnceLock::new();
 
-fn engine() -> Option<&'static Engine<AndroidPlatform>> {
-    ENGINE.get()
-}
-
-/// Shared FCM-token cell, created on first use so the token can be set before or
-/// after `nativeStart`.
+/// Shared FCM-token cell, so the token can arrive before or after `start`.
 fn fcm_token_cell() -> &'static Arc<Mutex<Option<String>>> {
     FCM_TOKEN.get_or_init(|| Arc::new(Mutex::new(None)))
 }
 
-// ---------------------------------------------------------------------------
-// JNI helpers — package com.mydomain.android, class RustNet
-// ---------------------------------------------------------------------------
-
-fn jstr(env: &mut JNIEnv, s: &JString, fallback: &str) -> String {
-    env.get_string(s)
-        .map(|v| v.into())
-        .unwrap_or_else(|_| fallback.to_string())
+/// The running engine, if `MdEngine.start` has been called in this process.
+#[uniffi::export]
+pub fn running_engine() -> Option<Arc<MdEngine>> {
+    ENGINE.get().cloned()
 }
 
-fn ret(env: &mut JNIEnv, s: String) -> jstring {
-    env.new_string(s)
-        .map(|o| o.into_raw())
-        .unwrap_or(std::ptr::null_mut())
-}
-
-fn ok_or_err(r: mdcore::Result<()>) -> String {
-    match r {
-        Ok(()) => String::new(),
-        Err(e) => format!("ERROR: {e}"),
+/// Hand the Firebase token to the core (before or after `start`). With a
+/// running, logged-in engine it re-registers so the server stores it.
+#[uniffi::export]
+pub fn set_fcm_token(token: String) {
+    *fcm_token_cell().lock().unwrap() = (!token.is_empty()).then_some(token);
+    if let Some(e) = ENGINE.get() {
+        let _ = e.inner.refresh_from_server();
     }
 }
 
-fn with_engine<F: FnOnce(&Engine<AndroidPlatform>) -> mdcore::Result<()>>(f: F) -> String {
-    match engine() {
-        Some(e) => ok_or_err(f(e)),
-        None => "ERROR: not started".into(),
-    }
+/// A fresh random passphrase.
+#[uniffi::export]
+pub fn generate_key() -> String {
+    mdcore::crypto::generate_key()
 }
 
-// ---------------------------------------------------------------------------
-// JNI surface
-// ---------------------------------------------------------------------------
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeStart<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    device_id: JString<'l>,
-    name: JString<'l>,
-    wifi_ip: JString<'l>,
-    data_dir: JString<'l>,
-) -> jstring {
-    android_logger::init_once(
-        android_logger::Config::default()
-            .with_max_level(log::LevelFilter::Info)
-            .with_tag("mydomain_net"),
-    );
-    let device_id = jstr(&mut env, &device_id, "");
-    let name = jstr(&mut env, &name, "android");
-    let wifi_ip = jstr(&mut env, &wifi_ip, "");
-    let data_dir = jstr(&mut env, &data_dir, "");
-
-    if ENGINE.get().is_none() {
+#[uniffi::export]
+impl MdEngine {
+    /// Start networking (or return the running engine) and attach `listener`.
+    #[uniffi::constructor]
+    pub fn start(
+        device_id: String,
+        name: String,
+        wifi_ip: String,
+        data_dir: String,
+        listener: Box<dyn EventListener>,
+    ) -> MdResult<Arc<MdEngine>> {
+        android_logger::init_once(
+            android_logger::Config::default()
+                .with_max_level(log::LevelFilter::Info)
+                .with_tag("mydomain_net"),
+        );
+        if let Some(e) = ENGINE.get() {
+            e.set_listener(listener);
+            return Ok(e.clone());
+        }
         let wifi = Arc::new(Mutex::new(wifi_ip));
         let platform = AndroidPlatform {
             device_id,
-            name,
+            name: if name.is_empty() {
+                "android".into()
+            } else {
+                name
+            },
             wifi_ip: wifi.clone(),
             fcm_token: fcm_token_cell().clone(),
             kv: (!data_dir.is_empty()).then(|| FileKv::in_dir(&data_dir)),
         };
-        let sink = Arc::new(InboxSink {
-            messages: Mutex::new(VecDeque::new()),
-            events: Mutex::new(VecDeque::new()),
+        let sink = Arc::new(ListenerSink::default());
+        *sink.listener.lock().unwrap() = Some(listener);
+        let inner = Engine::start(platform, sink.clone() as Arc<dyn EventSink>)?;
+        log::info!("engine started");
+        let engine = Arc::new(MdEngine {
+            inner,
+            sink,
+            wifi_ip: wifi,
         });
-        match Engine::start(platform, sink.clone() as Arc<dyn EventSink>) {
-            Ok(eng) => {
-                let _ = WIFI_IP.set(wifi);
-                let _ = SINK.set(sink);
-                let _ = ENGINE.set(eng);
-                info!("engine started");
-            }
-            Err(e) => return ret(&mut env, format!("ERROR: {e}")),
+        // Lost a race with another start: use the winner.
+        Ok(ENGINE.get_or_init(|| engine).clone())
+    }
+
+    /// Replace the event listener (e.g. a recreated service).
+    pub fn set_listener(&self, listener: Box<dyn EventListener>) {
+        *self.sink.listener.lock().unwrap() = Some(listener);
+    }
+
+    pub fn identity(&self) -> DeviceIdentity {
+        let id = self.inner.identity();
+        DeviceIdentity {
+            node_id: id.node_id,
+            name: id.name,
+            ip: id.ip,
+            quic_port: id.quic_port,
         }
     }
 
-    let json = engine()
-        .map(|e| serde_json::to_string(&e.identity()).unwrap_or_else(|_| "{}".into()))
-        .unwrap_or_else(|| "{}".into());
-    ret(&mut env, json)
-}
+    // --- account ---
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthLogin<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    url: JString<'l>,
-    user: JString<'l>,
-    pass: JString<'l>,
-) -> jstring {
-    let url = jstr(&mut env, &url, "");
-    let user = jstr(&mut env, &user, "");
-    let pass = jstr(&mut env, &pass, "");
-    let out = with_engine(|e| e.auth_login(&url, &user, &pass));
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeAuthRegister<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    url: JString<'l>,
-    user: JString<'l>,
-    pass: JString<'l>,
-) -> jstring {
-    let url = jstr(&mut env, &url, "");
-    let user = jstr(&mut env, &user, "");
-    let pass = jstr(&mut env, &pass, "");
-    let out = with_engine(|e| e.auth_register(&url, &user, &pass));
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetEncryptionKey<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    passphrase: JString<'l>,
-) -> jstring {
-    let passphrase = jstr(&mut env, &passphrase, "");
-    let out = with_engine(|e| e.set_encryption_key(&passphrase));
-    ret(&mut env, out)
-}
-
-/// DEV / LAN-only: skip the registry login (see `Engine::dev_login`).
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeDevLogin<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    username: JString<'l>,
-    passphrase: JString<'l>,
-) -> jstring {
-    let username = jstr(&mut env, &username, "");
-    let passphrase = jstr(&mut env, &passphrase, "");
-    let out = with_engine(|e| e.dev_login(&username, &passphrase));
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeUpdateEncryptionKey<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    new_pass: JString<'l>,
-    password: JString<'l>,
-) -> jstring {
-    let new_pass = jstr(&mut env, &new_pass, "");
-    let password = jstr(&mut env, &password, "");
-    let out = with_engine(|e| e.update_encryption_key(&new_pass, &password));
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeLogout<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    if let Some(e) = engine() {
-        e.logout();
+    pub fn auth_login(
+        &self,
+        server_url: String,
+        username: String,
+        password: String,
+    ) -> MdResult<()> {
+        Ok(self.inner.auth_login(&server_url, &username, &password)?)
     }
-    ret(&mut env, String::new())
-}
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeGenerateKey<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    ret(&mut env, mdcore::crypto::generate_key())
-}
+    pub fn auth_register(
+        &self,
+        server_url: String,
+        username: String,
+        password: String,
+    ) -> MdResult<()> {
+        Ok(self
+            .inner
+            .auth_register(&server_url, &username, &password)?)
+    }
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeIsReady<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let ready = engine().map(|e| e.is_ready()).unwrap_or(false);
-    ret(&mut env, if ready { "true".into() } else { "false".into() })
-}
+    pub fn set_encryption_key(&self, passphrase: String) -> MdResult<()> {
+        Ok(self.inner.set_encryption_key(&passphrase)?)
+    }
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRefresh<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let out = with_engine(|e| e.refresh_from_server());
-    ret(&mut env, out)
-}
+    pub fn update_encryption_key(&self, new_passphrase: String, password: String) -> MdResult<()> {
+        Ok(self
+            .inner
+            .update_encryption_key(&new_passphrase, &password)?)
+    }
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeNetworkChanged<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    wifi_ip: JString<'l>,
-) -> jstring {
-    let wifi_ip = jstr(&mut env, &wifi_ip, "");
-    if let Some(w) = WIFI_IP.get() {
+    /// DEV / LAN-only: skip the registry login (see `Engine::dev_login`).
+    pub fn dev_login(&self, username: String, passphrase: String) -> MdResult<()> {
+        Ok(self.inner.dev_login(&username, &passphrase)?)
+    }
+
+    pub fn logout(&self) {
+        self.inner.logout();
+    }
+
+    /// Signed in to the server and holding a key. (An offline `dev_login`
+    /// has a key but no server session, so it isn't "ready".)
+    pub fn is_ready(&self) -> bool {
+        self.inner.is_ready()
+    }
+
+    // --- devices and links ---
+
+    /// Register this device and fetch the others from the server.
+    pub fn refresh(&self) -> MdResult<()> {
+        Ok(self.inner.refresh_from_server()?)
+    }
+
+    pub fn peers(&self) -> Vec<PeerInfo> {
+        let live: std::collections::HashSet<String> =
+            self.inner.connected_peers().into_iter().collect();
+        self.inner
+            .get_peers()
+            .into_iter()
+            .map(|p| PeerInfo {
+                connected: live.contains(&p.node_id),
+                source: serde_json::to_value(p.source)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default(),
+                node_id: p.node_id,
+                name: p.name,
+                ip: p.ip,
+                quic_port: p.quic_port,
+            })
+            .collect()
+    }
+
+    /// Add a device by address (Developer screen). Listed as `manual:<ip>`
+    /// until the first QUIC link reveals its real node id.
+    pub fn add_manual_peer(&self, name: String, ip: String, quic_port: u16) -> MdResult<()> {
+        Ok(self.inner.add_manual_peer(&name, &ip, quic_port)?)
+    }
+
+    /// The device's network changed (`wifi_ip`: its new Wi-Fi IPv4, or "").
+    pub fn network_changed(&self, wifi_ip: String) {
         if wifi_ip.parse::<Ipv4Addr>().is_ok() {
-            *w.lock().unwrap() = wifi_ip.clone();
+            *self.wifi_ip.lock().unwrap() = wifi_ip.clone();
         }
+        self.inner.network_changed(Some(&wifi_ip));
     }
-    if let Some(e) = engine() {
-        e.network_changed(Some(&wifi_ip));
+
+    pub fn scan_lan(&self) {
+        self.inner.scan_lan();
     }
-    ret(&mut env, String::new())
-}
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeScanLan<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    if let Some(e) = engine() {
-        e.scan_lan();
+    /// Connect along the ladder, in the background; progress arrives as
+    /// `connect-progress` events, success as `peer-connected`.
+    pub fn connect(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.connect(&node_id)?)
     }
-    ret(&mut env, String::new())
-}
 
-/// Send a message over the live link (a QUIC link is opened first if there
-/// is none). Returns the transport used on success, or "ERROR: …" on failure.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSend<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    node_id: JString<'l>,
-    text: JString<'l>,
-) -> jstring {
-    let node_id = jstr(&mut env, &node_id, "");
-    let text = jstr(&mut env, &text, "");
-    let out = match engine() {
-        Some(e) => match e.send(&node_id, &text) {
-            Ok(proto) => proto,
-            Err(err) => format!("ERROR: {err}"),
-        },
-        None => "ERROR: not started".into(),
-    };
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeGetPeers<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let json = engine()
-        .map(|e| serde_json::to_string(&e.get_peers()).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_else(|| "[]".into());
-    ret(&mut env, json)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollMessages<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let json = SINK
-        .get()
-        .map(|s| serde_json::to_string(&s.drain()).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_else(|| "[]".into());
-    ret(&mut env, json)
-}
-
-/// node_ids of peers with a live WebSocket (true on the accepting side too).
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectedPeers<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let json = engine()
-        .map(|e| serde_json::to_string(&e.connected_peers()).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_else(|| "[]".into());
-    ret(&mut env, json)
-}
-
-/// Drain feature events (notification / call-notification / call-history) as a
-/// JSON array; each object has a `kind` discriminator.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativePollEvents<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let json = SINK
-        .get()
-        .map(|s| serde_json::to_string(&s.drain_events()).unwrap_or_else(|_| "[]".into()))
-        .unwrap_or_else(|| "[]".into());
-    ret(&mut env, json)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareNotification<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    title: JString<'l>,
-    body: JString<'l>,
-    app: JString<'l>,
-) -> jstring {
-    let title = jstr(&mut env, &title, "");
-    let body = jstr(&mut env, &body, "");
-    let app = jstr(&mut env, &app, "");
-    if let Some(e) = engine() {
-        let app = if app.is_empty() {
-            None
-        } else {
-            Some(app.as_str())
-        };
-        e.share_notification(&title, &body, app);
+    pub fn firewall_check(&self) -> MdResult<FirewallStatus> {
+        let fs = self.inner.firewall_check()?;
+        Ok(FirewallStatus {
+            outbound_ok: fs.outbound_ok,
+            inbound_blocked: fs.inbound_blocked,
+        })
     }
-    ret(&mut env, String::new())
-}
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallNotification<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    caller: JString<'l>,
-    number: JString<'l>,
-    state: JString<'l>,
-) -> jstring {
-    let caller = jstr(&mut env, &caller, "");
-    let number = jstr(&mut env, &number, "");
-    let state = jstr(&mut env, &state, "");
-    if let Some(e) = engine() {
-        let number = if number.is_empty() {
-            None
-        } else {
-            Some(number.as_str())
-        };
-        e.share_call_notification(&caller, number, &state);
+    // --- messaging ---
+
+    /// Send a message over the live link (a QUIC link is opened first if
+    /// there is none). Returns the transport used, e.g. "QUIC".
+    pub fn send(&self, node_id: String, text: String) -> MdResult<String> {
+        Ok(self.inner.send(&node_id, &text)?)
     }
-    ret(&mut env, String::new())
-}
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareCallHistory<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    entries_json: JString<'l>,
-) -> jstring {
-    let entries_json = jstr(&mut env, &entries_json, "[]");
-    if let Some(e) = engine() {
-        e.share_call_history(&entries_json);
+    // --- signaling ---
+
+    /// An inbound FCM signal (from the FirebaseMessagingService).
+    pub fn on_signal(&self, from: String, payload: String) {
+        self.inner.on_signal(&from, &payload);
     }
-    ret(&mut env, String::new())
-}
 
-// --- signaling / connection setup ---
+    // --- shared notifications and calls ---
 
-/// Set the Firebase FCM token (from Kotlin). Re-registers so the server stores
-/// it. Order-independent vs `nativeStart`.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetFcmToken<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    token: JString<'l>,
-) -> jstring {
-    let token = jstr(&mut env, &token, "");
-    *fcm_token_cell().lock().unwrap() = if token.is_empty() { None } else { Some(token) };
-    if let Some(e) = engine() {
-        let _ = e.refresh_from_server();
+    pub fn share_notification(&self, title: String, body: String, app: Option<String>) {
+        self.inner.share_notification(&title, &body, app.as_deref());
     }
-    ret(&mut env, String::new())
-}
 
-/// Feed an inbound FCM signal (from Kotlin's FirebaseMessagingService).
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeOnSignal<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    from: JString<'l>,
-    payload: JString<'l>,
-) -> jstring {
-    let from = jstr(&mut env, &from, "");
-    let payload = jstr(&mut env, &payload, "");
-    if let Some(e) = engine() {
-        e.on_signal(&from, &payload);
+    pub fn share_call_notification(&self, caller: String, number: Option<String>, state: String) {
+        self.inner
+            .share_call_notification(&caller, number.as_deref(), &state);
     }
-    ret(&mut env, String::new())
-}
 
-/// Connect to a peer along the fallback ladder.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnect<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    node_id: JString<'l>,
-) -> jstring {
-    let node_id = jstr(&mut env, &node_id, "");
-    let out = with_engine(|e| e.connect(&node_id));
-    ret(&mut env, out)
-}
-
-/// Run the startup firewall check; returns JSON `{outbound_ok, inbound_blocked}`
-/// or `ERROR: ...`.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeFirewallCheck<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let out = match engine() {
-        Some(e) => match e.firewall_check() {
-            Ok(fs) => serde_json::json!({ "outbound_ok": fs.outbound_ok, "inbound_blocked": fs.inbound_blocked }).to_string(),
-            Err(e) => format!("ERROR: {e}"),
-        },
-        None => "ERROR: not started".into(),
-    };
-    ret(&mut env, out)
-}
-
-// --- app-notification pub/sub ---
-
-/// Producer: publish this device's shareable app list (JSON array of {pkg,label}).
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetInstalledApps<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    apps_json: JString<'l>,
-) -> jstring {
-    let apps_json = jstr(&mut env, &apps_json, "[]");
-    if let Some(e) = engine() {
-        e.set_installed_apps(&apps_json);
+    /// `entries_json`: JSON array of call-log entries.
+    pub fn share_call_history(&self, entries_json: String) {
+        self.inner.share_call_history(&entries_json);
     }
-    ret(&mut env, String::new())
-}
 
-/// Consumer: request a producer's app list (reply arrives via nativePollEvents).
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeRequestApps<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    node_id: JString<'l>,
-) -> jstring {
-    let node_id = jstr(&mut env, &node_id, "");
-    let out = with_engine(|e| e.request_apps(&node_id));
-    ret(&mut env, out)
-}
+    // --- app-notification pub/sub ---
 
-/// Consumer: set the enabled package set (JSON array of pkg strings) on a producer.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSubscribeApps<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    node_id: JString<'l>,
-    apps_json: JString<'l>,
-) -> jstring {
-    let node_id = jstr(&mut env, &node_id, "");
-    let apps_json = jstr(&mut env, &apps_json, "[]");
-    let out = with_engine(|e| e.subscribe_apps(&node_id, &apps_json));
-    ret(&mut env, out)
-}
-
-/// Producer: a captured app notification — forwarded to subscribers of `pkg`.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeShareAppNotification<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    pkg: JString<'l>,
-    app: JString<'l>,
-    title: JString<'l>,
-    body: JString<'l>,
-) -> jstring {
-    let pkg = jstr(&mut env, &pkg, "");
-    let app = jstr(&mut env, &app, "");
-    let title = jstr(&mut env, &title, "");
-    let body = jstr(&mut env, &body, "");
-    if let Some(e) = engine() {
-        e.share_app_notification(&pkg, &app, &title, &body);
+    /// Producer: this device's shareable app list (JSON array of {pkg,label}).
+    pub fn set_installed_apps(&self, apps_json: String) {
+        self.inner.set_installed_apps(&apps_json);
     }
-    ret(&mut env, String::new())
+
+    /// Consumer: ask a producer for its app list (reply: an `apps-list` event).
+    pub fn request_apps(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.request_apps(&node_id)?)
+    }
+
+    /// Consumer: the enabled packages (JSON array of strings) on a producer.
+    pub fn subscribe_apps(&self, node_id: String, apps_json: String) -> MdResult<()> {
+        Ok(self.inner.subscribe_apps(&node_id, &apps_json)?)
+    }
+
+    /// Producer: a captured app notification, forwarded to its subscribers.
+    pub fn share_app_notification(&self, pkg: String, app: String, title: String, body: String) {
+        self.inner.share_app_notification(&pkg, &app, &title, &body);
+    }
 }

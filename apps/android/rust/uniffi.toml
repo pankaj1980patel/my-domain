@@ -1,0 +1,3 @@
+[bindings.kotlin]
+package_name = "com.mydomain.android.ffi"
+cdylib_name = "mydomain_net"
