@@ -295,6 +295,24 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Notification actions (2026-11-02)
+
+- A notification forwarded from a subscribed phone app now carries its key
+  and its buttons (`share_app_notification_with`); another device can press
+  a button, reply (buttons that take text) or dismiss it
+  (`notification_action`, index -1 = dismiss; reliable, so it waits for
+  the phone). Android fills the reply into the button's RemoteInput and
+  fires it; Activity says what was done, never the text.
+- Desktop: a "Notifications" tile per device (last 30, memory only) with
+  the buttons, a reply box and Dismiss; handled items dim.
+- `mdctl`: `subscribe <node> <json pkgs>`, `notifact <node> <key> <index>
+  [text]`.
+- Verified live: `mdctl` subscribed to the phone's shell notifications, got
+  a posted notification with its key, and dismissed it remotely (gone from
+  the phone). Buttons and replies are covered by the core and bridge tests.
+- The desktop's bindings test now fails if export fails (an `i64` command
+  argument made specta skip the file silently).
+
 ## Verification codes to the computer (2026-11-02)
 
 - Android (off by default: Settings "Send verification codes to my
