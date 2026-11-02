@@ -76,6 +76,24 @@ impl<P: Platform> Engine<P> {
         self.send(node_id, &m)
     }
 
+    /// Ask a device to run an action it listed in its status (`actions`),
+    /// e.g. `run_action(phone, "flashlight", r#"{"on":true}"#)`. Arrives as
+    /// `CoreEvent::Action` there.
+    pub fn run_action(&self, node_id: &str, name: &str, args_json: &str) -> crate::Result<String> {
+        if !crate::features::device::is_action_name(name) {
+            return Err(format!("not an action name: {name}").into());
+        }
+        let args: serde_json::Value = if args_json.trim().is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(args_json).map_err(|e| format!("bad action arguments: {e}"))?
+        };
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({ "type": "action", "from": me, "name": name, "args": args })
+            .to_string();
+        self.send(node_id, &m)
+    }
+
     // --- files (see features::files) ---
 
     /// Where files from your other devices are saved. Until this is set,

@@ -16,7 +16,8 @@
 //!
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 //! `send <node> <text...>`, `status <node>`, `ring <node>`,
-//! `open <node> <url>`, `sendfile <node> <path>`, `downloads <dir>`,
+//! `open <node> <url>`, `action <node> <name> [json]`,
+//! `sendfile <node> <path>`, `downloads <dir>`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -386,6 +387,12 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         "open" => {
             let to = resolve(engine, &arg(words.next())?)?;
             Ok(json!({ "via": engine.open_url(&to, &arg(words.next())?)? }))
+        }
+        "action" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let name = arg(words.next())?;
+            let args = words.collect::<Vec<_>>().join(" ");
+            Ok(json!({ "via": engine.run_action(&to, &name, &args)? }))
         }
         "sendfile" => {
             let to = resolve(engine, &arg(words.next())?)?;

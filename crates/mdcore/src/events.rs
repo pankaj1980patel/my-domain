@@ -88,6 +88,13 @@ pub enum CoreEvent {
     Ring { from: String },
     /// Another of your devices asks this one to open a web link.
     OpenUrl { from: String, url: String },
+    /// Another of your devices asks this one to run action `name` (e.g.
+    /// "flashlight" with `{"on": true}`); the host app carries it out.
+    Action {
+        from: String,
+        name: String,
+        args: serde_json::Value,
+    },
     /// A file transfer moved on (`incoming`: to this device). `node_id` is
     /// the other device; `done` of `total` bytes are confirmed.
     FileProgress {
@@ -148,6 +155,7 @@ impl CoreEvent {
             CoreEvent::DeviceStatus { .. } => "device-status-event",
             CoreEvent::Ring { .. } => "ring-event",
             CoreEvent::OpenUrl { .. } => "open-url-event",
+            CoreEvent::Action { .. } => "action-event",
             CoreEvent::FileProgress { .. } => "file-progress",
             CoreEvent::FileReceived { .. } => "file-received",
             CoreEvent::FileSent { .. } => "file-sent",

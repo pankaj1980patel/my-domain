@@ -8,6 +8,13 @@
 //!   status         { from, status{} }  device → asker
 //!   ring           { from }            asker → device
 //!   open_url       { from, url }       asker → device (http/https only)
+//!   action         { from, name, args } asker → device
+//!
+//! `action` is the open-ended one: flashlight, volume, ringer mode, media
+//! keys, ... The host app carries it out and lists the names it supports in
+//! its status (`"actions": [...]`), so the asking side only offers buttons
+//! that will work. Names are short lowercase words (`[a-z0-9_.]`, up to 40
+//! characters); anything else is dropped.
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -29,7 +36,7 @@ pub fn is_openable(url: &str) -> bool {
 
 impl<P: Platform> ControlHandler<P> for DeviceHandler {
     fn kinds(&self) -> &'static [&'static str] {
-        &["status_request", "status", "ring", "open_url"]
+        &["status_request", "status", "ring", "open_url", "action"]
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
@@ -65,9 +72,28 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     });
                 }
             }
+            "action" => {
+                let name = msg.str("name");
+                if is_action_name(&name) {
+                    ctx.sink.emit(CoreEvent::Action {
+                        from,
+                        name,
+                        args: msg.json("args"),
+                    });
+                }
+            }
             _ => {}
         }
     }
+}
+
+/// A valid action name: short, lowercase, `[a-z0-9_.]`.
+pub fn is_action_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 40
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '.')
 }
 
 #[cfg(test)]
@@ -87,6 +113,16 @@ mod tests {
             "",
         ] {
             assert!(!is_openable(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn action_names_are_short_lowercase_words() {
+        assert!(is_action_name("flashlight"));
+        assert!(is_action_name("media.play_pause"));
+        assert!(is_action_name("volume2"));
+        for bad in ["", "Flash", "rm -rf", "a/b", &"x".repeat(41)] {
+            assert!(!is_action_name(bad), "{bad}");
         }
     }
 }

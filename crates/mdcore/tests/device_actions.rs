@@ -67,3 +67,22 @@ fn only_web_links_are_sent_and_opened() {
         .expect("no open-url");
     assert_eq!(url, "https://example.com/x");
 }
+
+#[test]
+fn an_action_reaches_the_device_with_its_arguments() {
+    let (a, b) = pair("action");
+    assert!(a.engine.run_action(&b.node_id(), "Bad Name", "").is_err());
+    assert!(a.engine.run_action(&b.node_id(), "flashlight", "{nope").is_err());
+    a.engine
+        .run_action(&b.node_id(), "flashlight", r#"{"on":true}"#)
+        .unwrap();
+    let (name, args) = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Action { name, args, .. } => Some((name.clone(), args.clone())),
+            _ => None,
+        })
+        .expect("no action");
+    assert_eq!(name, "flashlight");
+    assert_eq!(args["on"], true);
+}
