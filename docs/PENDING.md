@@ -1,6 +1,6 @@
 # What's pending
 
-Status as of **2026-11-01**, in priority order. What's already built is in
+Status as of **2026-11-02**, in priority order. What's already built is in
 [DONE.md](DONE.md). The full plan for every phase lives in the rebuild plan
 and in [learnings/](../learnings/README.md).
 
@@ -8,7 +8,6 @@ and in [learnings/](../learnings/README.md).
 
 | Item | Why |
 |---|---|
-| **Deploy the latest server to `oracle-dev`** (`apps/server/deploy.sh`) | The live server (152.67.7.50:6969) is still the **Jun 28** build. It has no `/relay` endpoint (returns 404) and doesn't store `quic_port`. Relaying through the server won't work until it's deployed. |
 | **Rotate the server `JWT_SECRET`** | The old value was in a committed file before it was redacted. Changing it logs every device out once. |
 | **Change the laptop password** | It was shared in chat. |
 | **Dirty NTFS partition** on the laptop (`/dev/nvme0n1p6`) | Was already dirty before this work; left untouched. Fix it from Windows (`chkdsk`) or with `ntfsfix`. |
@@ -63,9 +62,8 @@ or with less battery.
       safely go.
 
 - ~~Even less server dependence~~: **done** (peer cache, `addr_update`,
-  signals over our own links and through a shared neighbour). Next ideas:
-  - Neighbours forward more than one hop (needs loop protection and a hop
-    budget).
+  signals over our own links, forwarded up to 3 hops, QUIC port kept
+  across restarts, FCM on every device). Next idea:
   - A LAN device acts as "home base" for phones away from home.
 
 ## 3. Phase 2 leftovers (networking)
@@ -87,9 +85,12 @@ or with less battery.
   between the threaded code and the async code (the "bridge thread").
 - ~~Relay over `wss://` (TLS)~~: **done**. The live test chats through the
   real HTTPS server's relay.
-- **Test the engine against the real server's relay.** Today the engine has
-  only been tested against `FakeRelay`. Both follow the same protocol, but
-  the two have never been connected.
+- ~~Test the engine against the real server's relay~~: **done**
+  (`tests/live_server.rs`, ignored by default; it cleans up its devices).
+- **Clean engine shutdown.** Dropping an `Engine` doesn't release its
+  sockets, because background threads keep the endpoint alive. Fine for a
+  real restart (a new process), but in-process restarts can't reuse the
+  QUIC port. The tokio move above fixes it.
 
 ## 4. Phase 3: Bridges and apps
 
@@ -98,8 +99,8 @@ or with less battery.
   - It replaces the hand-written JNI and the 1-second polling. Events are
     pushed through Kotlin callbacks instead.
   - It also removes Kotlin's own copies of the clipboard and reconnect logic.
-- **Android FCM receiver** (`FirebaseMessagingService` → `onSignal`). Today
-  the phone can't be woken up by a push.
+- ~~Android FCM receiver~~: **done** (2026-11-02), plus the desktop moved
+  to Android-mode FCM registration. See DONE.md.
 - **Desktop UI in SolidJS + TypeScript**, with typed commands (`tauri-specta`)
   and native OS notifications. Why:
   [ADR-0004](../learnings/decisions/ADR-0004-solidjs.md).

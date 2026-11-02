@@ -1,6 +1,6 @@
 # What's done
 
-Status as of **2026-11-01**. Everything below is committed on the `monorepo`
+Status as of **2026-11-02**. Everything below is committed on the `monorepo`
 branch, and was built and tested unless a line says otherwise. What's still
 left is in [PENDING.md](PENDING.md).
 
@@ -215,16 +215,34 @@ The engine tries each method in order, cheapest first, until one works
     comes up, after a network change, and when its mapping changes. Peers
     update their cache with no server involved.
   - **Signals over our own links:** a signal for a peer we're linked to
-    goes straight to it, with no server. Otherwise every linked neighbour
-    that can reach the target forwards it one hop, and the server is tried
-    too. The receiver keeps the first copy and drops the rest.
+    goes straight to it, with no server. Otherwise it passes through linked
+    devices, up to 3 of them, and the server is tried too. Each device
+    forwards a given signal once, so loops can't echo. The receiver keeps
+    the first copy and drops the rest.
     - Example: a phone and a desktop that were never linked set up a direct
       QUIC connection with only the laptop passing their signals, no server.
+  - **Same QUIC port after a restart:** the port is saved on the device and
+    reused, so peers' cached addresses and the router mapping stay valid.
   - **On the LAN:** mDNS plus direct QUIC needs no server at all.
   - **Signals:** the server uses a device's WebSocket for a signal only if
     one happens to be open (e.g. during a relay session), and FCM otherwise.
     The always-on WebSocket (`signal_channel`) exists but is **off by
     default**.
+
+- **FCM on every device (2026-11-02).** FCM is the signaling path: it's
+  free, so the server only forwards pushes and holds no connections.
+  - **Android:** a `FirebaseMessagingService` feeds signals to the core, and
+    starts the engine first if the app was asleep. Firebase is initialised
+    in code from the gitignored `apps/android/google-services-android.json`.
+  - **Desktop:** `fcm_receiver_rs` now registers as the project's Firebase
+    **Android** app. Tokens from its web (Chrome) mode are rejected by FCM
+    as `UNREGISTERED` the moment they're issued. Registration is retried on
+    the same checked-in device, because Google refuses the first try
+    (`PHONE_REGISTRATION_ERROR`).
+  - Verified on the real devices: a server push reaches the phone, the Mac
+    and the laptop; a `quic_offer` → `quic_answer` round trip runs over FCM;
+    the phone on IPv6-only mobile data (Jio) sent a message the Mac received
+    over **direct QUIC**, through the Mac's router mapping.
 
 ## Device lab and dev tools
 
