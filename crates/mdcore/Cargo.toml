@@ -29,6 +29,8 @@ rcgen = { workspace = true }
 socket2 = { version = "0.5", features = ["all"] }
 # UPnP-IGD: ask the home router to forward our QUIC port (sync client).
 igd-next = { version = "0.18", default-features = false, features = ["io_sync"] }
+# mDNS / DNS-SD: standard LAN discovery (Bonjour / NSD / Avahi compatible).
+mdns-sd = "0.21"
 uuid = { version = "1", features = ["v4"] }
 argon2 = "0.5"
 chacha20poly1305 = "0.10"

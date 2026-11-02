@@ -80,6 +80,10 @@ pub struct CoreConfig {
     /// Ask the home router to forward our QUIC port (UPnP). `None` = don't
     /// (tests, or networks where it's unwanted).
     pub port_mapper: Option<std::sync::Arc<dyn crate::nat::portmap::PortMapper>>,
+    /// Advertise and browse via mDNS / DNS-SD on the LAN.
+    pub mdns: bool,
+    /// Also run mDNS on the loopback interface (tests on one machine).
+    pub mdns_loopback: bool,
 }
 
 impl Default for CoreConfig {
@@ -95,6 +99,8 @@ impl Default for CoreConfig {
             auto_quic: true,
             relay_url: None,
             port_mapper: Some(std::sync::Arc::new(crate::nat::portmap::UpnpMapper)),
+            mdns: true,
+            mdns_loopback: false,
         }
     }
 }

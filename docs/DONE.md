@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **93** core tests, plus **5** server tests and **1** desktop test |
+| Tests | **105** core tests, plus **7** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -131,14 +131,16 @@ The engine tries each method in order, cheapest first, until one works
 
 ## Connectivity improvements (started 2026-11-02)
 
-- **HTTPS groundwork** (the certificate itself still waits on Oracle's
-  firewall; see PENDING):
-  - The relay client speaks `wss://` (rustls).
-  - The server takes the real client IP from `X-Forwarded-For`, but only when
-    the request comes from the local proxy, so it can't be spoofed.
-  - Caddy is installed on `oracle-dev`.
-  - `deploy.sh` gained `BIN_SOURCE=docker`, a fast cross-compile, and keeps
-    the previous binary as `.prev` for rollback.
+- **HTTPS, live:** `https://152-67-7-50.sslip.io`, with Caddy and a Let's
+  Encrypt certificate on `oracle-dev`.
+  - The relay runs over `wss://` (rustls).
+  - The server sees real client IPs; `X-Forwarded-For` is trusted only
+    from the local proxy.
+  - Both apps default to this URL.
+  - An opt-in live test ([live_server.rs](../crates/mdcore/tests/live_server.rs))
+    logs two engines in to the real server and chats through the relay.
+  - `deploy.sh BIN_SOURCE=docker` cross-compiles in seconds and keeps
+    `.prev` for rollback.
 - **NAT type detection** ([nat/mod.rs](../crates/mdcore/src/nat/mod.rs)):
   - Two STUN servers (Google + Cloudflare) are asked for our public address
     from one socket:
@@ -159,6 +161,31 @@ The engine tries each method in order, cheapest first, until one works
   - Desktop notices IP changes by itself; Android reports them.
   - A QUIC link from a peer that moved (same device, new address) replaces
     its stale link instead of being rejected as a duplicate.
+
+- **IPv6:**
+  - Each device publishes its global IPv6 address.
+  - The QUIC endpoint is dual-stack.
+  - A peer's addresses are **dialed in parallel**: IPv6, then the router
+    mapping, then the LAN IPv4. The first handshake wins, so a dead address
+    never costs a timeout.
+- **UPnP port mapping**
+  ([nat/portmap.rs](../crates/mdcore/src/nat/portmap.rs)):
+  - The engine asks the home router to forward its QUIC port, renews the
+    lease every 20 minutes, re-maps after a network change and unmaps on
+    exit.
+  - It refuses mappings behind carrier-grade NAT, which would be unreachable.
+  - **Verified on the real home router:** the Oracle server got a QUIC
+    reply from the laptop through `1.22.92.77:40815`.
+- **QUIC connection migration:** links we dialed survive a network change;
+  QUIC moves them to the new address. Only links we accepted are re-dialed.
+- **mDNS / DNS-SD discovery** ([mdns.rs](../crates/mdcore/src/mdns.rs)):
+  - Devices advertise `_mydomain._udp.local.` and find each other
+    continuously, with no Scan button.
+  - Found peers go through the same anti-spoofing rules as beacons.
+- **Fixed a serious Android build bug:** every APK since 2026-11-01 had
+  shipped a **stale, pre-QUIC Rust core**, because Gradle's JNI merge kept
+  reporting UP-TO-DATE. The merge now always re-runs, and the phone runs the
+  current core.
 
 ## Device lab and dev tools
 

@@ -286,6 +286,9 @@ impl<P: Platform> Engine<P> {
             std::thread::spawn(move || ws::ws_server_loop(ws_listener, ctx));
         }
         ctx.quic.spawn_accept_loop(ctx.clone());
+        if ctx.config.mdns {
+            crate::mdns::start(ctx.clone(), ctx.config.mdns_loopback);
+        }
 
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
         background::spawn_all(&ctx);

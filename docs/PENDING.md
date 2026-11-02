@@ -20,44 +20,22 @@ and in [learnings/](../learnings/README.md).
 In priority order. Each item makes devices connect in more places, faster,
 or with less battery.
 
-1. **Serve the server on port 443 with HTTPS.** *(in progress, waiting on you)*
-   - Done:
-     - The latest server is deployed on `oracle-dev` (with `/relay`).
-     - Caddy is installed with
-       [apps/server/Caddyfile](../apps/server/Caddyfile) for
-       `152-67-7-50.sslip.io`.
-     - The server reads the real client IP from the proxy.
-     - Clients support `https://` and `wss://`.
-   - **Blocked:** Oracle Cloud's VCN Security List doesn't allow inbound
-     TCP 80/443 yet, so Let's Encrypt can't verify the domain. Open them in
-     the console. Caddy then gets the certificate by itself.
-   - After that:
-     - Switch the apps' default server to `https://152-67-7-50.sslip.io`.
-     - Test the relay over `wss://` on the real devices.
-     - Later, close `:6969` to the public.
-2. ~~Detect NAT type up front~~: **done**, see [DONE.md](DONE.md).
-3. ~~Re-check the network when it changes~~: **done**, see [DONE.md](DONE.md).
-4. **IPv6.**
-   - Many mobile networks (Jio, Airtel) give phones a public IPv6 address
-     with no NAT, so QUIC can connect directly, with no punch and no relay.
-   - Store **several addresses per device** in the registry (LAN IPv4, global
-     IPv6, public address from STUN) and dial them in parallel; the first to
-     answer wins.
-   - Bind the QUIC endpoint dual-stack (IPv4 + IPv6).
-5. **Ask the home router to open a port** (UPnP-IGD, NAT-PMP, PCP).
-   - If the router agrees, the device becomes reachable from anywhere on a
-     known public port. Publish that address as one more candidate.
-   - Renew the mapping before it expires, and remove it on exit.
-6. **QUIC connection migration.**
-   - When the phone moves from Wi-Fi to mobile data, keep the live QUIC
-     connection by rebinding the endpoint to the new network (quinn
-     `Endpoint::rebind`) instead of letting it time out and reconnecting
-     from scratch.
-7. **Standard LAN discovery (mDNS / DNS-SD).**
-   - Advertise `_mydomain._udp.local` with node id and ports. macOS has
-     Bonjour built in, Android has NSD, Linux has Avahi.
-   - It replaces the custom multicast and the /24 sweep (254 packets every
-     ~10 s, which some routers flag). Keep the sweep only as a last fallback.
+1. ~~Serve the server on port 443 with HTTPS~~: **done**. Live at
+   `https://152-67-7-50.sslip.io` (Caddy + Let's Encrypt); both apps
+   default to it.
+   - Later: close `:6969` to the public, once no install uses it.
+2. ~~Detect NAT type up front~~: **done**.
+3. ~~Re-check the network when it changes~~: **done**.
+4. ~~IPv6~~: **done**. Still to do: Android doesn't report an IPv6
+   address yet (its platform only knows the Wi-Fi IPv4).
+5. ~~Ask the home router to open a port~~: **done** for UPnP-IGD (verified
+   on the home router: the internet reaches the laptop through the
+   mapping).
+   - Still to do: NAT-PMP / PCP, for routers without UPnP.
+6. ~~QUIC connection migration~~: **done**.
+7. ~~Standard LAN discovery (mDNS / DNS-SD)~~: **done**.
+   - Still to do: once mDNS has proven itself on real networks, send the
+     /24 sweep only when mDNS finds nothing.
 8. **Keep-alive that suits phones.**
    - The fixed 5 s keep-alive and 20 s idle timeout cost a phone battery.
    - Instead: about 25 s keep-alive (just under typical router timeouts),

@@ -17,6 +17,7 @@ pub mod error;
 pub mod events;
 pub mod features;
 pub mod kv;
+pub mod mdns;
 pub mod model;
 pub mod nat;
 pub mod platform;
