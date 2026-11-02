@@ -57,9 +57,14 @@ impl<P: Platform> Engine<P> {
         transport::outbox::hold(&self.ctx, node_id, id, &from, text);
         let live = linked || self.ctx.ws_conns.lock().contains_key(node_id.as_str());
         if live && transport::outbox::pump(&self.ctx, node_id, false, Some(id)) {
-            return Ok(self.display_transport(node_id));
+            // Handed to a route that isn't confirmed live yet (a relay
+            // route waiting for the peer's hello): still waiting, really.
+            if self.ctx.p2p_conns.lock().contains_key(node_id.as_str()) {
+                return Ok(self.display_transport(node_id));
+            }
+        } else {
+            let _ = self.connect(node_id);
         }
-        let _ = self.connect(node_id);
         Ok(QUEUED.to_string())
     }
 

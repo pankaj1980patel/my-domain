@@ -177,7 +177,13 @@ impl EventSink for PrintSink {
 /// `field="a value"` and texts in `wait`).
 fn words(line: &str) -> Vec<String> {
     let (mut out, mut cur, mut quoted) = (Vec::new(), String::new(), false);
-    for c in line.chars() {
+    for (i, c) in line.char_indices() {
+        // A JSON argument (`action <node> flashlight {"on":true}`) is the
+        // rest of the line, quotes and all.
+        if cur.is_empty() && !quoted && matches!(c, '{' | '[') {
+            out.push(line[i..].trim_end().to_string());
+            return out;
+        }
         match c {
             '"' => quoted = !quoted,
             c if c.is_whitespace() && !quoted => {
@@ -520,6 +526,14 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_json_argument_is_kept_verbatim() {
+        assert_eq!(
+            words(r#"action @phone flashlight {"on": true}"#),
+            ["action", "@phone", "flashlight", r#"{"on": true}"#]
+        );
+    }
 
     #[test]
     fn words_keep_quoted_values_together() {
