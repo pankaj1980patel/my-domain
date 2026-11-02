@@ -47,6 +47,10 @@ enum class Tone { Info, Ok, Warn, Error }
 
 data class ActivityItem(val id: Long, val ts: Long, val text: String, val tone: Tone)
 
+/** One recent clipboard value. [source]: the device it came from (null =
+ *  this phone). Kept in memory only: it may hold passwords or codes. */
+data class ClipEntry(val text: String, val source: String?, val ts: Long)
+
 data class AppEntry(val pkg: String, val label: String)
 
 data class AppsState(val apps: List<AppEntry>, val subscribed: Set<String>)
@@ -105,6 +109,13 @@ object Core {
 
     /** Clipboard auto-sync with the other devices (NetService acts on it). */
     var clipSync by mutableStateOf(false); private set
+
+    /** Recent clipboard values, newest first (memory only, never saved). */
+    val clipHistory = mutableStateListOf<ClipEntry>()
+
+    /** Text the app itself just put on the system clipboard from
+     *  [clipHistory]; the clipboard listener skips recording it once. */
+    @Volatile private var recopied: String? = null
 
     fun engine(): MdEngine? = runningEngine()
 
@@ -175,6 +186,33 @@ object Core {
     }
 
     fun enableClipSync(on: Boolean) = onMain { clipSync = on }
+
+    /** Remember a clipboard value ([source] null = copied on this phone).
+     *  A repeat moves to the top; the newest 20 are kept. Safe from any thread. */
+    fun recordClip(text: String, source: String?) = onMain {
+        if (text.isBlank()) return@onMain
+        clipHistory.removeAll { it.text == text }
+        clipHistory.add(0, ClipEntry(text, source, System.currentTimeMillis()))
+        if (clipHistory.size > 20) clipHistory.removeRange(20, clipHistory.size)
+    }
+
+    fun clearClipHistory() = onMain { clipHistory.clear() }
+
+    /** Put a history entry back on the system clipboard. Moves it to the top
+     *  (keeping its source) without recording it again as a local copy. */
+    fun copyFromHistory(entry: ClipEntry) {
+        recopied = entry.text
+        val cm = app.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("Clipboard", entry.text))
+        recordClip(entry.text, entry.source)
+    }
+
+    /** True once if [text] is what [copyFromHistory] just set. */
+    fun consumeRecopy(text: String): Boolean {
+        if (recopied != text) return false
+        recopied = null
+        return true
+    }
 
     // --- events --------------------------------------------------------------
 
@@ -477,7 +515,7 @@ object Core {
     suspend fun signOut() {
         call { it.logout() }
         onMain {
-            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear()
+            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear()
         }
         reload()
     }

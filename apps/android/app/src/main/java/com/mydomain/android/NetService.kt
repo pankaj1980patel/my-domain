@@ -268,6 +268,12 @@ class NetService : Service() {
                     val text = clip.getItemAt(0).text?.toString()
                     if (text != null && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
                         currentLocalClip = text
+                        // A copy made on this phone (not one we applied from
+                        // a device, nor a recent value copied again).
+                        val recopy = Core.consumeRecopy(text)
+                        if (Core.clipSync && !recopy && text != lastReceivedClipboard) {
+                            Core.recordClip(text, null)
+                        }
                         if (Core.clipSync) syncClipboard(text)
                     }
                 }
@@ -291,6 +297,7 @@ class NetService : Service() {
                 if (content != lastReceivedClipboard) {
                     lastReceivedClipboard = content
                     updateLocalClipboard(content)
+                    Core.recordClip(content, msg.optString("node_id").ifEmpty { null })
                 }
             }
             // A peer is pulling our clipboard: reply with the latest known value.
@@ -310,6 +317,7 @@ class NetService : Service() {
                 val content = json.optString("content")
                 lastReceivedClipboard = content
                 updateLocalClipboard(content)
+                Core.recordClip(content, msg.optString("node_id").ifEmpty { json.optString("from") }.ifEmpty { null })
                 Core.addActivity(getString(R.string.act_clipboard_copied, Core.peerName(msg.optString("node_id"))), Tone.Ok)
             }
         }

@@ -34,6 +34,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
@@ -153,7 +154,37 @@ private fun ClipboardTile(node: String) {
             }
         }, Modifier.fillMaxWidth(), enabled = !busy)
         ClipSyncSwitch(stringResource(R.string.clipboard_sync))
+        ClipHistory()
     }
+}
+
+/** Recent clipboard values (memory only), each with a Copy button. */
+@Composable
+private fun ClipHistory() {
+    val toast = LocalToast.current
+    val copied = stringResource(R.string.clipboard_copied)
+    val recent = Core.clipHistory.take(8)
+    if (recent.isEmpty()) return
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.clipboard_recent), style = MaterialTheme.typography.labelLarge, color = T.text, modifier = Modifier.weight(1f))
+        GhostButton(stringResource(R.string.clipboard_clear), { Core.clearClipHistory() }, small = true)
+    }
+    recent.forEach { e ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(e.text, style = MaterialTheme.typography.bodyMedium, color = T.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (e.source == null) stringResource(R.string.clipboard_from_this_phone) else Core.peerName(e.source),
+                    style = MaterialTheme.typography.labelMedium, color = T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            GhostButton(stringResource(R.string.clipboard_copy), {
+                runCatching { Core.copyFromHistory(e) }.onSuccess { toast(copied) }.onFailure { toast(friendlyError(it)) }
+            }, small = true)
+        }
+    }
+    Muted(stringResource(R.string.clipboard_recent_hint))
 }
 
 @Composable
