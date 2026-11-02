@@ -37,6 +37,7 @@ use parking_lot::Mutex;
 use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
 
+use crate::config::KeepAlive;
 use crate::engine::NetCtx;
 use crate::model::{Envelope, WsFrame};
 use crate::platform::Platform;
@@ -52,11 +53,6 @@ pub(crate) const MAX_FRAME: usize = 4 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long the accepting side of a punched path waits for the dialer.
 const PUNCH_ACCEPT_TIMEOUT: Duration = Duration::from_secs(10);
-/// QUIC keep-alive. NAT routers forget idle UDP mappings (often within
-/// 30 s), which would silently close a punched path; a ping every few
-/// seconds keeps it open. Also lets each side notice a dead peer.
-const KEEP_ALIVE: Duration = Duration::from_secs(5);
-const IDLE_TIMEOUT: Duration = Duration::from_secs(20);
 /// Time allowed for the peer's `Hello` after the connection is up.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(3);
 /// Connection ids live in their own range so they never collide with WS/punch/rtc.
@@ -130,7 +126,7 @@ fn canonical(addr: SocketAddr) -> SocketAddr {
 impl QuicNode {
     /// Create the runtime, a self-signed cert, and an endpoint bound to an
     /// ephemeral UDP port on all interfaces.
-    pub fn start() -> std::io::Result<QuicNode> {
+    pub fn start(keepalive: KeepAlive) -> std::io::Result<QuicNode> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("md-quic")
@@ -140,11 +136,11 @@ impl QuicNode {
             let _guard = runtime.enter(); // quinn needs a runtime context to bind
             let mut ep = Endpoint::new(
                 quinn::EndpointConfig::default(),
-                Some(server_config().map_err(std::io::Error::other)?),
+                Some(server_config(keepalive).map_err(std::io::Error::other)?),
                 bind_udp()?,
                 Arc::new(quinn::TokioRuntime),
             )?;
-            ep.set_default_client_config(client_config().map_err(std::io::Error::other)?);
+            ep.set_default_client_config(client_config(keepalive).map_err(std::io::Error::other)?);
             ep
         };
         let port = endpoint.local_addr()?.port();
@@ -281,11 +277,13 @@ impl QuicLink {
         socket.set_read_timeout(None)?;
         let mut endpoint = Endpoint::new(
             quinn::EndpointConfig::default(),
-            Some(server_config().map_err(std::io::Error::other)?),
+            Some(server_config(ctx.config.keepalive).map_err(std::io::Error::other)?),
             socket,
             Arc::new(quinn::TokioRuntime),
         )?;
-        endpoint.set_default_client_config(client_config().map_err(std::io::Error::other)?);
+        endpoint.set_default_client_config(
+            client_config(ctx.config.keepalive).map_err(std::io::Error::other)?,
+        );
         self.rt.spawn(async move {
             let conn = if dial {
                 match endpoint.connect(peer, "mydomain") {
@@ -476,7 +474,9 @@ async fn read_frame(recv: &mut RecvStream) -> std::io::Result<Vec<u8>> {
 
 // --- TLS ---------------------------------------------------------------------
 
-fn server_config() -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Send + Sync>> {
+fn server_config(
+    keepalive: KeepAlive,
+) -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Send + Sync>> {
     let cert = rcgen::generate_simple_self_signed(vec!["mydomain".into()])?;
     let key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der());
     let mut tls = rustls::ServerConfig::builder_with_provider(provider())
@@ -485,7 +485,7 @@ fn server_config() -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Se
         .with_single_cert(vec![cert.cert.der().clone()], key.into())?;
     tls.alpn_protocols = vec![ALPN.to_vec()];
     let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls)?));
-    cfg.transport_config(transport_config()?);
+    cfg.transport_config(transport_config(keepalive)?);
     // Follow a client that changes address (Wi-Fi -> mobile data). On by
     // default in quinn; explicit because the network-change logic relies on it.
     cfg.migration(true);
@@ -493,14 +493,19 @@ fn server_config() -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Se
 }
 
 fn transport_config(
+    keepalive: KeepAlive,
 ) -> Result<Arc<quinn::TransportConfig>, Box<dyn std::error::Error + Send + Sync>> {
+    // Keep-alive holds NAT mappings open (a punched path dies when its
+    // mapping expires) and lets each side notice a dead peer; see KeepAlive.
     let mut t = quinn::TransportConfig::default();
-    t.keep_alive_interval(Some(KEEP_ALIVE));
-    t.max_idle_timeout(Some(IDLE_TIMEOUT.try_into()?));
+    t.keep_alive_interval(keepalive.interval);
+    t.max_idle_timeout(Some(keepalive.idle_timeout.try_into()?));
     Ok(Arc::new(t))
 }
 
-fn client_config() -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+fn client_config(
+    keepalive: KeepAlive,
+) -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
     let mut tls = rustls::ClientConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])?
         .dangerous()
@@ -508,7 +513,7 @@ fn client_config() -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Se
         .with_no_client_auth();
     tls.alpn_protocols = vec![ALPN.to_vec()];
     let mut cfg = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls)?));
-    cfg.transport_config(transport_config()?);
+    cfg.transport_config(transport_config(keepalive)?);
     Ok(cfg)
 }
 

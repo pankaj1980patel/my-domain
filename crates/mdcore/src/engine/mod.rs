@@ -197,7 +197,7 @@ impl<P: Platform> Engine<P> {
             .port();
         let ws_listener = TcpListener::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
         let ws_port = ws_listener.local_addr().map_err(|e| e.to_string())?.port();
-        let quic = transport::quic::QuicNode::start()?;
+        let quic = transport::quic::QuicNode::start(config.keepalive)?;
 
         let identity = Arc::new(Mutex::new(Identity {
             node_id,

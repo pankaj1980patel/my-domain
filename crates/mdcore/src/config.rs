@@ -62,6 +62,27 @@ impl ConnectRungs {
     }
 }
 
+/// How often idle links are pinged, and how long silence means "dead".
+///
+/// The interval must stay under the NAT mapping timeout of typical routers
+/// (often 30 s): a mapping that expires closes a punched path. Every ping
+/// also wakes a phone's radio, so it shouldn't be any shorter than needed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct KeepAlive {
+    /// `None`: never ping (links then die after `idle_timeout` of silence).
+    pub interval: Option<std::time::Duration>,
+    pub idle_timeout: std::time::Duration,
+}
+
+impl Default for KeepAlive {
+    fn default() -> Self {
+        KeepAlive {
+            interval: Some(std::time::Duration::from_secs(20)),
+            idle_timeout: std::time::Duration::from_secs(60),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CoreConfig {
     /// STUN servers (`host:port`) used to learn our public address for hole
@@ -84,6 +105,8 @@ pub struct CoreConfig {
     pub mdns: bool,
     /// Also run mDNS on the loopback interface (tests on one machine).
     pub mdns_loopback: bool,
+    /// Link keep-alive (QUIC and the connectionless-link heartbeat).
+    pub keepalive: KeepAlive,
 }
 
 impl Default for CoreConfig {
@@ -101,6 +124,7 @@ impl Default for CoreConfig {
             port_mapper: Some(std::sync::Arc::new(crate::nat::portmap::UpnpMapper)),
             mdns: true,
             mdns_loopback: false,
+            keepalive: KeepAlive::default(),
         }
     }
 }

@@ -15,9 +15,6 @@ use super::*;
 
 const CLIPBOARD_POLL: Duration = Duration::from_millis(1000);
 const IP_POLL: Duration = Duration::from_secs(5);
-const HEARTBEAT_EVERY: Duration = Duration::from_secs(5);
-/// A connectionless link with no traffic for this long is considered dead.
-const LINK_TIMEOUT_SECS: u64 = 15;
 
 pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
     if ctx.platform.clipboard().is_some() {
@@ -141,7 +138,15 @@ pub(super) fn spawn_ip_watcher<P: Platform>(h: netchange::NetHandles<P>) {
 }
 
 fn heartbeat<P: Platform>(ctx: NetCtx<P>) {
-    while tick(&ctx, HEARTBEAT_EVERY) {
+    use transport::TransportKind::{Udp, WebRtc};
+    // Same cadence as QUIC's keep-alive (CoreConfig::keepalive). Only the
+    // links without their own liveness need it: plain UDP and WebRTC. QUIC
+    // (direct and punched) has keep-alive + idle timeout built in, and WS /
+    // relay sockets report closure themselves.
+    let ka = ctx.config.keepalive;
+    let every = ka.interval.unwrap_or(ka.idle_timeout / 3);
+    let timeout_secs = ka.idle_timeout.as_secs().max(1);
+    while tick(&ctx, every) {
         let me = ctx.identity.lock().node_id.clone();
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -149,13 +154,12 @@ fn heartbeat<P: Platform>(ctx: NetCtx<P>) {
             .unwrap_or(0);
         let ping = serde_json::json!({ "type": "p2p_ping", "from": me }).to_string();
         for (node_id, kind, last_seen) in transport::live_snapshot(&ctx) {
-            // WS links are event-driven (the socket reports closure itself).
-            if kind == transport::TransportKind::Ws {
+            if !matches!(kind, Udp | WebRtc) {
                 continue;
             }
-            if now.saturating_sub(last_seen) > LINK_TIMEOUT_SECS {
+            if now.saturating_sub(last_seen) > timeout_secs {
                 transport::drop_live(&ctx, &node_id);
-            } else {
+            } else if ka.interval.is_some() {
                 transport::send_control_to(&ctx, &node_id, &ping);
             }
         }
