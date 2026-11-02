@@ -315,6 +315,12 @@ From a code review of `features/files.rs`:
   as `.`/`..` or end in dots or spaces.
 - Tests: two files at once; a file that shrinks while sending.
 
+Also: control handlers take the sender's id from the link, not from the
+message's own `"from"` field (`ControlMsg::sender`); finished and
+cancelled transfers are remembered in the platform store, so a receiver
+that restarted still answers a repeated offer instead of taking the file
+twice.
+
 Relay: a message from a device we had no relay route to (its hello, or
 the push that set it up, was lost) now sets the route up, so our receipts
 and replies reach it. Found live: the phone received `mdctl`'s actions but
@@ -329,7 +335,9 @@ its answers had nowhere to go.
   `clear_clipboard_history`, `copy_to_clipboard`; event
   `clipboard-history`.
 - Desktop: "Recent" list in the Clipboard tile with Copy and Clear.
-  Android keeps its clipboard in the app layer, so it has no history yet.
+- Android (app layer, since its core has no clipboard): the same list,
+  memory only, cleared on sign-out. Android 10+ only reports local copies
+  while the app is on screen. Not yet tried on the phone.
 - Test: `the_clipboard_history_keeps_recent_values_newest_first`.
 
 ## Device controls (2026-11-02)
