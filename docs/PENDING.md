@@ -13,7 +13,7 @@ and in [learnings/](../learnings/README.md).
 | **Change the laptop password** | It was shared in chat. |
 | **Dirty NTFS partition** on the laptop (`/dev/nvme0n1p6`) | Was already dirty before this work; left untouched. Fix it from Windows (`chkdsk`) or with `ntfsfix`. |
 | **Archive the six old GitHub repos** | They're merged into this monorepo with full history. |
-| **Merge `monorepo` → `main`** (open a PR) | CI runs only on pushes to `main` and on PRs, so this branch hasn't been through CI yet. The CI steps were run by hand on the Linux laptop on 2026-11-03 and all pass: fmt, clippy, workspace and doc tests, UI build, bindings current, Android `assembleDebug` (built on the Mac). Not run: nextest (`cargo test` covers the same tests) and cargo-deny. The Tauri notification, dialog and file plugins were added on 2026-11-02, so the PR's cargo-deny run is the first license and advisory check for them. |
+| **Merge `monorepo` → `main`** (open a PR) | CI runs only on pushes to `main` and on PRs, so this branch hasn't been through CI yet. The CI steps were run by hand on the Linux laptop on 2026-11-03 and all pass: fmt, clippy, workspace and doc tests, UI build, bindings current, Android `assembleDebug` (built on the Mac). Not run: nextest (`cargo test` covers the same tests) and cargo-deny (`advisories bans sources`; it needs the online advisory database). The Tauri notification, dialog and file plugins added on 2026-11-02 get their first advisory check there. |
 
 ## 2. Connectivity improvements (do these first)
 
