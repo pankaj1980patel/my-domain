@@ -54,7 +54,7 @@ export default function SignIn(props: { onDone: () => void }) {
   return (
     <main class="signin">
       <form class="signin-card" onSubmit={submit}>
-        <img class="signin-logo" src="/logo.png" alt="" />
+        <img class="signin-logo" src="/logo.svg" alt="" />
         <h1>{create() ? "Create your account" : "Welcome back"}</h1>
         <p class="muted">All your devices, working together. Privately.</p>
 

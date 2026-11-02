@@ -27,7 +27,7 @@ export default function App() {
         <div class="shell">
           <nav class="sidebar" aria-label="Main">
             <div class="brand">
-              <img src="/logo.png" alt="" />
+              <img src="/logo.svg" alt="" />
               <span>my-domain</span>
             </div>
             <button class={`nav-item ${is("home") ? "active" : ""}`} onClick={() => go({ name: "home" })}> Devices
