@@ -236,6 +236,10 @@ impl EventSink for TauriSink {
                 let (app, url) = (self.app.clone(), url.clone());
                 std::thread::spawn(move || device::on_open_url(&app, &url));
             }
+            CoreEvent::Action { name, args, .. } => {
+                let (app, name, args) = (self.app.clone(), name.clone(), args.clone());
+                std::thread::spawn(move || device::on_action(&app, &name, &args));
+            }
             _ => {}
         }
         let _ = self.app.emit(ev.name(), ev.ui_payload());
@@ -568,6 +572,13 @@ fn download_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
     Some(dir)
 }
 
+/// Run an action a device listed in its status (`actions`).
+#[tauri::command]
+#[specta::specta]
+fn run_action(node_id: String, name: String, args_json: String, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.run_action(&node_id, &name, &args_json)
+}
+
 /// Send a file to a device. Returns the transfer id; progress arrives as
 /// `file-progress`, then `file-sent` or `file-failed`.
 #[tauri::command]
@@ -682,6 +693,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         send_file,
         cancel_file,
         pick_file,
+        run_action,
         reveal_file,
         open_file
     ])

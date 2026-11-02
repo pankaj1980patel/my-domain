@@ -88,6 +88,8 @@ class NetService : Service() {
         Fcm.init(this)
 
         publishInstalledApps()
+        Controls.onChange = { serviceScope.launch { pushStatus() } }
+        Controls.init(this)
         watchBattery()
         startNetworking()
     }
@@ -115,7 +117,18 @@ class NetService : Service() {
         val pct = (level * 100 / scale).coerceIn(0, 100)
         val st = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val charging = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL
-        val json = JSONObject().put("battery", pct).put("charging", charging).toString()
+        battery = pct to charging
+        pushStatus()
+    }
+
+    private var battery: Pair<Int, Boolean>? = null
+
+    /** Battery, the controls' state and the actions we take, for devices
+     *  that ask (`request_status`). Pushed only when it changed. */
+    private fun pushStatus() {
+        val o = Controls.state(this).put("actions", Controls.actions())
+        battery?.let { (pct, charging) -> o.put("battery", pct).put("charging", charging) }
+        val json = o.toString()
         if (json == lastStatus) return
         val engine = Core.engine() ?: return
         engine.setDeviceStatus(json)
@@ -225,6 +238,7 @@ class NetService : Service() {
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))
+                        "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject())
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
                         "file_failed" -> FileActions.onFailed(this@NetService, o)

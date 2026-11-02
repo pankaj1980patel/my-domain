@@ -21,6 +21,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import org.json.JSONObject
+import com.mydomain.android.core.DeviceStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -227,6 +229,7 @@ private fun FindTile(node: String, name: String) {
             )
         }
         Muted(stringResource(R.string.find_body))
+        if (status != null && status.actions.isNotEmpty()) Controls(node, status)
         SoftButton(stringResource(R.string.find_ring), {
             scope.launch {
                 try {
@@ -253,6 +256,64 @@ private fun FindTile(node: String, name: String) {
                     }
                 }
             }, enabled = !busy && url.isNotBlank())
+        }
+    }
+}
+
+/** Buttons for the actions the device listed in its status. */
+@Composable
+private fun Controls(node: String, st: DeviceStatus) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val run = { name: String, args: JSONObject ->
+        scope.launch {
+            try { Core.runAction(node, name, args) } catch (e: Exception) { toast(friendlyError(e)) }
+        }
+        Unit
+    }
+    @Composable
+    fun Btn(label: Int, name: String, args: JSONObject, m: Modifier = Modifier) =
+        GhostButton(stringResource(label), { run(name, args) }, m, small = true)
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if ("flashlight" in st.actions) {
+            val on = st.torch == true
+            SoftButton(
+                stringResource(if (on) R.string.ctl_torch_off else R.string.ctl_torch_on),
+                { run("flashlight", JSONObject().put("on", !on)) }, Modifier.fillMaxWidth(),
+            )
+        }
+        if ("volume" in st.actions || "mute" in st.actions) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    st.volume?.let { stringResource(R.string.ctl_volume_level, it) } ?: stringResource(R.string.ctl_volume),
+                    color = T.text2, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
+                )
+                if ("volume" in st.actions) {
+                    Btn(R.string.ctl_volume_down, "volume", JSONObject().put("step", -1))
+                    Btn(R.string.ctl_volume_up, "volume", JSONObject().put("step", 1))
+                }
+                if ("mute" in st.actions) {
+                    Btn(if (st.muted == true) R.string.ctl_unmute else R.string.ctl_mute, "mute", JSONObject().put("on", st.muted != true))
+                }
+            }
+        }
+        if ("media" in st.actions) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Btn(R.string.ctl_previous, "media", JSONObject().put("key", "previous"), Modifier.weight(1f))
+                Btn(R.string.ctl_play_pause, "media", JSONObject().put("key", "play_pause"), Modifier.weight(1f))
+                Btn(R.string.ctl_next, "media", JSONObject().put("key", "next"), Modifier.weight(1f))
+            }
+        }
+        if ("ringer" in st.actions) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("normal" to R.string.ctl_ring_normal, "vibrate" to R.string.ctl_ring_vibrate, "silent" to R.string.ctl_ring_silent)
+                    .forEach { (mode, label) ->
+                        val m = Modifier.weight(1f)
+                        if (st.ringer == mode) SoftButton(stringResource(label), { }, m)
+                        else Btn(label, "ringer", JSONObject().put("mode", mode), m)
+                    }
+            }
         }
     }
 }

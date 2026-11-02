@@ -22,6 +22,7 @@ import com.mydomain.android.ffi.runningEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -52,7 +53,13 @@ data class AppsState(val apps: List<AppEntry>, val subscribed: Set<String>)
 
 /** A device's reported status (`device_status` event); fields it didn't
  *  report are null (a desktop has no battery). */
-data class DeviceStatus(val battery: Int?, val charging: Boolean?)
+/** What a device reported about itself: battery, the actions it takes
+ *  (flashlight, volume, media, ringer, mute) and their current values. */
+data class DeviceStatus(
+    val battery: Int?, val charging: Boolean?,
+    val actions: Set<String> = emptySet(),
+    val torch: Boolean? = null, val volume: Int? = null, val ringer: String? = null, val muted: Boolean? = null,
+)
 
 /** One raw core event, for the Developer screen. */
 data class DevEvent(val ts: Long, val name: String, val payload: String)
@@ -246,9 +253,15 @@ object Core {
             "call_history" -> addActivity(str(R.string.act_call_history))
             "device_status" -> {
                 val st = o.optJSONObject("status") ?: JSONObject()
+                val acts = st.optJSONArray("actions")
                 deviceStatus[o.optString("from")] = DeviceStatus(
                     battery = if (st.has("battery")) st.optInt("battery") else null,
                     charging = if (st.has("charging")) st.optBoolean("charging") else null,
+                    actions = (0 until (acts?.length() ?: 0)).map { acts!!.optString(it) }.toSet(),
+                    torch = if (st.has("torch")) st.optBoolean("torch") else null,
+                    volume = if (st.has("volume")) st.optInt("volume") else null,
+                    ringer = st.optString("ringer").ifEmpty { null },
+                    muted = if (st.has("muted")) st.optBoolean("muted") else null,
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
@@ -393,6 +406,15 @@ object Core {
 
     /** Ring a device (find my device). */
     suspend fun ring(node: String): String = call { it.ring(node) }
+
+    /** Run [name] on [node], then ask for its status again so the buttons
+     *  show the new state. */
+    suspend fun runAction(node: String, name: String, args: JSONObject = JSONObject()): String {
+        val via = call { it.runAction(node, name, args.toString()) }
+        delay(400)
+        runCatching { requestStatus(node) }
+        return via
+    }
 
     /** Open a web link on a device. */
     suspend fun openUrl(node: String, url: String): String = call { it.openUrl(node, url) }

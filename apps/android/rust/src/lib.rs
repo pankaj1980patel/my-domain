@@ -545,6 +545,13 @@ impl MdEngine {
         Ok(self.inner.request_status(&node_id)?)
     }
 
+    /// Run an action a device listed in its status (`actions`), e.g.
+    /// `run_action(node, "flashlight", "{\"on\":true}")`; it gets an
+    /// `action-event`. Returns the transport used, or "queued".
+    pub fn run_action(&self, node_id: String, name: String, args_json: String) -> MdResult<String> {
+        Ok(self.inner.run_action(&node_id, &name, &args_json)?)
+    }
+
     /// Ring a device (find my device): it gets a `ring-event`. Returns the
     /// transport used, or "queued" (a sleeping phone is woken by push).
     pub fn ring(&self, node_id: String) -> MdResult<String> {

@@ -205,4 +205,19 @@
     </plurals>
     <string name="share_no_devices">No devices yet. Sign in on another device first.</string>
     <string name="share_sending">Sending to %1$s</string>
+    <!-- Controls on another device -->
+    <string name="ctl_torch_on">Turn on the flashlight</string>
+    <string name="ctl_torch_off">Turn off the flashlight</string>
+    <string name="ctl_volume">Volume</string>
+    <string name="ctl_volume_level">Volume %1$d%%</string>
+    <string name="ctl_volume_down">Quieter</string>
+    <string name="ctl_volume_up">Louder</string>
+    <string name="ctl_mute">Mute</string>
+    <string name="ctl_unmute">Unmute</string>
+    <string name="ctl_previous">Previous</string>
+    <string name="ctl_play_pause">Play/Pause</string>
+    <string name="ctl_next">Next</string>
+    <string name="ctl_ring_normal">Ring</string>
+    <string name="ctl_ring_vibrate">Vibrate</string>
+    <string name="ctl_ring_silent">Silent</string>
 </resources>

@@ -42,7 +42,18 @@ export type ActivityItem = {
 export type AppEntry = { pkg: string; label: string };
 
 /** What a device reported about itself (answer to requestStatus). */
-export type DeviceStatus = { battery?: number; charging?: boolean; platform?: string; ts: number };
+export type DeviceStatus = {
+  battery?: number;
+  charging?: boolean;
+  platform?: string;
+  /** Actions it takes (flashlight, volume, mute, media, ringer) and their state. */
+  actions: string[];
+  torch?: boolean;
+  volume?: number;
+  muted?: boolean;
+  ringer?: string;
+  ts: number;
+};
 
 /** A file going to or coming from a device. `waiting`: offered, the device
  *  hasn't started taking it yet (or isn't reachable). */
@@ -218,11 +229,16 @@ export async function startEvents() {
       const node = state.peers.find((p) => p.name === a.from || p.node_id === a.from)?.node_id ?? a.from;
       setState("apps", node, { apps: a.apps ?? [], subscribed: a.subscribed ?? [] });
     }),
-    on<{ from: string; status: { battery?: unknown; charging?: unknown; platform?: unknown } }>("device-status-event", ({ from, status }) =>
+    on<{ from: string; status: Record<string, unknown> }>("device-status-event", ({ from, status }) =>
       setState("status", from, {
         battery: typeof status?.battery === "number" ? Math.round(status.battery) : undefined,
         charging: typeof status?.charging === "boolean" ? status.charging : undefined,
         platform: typeof status?.platform === "string" ? status.platform : undefined,
+        actions: Array.isArray(status?.actions) ? status.actions.filter((a): a is string => typeof a === "string") : [],
+        torch: typeof status?.torch === "boolean" ? status.torch : undefined,
+        volume: typeof status?.volume === "number" ? Math.round(status.volume) : undefined,
+        muted: typeof status?.muted === "boolean" ? status.muted : undefined,
+        ringer: typeof status?.ringer === "string" ? status.ringer : undefined,
         ts: now(),
       }),
     ),
@@ -403,6 +419,14 @@ export async function requestStatus(node: string) {
 }
 
 /** Returns the transport, or "queued" (rings once the device is reachable). */
+/** Run an action the device listed in its status, then ask for its status
+ *  again so the buttons show the new state. */
+export async function runAction(node: string, name: string, args: Record<string, unknown> = {}): Promise<string> {
+  const via = await unwrap(commands.runAction(node, name, JSON.stringify(args)));
+  setTimeout(() => requestStatus(node).catch(() => {}), 400);
+  return via;
+}
+
 export async function ringDevice(node: string): Promise<string> {
   return unwrap(commands.ringDevice(node));
 }

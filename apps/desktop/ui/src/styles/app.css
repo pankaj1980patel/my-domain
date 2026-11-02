@@ -840,3 +840,6 @@ input[type="checkbox"][role="switch"]:checked::after {
 .text-error {
   color: var(--danger);
 }
+.grow {
+  flex: 1;
+}

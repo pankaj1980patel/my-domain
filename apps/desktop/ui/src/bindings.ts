@@ -72,6 +72,8 @@ export const commands = {
 	 *  it doesn't run on (and block) the main thread the dialog needs.
 	 */
 	pickFile: () => __TAURI_INVOKE<string | null>("pick_file"),
+	/**  Run an action a device listed in its status (`actions`). */
+	runAction: (nodeId: string, name: string, argsJson: string) => typedError<string, string>(__TAURI_INVOKE("run_action", { nodeId, name, argsJson })),
 	/**  Show a received file in Finder / Explorer / the file manager. */
 	revealFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_file", { path })),
 	/**  Open a received file with its default app. */

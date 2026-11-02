@@ -14,12 +14,14 @@ import {
   requestStatus,
   revealFile,
   ringDevice,
+  runAction,
   sendFile,
   sendMessage,
   setClipSync,
   shareNotification,
   state,
   toggleApp,
+  type DeviceStatus,
   type Transfer,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
@@ -235,6 +237,9 @@ function ControlTile(props: { node: string }) {
       <Show when={battery()}>
         <p class="small">{battery()}</p>
       </Show>
+      <Show when={status()?.actions.length}>
+        <Controls node={props.node} st={status()!} />
+      </Show>
       <button class="btn btn-soft btn-block" disabled={busy()} onClick={ring}>
         {t("control.ring")}
       </button>
@@ -440,5 +445,75 @@ function TransferRow(props: { x: Transfer; device: string }) {
         </div>
       </Show>
     </li>
+  );
+}
+
+/** Buttons for the actions a device listed in its status. */
+function Controls(props: { node: string; st: DeviceStatus }) {
+  const has = (a: string) => props.st.actions.includes(a);
+  const run = (name: string, args: Record<string, unknown>) => () =>
+    runAction(props.node, name, args).catch((e) => toast(friendlyError(e), "error"));
+  const ringers = [
+    ["normal", "control.ringerNormal"],
+    ["vibrate", "control.ringerVibrate"],
+    ["silent", "control.ringerSilent"],
+  ] as const;
+  return (
+    <div class="stack">
+      <Show when={has("flashlight")}>
+        <button class="btn btn-soft btn-block" onClick={run("flashlight", { on: !props.st.torch })}>
+          {props.st.torch ? t("control.torchOff") : t("control.torchOn")}
+        </button>
+      </Show>
+      <Show when={has("volume") || has("mute")}>
+        <div class="row">
+          <span class="small muted grow">
+            {props.st.volume !== undefined ? t("control.volumeLevel", { level: props.st.volume }) : t("control.volume")}
+          </span>
+          <Show when={has("volume")}>
+            <button class="btn btn-ghost btn-sm" onClick={run("volume", { step: -1 })}>
+              {t("control.quieter")}
+            </button>
+            <button class="btn btn-ghost btn-sm" onClick={run("volume", { step: 1 })}>
+              {t("control.louder")}
+            </button>
+          </Show>
+          <Show when={has("mute")}>
+            <button class="btn btn-ghost btn-sm" onClick={run("mute", { on: !props.st.muted })}>
+              {props.st.muted ? t("control.unmute") : t("control.mute")}
+            </button>
+          </Show>
+        </div>
+      </Show>
+      <Show when={has("media")}>
+        <div class="row">
+          <button class="btn btn-ghost btn-sm grow" onClick={run("media", { key: "previous" })}>
+            {t("control.previous")}
+          </button>
+          <button class="btn btn-ghost btn-sm grow" onClick={run("media", { key: "play_pause" })}>
+            {t("control.playPause")}
+          </button>
+          <button class="btn btn-ghost btn-sm grow" onClick={run("media", { key: "next" })}>
+            {t("control.next")}
+          </button>
+        </div>
+      </Show>
+      <Show when={has("ringer")}>
+        <div class="row" role="group" aria-label={t("control.ringerLabel")}>
+          <For each={ringers}>
+            {([mode, label]) => (
+              <button
+                class="btn btn-sm grow"
+                classList={{ "btn-soft": props.st.ringer === mode, "btn-ghost": props.st.ringer !== mode }}
+                aria-pressed={props.st.ringer === mode}
+                onClick={run("ringer", { mode })}
+              >
+                {t(label)}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+    </div>
   );
 }

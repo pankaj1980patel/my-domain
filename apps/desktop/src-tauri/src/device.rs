@@ -1,7 +1,7 @@
 // The desktop's side of the quick device actions (mdcore `features::device`):
 // it reports this computer's battery to the core, rings (window to the front
 // plus an OS notification; the UI plays the sound) and opens links a sibling
-// sends. No extra crates: the battery comes from `pmset` (macOS) or sysfs
+// sends, and runs its volume / mute actions. No extra crates: the battery comes from `pmset` (macOS) or sysfs
 // (Linux), the notification from `osascript` / `notify-send`.
 
 use std::process::Command;
@@ -19,15 +19,107 @@ pub fn spawn_status_reporter(app: AppHandle) {
     std::thread::Builder::new()
         .name("device-status".into())
         .spawn(move || loop {
-            let status = read_battery()
-                .map(|(battery, charging)| serde_json::json!({ "battery": battery, "charging": charging }))
-                .unwrap_or_else(|| serde_json::json!({}));
-            if let Some(engine) = app.try_state::<Eng>() {
-                engine.set_device_status(&status.to_string());
-            }
+            push_status(&app);
             std::thread::sleep(Duration::from_secs(60));
         })
         .ok();
+}
+
+/// Battery, volume, mute and the actions this computer takes, to the core.
+fn push_status(app: &AppHandle) {
+    let mut status = serde_json::json!({});
+    if let Some((battery, charging)) = read_battery() {
+        status["battery"] = battery.into();
+        status["charging"] = charging.into();
+    }
+    if let Some((volume, muted)) = sound::read() {
+        status["volume"] = volume.into();
+        status["muted"] = muted.into();
+        status["actions"] = serde_json::json!(["volume", "mute"]);
+    }
+    if let Some(engine) = app.try_state::<Eng>() {
+        engine.set_device_status(&status.to_string());
+    }
+}
+
+/// A sibling asked this computer to run an action (`volume {step}` or
+/// `mute {on}`); then the status is pushed again so it shows the new level.
+pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
+    match name {
+        "volume" => sound::step(if args["step"].as_i64().unwrap_or(1) < 0 { -10 } else { 10 }),
+        "mute" => sound::mute(args["on"].as_bool()),
+        _ => return,
+    }
+    push_status(app);
+}
+
+/// The system output volume, through the OS's own command-line tools.
+mod sound {
+    use std::process::Command;
+
+    fn run(cmd: &str, args: &[&str]) -> Option<String> {
+        let out = Command::new(cmd).args(args).output().ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    }
+
+    /// (volume 0-100, muted)
+    #[cfg(target_os = "macos")]
+    pub fn read() -> Option<(u8, bool)> {
+        let v = run("osascript", &["-e", "output volume of (get volume settings)"])?;
+        let m = run("osascript", &["-e", "output muted of (get volume settings)"])?;
+        Some((v.parse::<u8>().ok()?.min(100), m == "true"))
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn step(by: i32) {
+        if let Some((v, _)) = read() {
+            let to = (i32::from(v) + by).clamp(0, 100).to_string();
+            let _ = run("osascript", &["-e", &format!("set volume output volume {to}")]);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn mute(on: Option<bool>) {
+        let on = on.unwrap_or_else(|| !read().is_some_and(|(_, m)| m));
+        let _ = run("osascript", &["-e", &format!("set volume output muted {on}")]);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn read() -> Option<(u8, bool)> {
+        let v = run("pactl", &["get-sink-volume", "@DEFAULT_SINK@"])?;
+        let pct = v.split('/').nth(1)?.trim().trim_end_matches('%').trim().parse::<u32>().ok()?;
+        let m = run("pactl", &["get-sink-mute", "@DEFAULT_SINK@"])?;
+        Some((pct.min(100) as u8, m.ends_with("yes")))
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn step(by: i32) {
+        let arg = format!("{by:+}%");
+        let _ = run("pactl", &["set-sink-volume", "@DEFAULT_SINK@", &arg]);
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn mute(on: Option<bool>) {
+        let v = match on {
+            Some(true) => "1",
+            Some(false) => "0",
+            None => "toggle",
+        };
+        let _ = run("pactl", &["set-sink-mute", "@DEFAULT_SINK@", v]);
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn read() -> Option<(u8, bool)> {
+        None
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn step(_by: i32) {}
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn mute(_on: Option<bool>) {}
 }
 
 /// (percent 0-100, plugged in), or `None` without a battery.
