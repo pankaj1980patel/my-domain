@@ -115,13 +115,44 @@ pub fn flush<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
 }
 
 /// Resend overdue messages to every peer that has a link. Called on a timer.
+///
+/// A message sent on a link and still unacknowledged `RESEND_SECS` later
+/// means the link is dead even if it looks alive: a phone whose CPU went to
+/// sleep with the screen off neither answers nor closes it, and QUIC only
+/// notices after its idle timeout. So instead of resending into it, close
+/// it and reconnect; the connect ladder wakes the device by push, and the
+/// new link gets everything unacknowledged.
 pub fn retry_due<P: Platform>(ctx: &NetCtx<P>) {
     let nodes: Vec<String> = ctx.outbox.lock().keys().cloned().collect();
     for node in nodes {
-        if ctx.ws_conns.lock().contains_key(&node) {
+        if !ctx.ws_conns.lock().contains_key(&node) {
+            continue;
+        }
+        if unanswered(ctx, &node) {
+            crate::engine::reconnect(ctx, &node);
+        } else {
             pump(ctx, &node, false, None);
         }
     }
+}
+
+/// Whether a message went out on a link `RESEND_SECS` ago or more without an
+/// ack. Marks them all unsent, so this fires once per dead link.
+fn unanswered<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
+    let mut out = ctx.outbox.lock();
+    let Some(q) = out.get_mut(node_id) else {
+        return false;
+    };
+    let now = now_secs();
+    let dead = q
+        .iter()
+        .any(|m| m.sent_at > 0 && now.saturating_sub(m.sent_at) >= RESEND_SECS);
+    if dead {
+        for m in q.iter_mut() {
+            m.sent_at = 0;
+        }
+    }
+    dead
 }
 
 /// `node_id` acknowledged message `id`. Returns whether it was waiting.

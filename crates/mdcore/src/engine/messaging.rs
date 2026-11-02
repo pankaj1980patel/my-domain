@@ -21,6 +21,25 @@ pub(crate) fn send_reliably<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &
     }
 }
 
+/// The link to `node_id` carries nothing any more (see
+/// `transport::outbox::retry_due`): close it, and once it's gone run the
+/// connect ladder for a fresh one.
+pub(crate) fn reconnect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    transport::close_link(ctx, node_id);
+    let (ctx, node) = (ctx.clone(), node_id.to_string());
+    std::thread::spawn(move || {
+        // A QUIC link is closed by its own task: give it a moment.
+        for _ in 0..30 {
+            if !ctx.ws_conns.lock().contains_key(&node) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
+        super::ladder::run_connect_ladder(ctx, url, token, node);
+    });
+}
+
 impl<P: Platform> Engine<P> {
     // --- messaging ---
 

@@ -45,9 +45,27 @@ or with less battery.
      phone over a day.
    - Verified on the phone (vivo I2405): in the background with the screen
      on, a link closes 3 min after its last message, as designed. With the
-     **screen off**, a punched link dropped within seconds. Likely the
-     phone's power saving cutting a background app's UDP; investigate with
-     `files/events.log` (below) and the battery-optimisation exemption.
+     **screen off**, a punched link dropped within seconds.
+   - Investigated (2026-11-02). With the screen off the phone sleeps, and a
+     link goes quiet without closing: the Mac kept sending "via QUIC" into
+     it. Network policy doesn't block the app (`effective=NONE`).
+     - Fixed in the core: a message unacknowledged 10 s after it went out
+       on a link closes that link and reconnects, and the push wakes the
+       phone. Status and app-list replies are now reliable too.
+     - Fixed on Android: a 30 s wake lock after each push, so the connect
+       finishes before the phone sleeps again.
+     - Result: 13 of 14 status requests answered over 6 min with the
+       screen off; the recovered ones took about 13 s.
+     - The one miss: FCM stopped delivering after a burst of silent
+       high-priority pushes. FCM may deprioritize data pushes that don't
+       show a notification.
+     - With the app exempt from battery optimisation (`deviceidle
+       whitelist`), 14 of 14 were answered instantly and the link never
+       dropped.
+   - Still to do: an opt-in "Stay connected with the screen off" setting
+     that asks for the battery-optimisation exemption
+     (`ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`). Belongs in the new UI.
+     Measure the battery cost before making it the default.
 9. ~~Connection quality~~: **done** (`Engine::link_stats()`, desktop
    command `link_stats`).
    - ~~Show it in the new UI~~: **done** (2026-11-02): signal bars and

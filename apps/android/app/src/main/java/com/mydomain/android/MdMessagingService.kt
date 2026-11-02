@@ -1,6 +1,7 @@
 package com.mydomain.android
 
 import android.content.Intent
+import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -22,6 +23,7 @@ class MdMessagingService : FirebaseMessagingService() {
         val payload = data["payload"] ?: return
         Log.i(TAG, "signal from ${sender.take(8)}: ${data["type"]}")
         Core.labLog("push from ${sender.take(8)}: ${data["type"]}")
+        stayAwake()
         if (!waitForEngine()) {
             Log.w(TAG, "signal from $sender dropped: engine not ready")
             return
@@ -42,9 +44,23 @@ class MdMessagingService : FirebaseMessagingService() {
         return false
     }
 
+    /**
+     * FCM keeps the phone awake only while this handler runs; the link the
+     * signal sets up, and the message waiting on it, need a little longer.
+     * Without this the CPU sleeps mid-connect (screen off) and the sender
+     * sees a link that never answers. Times out by itself.
+     */
+    private fun stayAwake() {
+        val pm = getSystemService(PowerManager::class.java) ?: return
+        runCatching {
+            pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mydomain:push").acquire(AWAKE_AFTER_PUSH_MS)
+        }
+    }
+
     private fun ready() = runCatching { Core.engine()?.isReady() == true }.getOrDefault(false)
 
     private companion object {
         const val TAG = "mydomain_fcm"
+        const val AWAKE_AFTER_PUSH_MS = 30_000L
     }
 }

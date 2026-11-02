@@ -19,7 +19,6 @@
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
 use crate::platform::Platform;
-use crate::transport::send_control_to;
 
 use super::{ControlHandler, ControlMsg};
 
@@ -55,7 +54,9 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 status["platform"] = ctx.platform.platform_kind().into();
                 let reply = serde_json::json!({ "type": "status", "from": me, "status": status })
                     .to_string();
-                send_control_to(ctx, &from, &reply);
+                // Reliably: a reply lost on a link that just died would
+                // otherwise never come (the resent request is a repeat).
+                crate::engine::send_reliably(ctx, &from, &reply);
             }
             "status" => ctx.sink.emit(CoreEvent::DeviceStatus {
                 from,
