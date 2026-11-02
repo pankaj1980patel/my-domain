@@ -295,6 +295,21 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Linux desktop verified; dead links during a transfer (2026-11-02)
+
+- The workspace tests pass on Linux (rustc 1.99.1; specta needs a recent
+  stable). Run three times in a row with no failures.
+- Verified live, Mac `mdctl` to the Linux desktop app over direct QUIC:
+  status (battery, charging, volume, muted); volume 75 → 85 → 75 and mute
+  on/off through `pactl`; a 1 MB file arrived with a matching SHA-256.
+- Paused transfers: when a re-offer over a link that looks alive gets no
+  answer by the time the next one is due, the link is closed and the
+  next re-offer reconnects. (A killed app or a phone that left without
+  saying so keeps its QUIC link looking alive until the 60 s idle
+  timeout.) This fixed a flaky resume test.
+- The relay upgrade test waits for both sides to upgrade and counts only
+  messages. A late hello may still be greeted back by relay.
+
 ## Desktop tray; phone controls verified live (2026-11-02)
 
 - Desktop tray / menu-bar icon: Open my-domain; a submenu per device

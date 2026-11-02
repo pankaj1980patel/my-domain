@@ -4,7 +4,6 @@
 // sends, and runs its volume / mute actions. No extra crates: the battery comes from `pmset` (macOS) or sysfs
 // (Linux); the notification goes through `crate::notify`.
 
-use std::process::Command;
 use std::time::Duration;
 
 use tauri::{AppHandle, Manager};
@@ -148,7 +147,10 @@ mod sound {
 /// (percent 0-100, plugged in), or `None` without a battery.
 #[cfg(target_os = "macos")]
 fn read_battery() -> Option<(u8, bool)> {
-    let out = Command::new("pmset").args(["-g", "batt"]).output().ok()?;
+    let out = std::process::Command::new("pmset")
+        .args(["-g", "batt"])
+        .output()
+        .ok()?;
     parse_pmset(&String::from_utf8_lossy(&out.stdout))
 }
 
