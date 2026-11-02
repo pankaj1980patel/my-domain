@@ -159,7 +159,7 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                             serde_json::from_slice::<WsFrame>(&data.data)
                         {
                             let env = Envelope { nonce, ciphertext };
-                            handle_incoming(&ctx, &env, String::new(), "UDP");
+                            handle_incoming(&ctx, &env, Some(&node_id), String::new(), "WebRTC");
                         }
                     }
                     Event::ChannelClose(_) => rtc.disconnect(),

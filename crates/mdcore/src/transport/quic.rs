@@ -480,9 +480,11 @@ async fn run_connection<P: Platform>(
     while let Ok(bytes) = read_frame(&mut recv).await {
         if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&bytes) {
             let env = Envelope { nonce, ciphertext };
-            let (ctx, ip) = (ctx.clone(), ip.clone());
+            let (ctx, ip, from) = (ctx.clone(), ip.clone(), peer_id.clone());
             // handle_incoming is synchronous (locks, sink, feature handlers).
-            tokio::task::block_in_place(move || handle_incoming(&ctx, &env, ip, "QUIC"));
+            tokio::task::block_in_place(move || {
+                handle_incoming(&ctx, &env, Some(&from), ip, "QUIC")
+            });
         }
     }
 

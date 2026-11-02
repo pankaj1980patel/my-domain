@@ -34,8 +34,10 @@ fn chat_opens_and_reuses_a_quic_link_by_default() {
     let msg = b.sink.wait_for_message("first");
     assert!(msg.ok, "decrypted with the shared key");
     assert_eq!(msg.protocol, "QUIC");
-    // `from` is the sender's username (offline login), not its node id.
+    // `from` is the sender's username (offline login); `node_id` says which
+    // of the user's devices sent it.
     assert_eq!(msg.from, md_testkit::TEST_USER);
+    assert_eq!(msg.node_id.as_deref(), Some(a.node_id().as_str()));
 
     // Reused, and the receiver can answer on the same link.
     assert_eq!(a.engine.send(&b.node_id(), "second").unwrap(), "QUIC");

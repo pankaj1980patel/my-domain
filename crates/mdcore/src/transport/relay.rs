@@ -275,7 +275,7 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
         }
         Ok(WsFrame::Msg { nonce, ciphertext }) => {
             let env = Envelope { nonce, ciphertext };
-            handle_incoming(ctx, &env, String::new(), "RELAY");
+            handle_incoming(ctx, &env, Some(from), String::new(), "RELAY");
         }
         Err(_) => {}
     }

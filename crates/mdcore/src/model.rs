@@ -135,7 +135,12 @@ pub struct Envelope {
 /// A message surfaced to the UI.
 #[derive(Clone, Debug, Serialize)]
 pub struct IncomingMessage {
+    /// The sender's display name (its account username).
     pub from: String,
+    /// The sending device's node id, when the link knows it (it always does
+    /// for QUIC, WebRTC and the relay).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub node_id: Option<String>,
     pub ip: String,
     pub protocol: String,
     pub text: String,

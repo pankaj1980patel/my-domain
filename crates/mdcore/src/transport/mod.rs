@@ -174,7 +174,12 @@ const UNDECRYPTABLE_MAX_TRACKED: usize = 1024;
 /// An envelope from `ip` failed to decrypt. Count it, and surface at most one
 /// notice per sender IP per minute: enough to tell a user their passphrase
 /// doesn't match, without letting any LAN host flood the chat with junk.
-fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) {
+fn note_undecryptable<P: Platform>(
+    ctx: &NetCtx<P>,
+    from_node: Option<&str>,
+    ip: String,
+    protocol: &str,
+) {
     ctx.decrypt_fail_count
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let now = now_secs();
@@ -192,6 +197,7 @@ fn note_undecryptable<P: Platform>(ctx: &NetCtx<P>, ip: String, protocol: &str) 
     }
     ctx.sink.emit(CoreEvent::MessageReceived(IncomingMessage {
         from: "(unknown)".into(),
+        node_id: from_node.map(str::to_string),
         ip,
         protocol: protocol.into(),
         text: "🔒 message could not be decrypted (wrong encryption key)".into(),
@@ -229,13 +235,19 @@ pub fn broadcast_control<P: Platform>(ctx: &NetCtx<P>, text: &str) {
 /// Decrypt and dispatch an incoming envelope. Clipboard control messages are
 /// handled in-band (never shown as chat); everything else is emitted as a
 /// normal `MessageReceived`.
-pub fn handle_incoming<P: Platform>(ctx: &NetCtx<P>, env: &Envelope, ip: String, protocol: &str) {
+pub fn handle_incoming<P: Platform>(
+    ctx: &NetCtx<P>,
+    env: &Envelope,
+    from_node: Option<&str>,
+    ip: String,
+    protocol: &str,
+) {
     let pt = {
         let guard = ctx.key.lock();
         guard.as_ref().and_then(|k| decrypt(k, env))
     };
     let Some(pt) = pt else {
-        note_undecryptable(ctx, ip, protocol);
+        note_undecryptable(ctx, from_node, ip, protocol);
         return;
     };
     let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) else {
@@ -250,6 +262,7 @@ pub fn handle_incoming<P: Platform>(ctx: &NetCtx<P>, env: &Envelope, ip: String,
 
     ctx.sink.emit(CoreEvent::MessageReceived(IncomingMessage {
         from: msg.from,
+        node_id: from_node.map(str::to_string),
         ip,
         protocol: protocol.into(),
         text: msg.text,
