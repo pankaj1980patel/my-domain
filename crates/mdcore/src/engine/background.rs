@@ -165,9 +165,22 @@ pub(super) fn spawn_signal_channel<P: Platform>(ctx: NetCtx<P>) {
 }
 
 /// Sleep for `d`; returns `false` once the engine is shutting down.
+/// Sleep `d`, waking early (within 100 ms) if the engine shuts down. False
+/// once it has: the loop should exit, dropping its context (and with it the
+/// sockets the context keeps alive).
 fn tick<P: Platform>(ctx: &NetCtx<P>, d: Duration) -> bool {
-    std::thread::sleep(d);
-    !ctx.shutdown.load(Ordering::Relaxed)
+    const SLICE: Duration = Duration::from_millis(100);
+    let deadline = std::time::Instant::now() + d;
+    loop {
+        if ctx.shutdown.load(Ordering::Relaxed) {
+            return false;
+        }
+        let left = deadline.saturating_duration_since(std::time::Instant::now());
+        if left.is_zero() {
+            return true;
+        }
+        std::thread::sleep(left.min(SLICE));
+    }
 }
 
 fn clipboard_watcher<P: Platform>(ctx: NetCtx<P>) {

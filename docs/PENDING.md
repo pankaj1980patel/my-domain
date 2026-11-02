@@ -84,20 +84,21 @@ or with less battery.
   real HTTPS server's relay.
 - ~~Test the engine against the real server's relay~~: **done**
   (`tests/live_server.rs`, ignored by default; it cleans up its devices).
-- **Clean engine shutdown.** Dropping an `Engine` doesn't release its
-  sockets, because background threads keep the endpoint alive. Fine for a
-  real restart (a new process), but in-process restarts can't reuse the
-  QUIC port. The tokio move above fixes it.
+- ~~Clean engine shutdown~~: **done** (2026-11-02). The background loops
+  now wake within 100 ms of shutdown, so a dropped `Engine` releases its
+  QUIC port in under half a second (`tests/shutdown.rs`). Short-lived
+  threads (ladder, signals) still finish their current step.
 
 ## 4. Phase 3: Bridges and apps
 
-- **UniFFI bridge** (`md-ffi`) for Android. Why:
-  [ADR-0003](../learnings/decisions/ADR-0003-uniffi.md).
-  - It replaces the hand-written JNI and the 1-second polling. Events are
-    pushed through Kotlin callbacks instead.
-  - It also removes Kotlin's own copies of the clipboard and reconnect logic.
 - ~~Android FCM receiver~~: **done** (2026-11-02), plus the desktop moved
   to Android-mode FCM registration. See DONE.md.
+- **UniFFI bridge** (`apps/android/rust`): **built** (2026-11-02). Typed
+  `MdEngine`, events pushed to Kotlin, generated bindings; NetService no
+  longer polls. Still to do:
+  - Run it on the phone (the APK builds; not yet installed).
+  - Move the screens from the `RustNet` facade to `MdEngine` directly
+    (with the UI rebuild), then delete `RustNet.kt`.
 - **Desktop UI in SolidJS + TypeScript**, with typed commands (`tauri-specta`)
   and native OS notifications. Why:
   [ADR-0004](../learnings/decisions/ADR-0004-solidjs.md).
