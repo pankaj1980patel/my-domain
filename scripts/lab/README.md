@@ -30,3 +30,18 @@ environment variables in [common.sh](common.sh).
 
 Cross-device scenario tests (`scenarios/*.toml`, driven by `mdctl`) are added in
 Phase 3, once `mdctl` exists.
+
+## mdctl: a scriptable device
+
+`apps/mdctl` runs a my-domain device with no UI. It prints every event and
+command result as one JSON line, and takes commands on stdin:
+
+```sh
+set -a; . scripts/lab/test-creds.env; set +a
+printf 'peers\nsend <node_id> hello\nquit\n' | cargo run -q -p mdctl -- --name lab-box --data /tmp/lab-box
+```
+
+Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
+`send <node> <text>`, `add <name> <ip> <quic_port>`, `forget` (remove this
+device from the server), `quit`. `--offline USER --key K` skips the server.
+

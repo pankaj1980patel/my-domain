@@ -282,4 +282,17 @@ fn a_hand_entered_peer_is_reached_over_quic_and_relisted_under_its_real_id() {
         .find(|p| p.node_id == b.node_id())
         .expect("listed under its real node id");
     assert_eq!(real.name, "my mac");
+
+    // The placeholder keeps working, even after the entry changes again
+    // (e.g. LAN discovery updates its address).
+    let mut moved = real.clone();
+    moved.ip = "192.0.2.7".into();
+    a.engine.upsert_peer(moved);
+    assert_eq!(
+        a.engine
+            .send("manual:127.0.0.1", "still reachable")
+            .unwrap(),
+        "QUIC"
+    );
+    b.sink.wait_for_message("still reachable");
 }

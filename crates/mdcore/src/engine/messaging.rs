@@ -18,11 +18,13 @@ impl<P: Platform> Engine<P> {
         if self.ctx.key.lock().is_none() {
             return Err(CoreError::NoKey);
         }
-        if !self.ctx.peers.lock().contains_key(node_id) {
+        // A hand-entered peer is re-listed under its real id once a link
+        // reveals it: before dialing (a later send), and after (this one).
+        let node_id = &self.resolve_manual(node_id);
+        if !self.ctx.peers.lock().contains_key(node_id.as_str()) {
             return Err(CoreError::PeerNotFound);
         }
         let linked = self.ensure_link(node_id);
-        // A hand-entered peer may just have been re-listed under its real id.
         let node_id = &self.resolve_manual(node_id);
         if !linked && !self.ctx.ws_conns.lock().contains_key(node_id.as_str()) {
             let _ = self.connect(node_id);
@@ -83,18 +85,13 @@ impl<P: Platform> Engine<P> {
     }
 
     /// `manual:<ip>` placeholders are replaced by the real node id once a
-    /// QUIC link reveals it; map a stale placeholder to that id.
+    /// QUIC link reveals it; map a replaced placeholder to that id.
     fn resolve_manual(&self, node_id: &str) -> String {
-        let Some(ip) = node_id.strip_prefix("manual:") else {
-            return node_id.to_string();
-        };
-        let peers = self.ctx.peers.lock();
-        if peers.contains_key(node_id) {
-            return node_id.to_string();
-        }
-        peers
-            .values()
-            .find(|p| p.source == Source::Manual && p.ip == ip)
-            .map_or_else(|| node_id.to_string(), |p| p.node_id.clone())
+        self.ctx
+            .manual_aliases
+            .lock()
+            .get(node_id)
+            .cloned()
+            .unwrap_or_else(|| node_id.to_string())
     }
 }

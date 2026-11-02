@@ -102,9 +102,11 @@ or with less battery.
 - **Desktop UI in SolidJS + TypeScript**, with typed commands (`tauri-specta`)
   and native OS notifications. Why:
   [ADR-0004](../learnings/decisions/ADR-0004-solidjs.md).
-- **`mdctl`**, a command-line engine with no UI (`daemon`, `peers`, `call`,
-  `scenario run`). Linux machines can run my-domain without a desktop, and
-  it drives the cross-device tests.
+- **`mdctl`** (`apps/mdctl`): **built** (2026-11-02). A device with no UI:
+  logs in (flags or `MD_DEV_*`), prints every event and result as JSON
+  lines, takes commands on stdin (`peers`, `send`, `connect`, `add`,
+  `links`, `forget`, ...). Still to do: `scenario run` for scripted
+  cross-device tests.
 - **Simulated-NAT test.** Two engines, each behind its own simulated router
   (Linux network namespaces), must connect by hole punching. Each simulated
   device has to be its own process, which is why this needs `mdctl`.

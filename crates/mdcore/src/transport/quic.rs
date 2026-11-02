@@ -655,6 +655,11 @@ fn adopt_manual_peer<P: Platform>(ctx: &NetCtx<P>, peer_id: &str, remote: Socket
     let manual_id = format!("manual:{}", remote.ip());
     let adopted = {
         let mut peers = ctx.peers.lock();
+        if peers.contains_key(&manual_id) {
+            ctx.manual_aliases
+                .lock()
+                .insert(manual_id.clone(), peer_id.to_string());
+        }
         match peers.remove(&manual_id) {
             Some(mut p) if !peers.contains_key(peer_id) => {
                 p.node_id = peer_id.to_string();

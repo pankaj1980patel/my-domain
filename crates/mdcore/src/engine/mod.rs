@@ -90,6 +90,9 @@ pub struct NetCtx<P: Platform> {
     /// skips them for a while (`transport::quic::ensure_link`), so an
     /// unreachable peer doesn't cost a connect timeout on every message.
     pub quic_failed: Arc<Mutex<HashMap<String, std::time::Instant>>>,
+    /// Hand-entered `manual:<ip>` placeholders already re-listed under the
+    /// peer's real node id: placeholder -> real id.
+    pub manual_aliases: Arc<Mutex<HashMap<String, String>>>,
     /// Rate limiter for "could not decrypt" notices, keyed by sender IP.
     pub decrypt_fail_last: DecryptFailures,
     /// Every envelope that failed to decrypt, notified or not.
@@ -136,6 +139,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             installed_apps: self.installed_apps.clone(),
             subs: self.subs.clone(),
             quic_failed: self.quic_failed.clone(),
+            manual_aliases: self.manual_aliases.clone(),
             decrypt_fail_last: self.decrypt_fail_last.clone(),
             decrypt_fail_count: self.decrypt_fail_count.clone(),
             config: self.config.clone(),
@@ -276,6 +280,7 @@ impl<P: Platform> Engine<P> {
             installed_apps: installed_apps.clone(),
             subs: subs.clone(),
             quic_failed: Arc::default(),
+            manual_aliases: Arc::default(),
             decrypt_fail_last: Arc::default(),
             decrypt_fail_count: Arc::default(),
             config: Arc::new(config),

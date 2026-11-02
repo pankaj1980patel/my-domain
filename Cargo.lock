@@ -3762,6 +3762,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "mdctl"
+version = "0.1.0"
+dependencies = [
+ "if-addrs 0.13.4",
+ "mdcore",
+ "serde_json",
+ "uuid",
+]
+
+[[package]]
 name = "mdns-sd"
 version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
