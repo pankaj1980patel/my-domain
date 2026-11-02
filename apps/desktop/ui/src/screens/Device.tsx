@@ -13,6 +13,7 @@ import {
 } from "../lib/core";
 import { friendlyError, initial, niceName, progressLabel } from "../lib/words";
 import { linkStateOf, StatusPill, toast } from "../components/ui";
+import { t } from "../i18n";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -24,16 +25,16 @@ export default function Device(props: { node: string; onBack: () => void }) {
       fallback={
         <section class="page">
           <button class="link" onClick={props.onBack}>
-            ← Your devices
+            {t("device.back")}
           </button>
-          <p class="muted">This device isn't in your list any more.</p>
+          <p class="muted">{t("device.gone")}</p>
         </section>
       }
     >
       {(p) => (
         <section class="page">
           <button class="link back" onClick={props.onBack}>
-            ← Your devices
+            {t("device.back")}
           </button>
           <header class="device-head">
             <div class="device-avatar lg" aria-hidden="true">
@@ -51,7 +52,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 class="btn btn-primary"
                 onClick={() => connect(props.node).catch((e) => toast(friendlyError(e), "error"))}
               >
-                Connect
+                {t("device.connect")}
               </button>
             </Show>
           </header>
@@ -94,19 +95,18 @@ function ChatTile(props: { node: string }) {
 
   return (
     <article class="tile tile-wide">
-      <h2> Messages
-      </h2>
+      <h2>{t("chat.title")}</h2>
       <div class="thread" ref={list}>
-        <Show when={thread().length > 0} fallback={<p class="muted small center">Say hi. Messages go straight to this device, encrypted.</p>}>
+        <Show when={thread().length > 0} fallback={<p class="muted small center">{t("chat.empty")}</p>}>
           <For each={thread()}>
             {(m) => (
               <div class={`bubble bubble-${m.dir}`} classList={{ "bubble-pending": !!m.pending }}>
                 <span>{m.text}</span>
                 <Show when={m.pending}>
-                  <small class="bubble-note">{m.via === "queued" ? "Sends when connected" : "Sending…"}</small>
+                  <small class="bubble-note">{m.via === "queued" ? t("chat.queued") : t("chat.sending")}</small>
                 </Show>
                 <Show when={m.delivered && m.id === lastDelivered()}>
-                  <small class="bubble-note">Delivered</small>
+                  <small class="bubble-note">{t("chat.delivered")}</small>
                 </Show>
               </div>
             )}
@@ -115,13 +115,13 @@ function ChatTile(props: { node: string }) {
       </div>
       <form class="composer" onSubmit={send}>
         <input
-          placeholder="Write a message"
+          placeholder={t("chat.placeholder")}
           value={text()}
           onInput={(e) => setText(e.currentTarget.value)}
-          aria-label="Message"
+          aria-label={t("chat.label")}
         />
         <button class="btn btn-primary" type="submit" disabled={busy() || !text().trim()}>
-          Send
+          {t("chat.send")}
         </button>
       </form>
     </article>
@@ -132,9 +132,8 @@ function ClipboardTile(props: { node: string }) {
   const [busy, setBusy] = createSignal(false);
   return (
     <article class="tile">
-      <h2> Clipboard
-      </h2>
-      <p class="muted small">Copy something there, paste it here.</p>
+      <h2>{t("clipboard.title")}</h2>
+      <p class="muted small">{t("clipboard.hint")}</p>
       <button
         class="btn btn-soft btn-block"
         disabled={busy()}
@@ -142,7 +141,7 @@ function ClipboardTile(props: { node: string }) {
           setBusy(true);
           try {
             await pullClipboard(props.node);
-            toast("Copied to your clipboard", "ok");
+            toast(t("clipboard.copied"), "ok");
           } catch (e) {
             toast(friendlyError(e), "error");
           } finally {
@@ -150,10 +149,10 @@ function ClipboardTile(props: { node: string }) {
           }
         }}
       >
-        {busy() ? "Getting it…" : "Get its clipboard"}
+        {busy() ? t("clipboard.getting") : t("clipboard.get")}
       </button>
       <label class="switch-row">
-        <span>Keep clipboards in sync</span>
+        <span>{t("clipboard.sync")}</span>
         <input
           type="checkbox"
           role="switch"
@@ -170,8 +169,7 @@ function NotifyTile() {
   const [body, setBody] = createSignal("");
   return (
     <article class="tile">
-      <h2> Send a notification
-      </h2>
+      <h2>{t("notify.title")}</h2>
       <form
         class="stack"
         onSubmit={async (e) => {
@@ -180,13 +178,13 @@ function NotifyTile() {
           await shareNotification(title().trim(), body().trim());
           setTitle("");
           setBody("");
-          toast("Sent to your devices", "ok");
+          toast(t("notify.sent"), "ok");
         }}
       >
-        <input placeholder="Title" value={title()} onInput={(e) => setTitle(e.currentTarget.value)} aria-label="Title" />
-        <input placeholder="Message (optional)" value={body()} onInput={(e) => setBody(e.currentTarget.value)} aria-label="Message" />
+        <input placeholder={t("notify.titleField")} value={title()} onInput={(e) => setTitle(e.currentTarget.value)} aria-label={t("notify.titleField")} />
+        <input placeholder={t("notify.bodyField")} value={body()} onInput={(e) => setBody(e.currentTarget.value)} aria-label={t("notify.bodyLabel")} />
         <button class="btn btn-soft btn-block" type="submit" disabled={!title().trim()}>
-          Send to all my devices
+          {t("notify.send")}
         </button>
       </form>
     </article>
@@ -200,20 +198,19 @@ function AppsTile(props: { node: string }) {
     (data()?.apps ?? []).filter((a) => a.label.toLowerCase().includes(q().toLowerCase())).slice(0, 50);
   return (
     <article class="tile tile-wide">
-      <h2> App notifications
-      </h2>
-      <p class="muted small">Choose which of its apps can show notifications here.</p>
+      <h2>{t("apps.title")}</h2>
+      <p class="muted small">{t("apps.hint")}</p>
       <Show
         when={data()}
         fallback={
           <button class="btn btn-soft" onClick={() => requestApps(props.node).catch((e) => toast(friendlyError(e), "error"))}>
-            Show its apps
+            {t("apps.show")}
           </button>
         }
       >
-        <input placeholder="Search apps" value={q()} onInput={(e) => setQ(e.currentTarget.value)} aria-label="Search apps" />
+        <input placeholder={t("apps.search")} value={q()} onInput={(e) => setQ(e.currentTarget.value)} aria-label={t("apps.search")} />
         <ul class="app-list">
-          <For each={shown()} fallback={<li class="muted small">No apps to show.</li>}>
+          <For each={shown()} fallback={<li class="muted small">{t("apps.none")}</li>}>
             {(a) => (
               <li>
                 <label class="switch-row">

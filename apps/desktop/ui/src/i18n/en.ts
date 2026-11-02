@@ -1,0 +1,151 @@
+// English, the source language. Every string a person sees lives here; the
+// Developer screen and console logs stay inline on purpose.
+//
+// `{name}` is filled in by t(). A value with `one`/`other` is a plural: read it
+// with tn(), which picks the form by `{count}`. To add a language, copy this
+// file, translate the values (keep the keys and placeholders), and register
+// it in index.ts.
+
+export const en = {
+  // App shell
+  "app.name": "my-domain",
+  "nav.label": "Main",
+  "nav.devices": "Devices",
+  "nav.activity": "Activity",
+  "nav.settings": "Settings",
+
+  // Sign in
+  "signIn.titleCreate": "Create your account",
+  "signIn.titleWelcome": "Welcome back",
+  "signIn.tagline": "All your devices, working together. Privately.",
+  "signIn.username": "Username",
+  "signIn.password": "Password",
+  "signIn.deviceKey": "Device key",
+  "signIn.generate": "Generate",
+  "signIn.keyHint": "Use the same key on all your devices. It encrypts everything they send each other.",
+  "signIn.advanced": "Advanced",
+  "signIn.hideAdvanced": "Hide advanced",
+  "signIn.server": "Server",
+  "signIn.missingFields": "Fill in your username, password and device key.",
+  "signIn.signingIn": "Signing in…",
+  "signIn.createAccount": "Create account",
+  "signIn.signIn": "Sign in",
+  "signIn.haveAccount": "Already have an account?",
+  "signIn.newHere": "New here?",
+  "signIn.createAnAccount": "Create an account",
+
+  // Home
+  "home.title": "Your devices",
+  "home.emptyHint": "Devices signed in to your account appear here.",
+  "home.connectedCount": "{online} of {total} connected",
+  "home.refresh": "Refresh",
+  "home.refreshed": "Device list updated",
+  "home.emptyTitle": "No other devices yet",
+  "home.emptyBody":
+    "Install my-domain on your phone or another computer and sign in with the same account. It shows up here by itself.",
+
+  // Device card / status
+  "device.connect": "Connect",
+  "device.unread": { one: "{count} message", other: "{count} messages" },
+  "link.direct": "Connected directly",
+  "link.relay": "Connected through the internet",
+  "link.connecting": "Connecting…",
+  "link.failed": "Couldn't reach it",
+  "link.offline": "Not connected",
+  "quality.excellent": "Excellent connection",
+  "quality.good": "Good connection",
+  "quality.weak": "Weak connection",
+  "progress.quic": "Looking for it on your networks…",
+  "progress.signaledQuic": "Asking it to connect back…",
+  "progress.relay": "Connecting through the internet…",
+  "progress.punching": "Finding a faster direct route…",
+  "progress.failed": "Make sure my-domain is open on it and it's online.",
+
+  // Device page
+  "device.back": "← Your devices",
+  "device.gone": "This device isn't in your list any more.",
+  "chat.title": "Messages",
+  "chat.empty": "Say hi. Messages go straight to this device, encrypted.",
+  "chat.queued": "Sends when connected",
+  "chat.sending": "Sending…",
+  "chat.delivered": "Delivered",
+  "chat.placeholder": "Write a message",
+  "chat.label": "Message",
+  "chat.send": "Send",
+  "clipboard.title": "Clipboard",
+  "clipboard.hint": "Copy something there, paste it here.",
+  "clipboard.copied": "Copied to your clipboard",
+  "clipboard.getting": "Getting it…",
+  "clipboard.get": "Get its clipboard",
+  "clipboard.sync": "Keep clipboards in sync",
+  "notify.title": "Send a notification",
+  "notify.titleField": "Title",
+  "notify.bodyField": "Message (optional)",
+  "notify.bodyLabel": "Message",
+  "notify.send": "Send to all my devices",
+  "notify.sent": "Sent to your devices",
+  "apps.title": "App notifications",
+  "apps.hint": "Choose which of its apps can show notifications here.",
+  "apps.show": "Show its apps",
+  "apps.search": "Search apps",
+  "apps.none": "No apps to show.",
+
+  // Activity
+  "activity.title": "Activity",
+  "activity.subtitle": "Messages, connections and alerts from your devices.",
+  "activity.emptyTitle": "Nothing yet",
+  "activity.emptyBody": "Things your devices do show up here.",
+  "activity.connected": "Connected to {name}",
+  "activity.disconnected": "{name} disconnected",
+  "activity.unreadable": "A message couldn't be read: that device uses a different key",
+  "activity.message": "{name}: {text}",
+  "activity.notification": "{title}",
+  "activity.notificationWithBody": "{title} — {body}",
+  "activity.call": "Call from {caller} ({state})",
+  "activity.clipboardReceived": "Clipboard received",
+  "activity.clipboardSynced": "Clipboard synced",
+  "activity.clipboardCopied": "Copied {name}'s clipboard",
+  "activity.notificationSent": "Sent “{title}” to your devices",
+  "activity.someDevice": "a device",
+
+  // Settings
+  "settings.title": "Settings",
+  "settings.developerUnlocked": "Developer screen unlocked",
+  "settings.account": "Account",
+  "settings.signedInAs": "Signed in as {name}",
+  "settings.signOut": "Sign out",
+  "settings.thisDevice": "This device",
+  "settings.seenAs": "Other devices see it as {name}.",
+  "settings.clipSync": "Keep clipboards in sync with my devices",
+  "settings.deviceKey": "Device key",
+  "settings.deviceKeyHint": "All your devices must use the same key. Changing it here means changing it on every device.",
+  "settings.changeKey": "Change device key",
+  "settings.keyChanged": "Device key changed",
+  "settings.newKey": "New device key",
+  "settings.yourPassword": "Your password",
+  "settings.save": "Save",
+  "settings.cancel": "Cancel",
+  "settings.version": "my-domain {version}",
+
+  // Errors (friendlyError)
+  "error.notConnectedYet": "Not connected yet. Connecting now: try again in a moment.",
+  "error.connectionClosed": "The connection dropped. Reconnecting: try again in a moment.",
+  "error.noKey": "Set your device key first (Settings).",
+  "error.peerNotFound": "That device isn't in your list any more.",
+  "error.signedOut": "You're signed out. Sign in again.",
+  "error.badCredentials": "Wrong username or password.",
+  "error.noClipboard": "That device didn't answer. Is my-domain open on it?",
+  "error.timeout": "That took too long. Check your internet connection.",
+  "error.network": "Can't reach the server. Check your internet connection.",
+
+  // Relative time (timeAgo)
+  "time.justNow": "just now",
+  "time.secondsAgo": "{count}s ago",
+  "time.minutesAgo": "{count} min ago",
+  "time.hoursAgo": "{count} h ago",
+} as const;
+
+/** The shape every language must have: same keys, plain strings or plurals. */
+export type Messages = {
+  [K in keyof typeof en]: (typeof en)[K] extends string ? string : { one: string; other: string };
+};

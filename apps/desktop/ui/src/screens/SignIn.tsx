@@ -5,6 +5,7 @@ import { createSignal, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { signIn } from "../lib/core";
 import { friendlyError } from "../lib/words";
+import { t } from "../i18n";
 
 const DEFAULT_SERVER = "https://mydomain.servehttp.com";
 
@@ -21,7 +22,7 @@ export default function SignIn(props: { onDone: () => void }) {
   const submit = async (e?: Event) => {
     e?.preventDefault();
     if (!user().trim() || !pass() || !key().trim()) {
-      setError("Fill in your username, password and device key.");
+      setError(t("signIn.missingFields"));
       return;
     }
     setBusy(true);
@@ -55,15 +56,15 @@ export default function SignIn(props: { onDone: () => void }) {
     <main class="signin">
       <form class="signin-card" onSubmit={submit}>
         <img class="signin-logo" src="/logo.png" alt="" />
-        <h1>{create() ? "Create your account" : "Welcome back"}</h1>
-        <p class="muted">All your devices, working together. Privately.</p>
+        <h1>{create() ? t("signIn.titleCreate") : t("signIn.titleWelcome")}</h1>
+        <p class="muted">{t("signIn.tagline")}</p>
 
         <label class="field">
-          <span>Username</span>
+          <span>{t("signIn.username")}</span>
           <input value={user()} onInput={(e) => setUser(e.currentTarget.value)} autocomplete="username" autofocus />
         </label>
         <label class="field">
-          <span>Password</span>
+          <span>{t("signIn.password")}</span>
           <input
             type="password"
             value={pass()}
@@ -72,24 +73,24 @@ export default function SignIn(props: { onDone: () => void }) {
           />
         </label>
         <label class="field">
-          <span>Device key</span>
+          <span>{t("signIn.deviceKey")}</span>
           <div class="field-row">
             <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} />
             <Show when={create()}>
               <button type="button" class="btn btn-ghost btn-sm" onClick={async () => setKey(await commands.generateKey())}>
-                Generate
+                {t("signIn.generate")}
               </button>
             </Show>
           </div>
-          <small class="muted">Use the same key on all your devices. It encrypts everything they send each other.</small>
+          <small class="muted">{t("signIn.keyHint")}</small>
         </label>
 
         <button type="button" class="link" onClick={() => setAdvanced(!advanced())} aria-expanded={advanced()}>
-          {advanced() ? "Hide advanced" : "Advanced"}
+          {advanced() ? t("signIn.hideAdvanced") : t("signIn.advanced")}
         </button>
         <Show when={advanced()}>
           <label class="field">
-            <span>Server</span>
+            <span>{t("signIn.server")}</span>
             <input value={server()} onInput={(e) => setServer(e.currentTarget.value)} />
           </label>
         </Show>
@@ -101,12 +102,12 @@ export default function SignIn(props: { onDone: () => void }) {
         </Show>
 
         <button class="btn btn-primary btn-block" type="submit" disabled={busy()}>
-          {busy() ? "Signing in…" : create() ? "Create account" : "Sign in"}
+          {busy() ? t("signIn.signingIn") : create() ? t("signIn.createAccount") : t("signIn.signIn")}
         </button>
         <p class="muted center">
-          {create() ? "Already have an account?" : "New here?"}{" "}
+          {create() ? t("signIn.haveAccount") : t("signIn.newHere")}{" "}
           <button type="button" class="link" onClick={() => setCreate(!create())}>
-            {create() ? "Sign in" : "Create an account"}
+            {create() ? t("signIn.signIn") : t("signIn.createAnAccount")}
           </button>
         </p>
       </form>

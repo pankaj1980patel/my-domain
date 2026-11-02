@@ -4,6 +4,7 @@ import { createMemo, For, Show } from "solid-js";
 import { connect, refreshDevices, state } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { DeviceCard, Empty, toast } from "../components/ui";
+import { t } from "../i18n";
 
 export default function Home(props: { onOpen: (node: string) => void }) {
   const devices = createMemo(() =>
@@ -27,27 +28,26 @@ export default function Home(props: { onOpen: (node: string) => void }) {
     <section class="page">
       <header class="page-head">
         <div>
-          <h1>Your devices</h1>
+          <h1>{t("home.title")}</h1>
           <p class="muted">
-            <Show when={state.peers.length > 0} fallback="Devices signed in to your account appear here.">
-              {online()} of {state.peers.length} connected
+            <Show when={state.peers.length > 0} fallback={t("home.emptyHint")}>
+              {t("home.connectedCount", { online: online(), total: state.peers.length })}
             </Show>
           </p>
         </div>
         <button
           class="btn btn-ghost"
-          onClick={() => refreshDevices().then(() => toast("Device list updated", "ok"), (e) => toast(friendlyError(e), "error"))}
+          onClick={() => refreshDevices().then(() => toast(t("home.refreshed"), "ok"), (e) => toast(friendlyError(e), "error"))}
         >
-          Refresh
+          {t("home.refresh")}
         </button>
       </header>
 
       <Show
         when={devices().length > 0}
         fallback={
-          <Empty icon="" title="No other devices yet">
-            Install my-domain on your phone or another computer and sign in with the same account. It shows up here by
-            itself.
+          <Empty icon="" title={t("home.emptyTitle")}>
+            {t("home.emptyBody")}
           </Empty>
         }
       >

@@ -7,6 +7,7 @@
 import { createStore, produce } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
 import { commands, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { t } from "../i18n";
 
 export type Peer = Peer_Serialize;
 export type Identity = Identity_Serialize;
@@ -84,8 +85,8 @@ export async function unwrap<T>(
 }
 
 export function peerName(node: string | undefined): string {
-  if (!node) return "a device";
-  return state.peers.find((p) => p.node_id === node)?.name ?? "a device";
+  if (!node) return t("activity.someDevice");
+  return state.peers.find((p) => p.node_id === node)?.name ?? t("activity.someDevice");
 }
 
 export function addActivity(item: Omit<ActivityItem, "id" | "ts">) {
@@ -140,7 +141,7 @@ export async function startEvents() {
       const was = state.links[node_id];
       setState("links", node_id, transport);
       setState("progress", node_id, "connected");
-      if (!was) addActivity({ icon: "🔗", tone: "ok", node: node_id, text: `Connected to ${peerName(node_id)}` });
+      if (!was) addActivity({ icon: "🔗", tone: "ok", node: node_id, text: t("activity.connected", { name: peerName(node_id) }) });
     }),
     // Matched on the id alone: a hand-entered device acks under its real id.
     on<{ node_id: string; id: string }>("message-delivered", ({ id }) =>
@@ -148,7 +149,7 @@ export async function startEvents() {
     ),
     on<string>("peer-disconnected", (node_id) => {
       setState("links", produce((m) => delete m[node_id]));
-      addActivity({ icon: "⛓️‍💥", tone: "info", node: node_id, text: `${peerName(node_id)} disconnected` });
+      addActivity({ icon: "⛓️‍💥", tone: "info", node: node_id, text: t("activity.disconnected", { name: peerName(node_id) }) });
     }),
     on<{ node_id: string; stage: string; detail?: string | null }>("connect-progress", ({ node_id, stage }) =>
       setState("progress", node_id, stage),
@@ -159,7 +160,7 @@ export async function startEvents() {
           icon: "🔒",
           tone: "error",
           node: m.node_id,
-          text: "A message couldn't be read: that device uses a different key",
+          text: t("activity.unreadable"),
         });
         return;
       }
@@ -168,16 +169,16 @@ export async function startEvents() {
         "messages",
         produce((list) => list.push({ id: ++seq, node, dir: "in", text: m.text, ts: now(), via: m.protocol })),
       );
-      addActivity({ icon: "💬", tone: "info", node, text: `${peerName(node)}: ${m.text}` });
+      addActivity({ icon: "💬", tone: "info", node, text: t("activity.message", { name: peerName(node), text: m.text }) });
     }),
     on<{ from: string; title: string; body: string; app?: string | null }>("notification-event", (n) =>
-      addActivity({ icon: "🔔", tone: "info", text: `${n.title}${n.body ? ` — ${n.body}` : ""}` }),
+      addActivity({ icon: "🔔", tone: "info", text: n.body ? t("activity.notificationWithBody", { title: n.title, body: n.body }) : t("activity.notification", { title: n.title }) }),
     ),
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
-      addActivity({ icon: "📞", tone: "info", text: `Call from ${c.caller} (${c.state})` }),
+      addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
-      addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? "Clipboard received" : "Clipboard synced" }),
+      addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
     ),
     on<{ from: string; apps: AppEntry[]; subscribed: string[] }>("apps-list-event", (a) => {
       const node = state.peers.find((p) => p.name === a.from || p.node_id === a.from)?.node_id ?? a.from;
@@ -258,13 +259,13 @@ export async function setClipSync(on: boolean) {
 
 export async function pullClipboard(node: string): Promise<string> {
   const text = await unwrap(commands.getClipboard(node));
-  addActivity({ icon: "📋", tone: "ok", node, text: `Copied ${peerName(node)}'s clipboard` });
+  addActivity({ icon: "📋", tone: "ok", node, text: t("activity.clipboardCopied", { name: peerName(node) }) });
   return text;
 }
 
 export async function shareNotification(title: string, body: string) {
   await commands.shareNotification(title, body, "my-domain");
-  addActivity({ icon: "🔔", tone: "ok", text: `Sent “${title}” to your devices` });
+  addActivity({ icon: "🔔", tone: "ok", text: t("activity.notificationSent", { title }) });
 }
 
 export async function requestApps(node: string) {

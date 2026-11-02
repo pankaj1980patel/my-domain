@@ -4,6 +4,7 @@ import { createSignal, For, Show, type JSX } from "solid-js";
 import { state, type Peer } from "../lib/core";
 import { initial, linkLabel, linkState, niceName, qualityLabel, type LinkState } from "../lib/words";
 import type { Quality } from "../bindings";
+import { t, tn } from "../i18n";
 
 // --- toasts -------------------------------------------------------------------
 
@@ -72,7 +73,7 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
         <StatusPill node={props.peer.node_id} />
       </div>
       <Show when={unread() > 0}>
-        <span class="badge" aria-label={`${unread()} messages`}>
+        <span class="badge" aria-label={tn("device.unread", unread())}>
           {unread()}
         </span>
       </Show>
@@ -84,7 +85,7 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
             props.onConnect();
           }}
         >
-          Connect
+          {t("device.connect")}
         </button>
       </Show>
     </article>

@@ -3,6 +3,7 @@
 // Developer screen.
 
 import type { Quality, TransportKind } from "../bindings";
+import { t } from "../i18n";
 
 export type LinkState = "direct" | "relay" | "connecting" | "offline" | "failed";
 
@@ -17,15 +18,15 @@ export function linkState(link: TransportKind | undefined, progress: string | un
 export function linkLabel(s: LinkState): string {
   switch (s) {
     case "direct":
-      return "Connected directly";
+      return t("link.direct");
     case "relay":
-      return "Connected through the internet";
+      return t("link.relay");
     case "connecting":
-      return "Connecting…";
+      return t("link.connecting");
     case "failed":
-      return "Couldn't reach it";
+      return t("link.failed");
     default:
-      return "Not connected";
+      return t("link.offline");
   }
 }
 
@@ -33,11 +34,11 @@ export function linkLabel(s: LinkState): string {
 export function qualityLabel(q: Quality | undefined): string | null {
   switch (q) {
     case "excellent":
-      return "Excellent connection";
+      return t("quality.excellent");
     case "good":
-      return "Good connection";
+      return t("quality.good");
     case "weak":
-      return "Weak connection";
+      return t("quality.weak");
     default:
       return null;
   }
@@ -47,16 +48,16 @@ export function qualityLabel(q: Quality | undefined): string | null {
 export function progressLabel(stage: string | undefined): string | null {
   switch (stage) {
     case "quic":
-      return "Looking for it on your networks…";
+      return t("progress.quic");
     case "signaled_quic":
-      return "Asking it to connect back…";
+      return t("progress.signaledQuic");
     case "relay":
-      return "Connecting through the internet…";
+      return t("progress.relay");
     case "punching":
     case "webrtc":
-      return "Finding a faster direct route…";
+      return t("progress.punching");
     case "failed":
-      return "Make sure my-domain is open on it and it's online.";
+      return t("progress.failed");
     default:
       return null;
   }
@@ -65,16 +66,16 @@ export function progressLabel(stage: string | undefined): string | null {
 /** Turn a core error into something a person can act on. */
 export function friendlyError(e: unknown): string {
   const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
-  if (m.includes("not connected yet")) return "Not connected yet. Connecting now: try again in a moment.";
-  if (m.includes("connection closed")) return "The connection dropped. Reconnecting: try again in a moment.";
-  if (m.includes("encryption key")) return "Set your device key first (Settings).";
-  if (m.includes("peer not found")) return "That device isn't in your list any more.";
-  if (m.includes("not logged in")) return "You're signed out. Sign in again.";
-  if (m.includes("invalid credentials") || m.includes("401")) return "Wrong username or password.";
-  if (m.includes("no clipboard response")) return "That device didn't answer. Is my-domain open on it?";
-  if (m.includes("timed out") || m.includes("timeout")) return "That took too long. Check your internet connection.";
+  if (m.includes("not connected yet")) return t("error.notConnectedYet");
+  if (m.includes("connection closed")) return t("error.connectionClosed");
+  if (m.includes("encryption key")) return t("error.noKey");
+  if (m.includes("peer not found")) return t("error.peerNotFound");
+  if (m.includes("not logged in")) return t("error.signedOut");
+  if (m.includes("invalid credentials") || m.includes("401")) return t("error.badCredentials");
+  if (m.includes("no clipboard response")) return t("error.noClipboard");
+  if (m.includes("timed out") || m.includes("timeout")) return t("error.timeout");
   if (m.includes("dns") || m.includes("connection refused") || m.includes("network"))
-    return "Can't reach the server. Check your internet connection.";
+    return t("error.network");
   return e instanceof Error ? e.message : String(e);
 }
 
@@ -90,11 +91,11 @@ export function niceName(name: string): string {
 
 export function timeAgo(ts: number): string {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
-  if (s < 10) return "just now";
-  if (s < 60) return `${s}s ago`;
+  if (s < 10) return t("time.justNow");
+  if (s < 60) return t("time.secondsAgo", { count: s });
   const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return t("time.minutesAgo", { count: m });
   const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
+  if (h < 24) return t("time.hoursAgo", { count: h });
   return new Date(ts).toLocaleDateString();
 }
