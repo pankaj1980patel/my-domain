@@ -10,11 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,7 +27,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
@@ -75,10 +74,11 @@ fun SignInScreen(prefs: SharedPreferences) {
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Spacer(Modifier.height(32.dp))
+            Spacer(Modifier.height(16.dp))
+            // Soft-edged mark: the logo's own sky fades into the background.
             Image(
                 painterResource(R.drawable.logo_mark), contentDescription = null,
-                modifier = Modifier.size(72.dp).clip(RoundedCornerShape(18.dp)),
+                modifier = Modifier.size(112.dp).offset(x = (-14).dp),
             )
             Text(if (create) "Create your account" else "Welcome back", style = MaterialTheme.typography.headlineSmall, color = T.text)
             Muted("All your devices, working together. Privately.")
