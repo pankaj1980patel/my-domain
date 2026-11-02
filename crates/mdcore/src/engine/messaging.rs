@@ -9,11 +9,19 @@ impl<P: Platform> Engine<P> {
     // --- messaging ---
 
     /// Send a chat message over the peer's live link, opening a QUIC link
-    /// first if there is none. With no way to reach the peer right now, the
-    /// message is held (`transport::outbox`), the connect ladder starts in
-    /// the background, and this returns `"queued"`: the message goes out as
-    /// soon as a link is up. Otherwise returns the transport used.
+    /// first if there is none. The message is kept (`transport::outbox`) and
+    /// resent on later links until the peer acknowledges it
+    /// (`CoreEvent::MessageDelivered`). With no way to reach the peer right
+    /// now, the connect ladder starts in the background and this returns
+    /// `"queued"`: the message goes out as soon as a link is up. Otherwise
+    /// returns the transport used.
     pub fn send(&self, node_id: &str, text: &str) -> crate::Result<String> {
+        self.send_with_id(node_id, text, &transport::outbox::new_id())
+    }
+
+    /// `send`, with the message id chosen by the caller (the UI matches it
+    /// against `MessageDelivered`).
+    pub fn send_with_id(&self, node_id: &str, text: &str, id: &str) -> crate::Result<String> {
         let from = self
             .username
             .lock()
@@ -30,20 +38,13 @@ impl<P: Platform> Engine<P> {
         }
         let linked = self.ensure_link(node_id);
         let node_id = &self.resolve_manual(node_id);
-        if !linked && !self.ctx.ws_conns.lock().contains_key(node_id.as_str()) {
-            transport::outbox::hold(&self.ctx, node_id, &from, text);
-            let _ = self.connect(node_id);
-            return Ok(QUEUED.to_string());
+        transport::outbox::hold(&self.ctx, node_id, id, &from, text);
+        let live = linked || self.ctx.ws_conns.lock().contains_key(node_id.as_str());
+        if live && transport::outbox::pump(&self.ctx, node_id, false, Some(id)) {
+            return Ok(self.display_transport(node_id));
         }
-        transport::send_payload(
-            &self.ctx.ws_conns,
-            &self.ctx.p2p_conns,
-            &self.ctx.key,
-            &from,
-            node_id,
-            text,
-        )?;
-        Ok(self.display_transport(node_id))
+        let _ = self.connect(node_id);
+        Ok(QUEUED.to_string())
     }
 
     // --- clipboard ---

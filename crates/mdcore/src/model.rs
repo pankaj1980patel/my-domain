@@ -123,10 +123,17 @@ impl Peer {
 }
 
 /// Decrypted message body.
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct Plaintext {
     pub from: String,
     pub text: String,
+    /// A chat message's id. The receiver acknowledges it (`ack`) and drops
+    /// repeats, so the sender can resend until it hears back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    /// Set on an acknowledgement: the id of the message that arrived.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ack: Option<String>,
 }
 
 /// Encrypted on-the-wire envelope (TCP/UDP body, and WS `msg` frames).
@@ -150,6 +157,9 @@ pub struct IncomingMessage {
     pub text: String,
     pub ts: u64,
     pub ok: bool,
+    /// The message's id, when the sender gave it one (chat does).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
 }
 
 /// WebSocket frames (legacy protocol v1; v2 framing lives in `wire::frame`).

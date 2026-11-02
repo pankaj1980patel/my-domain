@@ -295,6 +295,21 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Delivery receipts (2026-11-02)
+
+- Every chat message carries an id (`Plaintext.id`). The receiver acks it
+  (`Plaintext.ack`) every time and shows it only the first time (ids
+  remembered per sender). The sender keeps the message in the outbox until
+  the ack: it is resent on every new or upgraded link and every 10 s on a
+  live one, so a message sent as a link is swapped (glare, relay to
+  direct) is no longer lost.
+- New event `MessageDelivered { node_id, id }` (`message-delivered`);
+  `Engine::send_with_id` lets the UI pick the id. Both apps show a bubble
+  as pending until its receipt arrives ("Sends when connected" only while
+  there is no link); desktop marks the newest delivered message.
+- Tests: `the_sender_hears_when_a_message_arrived`,
+  `a_resent_message_is_shown_once_and_still_acknowledged`, the bridge test.
+
 ## Messages wait for a link; relay route fix (2026-11-02)
 
 - **Outbox:** a message sent while a device has no link is held

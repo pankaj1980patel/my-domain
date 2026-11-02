@@ -361,8 +361,17 @@ fn scan_lan(engine: State<Eng>) {
 
 #[tauri::command]
 #[specta::specta]
-fn send_message(node_id: String, text: String, engine: State<Eng>) -> Result<String, CoreError> {
-    engine.send(&node_id, &text)
+fn send_message(
+    node_id: String,
+    text: String,
+    id: Option<String>,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    // The UI picks the id so it can match the delivery receipt to its bubble.
+    match id {
+        Some(id) => engine.send_with_id(&node_id, &text, &id),
+        None => engine.send(&node_id, &text),
+    }
 }
 
 #[tauri::command]

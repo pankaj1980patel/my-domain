@@ -109,6 +109,8 @@ pub struct NetCtx<P: Platform> {
     pub background: Arc<AtomicBool>,
     /// Messages waiting for a peer's link (see `transport::outbox`).
     pub outbox: transport::outbox::Outbox,
+    /// Ids of chat messages that arrived, per sender (drops resends).
+    pub seen: transport::outbox::Seen,
     /// Dial/accept QUIC connections (the runtime itself is owned by `Engine`).
     pub quic: transport::quic::QuicLink,
     /// The relay WebSocket to the server, when open (last-resort path).
@@ -153,6 +155,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             shutdown: self.shutdown.clone(),
             background: self.background.clone(),
             outbox: self.outbox.clone(),
+            seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
             nat: self.nat.clone(),
@@ -299,6 +302,7 @@ impl<P: Platform> Engine<P> {
             shutdown: Arc::default(),
             background: Arc::default(),
             outbox: Arc::default(),
+            seen: Arc::default(),
             quic: quic.link(),
             relay: Arc::default(),
             nat: Arc::default(),

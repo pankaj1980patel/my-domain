@@ -23,6 +23,8 @@ pub enum CoreEvent {
     PeersUpdated { peers: Vec<Peer> },
     /// A decrypted (or undecryptable) chat message arrived.
     MessageReceived(IncomingMessage),
+    /// A peer acknowledged chat message `id` (it arrived).
+    MessageDelivered { node_id: String, id: String },
     /// A WebSocket connection to a peer was established.
     WsConnected { node_id: String },
     /// A WebSocket connection to a peer closed.
@@ -89,6 +91,7 @@ impl CoreEvent {
         match self {
             CoreEvent::PeersUpdated { .. } => "peers-updated",
             CoreEvent::MessageReceived(_) => "message-received",
+            CoreEvent::MessageDelivered { .. } => "message-delivered",
             CoreEvent::WsConnected { .. } => "ws-connected",
             CoreEvent::WsDisconnected { .. } => "ws-disconnected",
             CoreEvent::PeerConnected { .. } => "peer-connected",

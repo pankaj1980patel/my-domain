@@ -18,8 +18,12 @@ export type ChatMessage = {
   text: string;
   ts: number;
   via?: string;
-  /** Held by the core until the device is connected. */
+  /** Message id shared with the core; the delivery receipt carries it back. */
+  mid?: string;
+  /** Sent (or queued) but the device hasn't confirmed receipt yet. */
   pending?: boolean;
+  /** Set when the receipt arrives. */
+  delivered?: boolean;
 };
 
 export type ActivityItem = {
@@ -106,7 +110,7 @@ function logDev(name: string, payload: unknown) {
 
 // --- events ---------------------------------------------------------------
 
-type IncomingMessage = { from: string; node_id?: string; ip: string; protocol: string; text: string; ts: number; ok: boolean };
+type IncomingMessage = { from: string; node_id?: string; ip: string; protocol: string; text: string; ts: number; ok: boolean; id?: string | null };
 
 let listening = false;
 let qualityTimer: ReturnType<typeof setInterval> | undefined;
@@ -136,10 +140,12 @@ export async function startEvents() {
       const was = state.links[node_id];
       setState("links", node_id, transport);
       setState("progress", node_id, "connected");
-      // The core sends held messages the moment a link is up.
-      setState("messages", (m) => m.node === node_id && !!m.pending, "pending", false);
       if (!was) addActivity({ icon: "🔗", tone: "ok", node: node_id, text: `Connected to ${peerName(node_id)}` });
     }),
+    // Matched on the id alone: a hand-entered device acks under its real id.
+    on<{ node_id: string; id: string }>("message-delivered", ({ id }) =>
+      setState("messages", (m) => m.mid === id, { pending: false, delivered: true }),
+    ),
     on<string>("peer-disconnected", (node_id) => {
       setState("links", produce((m) => delete m[node_id]));
       addActivity({ icon: "⛓️‍💥", tone: "info", node: node_id, text: `${peerName(node_id)} disconnected` });
@@ -225,10 +231,19 @@ export async function resume(): Promise<boolean> {
 }
 
 export async function sendMessage(node: string, text: string): Promise<string> {
-  const via = await unwrap(commands.sendMessage(node, text));
-  const pending = via === "queued";
-  setState("messages", produce((list) => list.push({ id: ++seq, node, dir: "out", text, ts: now(), via, pending })));
-  return via;
+  // Pending until the device acks it ("message-delivered"); the core resends
+  // until then. The bubble goes in first so a fast receipt can't beat it.
+  const mid = crypto.randomUUID();
+  const id = ++seq;
+  setState("messages", produce((list) => list.push({ id, node, dir: "out", text, ts: now(), mid, pending: true })));
+  try {
+    const via = await unwrap(commands.sendMessage(node, text, mid));
+    setState("messages", (m) => m.id === id, "via", via);
+    return via;
+  } catch (e) {
+    setState("messages", (list) => list.filter((m) => m.id !== id));
+    throw e;
+  }
 }
 
 export async function connect(node: string) {

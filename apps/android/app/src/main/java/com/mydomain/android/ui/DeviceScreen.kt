@@ -100,15 +100,16 @@ private fun ChatTile(node: String) {
             Muted("Say hi. Messages go straight to this device, encrypted.", Modifier.fillMaxWidth().padding(vertical = 8.dp), center = true)
         }
         thread.forEach { m ->
+            val waiting = m.queued && m.pending
             Box(Modifier.fillMaxWidth(), contentAlignment = if (m.incoming) Alignment.CenterStart else Alignment.CenterEnd) {
                 Column(
                     Modifier.widthIn(max = 280.dp)
-                        .alpha(if (m.pending) 0.7f else 1f)
+                        .alpha(if (waiting) 0.7f else 1f)
                         .background(if (m.incoming) T.surface2 else T.accent, RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
                     Text(m.text, color = if (m.incoming) T.text else T.accentText, style = MaterialTheme.typography.bodyMedium)
-                    if (m.pending) {
+                    if (waiting) {
                         Text("Sends when connected", color = T.accentText, style = MaterialTheme.typography.labelMedium)
                     }
                 }

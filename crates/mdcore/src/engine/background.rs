@@ -81,6 +81,14 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
         let ctx = ctx.clone();
         std::thread::spawn(move || heartbeat(ctx));
     }
+    {
+        let ctx = ctx.clone();
+        std::thread::spawn(move || {
+            while tick(&ctx, Duration::from_secs(2)) {
+                transport::outbox::retry_due(&ctx);
+            }
+        });
+    }
     if let Some(idle) = ctx.config.idle_close_after {
         let ctx = ctx.clone();
         std::thread::spawn(move || idle_closer(ctx, idle));

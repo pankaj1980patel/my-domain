@@ -238,6 +238,7 @@ fn note_undecryptable<P: Platform>(
         text: "🔒 message could not be decrypted (wrong encryption key)".into(),
         ts: now,
         ok: false,
+        id: None,
     }));
 }
 
@@ -306,6 +307,32 @@ pub fn handle_incoming<P: Platform>(
         note_use(&ctx.p2p_conns, node);
     }
 
+    // An acknowledgement of a chat message we sent.
+    if let Some(id) = &msg.ack {
+        if let Some(node) = from_node {
+            if outbox::acked(ctx, node, id) {
+                ctx.sink.emit(CoreEvent::MessageDelivered {
+                    node_id: node.to_string(),
+                    id: id.clone(),
+                });
+            }
+        }
+        return;
+    }
+    // A chat message with an id: acknowledge it (every time: the sender
+    // resends until it hears back), and show it only the first time.
+    if let (Some(id), Some(node)) = (&msg.id, from_node) {
+        let ack = Plaintext {
+            from: ctx.identity.lock().name.clone(),
+            ack: Some(id.clone()),
+            ..Default::default()
+        };
+        let _ = send_plaintext(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, node, &ack);
+        if !outbox::first_arrival(&ctx.seen, node, id) {
+            return;
+        }
+    }
+
     // Discrete-feature control message? (clipboard / notification / call / …)
     let control = ctx.control.clone();
     if control.dispatch(ctx, &msg.from, &ip, protocol, &msg.text) {
@@ -320,6 +347,7 @@ pub fn handle_incoming<P: Platform>(
         text: msg.text,
         ts: now_secs(),
         ok: true,
+        id: msg.id,
     }));
 }
 
@@ -333,12 +361,24 @@ pub fn send_payload(
     node_id: &str,
     text: &str,
 ) -> crate::Result<()> {
-    let k = key.lock().ok_or(CoreError::NoKey)?;
-    let plaintext = serde_json::to_vec(&Plaintext {
+    let pt = Plaintext {
         from: from.to_string(),
         text: text.to_string(),
-    })
-    .map_err(|e| e.to_string())?;
+        ..Default::default()
+    };
+    send_plaintext(ws_conns, p2p, key, node_id, &pt)
+}
+
+/// Encrypt a message body and send it to `node_id` over its live link.
+pub fn send_plaintext(
+    ws_conns: &WsConns,
+    p2p: &P2pConns,
+    key: &KeyHolder,
+    node_id: &str,
+    pt: &Plaintext,
+) -> crate::Result<()> {
+    let k = key.lock().ok_or(CoreError::NoKey)?;
+    let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
     let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
     let frame = serde_json::to_string(&WsFrame::Msg {
         nonce: env.nonce.clone(),

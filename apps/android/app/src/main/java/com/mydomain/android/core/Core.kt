@@ -19,11 +19,20 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-/** `pending`: held by the core until the device is connected. */
+/**
+ * One chat bubble. Outgoing messages carry [msgId] (sent to the core) and stay
+ * [pending] until the peer acknowledges it (`message_delivered` with that id).
+ * [queued]: there was no link when it was sent, so the core holds it until
+ * the device is connected.
+ */
 data class ChatMessage(
     val id: Long, val node: String, val incoming: Boolean, val text: String, val ts: Long,
-    val pending: Boolean = false,
-)
+    val msgId: String? = null,
+    val queued: Boolean = false,
+    val delivered: Boolean = false,
+) {
+    val pending: Boolean get() = !incoming && !delivered
+}
 
 enum class Tone { Info, Ok, Warn, Error }
 
@@ -166,8 +175,6 @@ object Core {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")
                 progress[node] = "connected"
-                // The core sends held messages the moment a link is up.
-                messages.replaceAll { if (it.node == node && it.pending) it.copy(pending = false) else it }
                 if (!was) addActivity("Connected to ${peerName(node)}", Tone.Ok)
             }
             "peer_disconnected" -> {
@@ -176,6 +183,10 @@ object Core {
                 addActivity("${peerName(node)} disconnected")
             }
             "connect_progress" -> progress[node] = o.optString("stage")
+            "message_delivered" -> {
+                val id = o.optString("id")
+                messages.replaceAll { if (!it.incoming && it.msgId == id) it.copy(delivered = true) else it }
+            }
             "message_received" -> {
                 if (!o.optBoolean("ok", true)) {
                     addActivity("A message couldn't be read: that device uses a different key", Tone.Error)
@@ -235,11 +246,22 @@ object Core {
         reload()
     }
 
-    /** Send a chat message; returns the transport used. */
+    /**
+     * Send a chat message; returns the transport used ("queued" with no link
+     * yet). The bubble is added first, so a fast `message_delivered` finds it.
+     */
     suspend fun sendMessage(node: String, text: String): String {
-        val via = call { it.send(node, text) }
-        val pending = via == "queued"
-        onMain { messages.add(ChatMessage(++seq, node, false, text, System.currentTimeMillis(), pending)) }
+        val msgId = java.util.UUID.randomUUID().toString()
+        onMain { messages.add(ChatMessage(++seq, node, false, text, System.currentTimeMillis(), msgId)) }
+        val via = try {
+            call { it.sendWithId(node, text, msgId) }
+        } catch (e: Exception) {
+            onMain { messages.removeAll { it.msgId == msgId } }
+            throw e
+        }
+        if (via == "queued") {
+            onMain { messages.replaceAll { if (it.msgId == msgId) it.copy(queued = true) else it } }
+        }
         return via
     }
 

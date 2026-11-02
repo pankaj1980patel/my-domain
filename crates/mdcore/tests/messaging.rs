@@ -322,3 +322,56 @@ fn a_hand_entered_peer_is_reached_over_quic_and_relisted_under_its_real_id() {
     );
     b.sink.wait_for_message("still reachable");
 }
+
+// ---------------------------------------------------------------------------
+// Delivery receipts: every chat message is acknowledged; resends show once
+// ---------------------------------------------------------------------------
+
+fn delivered(node: &TestNode, id: &str) -> bool {
+    node.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::MessageDelivered { id: got, .. } if got == id => Some(()),
+            _ => None,
+        })
+        .is_some()
+}
+
+#[test]
+fn the_sender_hears_when_a_message_arrived() {
+    let (a, b) = pair("receipt");
+    assert_eq!(
+        a.engine.send_with_id(&b.node_id(), "did you get this", "m1").unwrap(),
+        "QUIC"
+    );
+    let msg = b.sink.wait_for_message("did you get this");
+    assert_eq!(msg.id.as_deref(), Some("m1"));
+    assert!(delivered(&a, "m1"), "no receipt; got {:#?}", a.sink.all());
+}
+
+#[test]
+fn a_resent_message_is_shown_once_and_still_acknowledged() {
+    let (a, b) = pair("receipt-dup");
+    a.engine.send_with_id(&b.node_id(), "only once", "dup").unwrap();
+    assert!(delivered(&a, "dup"));
+    // The same message again, as a resend after a lost receipt would be.
+    a.engine.send_with_id(&b.node_id(), "only once", "dup").unwrap();
+    let receipts = || {
+        a.sink
+            .all()
+            .iter()
+            .filter(|e| matches!(e, CoreEvent::MessageDelivered { id, .. } if id == "dup"))
+            .count()
+    };
+    let t = std::time::Instant::now();
+    while receipts() < 2 && t.elapsed() < WAIT {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(receipts(), 2, "the resend is acknowledged too");
+    let copies = b
+        .sink
+        .all()
+        .iter()
+        .filter(|e| matches!(e, CoreEvent::MessageReceived(m) if m.text == "only once"))
+        .count();
+    assert_eq!(copies, 1, "shown once");
+}

@@ -72,6 +72,8 @@ function ChatTile(props: { node: string }) {
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const thread = () => state.messages.filter((m) => m.node === props.node);
+  // Only the newest delivered message of ours gets the marker.
+  const lastDelivered = () => thread().filter((m) => m.dir === "out" && m.delivered).pop()?.id;
   let list: HTMLDivElement | undefined;
 
   const send = async (e: Event) => {
@@ -101,7 +103,10 @@ function ChatTile(props: { node: string }) {
               <div class={`bubble bubble-${m.dir}`} classList={{ "bubble-pending": !!m.pending }}>
                 <span>{m.text}</span>
                 <Show when={m.pending}>
-                  <small class="bubble-note">Sends when connected</small>
+                  <small class="bubble-note">{m.via === "queued" ? "Sends when connected" : "Sending…"}</small>
+                </Show>
+                <Show when={m.delivered && m.id === lastDelivered()}>
+                  <small class="bubble-note">Delivered</small>
                 </Show>
               </div>
             )}

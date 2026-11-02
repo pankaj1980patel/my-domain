@@ -1,6 +1,10 @@
-//! Messages sent while a peer had no link: held here and delivered the moment
-//! a link comes up (the connect ladder was started by the send). Like any
-//! messenger, so "not connected yet, try again" never reaches the user.
+//! Chat messages on their way to a peer: each one stays here until the peer
+//! acknowledges it. A message sent with no link waits for one (the connect
+//! ladder was started by the send); a message sent on a link that then died,
+//! or was replaced (relay to direct), is sent again on the next link. The
+//! receiver drops repeats by id, so resending is always safe. Like any
+//! messenger, "not connected yet, try again" never reaches the user, and a
+//! message isn't lost because a link changed under it.
 //!
 //! Bounded: at most `MAX_PER_PEER` messages per peer (the oldest are dropped),
 //! and a message older than `MAX_AGE_SECS` is discarded instead of sent late.
@@ -10,25 +14,44 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 
-use super::{now_secs, send_payload};
+use super::{now_secs, send_plaintext};
 use crate::engine::NetCtx;
+use crate::model::Plaintext;
 use crate::platform::Platform;
 
 const MAX_PER_PEER: usize = 100;
 const MAX_AGE_SECS: u64 = 10 * 60;
+/// Sent on a live link but not acknowledged this long after: send it again.
+const RESEND_SECS: u64 = 10;
+/// Ids remembered per sender, to drop repeats.
+const SEEN_PER_PEER: usize = 256;
 
-/// One held message.
+/// One message waiting for its acknowledgement.
 pub struct Queued {
     at: u64,
+    /// When it last went out on a link (0 = not yet).
+    sent_at: u64,
+    id: String,
     from: String,
     text: String,
 }
 
-/// node_id -> messages waiting for its link.
+/// node_id -> messages not yet acknowledged, oldest first.
 pub type Outbox = Arc<Mutex<HashMap<String, VecDeque<Queued>>>>;
 
-/// Hold `text` for `node_id` until it has a link.
-pub fn hold<P: Platform>(ctx: &NetCtx<P>, node_id: &str, from: &str, text: &str) {
+/// sender node_id -> ids of the messages that arrived from it, newest last.
+pub type Seen = Arc<Mutex<HashMap<String, VecDeque<String>>>>;
+
+/// A fresh message id.
+pub fn new_id() -> String {
+    use rand_core::{OsRng, RngCore};
+    let mut b = [0u8; 8];
+    OsRng.fill_bytes(&mut b);
+    b.iter().map(|x| format!("{x:02x}")).collect()
+}
+
+/// Keep `text` for `node_id` until it's acknowledged.
+pub fn hold<P: Platform>(ctx: &NetCtx<P>, node_id: &str, id: &str, from: &str, text: &str) {
     let mut out = ctx.outbox.lock();
     let q = out.entry(node_id.to_string()).or_default();
     if q.len() >= MAX_PER_PEER {
@@ -36,46 +59,127 @@ pub fn hold<P: Platform>(ctx: &NetCtx<P>, node_id: &str, from: &str, text: &str)
     }
     q.push_back(Queued {
         at: now_secs(),
+        sent_at: 0,
+        id: id.to_string(),
         from: from.to_string(),
         text: text.to_string(),
     });
 }
 
-/// `node_id` just got a link: send what was waiting for it, in order. Runs
-/// on its own thread (we're called while a link is being registered).
-pub fn flush<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
-    let Some(waiting) = ctx.outbox.lock().remove(node_id) else {
-        return;
+/// Send what's due for `node_id`, in order: messages not sent yet, ones sent
+/// over `RESEND_SECS` ago, or (`all`, on a new link) everything unacknowledged.
+/// Stops at the first failure (no link). Returns whether message `id` went out.
+pub fn pump<P: Platform>(ctx: &NetCtx<P>, node_id: &str, all: bool, id: Option<&str>) -> bool {
+    // Held for the whole pass, so two pumps can't interleave and reorder.
+    let mut out = ctx.outbox.lock();
+    let Some(q) = out.get_mut(node_id) else {
+        return false;
     };
+    let now = now_secs();
+    q.retain(|m| now.saturating_sub(m.at) <= MAX_AGE_SECS);
+    let mut sent_it = false;
+    for m in q.iter_mut() {
+        let due = all || m.sent_at == 0 || now.saturating_sub(m.sent_at) >= RESEND_SECS;
+        if !due {
+            continue;
+        }
+        let pt = Plaintext {
+            from: m.from.clone(),
+            text: m.text.clone(),
+            id: Some(m.id.clone()),
+            ack: None,
+        };
+        if send_plaintext(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, node_id, &pt).is_err() {
+            break;
+        }
+        m.sent_at = now;
+        sent_it |= id == Some(m.id.as_str());
+    }
+    if q.is_empty() {
+        out.remove(node_id);
+    }
+    sent_it
+}
+
+/// `node_id` just got a link (new, or upgraded): send everything it hasn't
+/// acknowledged. Runs on its own thread (we're called while a link is being
+/// registered).
+pub fn flush<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    if !ctx.outbox.lock().contains_key(node_id) {
+        return;
+    }
     let (ctx, node) = (ctx.clone(), node_id.to_string());
     std::thread::spawn(move || {
-        let now = now_secs();
-        let mut left = waiting
-            .into_iter()
-            .filter(|m| now.saturating_sub(m.at) <= MAX_AGE_SECS);
-        while let Some(m) = left.next() {
-            let sent = send_payload(
-                &ctx.ws_conns,
-                &ctx.p2p_conns,
-                &ctx.key,
-                &m.from,
-                &node,
-                &m.text,
-            );
-            if sent.is_err() {
-                // The link went away again: keep the rest for the next one.
-                let mut out = ctx.outbox.lock();
-                let q = out.entry(node.clone()).or_default();
-                for (i, m) in std::iter::once(m).chain(left).enumerate() {
-                    q.insert(i, m);
-                }
-                return;
-            }
-        }
+        pump(&ctx, &node, true, None);
     });
 }
 
-/// How many messages are waiting for `node_id`.
+/// Resend overdue messages to every peer that has a link. Called on a timer.
+pub fn retry_due<P: Platform>(ctx: &NetCtx<P>) {
+    let nodes: Vec<String> = ctx.outbox.lock().keys().cloned().collect();
+    for node in nodes {
+        if ctx.ws_conns.lock().contains_key(&node) {
+            pump(ctx, &node, false, None);
+        }
+    }
+}
+
+/// `node_id` acknowledged message `id`. Returns whether it was waiting.
+pub fn acked<P: Platform>(ctx: &NetCtx<P>, node_id: &str, id: &str) -> bool {
+    let mut out = ctx.outbox.lock();
+    let Some(q) = out.get_mut(node_id) else {
+        return false;
+    };
+    let before = q.len();
+    q.retain(|m| m.id != id);
+    let found = q.len() != before;
+    if q.is_empty() {
+        out.remove(node_id);
+    }
+    found
+}
+
+/// Record that message `id` arrived from `node_id`. Returns false if it had
+/// already arrived (a resend): don't show it twice.
+pub fn first_arrival(seen: &Seen, node_id: &str, id: &str) -> bool {
+    let mut seen = seen.lock();
+    let ids = seen.entry(node_id.to_string()).or_default();
+    if ids.iter().any(|x| x == id) {
+        return false;
+    }
+    if ids.len() >= SEEN_PER_PEER {
+        ids.pop_front();
+    }
+    ids.push_back(id.to_string());
+    true
+}
+
+/// How many messages to `node_id` aren't acknowledged yet.
 pub fn waiting<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> usize {
     ctx.outbox.lock().get(node_id).map_or(0, VecDeque::len)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_repeat_is_recognised_and_old_ids_are_forgotten() {
+        let seen = Seen::default();
+        assert!(first_arrival(&seen, "a", "1"));
+        assert!(!first_arrival(&seen, "a", "1"));
+        assert!(first_arrival(&seen, "b", "1"), "per sender");
+        for i in 0..SEEN_PER_PEER {
+            first_arrival(&seen, "a", &format!("x{i}"));
+        }
+        assert!(first_arrival(&seen, "a", "1"), "bounded memory");
+    }
+
+    #[test]
+    fn ids_are_unique_hex() {
+        let (a, b) = (new_id(), new_id());
+        assert_ne!(a, b);
+        assert_eq!(a.len(), 16);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+    }
 }

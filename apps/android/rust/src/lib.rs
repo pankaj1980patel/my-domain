@@ -478,6 +478,14 @@ impl MdEngine {
         Ok(self.inner.send(&node_id, &text)?)
     }
 
+    /// `send` with the message id chosen by the app. When the peer has it, a
+    /// `message-delivered` event carries the same `id`. Returns the
+    /// transport used, or "queued" when there is no link yet (the core sends
+    /// it once connected, and resends until acknowledged).
+    pub fn send_with_id(&self, node_id: String, text: String, id: String) -> MdResult<String> {
+        Ok(self.inner.send_with_id(&node_id, &text, &id)?)
+    }
+
     // --- signaling ---
 
     /// An inbound FCM signal (from the FirebaseMessagingService).

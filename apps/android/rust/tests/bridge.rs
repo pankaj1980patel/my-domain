@@ -173,5 +173,22 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         "QUIC"
     );
     desktop.sink.wait_for_message("reply from the phone");
+
+    // With an app-chosen id, the desktop's acknowledgement comes back as a
+    // `message-delivered` event carrying that id.
+    assert_eq!(
+        phone
+            .send_with_id(
+                desktop.node_id(),
+                "receipt please".into(),
+                "bridge-msg-1".into()
+            )
+            .unwrap(),
+        "QUIC"
+    );
+    desktop.sink.wait_for_message("receipt please");
+    let delivered = events.wait_for("message-delivered", |v| v["id"] == "bridge-msg-1");
+    assert_eq!(delivered["kind"], "message_delivered");
+    assert_eq!(delivered["node_id"], desktop.node_id().as_str());
     let _ = std::fs::remove_dir_all(dir);
 }
