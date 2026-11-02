@@ -93,4 +93,9 @@ class CodesTest {
             .mapNotNull(::findCode)
             .forEach { assertTrue(it, isCode(it)) }
     }
+
+    @Test fun aNotificationsTitleTextAndBigTextTogether() {
+        val body = "582914 is your OTP for login. Do not share it with anyone."
+        assertEquals("582914", findCode(listOf("VM-HDFCBK", body, body).joinToString("\n")))
+    }
 }

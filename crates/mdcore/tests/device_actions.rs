@@ -107,9 +107,7 @@ fn an_action_reaches_the_device_with_its_arguments() {
 fn a_shared_code_lands_on_the_other_clipboard() {
     let (a, b) = pair("code");
     assert!(a.engine.share_code("hello", None).is_err());
-    // A link first: codes only go to connected devices.
-    a.engine.send(&b.node_id(), "hi").unwrap();
-    b.sink.wait_for_message("hi");
+    // No link yet: it connects and delivers.
     a.engine.share_code("482913", Some("Messages")).unwrap();
     let code = b
         .sink

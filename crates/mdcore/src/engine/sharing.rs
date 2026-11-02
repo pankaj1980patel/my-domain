@@ -17,18 +17,24 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Share a verification code (found by the host in a notification) with
-    /// your connected devices; those with a clipboard copy it
-    /// (`CoreEvent::CodeCopied`). Best effort: not queued.
+    /// your other devices; those with a clipboard copy it
+    /// (`CoreEvent::CodeCopied`). Sent the reliable way (it connects if
+    /// there's no link yet), stamped with the time: a device drops a code
+    /// older than `features::code::MAX_AGE_SECS` instead of pasting a stale
+    /// one late.
     pub fn share_code(&self, code: &str, app: Option<&str>) -> crate::Result<()> {
         if !crate::features::code::is_code(code) {
             return Err("that doesn't look like a code".to_string().into());
         }
         let from = self.ctx.identity.lock().node_id.clone();
-        let msg = serde_json::json!({ "type": "code", "code": code, "app": app, "from": from })
-            .to_string();
-        let linked: Vec<String> = self.ctx.ws_conns.lock().keys().cloned().collect();
-        for node in linked {
-            crate::transport::send_control_to(&self.net_ctx(), &node, &msg);
+        let msg = serde_json::json!({
+            "type": "code", "code": code, "app": app, "from": from,
+            "ts": crate::transport::now_secs(),
+        })
+        .to_string();
+        let peers: Vec<String> = self.ctx.peers.lock().keys().cloned().collect();
+        for node in peers {
+            crate::engine::send_reliably(&self.ctx, &node, &msg);
         }
         Ok(())
     }

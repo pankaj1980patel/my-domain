@@ -4,9 +4,9 @@
 //!
 //!   code { from, code, app? }   phone → your other devices
 //!
-//! Best effort, to devices with a live link (`Engine::share_code`): a code
-//! is useless a few minutes later, so it isn't queued or used to wake a
-//! device.
+//! Sent the reliable way to all your devices (`Engine::share_code`), with
+//! the time it was found: a code is useless a few minutes later, so one
+//! older than `MAX_AGE_SECS` is dropped rather than pasted late.
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -15,6 +15,9 @@ use crate::platform::Platform;
 use super::{ControlHandler, ControlMsg};
 
 pub struct CodeHandler;
+
+/// A code that took longer than this to arrive is dropped.
+pub const MAX_AGE_SECS: u64 = 120;
 
 /// A plausible one-time code: 4 to 10 letters or digits, at least 4 digits.
 pub fn is_code(code: &str) -> bool {
@@ -34,6 +37,10 @@ impl<P: Platform> ControlHandler<P> for CodeHandler {
             return; // nowhere to paste it here
         };
         if !is_code(&code) {
+            return;
+        }
+        let ts = msg.json("ts").as_u64().unwrap_or(0);
+        if crate::transport::now_secs().saturating_sub(ts) > MAX_AGE_SECS {
             return;
         }
         let from = msg.sender();

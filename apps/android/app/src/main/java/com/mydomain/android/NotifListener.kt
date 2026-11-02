@@ -34,6 +34,7 @@ class NotifListener : NotificationListenerService() {
         val label = appLabel(n.packageName)
         runCatching { Core.engine()?.shareAppNotification(n.packageName, label, title, text) }
 
+        Core.labLog("notification from ${n.packageName}")
         if (getSharedPreferences("md", MODE_PRIVATE).getBoolean(PREF_SHARE_CODES, false)) {
             val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
             shareCode(listOf(title, text, big).joinToString("\n"), label)
@@ -50,8 +51,12 @@ class NotifListener : NotificationListenerService() {
             recent.entries.removeAll { now - it.value > DEDUPE_MS }
             if (recent.containsKey(code)) return
         }
-        val engine = Core.engine() ?: return
-        if (runCatching { engine.shareCode(code, label) }.isFailure) return
+        // Logged without the code itself.
+        val engine = Core.engine() ?: return Core.labLog("code from $label not sent: engine not running")
+        runCatching { engine.shareCode(code, label) }.onFailure {
+            Core.labLog("code from $label not sent: ${it.javaClass.simpleName}")
+            return
+        }
         synchronized(recent) { recent[code] = now }
         Core.labLog("shared a verification code from $label")
         Core.addActivity(getString(R.string.act_code_sent), Tone.Ok)
