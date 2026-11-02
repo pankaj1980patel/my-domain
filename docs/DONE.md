@@ -295,6 +295,13 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Dial from the computer (2026-11-02)
+
+- Android `dial {number}` action (phones only): opens the dialer with the
+  number filled in, or a tap-to-open notification in the background. It
+  never places the call itself and needs no permission. Desktop: a "Call"
+  field in Find & control when the phone lists `dial`.
+
 ## Notification actions (2026-11-02)
 
 - A notification forwarded from a subscribed phone app now carries its key
