@@ -162,6 +162,7 @@ pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     if ctx.quic.close_peer(node_id, b"idle") {
         return;
     }
+    relay::forget_peer(ctx, node_id);
     ctx.ws_conns.lock().remove(node_id);
     drop_live(ctx, node_id);
 }

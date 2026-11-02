@@ -138,16 +138,21 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
 /// `ws_conns` (unless it already has a link). Does NOT mark it live; that
 /// happens when its `Hello` arrives.
 pub fn add_relay_link<P: Platform>(ctx: &NetCtx<P>, peer: &str) -> bool {
-    let relay_tx = {
+    let (relay_tx, known) = {
         let relay = ctx.relay.lock();
         let Some(r) = relay.as_ref() else {
             return false;
         };
-        if r.peers.contains_key(peer) {
+        (r.tx.clone(), r.peers.get(peer).copied())
+    };
+    // Already routed, and that route is still the peer's link. (A direct
+    // link may have replaced it and since died: then route it again, or
+    // the peer shows as live with no way to send to it.)
+    if let Some(id) = known {
+        if ctx.ws_conns.lock().get(peer).is_some_and(|(c, _)| *c == id) {
             return true;
         }
-        r.tx.clone()
-    };
+    }
     let conn_id = RELAY_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let (ptx, prx) = mpsc::channel::<String>();
     {
@@ -172,6 +177,13 @@ pub fn add_relay_link<P: Platform>(ctx: &NetCtx<P>, peer: &str) -> bool {
         }
     });
     true
+}
+
+/// Stop routing `peer` through the relay (its link was closed on purpose).
+pub fn forget_peer<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
+    if let Some(r) = ctx.relay.lock().as_mut() {
+        r.peers.remove(peer);
+    }
 }
 
 /// Send our `Hello` to `peer` through the relay.

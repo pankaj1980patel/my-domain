@@ -216,3 +216,72 @@ fn signals_arrive_over_the_servers_websocket_without_any_push_service() {
     a.engine.send(&b.node_id(), "signaled over ws").unwrap();
     b.sink.wait_for_message("signaled over ws");
 }
+
+/// A relayed peer whose direct link replaced the relay and then died must be
+/// routed through the relay again, not shown as live with nowhere to send.
+/// (Seen on the phone: relay, then a punched link that died with the screen
+/// off, then the relay again, and every send failed with "not connected".)
+#[test]
+fn the_relay_route_comes_back_after_a_direct_link_dies() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let a = node("reroute-a", "alice", &reg, &hub, &relay);
+    // b can upgrade to direct QUIC, and closes idle links within a second
+    // when told.
+    let b = {
+        let cfg = CoreConfig {
+            rungs: ConnectRungs {
+                quic: true,
+                relay: true,
+                ..ConnectRungs::none()
+            },
+            idle_close_after: Some(Duration::from_secs(1)),
+            ..relay_only(&relay)
+        };
+        let n = TestNode::start_on_hub("reroute-b", &hub, cfg);
+        n.engine
+            .auth_login(&reg.url(), "alice", "alice-pw")
+            .unwrap();
+        n.engine.set_encryption_key("family key").unwrap();
+        n
+    };
+    TestNode::pair(&a, &b);
+
+    // 1. Relay.
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("relay"));
+    // 2. b upgrades to direct QUIC: it replaces the relay on a's side.
+    b.engine.connect(&a.node_id()).unwrap();
+    let upgraded = a.sink.wait_until(WAIT, |e| match e {
+        mdcore::CoreEvent::PeerConnected { node_id, transport }
+            if *node_id == b.node_id() && *transport == mdcore::transport::TransportKind::Quic =>
+        {
+            Some(())
+        }
+        _ => None,
+    });
+    assert!(upgraded.is_some(), "a direct link replaced the relay");
+    // 3. The direct link dies (b closes it as idle).
+    b.engine.set_background(true);
+    let gone = a.sink.wait_until(WAIT, |e| match e {
+        mdcore::CoreEvent::PeerDisconnected { node_id } if *node_id == b.node_id() => Some(()),
+        _ => None,
+    });
+    assert!(gone.is_some(), "the direct link closed");
+    b.engine.set_background(false);
+    // 4. Reconnected (the relay, or b may upgrade to QUIC again first), and
+    // a's sends go through. Before the fix a stayed "live" on a relay route
+    // with no queue, and every send failed.
+    a.engine.connect(&b.node_id()).unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    loop {
+        match a.engine.send(&b.node_id(), "via the relay again") {
+            Ok(_) => break,
+            Err(e) => {
+                assert!(std::time::Instant::now() < deadline, "never sendable: {e}");
+                std::thread::sleep(Duration::from_millis(200));
+            }
+        }
+    }
+    b.sink.wait_for_message("via the relay again");
+}
