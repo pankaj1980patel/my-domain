@@ -76,6 +76,14 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var device by rememberSaveable { mutableStateOf<String?>(null) }
     var developer by rememberSaveable { mutableStateOf(false) }
 
+    // Link quality on the status lines: refresh while the app is on screen.
+    LaunchedEffect(Unit) {
+        while (true) {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Core.pollQuality() }
+            delay(5000)
+        }
+    }
+
     BackHandler(enabled = device != null || developer || tab != Tab.Devices) {
         when {
             device != null -> device = null

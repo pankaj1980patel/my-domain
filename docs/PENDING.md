@@ -42,7 +42,8 @@ or with less battery.
      phone over a day.
 9. ~~Connection quality~~: **done** (`Engine::link_stats()`, desktop
    command `link_stats`).
-   - Still to do: show it in the new UI.
+   - ~~Show it in the new UI~~: **done** (2026-11-02): signal bars and
+     "Excellent/Good/Weak connection" next to each device's status.
    - Still to do: use it to choose between two live paths.
 10. **Better relay:** per-account fair-use cap and `/relay/stats` are
     **done**. Still to do:

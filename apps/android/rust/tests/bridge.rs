@@ -155,6 +155,14 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         .expect("the desktop is re-listed under its real id");
     assert!(listed.connected);
     assert_eq!(listed.link.as_deref(), Some("quic"));
+    // ...and its quality, measured by QUIC (loopback: excellent).
+    let q = phone.link_stats();
+    let q = q
+        .iter()
+        .find(|s| s.node_id == desktop.node_id())
+        .expect("rated");
+    assert!(q.rtt_ms.is_some());
+    assert_eq!(q.quality, "excellent");
     assert_eq!(listed.name, "Desk");
 
     // And the phone answers over the same link.

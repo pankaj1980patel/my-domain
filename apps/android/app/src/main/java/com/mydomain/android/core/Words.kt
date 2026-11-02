@@ -26,6 +26,14 @@ fun linkLabel(s: LinkState): String = when (s) {
     LinkState.Offline -> "Not connected"
 }
 
+/** Link quality in plain words (the core's rating; no milliseconds here). */
+fun qualityLabel(q: String?): String? = when (q) {
+    "excellent" -> "Excellent connection"
+    "good" -> "Good connection"
+    "weak" -> "Weak connection"
+    else -> null
+}
+
 /** One line under the status while the connect ladder runs. */
 fun progressLabel(stage: String?): String? = when (stage) {
     "quic" -> "Looking for it on your networks…"

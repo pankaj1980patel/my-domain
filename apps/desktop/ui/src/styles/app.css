@@ -432,6 +432,35 @@ input[type="checkbox"][role="switch"]:checked::after {
   color: var(--text-2);
   width: fit-content;
 }
+/* Signal bars: link quality next to the status. */
+.bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  margin-left: 2px;
+}
+.bars span {
+  width: 3px;
+  border-radius: 1px;
+  background: var(--border);
+}
+.bars span:nth-child(1) {
+  height: 5px;
+}
+.bars span:nth-child(2) {
+  height: 8px;
+}
+.bars span:nth-child(3) {
+  height: 12px;
+}
+.bars span.on {
+  background: currentColor;
+}
+.bars-weak span.on {
+  background: var(--warning);
+}
+
 .pill .dot {
   width: 8px;
   height: 8px;

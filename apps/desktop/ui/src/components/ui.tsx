@@ -2,7 +2,8 @@
 
 import { createSignal, For, Show, type JSX } from "solid-js";
 import { state, type Peer } from "../lib/core";
-import { initial, linkLabel, linkState, niceName, type LinkState } from "../lib/words";
+import { initial, linkLabel, linkState, niceName, qualityLabel, type LinkState } from "../lib/words";
+import type { Quality } from "../bindings";
 
 // --- toasts -------------------------------------------------------------------
 
@@ -32,10 +33,26 @@ export function linkStateOf(node: string): LinkState {
 
 export function StatusPill(props: { node: string }) {
   const s = () => linkStateOf(props.node);
+  const q = () => (s() === "direct" || s() === "relay" ? state.quality[props.node] : undefined);
   return (
     <span class={`pill pill-${s()}`}>
       <span class="dot" aria-hidden="true" />
       {linkLabel(s())}
+      <Show when={q() && q() !== "unknown"}>
+        <SignalBars quality={q()!} />
+      </Show>
+    </span>
+  );
+}
+
+/** Three bars, filled by link quality; the label is for screen readers and
+ *  the hover tooltip. */
+export function SignalBars(props: { quality: Quality }) {
+  const filled = () => ({ excellent: 3, good: 2, weak: 1, unknown: 0 })[props.quality];
+  const label = () => qualityLabel(props.quality) ?? "";
+  return (
+    <span class={`bars bars-${props.quality}`} role="img" aria-label={label()} title={label()}>
+      <For each={[1, 2, 3]}>{(i) => <span class={i <= filled() ? "on" : ""} />}</For>
     </span>
   );
 }

@@ -2,7 +2,7 @@
 // No protocol names (QUIC, relay, NAT) on screen: those stay on the
 // Developer screen.
 
-import type { TransportKind } from "../bindings";
+import type { Quality, TransportKind } from "../bindings";
 
 export type LinkState = "direct" | "relay" | "connecting" | "offline" | "failed";
 
@@ -26,6 +26,20 @@ export function linkLabel(s: LinkState): string {
       return "Couldn't reach it";
     default:
       return "Not connected";
+  }
+}
+
+/** Link quality in plain words (the core's rating; no milliseconds here). */
+export function qualityLabel(q: Quality | undefined): string | null {
+  switch (q) {
+    case "excellent":
+      return "Excellent connection";
+    case "good":
+      return "Good connection";
+    case "weak":
+      return "Weak connection";
+    default:
+      return null;
   }
 }
 

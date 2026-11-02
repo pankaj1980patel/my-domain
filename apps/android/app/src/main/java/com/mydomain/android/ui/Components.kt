@@ -50,6 +50,9 @@ import com.mydomain.android.core.initial
 import com.mydomain.android.core.linkLabel
 import com.mydomain.android.core.linkStateOf
 import com.mydomain.android.core.niceName
+import com.mydomain.android.core.qualityLabel
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import com.mydomain.android.ffi.PeerInfo
 
 /** A flat card with a hairline border: the one container style. */
@@ -176,6 +179,7 @@ fun StatusPill(node: String) {
         val a by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "a")
         a
     } else 1f
+    val q = if (s == LinkState.Direct || s == LinkState.Relay) Core.quality[node] else null
     Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(8.dp).alpha(pulse).background(color, CircleShape))
         Spacer(Modifier.width(6.dp))
@@ -183,6 +187,29 @@ fun StatusPill(node: String) {
             linkLabel(s), style = MaterialTheme.typography.labelMedium,
             color = if (s == LinkState.Offline || s == LinkState.Connecting) T.text2 else color,
         )
+        if (q != null && qualityLabel(q) != null) {
+            Spacer(Modifier.width(6.dp))
+            SignalBars(q, color)
+        }
+    }
+}
+
+/** Three bars, filled by link quality. */
+@Composable
+fun SignalBars(quality: String, color: androidx.compose.ui.graphics.Color) {
+    val filled = when (quality) { "excellent" -> 3; "good" -> 2; "weak" -> 1; else -> 0 }
+    val on = if (quality == "weak") T.warning else color
+    Row(
+        Modifier.semantics { contentDescription = qualityLabel(quality) ?: "" },
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        listOf(5, 8, 12).forEachIndexed { i, h ->
+            Box(
+                Modifier.width(3.dp).height(h.dp)
+                    .background(if (i < filled) on else T.border, RoundedCornerShape(1.dp)),
+            )
+        }
     }
 }
 

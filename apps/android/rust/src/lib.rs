@@ -183,6 +183,16 @@ pub struct PeerInfo {
     pub link: Option<String>,
 }
 
+/// One live link's measured quality.
+#[derive(uniffi::Record)]
+pub struct LinkQuality {
+    pub node_id: String,
+    /// "excellent", "good", "weak", or "unknown" (not measured).
+    pub quality: String,
+    pub rtt_ms: Option<u32>,
+    pub loss_pct: Option<f32>,
+}
+
 /// Who is signed in, and where.
 #[derive(uniffi::Record)]
 pub struct Session {
@@ -436,6 +446,20 @@ impl MdEngine {
     /// `connect-progress` events, success as `peer-connected`.
     pub fn connect(&self, node_id: String) -> MdResult<()> {
         Ok(self.inner.connect(&node_id)?)
+    }
+
+    /// Quality of every live link (RTT and loss, rated by the core).
+    pub fn link_stats(&self) -> Vec<LinkQuality> {
+        self.inner
+            .link_stats()
+            .into_iter()
+            .map(|s| LinkQuality {
+                quality: as_str(s.quality),
+                rtt_ms: s.rtt_ms,
+                loss_pct: s.loss_pct,
+                node_id: s.node_id,
+            })
+            .collect()
     }
 
     pub fn firewall_check(&self) -> MdResult<FirewallStatus> {

@@ -53,6 +53,9 @@ object Core {
 
     /** node id -> latest connect-ladder stage. */
     val progress = mutableStateMapOf<String, String>()
+
+    /** node id -> measured link quality ("excellent", "good", "weak"). */
+    val quality = mutableStateMapOf<String, String>()
     val messages = mutableStateListOf<ChatMessage>()
     val activity = mutableStateListOf<ActivityItem>()
     val apps = mutableStateMapOf<String, AppsState>()
@@ -101,6 +104,16 @@ object Core {
             peers = p
             links.clear()
             p.forEach { peer -> peer.link?.let { links[peer.nodeId] = it } }
+        }
+    }
+
+    /** Re-read every live link's quality (called every few seconds while
+     *  the app is on screen). */
+    fun pollQuality() {
+        val stats = engine()?.linkStats() ?: return
+        onMain {
+            quality.clear()
+            stats.forEach { quality[it.nodeId] = it.quality }
         }
     }
 

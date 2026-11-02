@@ -6,7 +6,7 @@
 
 import { createStore, produce } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type Identity_Serialize, type Peer_Serialize, type TransportKind } from "../bindings";
+import { commands, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 
 export type Peer = Peer_Serialize;
 export type Identity = Identity_Serialize;
@@ -42,6 +42,8 @@ type State = {
   links: Record<string, TransportKind>;
   /** node_id -> latest connect-ladder stage */
   progress: Record<string, string>;
+  /** node_id -> measured link quality (live links only) */
+  quality: Record<string, Quality>;
   messages: ChatMessage[];
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
@@ -55,6 +57,7 @@ export const [state, setState] = createStore<State>({
   peers: [],
   links: {},
   progress: {},
+  quality: {},
   messages: [],
   activity: [],
   apps: {},
@@ -104,11 +107,20 @@ function logDev(name: string, payload: unknown) {
 type IncomingMessage = { from: string; node_id?: string; ip: string; protocol: string; text: string; ts: number; ok: boolean };
 
 let listening = false;
+let qualityTimer: ReturnType<typeof setInterval> | undefined;
+
+/** Re-read every live link's quality (RTT + loss, rated by the core). */
+async function pollQuality() {
+  const stats = await commands.linkStats().catch(() => []);
+  setState("quality", Object.fromEntries(stats.map((s) => [s.node_id, s.quality])));
+}
 
 /** Subscribe to the core's events once; the store updates itself after. */
 export async function startEvents() {
   if (listening) return;
   listening = true;
+  pollQuality();
+  qualityTimer ??= setInterval(pollQuality, 5000);
 
   const on = <T>(name: string, f: (p: T) => void) =>
     listen<T>(name, (e) => {
