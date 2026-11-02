@@ -43,7 +43,7 @@ or with less battery.
 8. ~~Keep-alive that suits phones~~: **done** (20 s / 60 s, configurable).
    - ~~Close idle links while the screen is off and wake by push~~:
      **done** (2026-11-02). Measured over an hour with the screen off
-     (2026-11-03, see DONE): the app's wake lock time fell from 2 min 17 s
+     (2026-11-03, see DONE): the app's wake lock time fell from 2 min 9 s
      to 11 s after the night's fixes. Still to do: a full day unplugged.
    - Verified on the phone (vivo I2405): in the background with the screen
      on, a link closes 3 min after its last message, as designed. With the

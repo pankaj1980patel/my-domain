@@ -28,6 +28,7 @@ environment variables in [common.sh](common.sh).
 | `scripts/lab/android.sh test` | Run instrumentation tests on the phone |
 | `scripts/lab/android.sh logcat` | Stream the app's logs |
 | `scripts/lab/scenarios.sh` | Run the mdctl scenarios against every lab device; pass/fail table |
+| `scripts/lab/battery.sh [secs]` | Phone on this Mac's USB: screen off, "unplugged", measure the app's pushes, wake locks, CPU and network for `secs` (default 3600) |
 
 Cross-device scenario tests (`scenarios/*.mdctl`, driven by `mdctl`) are
 described below.

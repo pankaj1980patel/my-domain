@@ -340,8 +340,8 @@ problems; all are fixed.
 
 - Measured on the phone, simulated unplugged (`dumpsys battery unplug`),
   screen off, deep Doze, one hour, on the build from before the relay
-  changes. The app held wake locks for 2 min 17 s and used 30 s of CPU.
-  Nearly all of it came from 19 deferred pushes, each holding the 30 s
+  changes. The app held wake locks for 2 min 9 s and used 30 s of CPU.
+  Nearly all of it came from 24 deferred pushes, each holding the 30 s
   post-push wake lock. All of them came from the Linux desktop, in bursts
   of three signals.
 - Cause: the desktop's relay link to the phone stayed "live" (the phone
@@ -355,8 +355,8 @@ problems; all are fixed.
 
   | | Before | After |
   |---|---|---|
-  | Pushes received | 19 | 2 |
-  | Wake lock time | 2 min 17 s | 11 s |
+  | Pushes received | 24 | 2 |
+  | Wake lock time | 2 min 9 s | 11 s |
   | CPU time | ~30 s | ~3 s |
 
   The remaining pushes were three bursts from the Linux desktop (one
