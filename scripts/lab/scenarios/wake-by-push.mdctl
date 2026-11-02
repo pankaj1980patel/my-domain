@@ -1,0 +1,9 @@
+# Reach a device that may be asleep: the message is held, the device is
+# woken by a push, a link comes up, and the held message goes out.
+# Works with the phone (no app automation needed):
+#   MD_PEER=I2405 cargo run -q -p mdctl -- --name lab-box --data /tmp/lab-box \
+#     --script scripts/lab/scenarios/wake-by-push.mdctl
+refresh
+send @${MD_PEER} lab wake-by-push check
+wait peer-connected node=@${MD_PEER} timeout=60
+links

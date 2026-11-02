@@ -36,7 +36,8 @@ pub fn start<P: Platform>(ctx: NetCtx<P>, loopback: bool) {
         let _ = daemon.enable_interface(IfKind::LoopbackV4);
     }
     let id = ctx.identity.lock().clone();
-    let registered = service_info(&id).and_then(|info| daemon.register(info).ok());
+    let mut tag = crate::crypto::lan_tag_of(&ctx.key).unwrap_or_default();
+    let registered = service_info(&id, &tag).and_then(|info| daemon.register(info).ok());
     let browse = daemon.browse(SERVICE_TYPE).ok();
     let (Some(()), Some(events)) = (registered, browse) else {
         let _ = daemon.shutdown();
@@ -44,6 +45,16 @@ pub fn start<P: Platform>(ctx: NetCtx<P>, loopback: bool) {
     };
     std::thread::spawn(move || {
         while !ctx.shutdown.load(Ordering::Relaxed) {
+            // The key usually arrives after start (sign-in): re-publish with
+            // its tag so our own devices recognise us.
+            let now = crate::crypto::lan_tag_of(&ctx.key).unwrap_or_default();
+            if now != tag {
+                tag = now;
+                let id = ctx.identity.lock().clone();
+                if let Some(info) = service_info(&id, &tag) {
+                    let _ = daemon.register(info);
+                }
+            }
             match events.recv_timeout(Duration::from_millis(500)) {
                 Ok(ServiceEvent::ServiceResolved(svc)) => on_resolved(&ctx, &svc),
                 Ok(_) | Err(mdns_sd::RecvTimeoutError::Timeout) => {}
@@ -54,9 +65,10 @@ pub fn start<P: Platform>(ctx: NetCtx<P>, loopback: bool) {
     });
 }
 
-fn service_info(id: &Identity) -> Option<ServiceInfo> {
+fn service_info(id: &Identity, tag: &str) -> Option<ServiceInfo> {
     let props: HashMap<String, String> = [
         ("id", id.node_id.clone()),
+        ("tag", tag.to_string()),
         ("name", id.name.clone()),
         ("tcp", id.tcp_port.to_string()),
         ("udp", id.udp_port.to_string()),
@@ -106,6 +118,10 @@ fn on_resolved<P: Platform>(ctx: &NetCtx<P>, svc: &ResolvedService) {
     if beacon.node_id == ctx.identity.lock().node_id {
         return;
     }
+    // Only our own devices (same key): not other people's, not tests.
+    if crate::crypto::lan_tag_of(&ctx.key).as_deref() != Some(beacon.tag.as_str()) {
+        return;
+    }
     let snapshot = {
         let mut map = ctx.peers.lock();
         merge_beacon(&mut map, &beacon, ip).then(|| map.values().cloned().collect())
@@ -131,6 +147,7 @@ fn beacon_from(svc: &ResolvedService) -> Option<(Beacon, IpAddr)> {
             ws_port: port("ws"),
             quic_port: port("quic"),
             reply: true,
+            tag: txt("tag").unwrap_or_default().to_string(),
         },
         best_address(&addrs)?,
     ))

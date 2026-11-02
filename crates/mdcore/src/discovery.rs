@@ -80,8 +80,9 @@ pub fn lan_targets(mode: &crate::platform::IfaceMode) -> Vec<SocketAddr> {
     v
 }
 
-pub fn send_beacon(socket: &UdpSocket, id: &Identity, reply: bool, to: &[SocketAddr]) {
+pub fn send_beacon(socket: &UdpSocket, id: &Identity, tag: &str, reply: bool, to: &[SocketAddr]) {
     let beacon = Beacon {
+        tag: tag.to_string(),
         node_id: id.node_id.clone(),
         name: id.name.clone(),
         tcp_port: id.tcp_port,
@@ -159,6 +160,7 @@ pub fn discovery_recv_loop(
     peers: PeerMap,
     identity: Arc<Mutex<Identity>>,
     sink: Arc<dyn EventSink>,
+    key: crate::engine::KeyHolder,
 ) {
     let mut buf = [0u8; 2048];
     loop {
@@ -177,6 +179,13 @@ pub fn discovery_recv_loop(
         if beacon.node_id == identity.lock().node_id {
             continue;
         }
+        // Only our own devices (same key): not other people's, not tests.
+        let Some(tag) = crate::crypto::lan_tag_of(&key) else {
+            continue;
+        };
+        if beacon.tag != tag {
+            continue;
+        }
         let snapshot = {
             let mut map = peers.lock();
             merge_beacon(&mut map, &beacon, src.ip()).then(|| map.values().cloned().collect())
@@ -190,6 +199,7 @@ pub fn discovery_recv_loop(
             send_beacon(
                 &send,
                 &id,
+                &tag,
                 true,
                 &[SocketAddr::new(src.ip(), DISCOVERY_PORT)],
             );
@@ -229,6 +239,7 @@ mod tests {
             ws_port: tcp + 2,
             quic_port: tcp + 3,
             reply: false,
+            tag: String::new(),
         }
     }
 

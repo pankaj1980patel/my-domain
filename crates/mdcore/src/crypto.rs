@@ -43,6 +43,26 @@ pub fn decrypt(key: &[u8; 32], env: &Envelope) -> Option<Vec<u8>> {
     cipher.decrypt(XNonce::from_slice(&nonce), ct.as_ref()).ok()
 }
 
+/// The tag a device puts in its LAN announcements: a one-way hash of the
+/// device key, so only devices sharing the key recognise each other on the
+/// network (others' devices, and test runs, aren't listed). Reveals nothing
+/// about the key.
+pub fn lan_tag(key: &[u8; 32]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(b"my-domain lan tag v1");
+    h.update(key);
+    h.finalize()[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// [`lan_tag`] of the current key, if one is set.
+pub fn lan_tag_of(key: &parking_lot::Mutex<Option<[u8; 32]>>) -> Option<String> {
+    key.lock().as_ref().map(lan_tag)
+}
+
 /// Generate a random 24-byte key, base64-encoded (UI "Generate" helper).
 pub fn generate_key() -> String {
     let mut bytes = [0u8; 24];

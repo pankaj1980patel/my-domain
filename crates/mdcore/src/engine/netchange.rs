@@ -88,12 +88,16 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
 
 /// Beacon ourselves on the LAN a few times (multicast, broadcast, /24 sweep).
 pub(crate) fn announce<P: Platform>(ctx: &NetCtx<P>, socket: &Arc<UdpSocket>) {
+    // No key yet: nobody would accept our beacon (see `crypto::lan_tag`).
+    let Some(tag) = crate::crypto::lan_tag_of(&ctx.key) else {
+        return;
+    };
     let id = ctx.identity.lock().clone();
     let socket = socket.clone();
     let targets = discovery::lan_targets(&ctx.platform.iface_mode());
     std::thread::spawn(move || {
         for _ in 0..3 {
-            discovery::send_beacon(&socket, &id, false, &targets);
+            discovery::send_beacon(&socket, &id, &tag, false, &targets);
             std::thread::sleep(Duration::from_millis(700));
         }
     });

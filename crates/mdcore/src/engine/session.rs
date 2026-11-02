@@ -64,6 +64,15 @@ impl<P: Platform> Engine<P> {
         true
     }
 
+    /// The key (and so our LAN tag) just changed: tell the LAN, so our other
+    /// devices there list us. Only with automatic LAN discovery on (tests
+    /// turn it off and scan explicitly).
+    fn announce_with_key(&self) {
+        if self.ctx.config.mdns {
+            netchange::announce(&self.ctx, &self.disco_send);
+        }
+    }
+
     fn save_key(&self, key: &[u8; 32]) {
         self.ctx.platform.secret_set(SECRET_KEY, Some(&hex(key)));
     }
@@ -121,6 +130,7 @@ impl<P: Platform> Engine<P> {
         let key = derive_key(passphrase, username).ok_or("failed to derive key")?;
         *self.username.lock() = Some(username.to_string());
         *self.ctx.key.lock() = Some(key);
+        self.announce_with_key();
         Ok(())
     }
 
@@ -132,6 +142,7 @@ impl<P: Platform> Engine<P> {
         let key = derive_key(passphrase, &username).ok_or("failed to derive key")?;
         self.save_key(&key);
         *self.ctx.key.lock() = Some(key);
+        self.announce_with_key();
         Ok(())
     }
 
@@ -147,6 +158,7 @@ impl<P: Platform> Engine<P> {
         let key = derive_key(new_passphrase, &username).ok_or("failed to derive key")?;
         self.save_key(&key);
         *self.ctx.key.lock() = Some(key);
+        self.announce_with_key();
         Ok(())
     }
 

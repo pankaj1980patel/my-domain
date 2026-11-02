@@ -114,8 +114,8 @@ or with less battery.
 - **`mdctl`** (`apps/mdctl`): **built** (2026-11-02). A device with no UI:
   logs in (flags or `MD_DEV_*`), prints every event and result as JSON
   lines, takes commands on stdin (`peers`, `send`, `connect`, `add`,
-  `links`, `forget`, ...). Still to do: `scenario run` for scripted
-  cross-device tests.
+  `links`, `forget`, ...). Scripted scenarios: **done** (`--script`,
+  `wait`, `echo`; `scripts/lab/scenarios/`).
 - **Simulated-NAT test.** Two engines, each behind its own simulated router
   (Linux network namespaces), must connect by hole punching. Each simulated
   device has to be its own process, which is why this needs `mdctl`.

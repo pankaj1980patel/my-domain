@@ -310,6 +310,29 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   phone; regression test
   `relay::the_relay_route_comes_back_after_a_direct_link_dies`.
 
+## LAN discovery lists only your own devices (2026-11-02)
+
+- LAN announcements (mDNS TXT `tag`, UDP beacon `tag`) carry
+  `crypto::lan_tag`, a one-way hash of the device key; devices list only
+  announcements with their own tag. Before, any my-domain device on the
+  network was listed: test runs on the Mac left 46 entries in the desktop
+  app, and on shared Wi-Fi other people's devices would show. Devices
+  re-announce when their key is set (sign-in), and mDNS re-publishes.
+- Devices found on the LAN aren't restored from the peer cache (they
+  re-announce within seconds), so stale ones don't stay listed.
+- Tests: `mdns::only_devices_with_the_same_key_are_listed`,
+  `mdns::devices_found_on_the_lan_are_not_restored_from_the_cache`.
+
+## mdctl scenarios (2026-11-02)
+
+- `mdctl --script FILE` runs a scenario (`#` comments, `${VAR}` from the
+  environment, exit code 1 at the first failure). New commands: `wait
+  <event> [field=value ...] [timeout=N]`, `echo on|off` (answer every
+  message, for round-trip checks), `sleep`, and `@name` for any node id.
+  Scenarios in `scripts/lab/scenarios/` (`chat-roundtrip`,
+  `wake-by-push`). Test: `apps/mdctl/tests/scenario.rs` runs two real
+  `mdctl` processes.
+
 ## Device lab and dev tools
 
 - **`scripts/lab/start-all.sh`** starts the app on all three devices, logged

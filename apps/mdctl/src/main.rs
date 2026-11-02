@@ -17,11 +17,26 @@
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 //! `send <node> <text...>`, `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
+//!
+//! For scripted tests (`--script FILE`, or the same lines on stdin):
+//! - `wait <event> [field=value ...] [timeout=SECS]`: block until a matching
+//!   event arrives (one that came before the wait counts too), else fail.
+//!   `node=` matches the event's device; values may be "quoted".
+//! - `echo on|off`: answer every message with `echo: <text>`, so the other
+//!   end of a scenario can check a round trip.
+//! - `sleep <secs>`.
+//! - `@name` works wherever a node id goes (a device's name, any case).
+//!
+//! With `--script`, lines starting with `#` are comments, `${VAR}` is
+//! replaced from the environment, and the first failed command ends the run
+//! with exit code 1.
 
 use std::io::{BufRead, Write};
 use std::net::IpAddr;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::{Duration, Instant};
 
 use mdcore::engine::Engine;
 use mdcore::events::{CoreEvent, EventSink};
@@ -95,18 +110,142 @@ impl Out {
     }
 }
 
-struct PrintSink(Out);
+/// Every event so far, for `wait`. `next` is the first one a `wait` hasn't
+/// consumed yet.
+#[derive(Default)]
+struct Events {
+    seen: Mutex<(Vec<(String, Value)>, usize)>,
+    arrived: Condvar,
+}
+
+impl Events {
+    /// Block until an unconsumed event satisfies `matches`; consume it and
+    /// everything before it.
+    fn wait(&self, timeout: Duration, matches: impl Fn(&str, &Value) -> bool) -> Option<Value> {
+        let deadline = Instant::now() + timeout;
+        let mut g = self.seen.lock().unwrap_or_else(|e| e.into_inner());
+        loop {
+            let (list, next) = &mut *g;
+            if let Some(i) = (*next..list.len()).find(|&i| matches(&list[i].0, &list[i].1)) {
+                *next = i + 1;
+                return Some(list[i].1.clone());
+            }
+            let left = deadline.checked_duration_since(Instant::now())?;
+            g = self
+                .arrived
+                .wait_timeout(g, left)
+                .unwrap_or_else(|e| e.into_inner())
+                .0;
+        }
+    }
+}
+
+struct PrintSink {
+    out: Out,
+    events: Arc<Events>,
+    /// `echo on`: incoming messages to answer (sent from the main loop, not
+    /// from the core's thread).
+    echo: Arc<AtomicBool>,
+    replies: std::sync::mpsc::Sender<(String, String)>,
+}
 
 impl EventSink for PrintSink {
     fn emit(&self, ev: CoreEvent) {
-        self.0
-            .line(json!({ "event": ev.name(), "data": ev.ui_payload() }));
+        let (name, data) = (ev.name(), ev.ui_payload());
+        self.out.line(json!({ "event": name, "data": data }));
+        if let CoreEvent::MessageReceived(m) = &ev {
+            if let (true, true, Some(node)) = (self.echo.load(Ordering::Relaxed), m.ok, &m.node_id)
+            {
+                if !m.text.starts_with("echo: ") {
+                    let _ = self
+                        .replies
+                        .send((node.clone(), format!("echo: {}", m.text)));
+                }
+            }
+        }
+        let mut g = self.events.seen.lock().unwrap_or_else(|e| e.into_inner());
+        g.0.push((name.to_string(), data));
+        drop(g);
+        self.events.arrived.notify_all();
     }
+}
+
+/// Split a command line into words; "double quotes" group words (for
+/// `field="a value"` and texts in `wait`).
+fn words(line: &str) -> Vec<String> {
+    let (mut out, mut cur, mut quoted) = (Vec::new(), String::new(), false);
+    for c in line.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            c if c.is_whitespace() && !quoted => {
+                if !cur.is_empty() {
+                    out.push(std::mem::take(&mut cur));
+                }
+            }
+            c => cur.push(c),
+        }
+    }
+    if !cur.is_empty() {
+        out.push(cur);
+    }
+    out
+}
+
+/// Replace each `${VAR}` with the environment variable (empty if unset).
+fn expand_env(line: &str) -> String {
+    let mut out = String::new();
+    let mut rest = line;
+    while let Some(start) = rest.find("${") {
+        out.push_str(&rest[..start]);
+        match rest[start + 2..].find('}') {
+            Some(end) => {
+                let var = &rest[start + 2..start + 2 + end];
+                out.push_str(&std::env::var(var).unwrap_or_default());
+                rest = &rest[start + 2 + end + 1..];
+            }
+            None => {
+                out.push_str(&rest[start..]);
+                rest = "";
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// `@name` -> that device's node id (exact name, any case); anything else
+/// is already a node id.
+fn resolve(engine: &Engine<CliPlatform>, who: &str) -> Result<String, String> {
+    let Some(name) = who.strip_prefix('@') else {
+        return Ok(who.to_string());
+    };
+    engine
+        .get_peers()
+        .into_iter()
+        .find(|p| p.name.eq_ignore_ascii_case(name))
+        .map(|p| p.node_id)
+        .ok_or(format!("no device named {name}"))
+}
+
+/// Does event `data` have `field` equal to `want`? `node` matches the
+/// event's device (`node_id`, or the bare id some events carry).
+fn field_is(data: &Value, field: &str, want: &str) -> bool {
+    let got = match (field, data) {
+        ("node", Value::String(s)) => Some(s.clone()),
+        ("node", v) => v["node_id"].as_str().map(str::to_string),
+        (f, v) => match &v[f] {
+            Value::String(s) => Some(s.clone()),
+            Value::Null => None,
+            other => Some(other.to_string()),
+        },
+    };
+    got.as_deref() == Some(want)
 }
 
 struct Args {
     name: String,
     data: PathBuf,
+    script: Option<PathBuf>,
     server: Option<String>,
     user: Option<String>,
     pass: Option<String>,
@@ -119,6 +258,7 @@ fn parse_args() -> Result<Args, String> {
     let mut a = Args {
         name: "mdctl".into(),
         data: PathBuf::from(".mdctl"),
+        script: None,
         server: env("MD_DEV_SERVER"),
         user: env("MD_DEV_USER"),
         pass: env("MD_DEV_PASS"),
@@ -136,8 +276,9 @@ fn parse_args() -> Result<Args, String> {
             "--pass" => a.pass = Some(val()?),
             "--key" => a.key = Some(val()?),
             "--offline" => a.offline = Some(val()?),
+            "--script" => a.script = Some(PathBuf::from(val()?)),
             "-h" | "--help" => {
-                return Err("usage: mdctl [--name N] [--data DIR] \
+                return Err("usage: mdctl [--name N] [--data DIR] [--script FILE] \
                     [--server URL --user U --pass P | --offline USER] --key KEY"
                     .into())
             }
@@ -163,14 +304,58 @@ fn log_in(engine: &Engine<CliPlatform>, a: &Args) -> mdcore::Result<()> {
     engine.refresh_from_server()
 }
 
-/// Run one command line; returns false on `quit`.
-fn run(engine: &Engine<CliPlatform>, out: &Out, line: &str) -> bool {
-    let mut words = line.split_whitespace();
+struct Ctl<'a> {
+    engine: &'a Engine<CliPlatform>,
+    out: &'a Out,
+    events: &'a Events,
+    echo: &'a AtomicBool,
+}
+
+/// Run one command line. `Ok(false)` on `quit`; `Err` when the command failed.
+fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
+    let (engine, out) = (ctl.engine, ctl.out);
+    let all = words(line);
+    let mut words = all.iter().map(String::as_str);
     let Some(cmd) = words.next() else {
-        return true;
+        return Ok(true);
     };
     let arg = |w: Option<&str>| w.map(str::to_string).ok_or("missing argument".to_string());
     let result: Result<Value, String> = (|| match cmd {
+        "wait" => {
+            let event = arg(words.next())?;
+            let mut timeout = Duration::from_secs(30);
+            let mut want = Vec::new();
+            for w in words.by_ref() {
+                let (k, v) = w
+                    .split_once('=')
+                    .ok_or(format!("expected field=value, got {w}"))?;
+                match k {
+                    "timeout" => {
+                        timeout = Duration::from_secs_f64(v.parse().map_err(|_| "bad timeout")?)
+                    }
+                    "node" => want.push((k.to_string(), resolve(engine, v)?)),
+                    _ => want.push((k.to_string(), v.to_string())),
+                }
+            }
+            ctl.events
+                .wait(timeout, |name, data| {
+                    name == event && want.iter().all(|(k, v)| field_is(data, k, v))
+                })
+                .ok_or(format!(
+                    "timed out after {}s waiting for {event}",
+                    timeout.as_secs_f64()
+                ))
+        }
+        "echo" => {
+            let on = matches!(words.next(), Some("on"));
+            ctl.echo.store(on, Ordering::Relaxed);
+            Ok(json!(if on { "echoing" } else { "not echoing" }))
+        }
+        "sleep" => {
+            let secs: f64 = arg(words.next())?.parse().map_err(|_| "bad number")?;
+            std::thread::sleep(Duration::from_secs_f64(secs));
+            Ok(Value::Null)
+        }
         "quit" | "exit" => Ok(Value::Null),
         "identity" => Ok(json!(engine.identity())),
         "peers" => Ok(json!(engine.get_peers())),
@@ -180,11 +365,11 @@ fn run(engine: &Engine<CliPlatform>, out: &Out, line: &str) -> bool {
             Ok(json!(engine.get_peers()))
         }
         "connect" => {
-            engine.connect(&arg(words.next())?)?;
+            engine.connect(&resolve(engine, &arg(words.next())?)?)?;
             Ok(json!("connecting"))
         }
         "send" => {
-            let to = arg(words.next())?;
+            let to = resolve(engine, &arg(words.next())?)?;
             let text = words.collect::<Vec<_>>().join(" ");
             Ok(json!({ "via": engine.send(&to, &text)? }))
         }
@@ -204,10 +389,15 @@ fn run(engine: &Engine<CliPlatform>, out: &Out, line: &str) -> bool {
         other => Err(format!("unknown command {other}")),
     })();
     match result {
-        Ok(v) => out.line(json!({ "cmd": cmd, "ok": v })),
-        Err(e) => out.line(json!({ "cmd": cmd, "error": e })),
+        Ok(v) => {
+            out.line(json!({ "cmd": cmd, "ok": v }));
+            Ok(!matches!(cmd, "quit" | "exit"))
+        }
+        Err(e) => {
+            out.line(json!({ "cmd": cmd, "error": e }));
+            Err(())
+        }
     }
-    !matches!(cmd, "quit" | "exit")
 }
 
 fn main() {
@@ -219,8 +409,17 @@ fn main() {
         }
     };
     let out = Out(Arc::new(Mutex::new(std::io::stdout())));
+    let events = Arc::new(Events::default());
+    let echo = Arc::new(AtomicBool::new(false));
+    let (reply_tx, replies) = std::sync::mpsc::channel();
+    let sink = PrintSink {
+        out: out.clone(),
+        events: events.clone(),
+        echo: echo.clone(),
+        replies: reply_tx,
+    };
     let platform = CliPlatform::new(args.name.clone(), args.data.clone());
-    let engine = match Engine::start(platform, Arc::new(PrintSink(out.clone()))) {
+    let engine = match Engine::start(platform, Arc::new(sink)) {
         Ok(e) => e,
         Err(e) => {
             eprintln!("mdctl: failed to start: {e}");
@@ -234,13 +433,82 @@ fn main() {
             std::process::exit(1);
         }
     }
-    for line in std::io::stdin().lock().lines() {
-        let Ok(line) = line else { break };
-        if !run(&engine, &out, &line) {
-            break;
+    let engine = Arc::new(engine);
+    // `echo on`: answer from here, off the core's event thread.
+    {
+        let engine = engine.clone();
+        std::thread::spawn(move || {
+            for (node, text) in replies {
+                let _ = engine.send(&node, &text);
+            }
+        });
+    }
+    let ctl = Ctl {
+        engine: &engine,
+        out: &out,
+        events: &events,
+        echo: &echo,
+    };
+    let mut failed = false;
+    if let Some(path) = &args.script {
+        let script = match std::fs::read_to_string(path) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("mdctl: can't read {}: {e}", path.display());
+                std::process::exit(2);
+            }
+        };
+        for line in script.lines().map(str::trim) {
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            match run(&ctl, &expand_env(line)) {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(()) => {
+                    failed = true;
+                    break;
+                }
+            }
+        }
+    } else {
+        for line in std::io::stdin().lock().lines() {
+            let Ok(line) = line else { break };
+            if run(&ctl, &line) == Ok(false) {
+                break;
+            }
         }
     }
     // Sends are queued; dropping the engine closes its links at once. Give
     // the last messages a moment to leave before exiting.
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    std::thread::sleep(Duration::from_millis(500));
+    if failed {
+        std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn words_keep_quoted_values_together() {
+        assert_eq!(
+            words(r#"wait message-received text="echo: hi there" timeout=5"#),
+            [
+                "wait",
+                "message-received",
+                "text=echo: hi there",
+                "timeout=5"
+            ]
+        );
+    }
+
+    #[test]
+    fn env_vars_are_expanded() {
+        std::env::set_var("MDCTL_TEST_PEER", "phone");
+        assert_eq!(expand_env("send @${MDCTL_TEST_PEER} hi"), "send @phone hi");
+        assert_eq!(expand_env("x ${MDCTL_TEST_UNSET_VAR}y"), "x y");
+        assert_eq!(expand_env("no vars"), "no vars");
+    }
 }

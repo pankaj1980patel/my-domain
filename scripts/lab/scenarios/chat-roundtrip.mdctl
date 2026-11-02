@@ -1,0 +1,14 @@
+# Chat round trip with an echoing device.
+#
+# On another machine (or another terminal), start the echo box:
+#   set -a; . scripts/lab/test-creds.env; set +a
+#   (echo "echo on"; cat) | cargo run -q -p mdctl -- --name lab-echo --data /tmp/lab-echo
+# Then run this:
+#   cargo run -q -p mdctl -- --name lab-box --data /tmp/lab-box \
+#     --script scripts/lab/scenarios/chat-roundtrip.mdctl
+refresh
+connect @lab-echo
+wait peer-connected node=@lab-echo timeout=60
+send @lab-echo ping
+wait message-received text="echo: ping" timeout=30
+links

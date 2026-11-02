@@ -264,8 +264,9 @@ impl<P: Platform> Engine<P> {
                 let identity_c = identity.clone();
                 let sink_c = sink.clone();
                 let send_c = send.clone();
+                let key_c = key.clone();
                 std::thread::spawn(move || {
-                    discovery::discovery_recv_loop(recv, send_c, peers_c, identity_c, sink_c)
+                    discovery::discovery_recv_loop(recv, send_c, peers_c, identity_c, sink_c, key_c)
                 });
                 send
             }
@@ -327,6 +328,9 @@ impl<P: Platform> Engine<P> {
         // Signed in last time: carry on, and re-register in the background
         // (the FCM token, our addresses) so a push can reach us again.
         if engine.restore_session() {
+            if engine.ctx.config.mdns {
+                netchange::announce(&engine.ctx, &engine.disco_send);
+            }
             let h = engine.handles();
             std::thread::spawn(move || {
                 let session = h.server_url.lock().clone().zip(h.token.lock().clone());

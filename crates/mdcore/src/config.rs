@@ -95,7 +95,8 @@ pub struct CoreConfig {
     /// NAT-PMP). `None` = don't
     /// (tests, or networks where it's unwanted).
     pub port_mapper: Option<std::sync::Arc<dyn crate::nat::portmap::PortMapper>>,
-    /// Advertise and browse via mDNS / DNS-SD on the LAN.
+    /// Automatic LAN discovery: advertise and browse via mDNS / DNS-SD, and
+    /// send a beacon when signing in. (`Engine::scan_lan` works either way.)
     pub mdns: bool,
     /// Also run mDNS on the loopback interface (tests on one machine).
     pub mdns_loopback: bool,

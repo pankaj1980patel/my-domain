@@ -34,9 +34,12 @@ pub(super) fn load_peer_cache<P: Platform>(ctx: &NetCtx<P>) {
     };
     let me = ctx.identity.lock().node_id.clone();
     let mut peers = ctx.peers.lock();
+    // LAN-found devices aren't restored: real ones announce themselves again
+    // within seconds, and stale ones (another network, a finished test run)
+    // would otherwise stay listed forever.
     for p in list
         .into_iter()
-        .filter(|p| p.node_id != me)
+        .filter(|p| p.node_id != me && p.source != Source::Lan)
         .take(PEER_CACHE_MAX)
     {
         peers.entry(p.node_id.clone()).or_insert(p);

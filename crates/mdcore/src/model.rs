@@ -38,6 +38,10 @@ pub struct Beacon {
     pub quic_port: u16,
     #[serde(default)]
     pub reply: bool,
+    /// `crypto::lan_tag` of the sender's key: beacons with another tag (or
+    /// none) are ignored.
+    #[serde(default)]
+    pub tag: String,
 }
 
 /// Where a peer entry came from. Serializes to "registry" | "lan" | "manual"
