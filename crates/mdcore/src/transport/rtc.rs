@@ -105,6 +105,9 @@ pub fn accept_offer_and_run<P: Platform>(
 /// The canonical str0m drive loop for one connection. Pumps `poll_output` to
 /// completion before each input (the cardinal str0m rule), ferries app frames
 /// over the data channel, and registers/unregisters the peer's live link.
+/// How long a WebRTC session may take to open its data channel.
+const OPEN_WITHIN: Duration = Duration::from_secs(30);
+
 fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: String) {
     let local = socket.local_addr().ok();
     let (tx, rx) = mpsc::channel::<String>();
@@ -113,9 +116,18 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
     let mut registered = false;
     let mut lost_race = false;
     let mut buf = vec![0u8; 2000];
+    let started = Instant::now();
 
     loop {
         if !rtc.is_alive() {
+            break;
+        }
+        // A session that never opened stops: after `OPEN_WITHIN`, or once
+        // the peer is linked another way (QUIC won the race). Otherwise its
+        // ICE checks would keep this thread waking ~150 times a second, for
+        // good.
+        if !registered && (started.elapsed() > OPEN_WITHIN || super::is_direct(&ctx, &node_id)) {
+            rtc.disconnect();
             break;
         }
         // Drain queued outgoing app frames into the data channel (once open).

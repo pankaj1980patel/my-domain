@@ -295,6 +295,17 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Desktop idle CPU: stray WebRTC sessions end (2026-11-03)
+
+- The Linux desktop used 2.8% of a core while idle (debug build). One
+  thread woke about 150 times a second: a WebRTC session answered from a
+  pushed offer whose data channel never opened, because the peer had
+  linked over QUIC instead. Nothing ended it, so its ICE checks ran for
+  good.
+- A session that hasn't opened its channel now stops after 30 s
+  (`OPEN_WITHIN`), or as soon as the peer is linked directly another way.
+- Measured on the laptop: idle CPU went from 3.3 s to 0.55 s per 2 minutes.
+
 ## Review fixes: fewer pushes to unreachable devices (2026-11-03)
 
 An independent review of the night's networking changes found four
