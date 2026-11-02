@@ -18,6 +18,7 @@ use mdcore::CoreError;
 
 mod device;
 mod fcm;
+mod notify;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
 
@@ -239,6 +240,44 @@ impl EventSink for TauriSink {
             CoreEvent::Action { name, args, .. } => {
                 let (app, name, args) = (self.app.clone(), name.clone(), args.clone());
                 std::thread::spawn(move || device::on_action(&app, &name, &args));
+            }
+            // OS notifications for what arrives while the window is in the
+            // background (off the core's thread too: peer lookup, the OS).
+            CoreEvent::MessageReceived(m) if m.ok => {
+                let app = self.app.clone();
+                let (node, from, text) = (m.node_id.clone(), m.from.clone(), m.text.clone());
+                std::thread::spawn(move || {
+                    let title = match &node {
+                        Some(node) => notify::device_name(&app, node),
+                        None => from,
+                    };
+                    notify::post_if_away(&app, &title, &text);
+                });
+            }
+            CoreEvent::FileReceived { from, name, .. } => {
+                let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
+                std::thread::spawn(move || {
+                    let device = notify::device_name(&app, &from);
+                    notify::post_if_away(&app, "my-domain", &format!("Saved {name} from {device}"));
+                });
+            }
+            CoreEvent::Notification {
+                from,
+                title,
+                body,
+                app: source,
+            } => {
+                let app = self.app.clone();
+                let (from, title, body, source) =
+                    (from.clone(), title.clone(), body.clone(), source.clone());
+                std::thread::spawn(move || {
+                    let title = if !title.trim().is_empty() {
+                        title
+                    } else {
+                        source.unwrap_or_else(|| notify::device_name(&app, &from))
+                    };
+                    notify::post_if_away(&app, &title, &body);
+                });
             }
             _ => {}
         }
@@ -570,6 +609,21 @@ fn open_url_on(node_id: String, url: String, engine: State<Eng>) -> Result<Strin
     engine.open_url(&node_id, &url)
 }
 
+// --- notifications ---
+
+/// Whether OS notifications are shown (Settings, "Show notifications").
+#[tauri::command]
+#[specta::specta]
+fn notifications_enabled(prefs: State<notify::Prefs>) -> bool {
+    prefs.enabled()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_notifications_enabled(on: bool, prefs: State<notify::Prefs>) {
+    prefs.set_enabled(on)
+}
+
 // --- files ---
 
 /// Where received files are saved (set once at startup).
@@ -597,7 +651,12 @@ fn download_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
 /// Run an action a device listed in its status (`actions`).
 #[tauri::command]
 #[specta::specta]
-fn run_action(node_id: String, name: String, args_json: String, engine: State<Eng>) -> Result<String, CoreError> {
+fn run_action(
+    node_id: String,
+    name: String,
+    args_json: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
     engine.run_action(&node_id, &name, &args_json)
 }
 
@@ -720,7 +779,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         clear_clipboard_history,
         copy_to_clipboard,
         reveal_file,
-        open_file
+        open_file,
+        notifications_enabled,
+        set_notifications_enabled
     ])
 }
 
@@ -742,8 +803,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .setup(move |app| {
             let handle = app.handle().clone();
+            // Before the Engine: its first events may already notify.
+            app.manage(notify::Prefs::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {

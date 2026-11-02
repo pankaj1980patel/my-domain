@@ -193,6 +193,8 @@ export const en = {
   "settings.thisDevice": "This device",
   "settings.seenAs": "Other devices see it as {name}.",
   "settings.clipSync": "Keep clipboards in sync with my devices",
+  "settings.notifications": "Show notifications",
+  "settings.notificationsHint": "Messages, saved files and notifications from your phone, while this window is in the background.",
   "settings.deviceKey": "Device key",
   "settings.deviceKeyHint": "All your devices must use the same key. Changing it here means changing it on every device.",
   "settings.changeKey": "Change device key",

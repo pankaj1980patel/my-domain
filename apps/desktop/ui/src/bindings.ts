@@ -87,6 +87,9 @@ export const commands = {
 	revealFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_file", { path })),
 	/**  Open a received file with its default app. */
 	openFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("open_file", { path })),
+	/**  Whether OS notifications are shown (Settings, "Show notifications"). */
+	notificationsEnabled: () => __TAURI_INVOKE<boolean>("notifications_enabled"),
+	setNotificationsEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_notifications_enabled", { on }),
 };
 
 /* Types */

@@ -1,7 +1,7 @@
 // Account, this device, and preferences. Tap the version 7 times for the
 // Developer screen.
 
-import { createSignal, Show } from "solid-js";
+import { createSignal, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
@@ -13,6 +13,12 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [newKey, setNewKey] = createSignal("");
   const [pass, setPass] = createSignal("");
   const [showKey, setShowKey] = createSignal(false);
+  const [notifs, setNotifs] = createSignal(true);
+  onMount(async () => setNotifs(await commands.notificationsEnabled()));
+  const toggleNotifs = async (on: boolean) => {
+    await commands.setNotificationsEnabled(on);
+    setNotifs(on);
+  };
 
   const tapVersion = () => {
     const n = taps() + 1;
@@ -45,6 +51,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <span>{t("settings.clipSync")}</span>
           <input type="checkbox" role="switch" checked={state.clipSync} onChange={(e) => setClipSync(e.currentTarget.checked)} />
         </label>
+        <label class="switch-row">
+          <span>{t("settings.notifications")}</span>
+          <input type="checkbox" role="switch" checked={notifs()} onChange={(e) => toggleNotifs(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.notificationsHint")}</p>
       </article>
 
       <article class="tile">

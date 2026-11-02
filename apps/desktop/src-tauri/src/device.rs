@@ -2,7 +2,7 @@
 // it reports this computer's battery to the core, rings (window to the front
 // plus an OS notification; the UI plays the sound) and opens links a sibling
 // sends, and runs its volume / mute actions. No extra crates: the battery comes from `pmset` (macOS) or sysfs
-// (Linux), the notification from `osascript` / `notify-send`.
+// (Linux); the notification goes through `crate::notify`.
 
 use std::process::Command;
 use std::time::Duration;
@@ -46,7 +46,11 @@ fn push_status(app: &AppHandle) {
 /// `mute {on}`); then the status is pushed again so it shows the new level.
 pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
     match name {
-        "volume" => sound::step(if args["step"].as_i64().unwrap_or(1) < 0 { -10 } else { 10 }),
+        "volume" => sound::step(if args["step"].as_i64().unwrap_or(1) < 0 {
+            -10
+        } else {
+            10
+        }),
         "mute" => sound::mute(args["on"].as_bool()),
         _ => return,
     }
@@ -67,8 +71,14 @@ mod sound {
     /// (volume 0-100, muted)
     #[cfg(target_os = "macos")]
     pub fn read() -> Option<(u8, bool)> {
-        let v = run("osascript", &["-e", "output volume of (get volume settings)"])?;
-        let m = run("osascript", &["-e", "output muted of (get volume settings)"])?;
+        let v = run(
+            "osascript",
+            &["-e", "output volume of (get volume settings)"],
+        )?;
+        let m = run(
+            "osascript",
+            &["-e", "output muted of (get volume settings)"],
+        )?;
         Some((v.parse::<u8>().ok()?.min(100), m == "true"))
     }
 
@@ -76,20 +86,33 @@ mod sound {
     pub fn step(by: i32) {
         if let Some((v, _)) = read() {
             let to = (i32::from(v) + by).clamp(0, 100).to_string();
-            let _ = run("osascript", &["-e", &format!("set volume output volume {to}")]);
+            let _ = run(
+                "osascript",
+                &["-e", &format!("set volume output volume {to}")],
+            );
         }
     }
 
     #[cfg(target_os = "macos")]
     pub fn mute(on: Option<bool>) {
         let on = on.unwrap_or_else(|| !read().is_some_and(|(_, m)| m));
-        let _ = run("osascript", &["-e", &format!("set volume output muted {on}")]);
+        let _ = run(
+            "osascript",
+            &["-e", &format!("set volume output muted {on}")],
+        );
     }
 
     #[cfg(target_os = "linux")]
     pub fn read() -> Option<(u8, bool)> {
         let v = run("pactl", &["get-sink-volume", "@DEFAULT_SINK@"])?;
-        let pct = v.split('/').nth(1)?.trim().trim_end_matches('%').trim().parse::<u32>().ok()?;
+        let pct = v
+            .split('/')
+            .nth(1)?
+            .trim()
+            .trim_end_matches('%')
+            .trim()
+            .parse::<u32>()
+            .ok()?;
         let m = run("pactl", &["get-sink-mute", "@DEFAULT_SINK@"])?;
         Some((pct.min(100) as u8, m.ends_with("yes")))
     }
@@ -171,11 +194,12 @@ pub fn on_ring(app: &AppHandle, from: &str) {
         let _ = w.show();
         let _ = w.set_focus();
     }
-    let name = app
-        .try_state::<Eng>()
-        .and_then(|e| e.get_peers().into_iter().find(|p| p.node_id == from).map(|p| p.name))
-        .unwrap_or_else(|| "One of your devices".to_string());
-    notify("my-domain", &format!("{name} is looking for this computer"));
+    let name = crate::notify::device_name(app, from);
+    crate::notify::post(
+        app,
+        "my-domain",
+        &format!("{name} is looking for this computer"),
+    );
 }
 
 /// Open a link a sibling sent, in the default browser. The core only emits
@@ -186,38 +210,6 @@ pub fn on_open_url(app: &AppHandle, url: &str) {
     }
     if let Err(e) = app.opener().open_url(url, None::<&str>) {
         eprintln!("[device] couldn't open {url}: {e}");
-    }
-}
-
-/// Best-effort OS notification without a plugin. The text goes in as
-/// arguments, never into a script.
-fn notify(title: &str, body: &str) {
-    #[cfg(target_os = "macos")]
-    let cmd = Command::new("osascript")
-        .args([
-            "-e",
-            "on run argv",
-            "-e",
-            "display notification (item 2 of argv) with title (item 1 of argv)",
-            "-e",
-            "end run",
-            title,
-            body,
-        ])
-        .spawn();
-    #[cfg(target_os = "linux")]
-    let cmd = Command::new("notify-send").args([title, body]).spawn();
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    let cmd: std::io::Result<std::process::Child> = {
-        let _ = (title, body);
-        Err(std::io::ErrorKind::Unsupported.into())
-    };
-    match cmd {
-        // Reap it off-thread so it doesn't linger as a zombie.
-        Ok(mut child) => {
-            std::thread::spawn(move || child.wait());
-        }
-        Err(e) => eprintln!("[device] no OS notification: {e}"),
     }
 }
 

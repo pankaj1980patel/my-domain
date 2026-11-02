@@ -34,8 +34,8 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use fcm_receiver_rs::client::{AndroidApp, FcmClient};
 use fcm_receiver_rs::consts::{
-    FCM_SOCKET_ADDRESS, KMCS_VERSION, K_CLOSE_TAG, K_DATA_MESSAGE_STANZA_TAG,
-    K_HEARTBEAT_ACK_TAG, K_HEARTBEAT_PING_TAG,
+    FCM_SOCKET_ADDRESS, KMCS_VERSION, K_CLOSE_TAG, K_DATA_MESSAGE_STANZA_TAG, K_HEARTBEAT_ACK_TAG,
+    K_HEARTBEAT_PING_TAG,
 };
 use fcm_receiver_rs::messages::{
     create_login_request_raw, decode_data_message_stanza, ManualDataMessageStanza,
@@ -402,7 +402,13 @@ fn run(
             "",
             "MTalk connected — listening for push signals",
         );
-        match listen(android_id, security_token, generation, &mut received, &on_message) {
+        match listen(
+            android_id,
+            security_token,
+            generation,
+            &mut received,
+            &on_message,
+        ) {
             Ok(()) => return Ok(()), // superseded by a fresh registration
             Err(e) => {
                 emit_fcm(
@@ -441,8 +447,8 @@ fn listen(
         .map_err(|e| e.to_string())?
         .next()
         .ok_or("mtalk: no address")?;
-    let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15))
-        .map_err(|e| e.to_string())?;
+    let tcp =
+        TcpStream::connect_timeout(&addr, Duration::from_secs(15)).map_err(|e| e.to_string())?;
     let _ = tcp.set_nodelay(true);
     let _ = tcp.set_read_timeout(Some(Duration::from_secs(15)));
     let _ = tcp.set_write_timeout(Some(Duration::from_secs(15)));
@@ -638,8 +644,17 @@ mod tests {
         let mut f = Frames::default();
         // version, then a heartbeat ping (tag 0, size 0), then a data frame
         // whose 200-byte size needs a two-byte varint, delivered in pieces.
-        f.push(&[KMCS_VERSION, K_HEARTBEAT_PING_TAG, 0, K_DATA_MESSAGE_STANZA_TAG, 0xc8]);
-        assert_eq!(f.next_frame().unwrap(), Some((K_HEARTBEAT_PING_TAG, vec![])));
+        f.push(&[
+            KMCS_VERSION,
+            K_HEARTBEAT_PING_TAG,
+            0,
+            K_DATA_MESSAGE_STANZA_TAG,
+            0xc8,
+        ]);
+        assert_eq!(
+            f.next_frame().unwrap(),
+            Some((K_HEARTBEAT_PING_TAG, vec![]))
+        );
         assert_eq!(f.next_frame().unwrap(), None);
         f.push(&[0x01]);
         f.push(&[7; 150]);
