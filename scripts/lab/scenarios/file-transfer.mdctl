@@ -1,0 +1,10 @@
+# Send a file and wait until the other device confirms it saved it.
+#   MD_PEER=I2405 MD_FILE=/tmp/lab-file.bin cargo run -q -p mdctl -- \
+#     --name lab-box --data /tmp/lab-box \
+#     --script scripts/lab/scenarios/file-transfer.mdctl
+# MD_FILE must be a path without spaces. Against another mdctl, start it
+# with `downloads <dir>` first, or it has nowhere to save the file.
+refresh
+sendfile @${MD_PEER} ${MD_FILE}
+wait file-sent node=@${MD_PEER} timeout=120
+links

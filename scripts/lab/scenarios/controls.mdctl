@@ -1,0 +1,12 @@
+# Device controls: ask for status, nudge the volume up one step and back
+# down, then ask again. Nothing loud or bright (no ring, no flashlight).
+#   MD_PEER=I2405 cargo run -q -p mdctl -- --name lab-box --data /tmp/lab-box \
+#     --script scripts/lab/scenarios/controls.mdctl
+refresh
+status @${MD_PEER}
+wait device-status-event timeout=60
+action @${MD_PEER} volume {"step":1}
+sleep 1
+action @${MD_PEER} volume {"step":-1}
+status @${MD_PEER}
+wait device-status-event timeout=30

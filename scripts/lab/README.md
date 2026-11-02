@@ -28,8 +28,8 @@ environment variables in [common.sh](common.sh).
 | `scripts/lab/android.sh test` | Run instrumentation tests on the phone |
 | `scripts/lab/android.sh logcat` | Stream the app's logs |
 
-Cross-device scenario tests (`scenarios/*.toml`, driven by `mdctl`) are added in
-Phase 3, once `mdctl` exists.
+Cross-device scenario tests (`scenarios/*.mdctl`, driven by `mdctl`) are
+described below.
 
 ## mdctl: a scriptable device
 
@@ -44,8 +44,31 @@ printf 'peers\nsend <node_id> hello\nquit\n' | cargo run -q -p mdctl -- --name l
 Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 `send <node> <text>`, `status <node>`, `ring <node>`, `open <node> <url>`,
 `sendfile <node> <path>`, `downloads <dir>` (where received files go),
-`add <name> <ip> <quic_port>`, `forget` (remove this
-device from the server), `quit`. `--offline USER --key K` skips the server.
+`action <node> <name> [json]`, `add <name> <ip> <quic_port>`, `forget` (remove
+this device from the server), `quit`. `--offline USER --key K` skips the server.
+
+### Scenarios
+
+`--script FILE` runs a scenario; the first failed command or `wait` exits 1.
+They live in [scenarios/](scenarios) and take the peer's name from
+`MD_PEER` (the phone is `I2405`; a Mac or another mdctl works too):
+
+| Scenario | Checks |
+|---|---|
+| `chat-roundtrip.mdctl` | message to an `echo on` mdctl comes back |
+| `wake-by-push.mdctl` | a sleeping device is woken by push and the held message goes out |
+| `receipts.mdctl` | a message gets a `message-delivered` receipt |
+| `file-transfer.mdctl` | `MD_FILE` is sent and confirmed (`file-sent`) |
+| `controls.mdctl` | `status`, volume +1 then -1, `device-status-event` (no ring, no flashlight) |
+
+```sh
+set -a; . scripts/lab/test-creds.env; set +a
+MD_PEER=I2405 MD_FILE=/tmp/lab-file.bin cargo run -q -p mdctl -- \
+  --name lab-box --data /tmp/lab-box --script scripts/lab/scenarios/file-transfer.mdctl
+```
+
+`cargo test -p mdctl` runs the same kinds of scenario offline between two
+local mdctl processes (`apps/mdctl/tests/scenario.rs`).
 
 ## Android builds on the Mac
 

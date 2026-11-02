@@ -1,0 +1,7 @@
+# Send a message and wait for the other device's delivery receipt.
+#   MD_PEER=I2405 cargo run -q -p mdctl -- --name lab-box --data /tmp/lab-box \
+#     --script scripts/lab/scenarios/receipts.mdctl
+refresh
+send @${MD_PEER} lab receipts check
+wait message-delivered node=@${MD_PEER} timeout=60
+links
