@@ -273,6 +273,8 @@ pub fn test_config() -> CoreConfig {
 pub struct SignalHub {
     nodes: Mutex<HashMap<String, Weak<Engine<MockPlatform>>>>,
     log: Mutex<Vec<(String, String, String)>>,
+    /// Devices whose signals are logged but never delivered (switched off).
+    asleep: Mutex<std::collections::HashSet<String>>,
 }
 
 impl SignalHub {
@@ -293,6 +295,12 @@ impl SignalHub {
     /// `("a", "b", "punch_offer")`.
     pub fn log(&self) -> Vec<(String, String, String)> {
         self.log.lock().unwrap().clone()
+    }
+
+    /// From now on, signals to `node_id` are logged but not delivered, like
+    /// pushes to a phone that's switched off.
+    pub fn sleep(&self, node_id: &str) {
+        self.asleep.lock().unwrap().insert(node_id.to_string());
     }
 
     /// The signal types relayed so far, in order.
@@ -319,6 +327,9 @@ impl Signaler for SignalHub {
             .lock()
             .unwrap()
             .push((from.to_string(), to.to_string(), kind));
+        if self.asleep.lock().unwrap().contains(to) {
+            return Ok(());
+        }
         let from = from.to_string();
         std::thread::spawn(move || target.on_signal(&from, &payload));
         Ok(())

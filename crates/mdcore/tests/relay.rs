@@ -355,3 +355,27 @@ fn in_the_background_an_unused_relay_socket_is_closed() {
     a.engine.send(&b.node_id(), "back again").unwrap();
     b.sink.wait_for_message("back again");
 }
+
+#[test]
+fn a_message_to_a_device_thats_off_doesnt_keep_pushing_it() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let a = node("off-a", "alice", &reg, &hub, &relay);
+    let b = node("off-b", "alice", &reg, &hub, &relay);
+    TestNode::pair(&a, &b);
+    hub.sleep(&b.node_id());
+
+    assert_eq!(
+        a.engine.send(&b.node_id(), "are you there").unwrap(),
+        "queued"
+    );
+    // The ladder signals once; the relay route it leaves never goes live,
+    // and must not be taken for a dead link (reconnect = push) every 10 s.
+    std::thread::sleep(Duration::from_secs(16));
+    let offers = hub
+        .log()
+        .iter()
+        .filter(|(_, to, kind)| *to == b.node_id() && kind == "relay_offer")
+        .count();
+    assert_eq!(offers, 1, "{:?}", hub.kinds());
+}
