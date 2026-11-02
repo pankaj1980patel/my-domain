@@ -295,6 +295,16 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Relay socket closes when idle in the background (2026-11-02)
+
+- Once a device used the relay, its socket stayed open for good, pinging
+  every 20 s: an always-on WebSocket on the phone, and the stale socket
+  the server then sent signals into. In the background the idle closer
+  now also closes the relay socket once no peer is routed through it
+  (`relay::close_if_unused`), unless `signal_channel` keeps it open on
+  purpose. A send or a push opens it again. Test:
+  `in_the_background_an_unused_relay_socket_is_closed`.
+
 ## Server: no signals into a sleeping device's relay socket (2026-11-02)
 
 - The server delivered signals over a device's relay WebSocket whenever one

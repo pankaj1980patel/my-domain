@@ -304,3 +304,45 @@ fn the_relay_route_comes_back_after_a_direct_link_dies() {
     }
     b.sink.wait_for_message("via the relay again");
 }
+
+#[test]
+fn in_the_background_an_unused_relay_socket_is_closed() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let idle = |relay: &FakeRelay| CoreConfig {
+        idle_close_after: Some(Duration::from_secs(1)),
+        ..relay_only(relay)
+    };
+    let start = |id: &str| {
+        let n = TestNode::start_on_hub(id, &hub, idle(&relay));
+        n.engine
+            .auth_login(&reg.url(), "alice", "alice-pw")
+            .unwrap();
+        n.engine.set_encryption_key("family key").unwrap();
+        n
+    };
+    let (a, b) = (start("relay-idle-a"), start("relay-idle-b"));
+    TestNode::pair(&a, &b);
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("relay"));
+    assert!(relay.connected(&a.node_id()));
+
+    // Foreground: kept, even idle.
+    std::thread::sleep(Duration::from_millis(2500));
+    assert!(relay.connected(&a.node_id()));
+
+    // Background: the idle relayed link closes, then the socket itself.
+    a.engine.set_background(true);
+    let deadline = std::time::Instant::now() + WAIT;
+    while relay.connected(&a.node_id()) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "relay socket still open"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // A send brings it all back.
+    a.engine.send(&b.node_id(), "back again").unwrap();
+    b.sink.wait_for_message("back again");
+}

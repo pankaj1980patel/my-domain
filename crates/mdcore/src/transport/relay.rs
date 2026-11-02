@@ -34,6 +34,8 @@ use crate::platform::Platform;
 use super::{drop_live, handle_incoming, mark_live, TransportKind};
 
 static RELAY_CONN_SEQ: AtomicU64 = AtomicU64::new(4_000_000);
+/// Queued on a relay connection's own channel: close it.
+const CLOSE: &str = "\0close";
 
 /// This engine's relay connection, if open.
 pub struct RelayConn {
@@ -134,6 +136,31 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
     Ok(())
 }
 
+/// Close the relay connection if no peer is routed through it any more
+/// (their links closed as idle). Its 20 s pings would otherwise wake the
+/// radio all day; it opens again when a link needs it. Returns whether it
+/// was closed.
+pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>) -> bool {
+    // One lock at a time (other paths take them in the other order).
+    let Some((id, peers)) = ctx.relay.lock().as_ref().map(|r| (r.id, r.peers.clone())) else {
+        return false;
+    };
+    let in_use = {
+        let conns = ctx.ws_conns.lock();
+        peers
+            .iter()
+            .any(|(peer, conn)| conns.get(peer).is_some_and(|(c, _)| c == conn))
+    };
+    if in_use {
+        return false;
+    }
+    let relay = ctx.relay.lock();
+    relay
+        .as_ref()
+        .filter(|r| r.id == id && r.peers.len() == peers.len())
+        .is_some_and(|r| r.tx.send(CLOSE.to_string()).is_ok())
+}
+
 /// Route `peer` through the relay: register its outgoing queue in
 /// `ws_conns` (unless it already has a link). Does NOT mark it live; that
 /// happens when its `Hello` arrives.
@@ -221,6 +248,12 @@ fn relay_loop<P: Platform>(
         }
         let mut dead = false;
         while let Ok(out) = rx.try_recv() {
+            if out == CLOSE {
+                let _ = ws.close(None);
+                let _ = ws.flush();
+                dead = true;
+                break;
+            }
             if ws.send(WsMessage::Text(out)).is_err() {
                 dead = true;
                 break;
