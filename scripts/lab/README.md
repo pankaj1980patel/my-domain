@@ -27,6 +27,7 @@ environment variables in [common.sh](common.sh).
 | `scripts/lab/android.sh install` | Build the APK on the laptop, install it on the phone and launch it |
 | `scripts/lab/android.sh test` | Run instrumentation tests on the phone |
 | `scripts/lab/android.sh logcat` | Stream the app's logs |
+| `scripts/lab/scenarios.sh` | Run the mdctl scenarios against every lab device; pass/fail table |
 
 Cross-device scenario tests (`scenarios/*.mdctl`, driven by `mdctl`) are
 described below.
@@ -69,6 +70,11 @@ set -a; . scripts/lab/test-creds.env; set +a
 MD_PEER=I2405 MD_FILE=/tmp/lab-file.bin cargo run -q -p mdctl -- \
   --name lab-box --data /tmp/lab-box --script scripts/lab/scenarios/file-transfer.mdctl
 ```
+
+`scripts/lab/scenarios.sh` runs `receipts`, `controls` and `file-transfer`
+against each device in `MD_PEERS` (default: the Linux laptop and the phone)
+and prints a pass/fail table; `MD_SCENARIOS` picks others. The devices must
+be running the app, logged in to the test account.
 
 `cargo test -p mdctl` runs the same kinds of scenario offline between two
 local mdctl processes (`apps/mdctl/tests/scenario.rs`).
