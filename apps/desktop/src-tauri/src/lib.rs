@@ -281,23 +281,8 @@ fn scan_lan(engine: State<Eng>) {
 }
 
 #[tauri::command]
-fn connect_ws(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
-    engine.connect_ws(&node_id)
-}
-
-#[tauri::command]
 fn send_message(node_id: String, text: String, engine: State<Eng>) -> Result<String, CoreError> {
     engine.send(&node_id, &text)
-}
-
-#[tauri::command]
-fn directed_transport(engine: State<Eng>) -> String {
-    engine.directed_transport()
-}
-
-#[tauri::command]
-fn set_directed_transport(transport: String, engine: State<Eng>) {
-    engine.set_directed_transport(&transport)
 }
 
 #[tauri::command]
@@ -324,12 +309,10 @@ fn get_clipboard(node_id: String, engine: State<Eng>) -> Result<String, CoreErro
 fn add_manual_peer(
     name: String,
     ip: String,
-    tcp_port: u16,
-    udp_port: u16,
-    ws_port: u16,
+    quic_port: u16,
     engine: State<Eng>,
 ) -> Result<(), CoreError> {
-    engine.add_manual_peer(&name, &ip, tcp_port, udp_port, ws_port)
+    engine.add_manual_peer(&name, &ip, quic_port)
 }
 
 #[tauri::command]
@@ -395,11 +378,6 @@ fn fcm_selftest(
 #[tauri::command]
 fn report_firewall(engine: State<Eng>) {
     engine.report_firewall()
-}
-
-#[tauri::command]
-fn update_ws_open(open: bool, engine: State<Eng>) -> Result<(), CoreError> {
-    engine.update_ws_open(open)
 }
 
 /// Feed an inbound signal (when a desktop signal channel — e.g. SSE — is wired).
@@ -470,10 +448,7 @@ pub fn run() {
             logout,
             refresh_from_server,
             scan_lan,
-            connect_ws,
             send_message,
-            directed_transport,
-            set_directed_transport,
             enable_clipboard_sync,
             disable_clipboard_sync,
             clipboard_sync_enabled,
@@ -487,7 +462,6 @@ pub fn run() {
             firewall_check,
             fcm_selftest,
             report_firewall,
-            update_ws_open,
             on_signal,
             request_apps,
             subscribe_apps

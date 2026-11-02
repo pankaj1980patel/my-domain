@@ -34,48 +34,6 @@ fn pair_on_hub(test: &str, rungs: ConnectRungs) -> (TestNode, TestNode, std::syn
 const LADDER_WAIT: Duration = Duration::from_secs(20);
 
 #[test]
-fn rung1_lan_udp_ping_connects_without_any_signal() {
-    let (a, b, hub) = pair_on_hub(
-        "rung-lan",
-        ConnectRungs {
-            lan_udp: true,
-            ..ConnectRungs::none()
-        },
-    );
-    a.engine.connect(&b.node_id()).unwrap();
-    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("udp"));
-    assert!(
-        hub.log().is_empty(),
-        "same-LAN needs no server: {:?}",
-        hub.log()
-    );
-
-    // The link carries chat.
-    a.engine.send(&b.node_id(), "over the lan link").unwrap();
-    b.sink.wait_for_message("over the lan link");
-}
-
-#[test]
-fn rung3_signaled_websocket_connects_via_start_ws_and_ws_ready() {
-    let (a, b, hub) = pair_on_hub(
-        "rung-sigws",
-        ConnectRungs {
-            signaled_ws: true,
-            ..ConnectRungs::none()
-        },
-    );
-    a.engine.connect(&b.node_id()).unwrap();
-    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("ws"));
-    assert_eq!(hub.kinds(), vec!["start_ws", "ws_ready"]);
-
-    assert_eq!(
-        a.engine.send(&b.node_id(), "over signaled ws").unwrap(),
-        "WS"
-    );
-    b.sink.wait_for_message("over signaled ws");
-}
-
-#[test]
 fn rung4_hole_punch_connects_and_carries_chat() {
     let (a, b, hub) = pair_on_hub(
         "rung-punch",
@@ -216,26 +174,6 @@ fn with_every_rung_enabled_quic_is_preferred() {
         Some("quic")
     );
     assert!(hub.log().is_empty());
-}
-
-#[test]
-fn a_peer_without_quic_falls_through_to_the_next_rung() {
-    let (a, b, _hub) = pair_on_hub(
-        "quic-skip",
-        ConnectRungs {
-            quic: true,
-            lan_udp: true,
-            ..ConnectRungs::none()
-        },
-    );
-    // As an older build would advertise it: no QUIC port.
-    let mut old_b = b.as_peer();
-    old_b.quic_port = 0;
-    a.engine.upsert_peer(old_b);
-
-    a.engine.connect(&b.node_id()).unwrap();
-    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("udp"));
-    assert!(!a.ladder_stages(&b).contains(&"quic".to_string()));
 }
 
 /// A node whose NAT looks `kind` to it: two fake STUN servers that report

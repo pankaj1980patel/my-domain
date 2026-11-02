@@ -5,44 +5,33 @@ use super::*;
 impl<P: Platform> Engine<P> {
     // --- messaging ---
 
-    pub fn connect_ws(&self, node_id: &str) -> crate::Result<()> {
-        let peer = self
-            .ctx
-            .peers
-            .lock()
-            .get(node_id)
-            .cloned()
-            .ok_or(CoreError::PeerNotFound)?;
-        if peer.ws_port == 0 {
-            return Err("peer has no WebSocket port".into());
-        }
-        if self.ctx.ws_conns.lock().contains_key(node_id) {
-            return Ok(());
-        }
-        ws::ws_connect(self.net_ctx(), &peer.ip, peer.ws_port).map_err(Into::into)
-    }
-
-    /// Send a chat message, auto-selecting the transport: the active persistent
-    /// connection (WS/punch/WebRTC) if one is live, else the directed transport
-    /// (UDP/TCP). Returns the protocol used so the UI can report it.
+    /// Send a chat message over the peer's live link, opening a QUIC link
+    /// first if there is none. With no way to reach the peer right now, the
+    /// connect ladder starts in the background and this returns `NoLink`.
+    /// Returns the transport used so the UI can report it.
     pub fn send(&self, node_id: &str, text: &str) -> crate::Result<String> {
         let from = self
             .username
             .lock()
             .clone()
             .unwrap_or_else(|| self.ctx.identity.lock().name.clone());
-        self.ensure_link(node_id);
-        let proto = self.proto_for(node_id);
-        transport::send_payload(
-            &self.ctx.peers,
-            &self.ctx.ws_conns,
-            &self.ctx.key,
-            &from,
-            node_id,
-            proto,
-            text,
-        )?;
-        Ok(self.display_transport(node_id, proto))
+        if self.ctx.key.lock().is_none() {
+            return Err(CoreError::NoKey);
+        }
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        let linked = self.ensure_link(node_id);
+        // A hand-entered peer may just have been re-listed under its real id.
+        let node_id = &self.resolve_manual(node_id);
+        if !linked && !self.ctx.ws_conns.lock().contains_key(node_id.as_str()) {
+            let _ = self.connect(node_id);
+            return Err(CoreError::NoLink(
+                "not connected yet; connecting in the background".into(),
+            ));
+        }
+        transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, text)?;
+        Ok(self.display_transport(node_id))
     }
 
     // --- clipboard ---
@@ -76,17 +65,9 @@ impl<P: Platform> Engine<P> {
         let from = self.ctx.identity.lock().name.clone();
         let req = serde_json::json!({ "type": "clipboard_request", "from": me }).to_string();
         self.ensure_link(node_id);
-        let proto = self.proto_for(node_id);
-
-        if let Err(e) = transport::send_payload(
-            &self.ctx.peers,
-            &self.ctx.ws_conns,
-            &self.ctx.key,
-            &from,
-            node_id,
-            proto,
-            &req,
-        ) {
+        if let Err(e) =
+            transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, &req)
+        {
             self.ctx.clip_pending.lock().remove(node_id);
             return Err(e);
         }
@@ -99,5 +80,21 @@ impl<P: Platform> Engine<P> {
         clip.set(&content);
         *self.ctx.clip_last.lock() = content.clone();
         Ok(content)
+    }
+
+    /// `manual:<ip>` placeholders are replaced by the real node id once a
+    /// QUIC link reveals it; map a stale placeholder to that id.
+    fn resolve_manual(&self, node_id: &str) -> String {
+        let Some(ip) = node_id.strip_prefix("manual:") else {
+            return node_id.to_string();
+        };
+        let peers = self.ctx.peers.lock();
+        if peers.contains_key(node_id) {
+            return node_id.to_string();
+        }
+        peers
+            .values()
+            .find(|p| p.source == Source::Manual && p.ip == ip)
+            .map_or_else(|| node_id.to_string(), |p| p.node_id.clone())
     }
 }

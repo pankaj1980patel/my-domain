@@ -397,10 +397,14 @@ async fn run_connection<P: Platform>(
         _ => return,
     };
 
+    // A hand-entered peer is listed as `manual:<ip>` until we learn its real
+    // node id: now. Swap the placeholder for the real id, keeping its name.
+    adopt_manual_peer(&ctx, &peer_id, canonical(conn.remote_address()));
+
     // Register as this peer's live link. One link per peer. If the peer
     // already has one:
     // - a relay link (or one that never went live): replace it, direct wins;
-    // - another direct non-QUIC link (WS, UDP, WebRTC): keep it;
+    // - another direct non-QUIC link (WebRTC): keep it;
     // - a QUIC link in the SAME direction from a different address: the peer
     //   moved networks, so the new one replaces the stale one;
     // - a QUIC link in the OPPOSITE direction (both sides dialed at once):
@@ -422,7 +426,7 @@ async fn run_connection<P: Platform>(
                 .map(|pc| (pc.dialed, pc.remote, pc.conn.clone()));
             let replace = match &existing {
                 // Not QUIC: replace the relay (or a link that never went
-                // live); keep a working direct link (WS, UDP, WebRTC).
+                // live); keep a working direct link (WebRTC).
                 None => !super::is_direct(&ctx, &peer_id),
                 Some((was_dialed, was_remote, _)) if *was_dialed == dialer => *was_remote != remote,
                 Some(_) => dialer == (me < peer_id),
@@ -643,4 +647,86 @@ impl rustls::client::danger::ServerCertVerifier for AcceptAnyCert {
     fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
         self.0.signature_verification_algorithms.supported_schemes()
     }
+}
+
+/// If `remote` is the address of a hand-entered `manual:<ip>` peer, replace
+/// that placeholder with an entry under the peer's real node id.
+fn adopt_manual_peer<P: Platform>(ctx: &NetCtx<P>, peer_id: &str, remote: SocketAddr) {
+    let manual_id = format!("manual:{}", remote.ip());
+    let adopted = {
+        let mut peers = ctx.peers.lock();
+        match peers.remove(&manual_id) {
+            Some(mut p) if !peers.contains_key(peer_id) => {
+                p.node_id = peer_id.to_string();
+                p.quic_port = remote.port();
+                peers.insert(peer_id.to_string(), p);
+                true
+            }
+            Some(p) => {
+                // Already known under its real id: just drop the placeholder.
+                drop(p);
+                true
+            }
+            None => false,
+        }
+    };
+    if adopted {
+        crate::engine::emit_peers(ctx);
+    }
+}
+
+/// How long to wait before auto-dialing a peer again after a failed attempt.
+const QUIC_RETRY_AFTER: Duration = Duration::from_secs(30);
+
+/// Make sure there is a live link to `node_id` if QUIC can provide one:
+/// true at once if a link exists; otherwise dials the peer's QUIC addresses
+/// (at most ~3 s) unless auto-QUIC is off, the peer has no QUIC port, or a
+/// dial failed in the last `QUIC_RETRY_AFTER`. True if a link is up after.
+///
+/// Blocks on the QUIC runtime: never call from inside it.
+pub fn ensure_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
+    if ctx.ws_conns.lock().contains_key(node_id) {
+        return true;
+    }
+    if !ctx.config.auto_quic {
+        return false;
+    }
+    let Some(peer) = ctx.peers.lock().get(node_id).cloned() else {
+        return false;
+    };
+    if peer.quic_port == 0 {
+        return false;
+    }
+    if let Some(t) = ctx.quic_failed.lock().get(node_id) {
+        if t.elapsed() < QUIC_RETRY_AFTER {
+            return false;
+        }
+    }
+    let ok = ctx
+        .quic
+        .connect_any(ctx.clone(), &peer.quic_targets())
+        .is_ok()
+        && wait_for_link(ctx, node_id, Duration::from_secs(2));
+    if ok {
+        ctx.quic_failed.lock().remove(node_id);
+    } else {
+        ctx.quic_failed
+            .lock()
+            .insert(node_id.to_string(), std::time::Instant::now());
+    }
+    ok
+}
+
+/// Wait until `node_id` has an entry in `ws_conns` (a link registered its
+/// outgoing queue). The QUIC dial returns after the handshake; registration
+/// happens a moment later, after the `Hello` exchange.
+fn wait_for_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str, max: Duration) -> bool {
+    let deadline = std::time::Instant::now() + max;
+    while std::time::Instant::now() < deadline {
+        if ctx.ws_conns.lock().contains_key(node_id) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    false
 }

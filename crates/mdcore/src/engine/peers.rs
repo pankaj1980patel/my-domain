@@ -107,14 +107,7 @@ impl<P: Platform> Engine<P> {
         netchange::on_network_change(&self.handles(), new_ip);
     }
 
-    pub fn add_manual_peer(
-        &self,
-        name: &str,
-        ip: &str,
-        tcp_port: u16,
-        udp_port: u16,
-        ws_port: u16,
-    ) -> crate::Result<()> {
+    pub fn add_manual_peer(&self, name: &str, ip: &str, quic_port: u16) -> crate::Result<()> {
         let parsed: Ipv4Addr = ip
             .trim()
             .parse()
@@ -131,10 +124,12 @@ impl<P: Platform> Engine<P> {
                 node_id,
                 name: display,
                 ip: parsed.to_string(),
-                tcp_port,
-                udp_port,
-                ws_port,
-                quic_port: 0, // unknown for a hand-entered peer
+                tcp_port: 0,
+                udp_port: 0,
+                ws_port: 0,
+                // Listed as `manual:<ip>` until the first QUIC link reveals
+                // the real node id (transport::quic::adopt_manual_peer).
+                quic_port,
                 source: Source::Manual,
                 ws_open: false,
                 inbound_blocked: false,

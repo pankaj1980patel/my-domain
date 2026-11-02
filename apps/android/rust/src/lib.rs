@@ -375,20 +375,8 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeScanLan<'l>(
     ret(&mut env, String::new())
 }
 
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeConnectWs<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    node_id: JString<'l>,
-) -> jstring {
-    let node_id = jstr(&mut env, &node_id, "");
-    let out = with_engine(|e| e.connect_ws(&node_id));
-    ret(&mut env, out)
-}
-
-/// Send a message; the engine auto-selects the transport (active connection if
-/// any, else the directed UDP/TCP). Returns the protocol used on success, or
-/// "ERROR: …" on failure.
+/// Send a message over the live link (a QUIC link is opened first if there
+/// is none). Returns the transport used on success, or "ERROR: …" on failure.
 #[no_mangle]
 pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSend<'l>(
     mut env: JNIEnv<'l>,
@@ -406,31 +394,6 @@ pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSend<'l>(
         None => "ERROR: not started".into(),
     };
     ret(&mut env, out)
-}
-
-/// Directed transport ("UDP" | "TCP") used when no live connection exists.
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeDirectedTransport<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-) -> jstring {
-    let out = engine()
-        .map(|e| e.directed_transport())
-        .unwrap_or_else(|| "UDP".into());
-    ret(&mut env, out)
-}
-
-#[no_mangle]
-pub extern "system" fn Java_com_mydomain_android_RustNet_nativeSetDirectedTransport<'l>(
-    mut env: JNIEnv<'l>,
-    _c: JClass<'l>,
-    transport: JString<'l>,
-) -> jstring {
-    let transport = jstr(&mut env, &transport, "UDP");
-    if let Some(e) = engine() {
-        e.set_directed_transport(&transport);
-    }
-    ret(&mut env, String::new())
 }
 
 #[no_mangle]

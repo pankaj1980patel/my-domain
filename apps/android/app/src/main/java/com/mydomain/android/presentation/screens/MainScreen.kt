@@ -82,8 +82,6 @@ fun MainScreen(prefs: SharedPreferences, onLogout: () -> Unit) {
     var connected by remember { mutableStateOf<Set<String>>(emptySet()) }
     val log = remember { mutableStateListOf<LogEntry>() }
     var selected by remember { mutableStateOf<String?>(null) }
-    // Directed transport used only when there's no live connection (default UDP).
-    var directedTransport by remember { mutableStateOf(RustNet.nativeDirectedTransport().ifEmpty { "UDP" }) }
     var message by remember { mutableStateOf("") }
     var status by remember { mutableStateOf("") }
     var notifTitle by remember { mutableStateOf("") }
@@ -244,16 +242,13 @@ fun MainScreen(prefs: SharedPreferences, onLogout: () -> Unit) {
                             Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
                                     Text(sel.name, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                    Text("${sel.ip} · tcp ${sel.tcpPort} · udp ${sel.udpPort} · ws ${sel.wsPort}",
-                                        fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                                    Text(sel.ip, fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
                                     Text(if (isConn) "● connected" else "● online",
                                         fontSize = 12.sp, color = if (isConn) CONNECTED else ONLINE)
                                 }
-                                if (sel.wsPort != 0) {
-                                    OutlinedButton(enabled = !isConn, onClick = {
-                                        scope.launch { val e = withContext(Dispatchers.IO) { RustNet.nativeConnectWs(sel.nodeId) }; if (e.isNotEmpty()) status = e }
-                                    }) { Text(if (isConn) "WS ✓" else "Connect") }
-                                }
+                                OutlinedButton(enabled = !isConn, onClick = {
+                                    scope.launch { val e = withContext(Dispatchers.IO) { RustNet.nativeConnect(sel.nodeId) }; if (e.isNotEmpty()) status = e }
+                                }) { Text(if (isConn) "Connected" else "Connect") }
                             }
                         }
                     }
@@ -265,18 +260,9 @@ fun MainScreen(prefs: SharedPreferences, onLogout: () -> Unit) {
                                 Text("✉  Send message", fontWeight = FontWeight.SemiBold)
                                 Text(
                                     if (connected.contains(sel.nodeId)) "Sends over the active connection."
-                                    else "No live connection — sends directly over $directedTransport.",
+                                    else "Not connected yet; sending connects first.",
                                     fontSize = 12.sp, modifier = Modifier.padding(vertical = 6.dp)
                                 )
-                                // Directed transport (used only when not connected).
-                                Row(Modifier.padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    listOf("UDP", "TCP").forEach { pr ->
-                                        FilterChip(selected = directedTransport == pr, onClick = {
-                                            directedTransport = pr
-                                            scope.launch(Dispatchers.IO) { RustNet.nativeSetDirectedTransport(pr) }
-                                        }, label = { Text(pr) })
-                                    }
-                                }
                                 OutlinedTextField(message, { message = it }, label = { Text("Message") }, modifier = Modifier.fillMaxWidth())
                                 Button(onClick = {
                                     val node = sel.nodeId

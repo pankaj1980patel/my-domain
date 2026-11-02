@@ -200,32 +200,9 @@ class NetService : Service() {
             }
         }
         
-        // Polling peers and connecting WS in background if needed
-        serviceScope.launch {
-            while (isActive) {
-                if (RustNet.nativeIsReady() == "true") {
-                    // Try to maintain WS connections with known peers
-                    val peersJson = RustNet.nativeGetPeers()
-                    val peers = JSONArray(peersJson)
-                    val connectedJson = RustNet.nativeConnectedPeers()
-                    val connectedIds = JSONArray(connectedJson)
-                    val connectedSet = mutableSetOf<String>()
-                    for (i in 0 until connectedIds.length()) connectedSet.add(connectedIds.getString(i))
+        // No background reconnect loop: links open on demand (a send opens a
+        // QUIC link), and peers reach us through a push when we have none.
 
-                    for (i in 0 until peers.length()) {
-                        val p = peers.getJSONObject(i)
-                        val nodeId = p.getString("node_id")
-                        val wsPort = p.optInt("ws_port", 0)
-                        if (wsPort != 0 && !connectedSet.contains(nodeId)) {
-                            // Try to connect WS in background
-                            RustNet.nativeConnectWs(nodeId)
-                        }
-                    }
-                }
-                delay(10000) // Every 10 seconds
-            }
-        }
-        
         // Track the local clipboard. We always remember the latest value (so we
         // can answer passive "get clipboard" pulls), but only broadcast changes
         // to peers while ACTIVE auto-sync is enabled.
@@ -283,7 +260,7 @@ class NetService : Service() {
     }
 
     /** Send a clipboard control message to one peer over the active connection
-     *  (the engine auto-selects: live link if any, else directed UDP/TCP). */
+     *  (over the live link; the engine opens a QUIC link if there is none). */
     private fun sendClip(nodeId: String, json: String) {
         serviceScope.launch {
             RustNet.nativeSend(nodeId, json)

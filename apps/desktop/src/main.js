@@ -26,15 +26,10 @@ function dlog(kind, label, detail) {
   else updateDebugBadge();
 }
 
-const wsAddr = (p) => (p ? `ws://${p.ip}:${p.ws_port}` : "");
 
 // Wrapped Tauri bridge — used everywhere below instead of the raw handles.
 const invoke = async (cmd, args) => {
   dlog("invoke", cmd, args);
-  if (cmd === "connect_ws" && args && args.nodeId) {
-    const p = peers.find((x) => x.node_id === args.nodeId);
-    dlog("ws", "ws", `dialing ${p ? `${wsAddr(p)} (${p.name})` : args.nodeId}…`);
-  }
   try {
     const r = await _core.invoke(cmd, args);
     dlog("result", cmd, r);
@@ -138,9 +133,7 @@ function renderMeDetails() {
   el("me-details").innerHTML = `
     <dt>Name</dt><dd>${esc(identity.name)}</dd>
     <dt>IP</dt><dd>${esc(identity.ip)}</dd>
-    <dt>TCP</dt><dd>${identity.tcp_port}</dd>
-    <dt>UDP</dt><dd>${identity.udp_port}</dd>
-    <dt>WS</dt><dd>${identity.ws_port}</dd>
+    <dt>QUIC</dt><dd>${identity.quic_port}</dd>
     <dt>Node</dt><dd>${esc(identity.node_id)}</dd>`;
 }
 
@@ -195,7 +188,7 @@ function renderDevice() {
   const isConn = !!tx;
   el("dv-avatar").textContent = avatarText(p.name);
   el("dv-name").textContent = p.name;
-  el("dv-sub").textContent = `${p.ip} · tcp ${p.tcp_port} · udp ${p.udp_port} · ws ${p.ws_port}`;
+  el("dv-sub").textContent = `${p.ip} · quic ${p.quic_port}`;
   const status = el("dv-status");
   status.textContent = isConn ? `connected · ${tx}` : "not connected";
   status.className = "pill " + (isConn ? "connected" : "");
@@ -288,8 +281,8 @@ async function onSend(e) {
   if (!text) return setStatus("send-status", "Message is empty.", false);
   el("send-btn").disabled = true;
   try {
-    // Core auto-selects the transport: the active P2P connection if one is
-    // live, else the directed transport (UDP/TCP). It returns what it used.
+    // Sends over the live link (the core opens a QUIC link first if there is
+    // none) and returns the transport it used.
     const protocol = await invoke("send_message", { nodeId: p.node_id, text });
     logActivity({ node: p.node_id, dir: "out", name: p.name, ip: p.ip, protocol, text });
     el("msg-input").value = "";
@@ -301,8 +294,7 @@ async function onSend(e) {
   }
 }
 
-// Reflect which transport the next message will use for the selected device.
-let directedTransport = "UDP";
+// Reflect how the next message will travel for the selected device.
 function updateSendTransport() {
   const hint = el("send-transport");
   if (!hint) return;
@@ -310,7 +302,7 @@ function updateSendTransport() {
   const tx = p && connected.get(p.node_id);
   hint.textContent = tx
     ? `Sends over the active ${tx.toUpperCase()} connection.`
-    : `No live connection — sends directly over ${directedTransport}.`;
+    : "Not connected yet; sending connects first.";
 }
 
 async function refreshClipToggle() {
@@ -360,27 +352,6 @@ async function openSettings() {
   el("nav-settings").classList.add("active");
   showView();
   renderDevices();
-  await refreshDirectedTransport();
-}
-async function refreshDirectedTransport() {
-  try {
-    directedTransport = (await invoke("directed_transport")) || "UDP";
-  } catch {
-    directedTransport = "UDP";
-  }
-  const radio = document.querySelector(`input[name="dtransport"][value="${directedTransport}"]`);
-  if (radio) radio.checked = true;
-}
-async function onTransportChange(e) {
-  const transport = e.target.value;
-  try {
-    await invoke("set_directed_transport", { transport });
-    directedTransport = transport;
-    updateSendTransport();
-    toast(`Direct transport set to ${transport}`);
-  } catch (err) {
-    setStatus("fw-status", String(err), false);
-  }
 }
 async function onUpdateKey(e) {
   e.preventDefault();
@@ -413,14 +384,13 @@ async function onAddManual(e) {
   e.preventDefault();
   const name = el("m-name").value.trim();
   const ip = el("m-ip").value.trim();
-  const tcpPort = parseInt(el("m-tcp").value, 10) || 0;
-  const udpPort = parseInt(el("m-udp").value, 10) || 0;
-  const wsPort = parseInt(el("m-ws").value, 10) || 0;
+  const quicPort = parseInt(el("m-quic").value, 10) || 0;
   if (!ip) return setStatus("manual-status", "Enter an IP.", false);
+  if (!quicPort) return setStatus("manual-status", "Enter the device's QUIC port (Settings → This device).", false);
   try {
-    await invoke("add_manual_peer", { name, ip, tcpPort, udpPort, wsPort });
+    await invoke("add_manual_peer", { name, ip, quicPort });
     await loadPeers();
-    el("m-name").value = el("m-ip").value = el("m-tcp").value = el("m-udp").value = el("m-ws").value = "";
+    el("m-name").value = el("m-ip").value = el("m-quic").value = "";
     closeAdd();
     toast(`Added ${ip}`);
   } catch (err) {
@@ -519,7 +489,7 @@ async function init() {
     el("btn-connect").textContent = "Connecting…";
     el("btn-connect").disabled = true;
     // The ladder (connect) runs in the background and reports via connect-progress
-    // + peer-connected; it tries same-LAN UDP, direct/FCM WS, punch, then WebRTC.
+    // + peer-connected: direct QUIC, signaled QUIC, relay, then punch / WebRTC.
     try { await invoke("connect", { nodeId: p.node_id }); } catch (err) { toast(String(err)); renderDevice(); }
   });
   el("btn-remove").addEventListener("click", async () => {
@@ -533,7 +503,6 @@ async function init() {
   el("settings-form").addEventListener("submit", onUpdateKey);
   el("s-genkey").addEventListener("click", async () => { el("s-key").value = await invoke("generate_key"); });
   el("btn-firewall").addEventListener("click", onFirewall);
-  el("transport-seg").addEventListener("change", onTransportChange);
   el("s-logout").addEventListener("click", async () => { await invoke("logout"); location.reload(); });
 
   // modal

@@ -1,5 +1,5 @@
 //! The connect ladder: try the cheapest way to reach a peer first, fall back
-//! rung by rung (LAN UDP, direct WS, signaled WS, hole punch, WebRTC).
+//! rung by rung (direct QUIC, signaled QUIC, relay, hole punch, WebRTC).
 //! See learnings/01-architecture.md.
 
 use super::signaling::{relay_target, send_signal_via};
@@ -23,30 +23,11 @@ impl<P: Platform> Engine<P> {
     }
 }
 
-/// Whether a peer reported it can't receive inbound connections. LAN/manual
-/// peers default to `false` (unknown → attempt direct); registry peers carry the
-/// real flag the device self-reported via `report_firewall`.
-fn peer_inbound_blocked(peer: &Peer) -> bool {
-    peer.inbound_blocked
-}
-
 // ---------------------------------------------------------------------------
 // Connection ladder (runs off-thread; uses only NetCtx + the server creds, so
 // it doesn't need `&Engine`). Each rung emits ConnectProgress and bails to the
 // next on timeout. Rungs are ordered cheapest-first.
 // ---------------------------------------------------------------------------
-
-/// Same-LAN heuristic: LAN-discovered peer, or our IPs share a /24.
-fn same_lan<P: Platform>(ctx: &NetCtx<P>, peer: &Peer) -> bool {
-    if peer.source == Source::Lan {
-        return true;
-    }
-    let my_ip = ctx.identity.lock().ip.clone();
-    match (my_ip.parse::<Ipv4Addr>(), peer.ip.parse::<Ipv4Addr>()) {
-        (Ok(a), Ok(b)) => a.octets()[..3] == b.octets()[..3],
-        _ => false,
-    }
-}
 
 fn is_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     ctx.p2p_conns.lock().contains_key(node_id)
@@ -74,29 +55,6 @@ fn wait_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str, ms: u64) -> bool {
         }
     }
     is_live(ctx, node_id)
-}
-
-/// Send one UDP ping and wait briefly for the pong to flip the peer live.
-fn udp_ping_connect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
-    let (me, name) = {
-        let id = ctx.identity.lock();
-        (id.node_id.clone(), id.name.clone())
-    };
-    let ping = serde_json::json!({ "type": "p2p_ping", "from": me }).to_string();
-    if transport::send_payload(
-        &ctx.peers,
-        &ctx.ws_conns,
-        &ctx.key,
-        &name,
-        node_id,
-        transport::SendPath::Udp,
-        &ping,
-    )
-    .is_err()
-    {
-        return false;
-    }
-    wait_direct(ctx, node_id, 2000)
 }
 
 pub(super) fn run_connect_ladder<P: Platform>(
@@ -139,7 +97,6 @@ fn run_ladder<P: Platform>(
         return;
     };
 
-    // Rung 1 — same-LAN UDP ping/pong (no FCM, no server).
     let rungs = ctx.config.rungs.clone();
 
     // Rung 0 — direct QUIC to the peer's advertised address. One handshake
@@ -153,24 +110,6 @@ fn run_ladder<P: Platform>(
             && wait_direct(&ctx, &node_id, 3000)
         {
             return; // the link emits PeerConnected
-        }
-    }
-
-    if rungs.lan_udp && same_lan(&ctx, &peer) {
-        emit("udp_ping", None);
-        if udp_ping_connect(&ctx, &node_id) {
-            emit("connected", Some("udp".into()));
-            return;
-        }
-    }
-
-    // Rung 2 — direct WS if the peer advertises a reachable WS server.
-    if rungs.direct_ws && peer.ws_port != 0 && peer.ws_open && !peer_inbound_blocked(&peer) {
-        emit("direct_ws", None);
-        if ws::ws_connect(ctx.clone(), &peer.ip, peer.ws_port).is_ok()
-            && wait_direct(&ctx, &node_id, 3000)
-        {
-            return; // WS handler emits PeerConnected
         }
     }
 
@@ -198,25 +137,6 @@ fn run_ladder<P: Platform>(
             }
         }
         ctx.quic_waiters.lock().remove(&sid);
-    }
-
-    // Rung 3b — FCM-coordinated WS: ask the peer to open its WS and reply WsReady,
-    // which our on_signal dials. (1 FCM round trip.)
-    if rungs.signaled_ws {
-        emit("via_signal", None);
-        let sid = uuid::Uuid::new_v4().to_string();
-        if send_signal_via(
-            &server_url,
-            &token,
-            &ctx,
-            &node_id,
-            &Signal::StartWs { sid },
-        )
-        .is_ok()
-            && wait_direct(&ctx, &node_id, 8000)
-        {
-            return;
-        }
     }
 
     // Relay through the server, BEFORE the slow rungs: if the quick rungs

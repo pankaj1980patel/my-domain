@@ -28,22 +28,6 @@ pub struct Candidate {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Signal {
-    /// "open your WS server and tell me when it's reachable".
-    StartWs {
-        sid: String,
-    },
-    /// Sent after `ws_open` is live; the initiator dials this endpoint.
-    WsReady {
-        sid: String,
-        ip: String,
-        ws_port: u16,
-    },
-    /// Couldn't open a reachable WS (e.g. also firewalled).
-    WsUnavailable {
-        sid: String,
-        reason: String,
-    },
-
     /// UDP hole punch: exchange candidates and a relative start time.
     PunchOffer {
         sid: String,

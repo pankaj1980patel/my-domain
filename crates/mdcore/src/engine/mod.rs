@@ -7,7 +7,7 @@
 
 use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, TcpListener, UdpSocket};
+use std::net::{Ipv4Addr, UdpSocket};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
@@ -26,13 +26,14 @@ use crate::registry::{
     auth_call, base, registry_fetch, registry_register, verify_password_call, RegistryDevice,
 };
 use crate::signal::{Signal, Signaler};
-use crate::transport::{self, ws, P2pConns};
+use crate::transport::{self, P2pConns};
 
 mod background;
 mod ladder;
 mod messaging;
 mod netchange;
 mod peers;
+pub(crate) use peers::emit_peers;
 mod session;
 mod sharing;
 mod signaling;
@@ -85,9 +86,10 @@ pub struct NetCtx<P: Platform> {
     pub installed_apps: Arc<Mutex<String>>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
-    /// Directed transport for peers with no live persistent channel (UDP by
-    /// default). A live WS/punch/WebRTC link always wins over this.
-    pub directed_transport: Arc<Mutex<transport::Directed>>,
+    /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC
+    /// skips them for a while (`transport::quic::ensure_link`), so an
+    /// unreachable peer doesn't cost a connect timeout on every message.
+    pub quic_failed: Arc<Mutex<HashMap<String, std::time::Instant>>>,
     /// Rate limiter for "could not decrypt" notices, keyed by sender IP.
     pub decrypt_fail_last: DecryptFailures,
     /// Every envelope that failed to decrypt, notified or not.
@@ -133,7 +135,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             control: self.control.clone(),
             installed_apps: self.installed_apps.clone(),
             subs: self.subs.clone(),
-            directed_transport: self.directed_transport.clone(),
+            quic_failed: self.quic_failed.clone(),
             decrypt_fail_last: self.decrypt_fail_last.clone(),
             decrypt_fail_count: self.decrypt_fail_count.clone(),
             config: self.config.clone(),
@@ -173,14 +175,7 @@ pub struct Engine<P: Platform> {
     disco_send: Arc<UdpSocket>,
     /// Owns the QUIC runtime; dropped (after `Drop::drop` runs) with the engine.
     _quic: transport::quic::QuicNode,
-    /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC skips
-    /// them for `QUIC_RETRY_AFTER`, so an unreachable peer doesn't cost a
-    /// connect timeout on every message.
-    quic_failed: Mutex<HashMap<String, std::time::Instant>>,
 }
-
-/// How long to wait before auto-dialing a peer again after a failed attempt.
-const QUIC_RETRY_AFTER: Duration = Duration::from_secs(30);
 
 /// kv key holding the QUIC port of the last run.
 const QUIC_PORT_KEY: &str = "quic_port";
@@ -208,15 +203,6 @@ impl<P: Platform> Engine<P> {
         };
         let name = platform.device_name();
 
-        let tcp_listener = TcpListener::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
-        let tcp_port = tcp_listener.local_addr().map_err(|e| e.to_string())?.port();
-        let udp_msg_socket = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
-        let udp_port = udp_msg_socket
-            .local_addr()
-            .map_err(|e| e.to_string())?
-            .port();
-        let ws_listener = TcpListener::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
-        let ws_port = ws_listener.local_addr().map_err(|e| e.to_string())?.port();
         // Same QUIC port as last run when it's free: peers' cached addresses
         // and the router mapping then survive a restart.
         let last_port = platform
@@ -230,9 +216,10 @@ impl<P: Platform> Engine<P> {
             node_id,
             name,
             ip: platform.local_ip(),
-            tcp_port,
-            udp_port,
-            ws_port,
+            // Retired transports; the registry still expects the fields.
+            tcp_port: 0,
+            udp_port: 0,
+            ws_port: 0,
             quic_port: quic.link().port(),
             ipv6: platform.local_ipv6(),
             mapped_quic: None,
@@ -252,7 +239,6 @@ impl<P: Platform> Engine<P> {
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));
-        let directed_transport = Arc::new(Mutex::new(transport::Directed::default()));
 
         // Discovery socket. If multicast bind fails (some networks/permissions),
         // fall back to a plain UDP socket for sending — messaging still works.
@@ -289,7 +275,7 @@ impl<P: Platform> Engine<P> {
             control: control.clone(),
             installed_apps: installed_apps.clone(),
             subs: subs.clone(),
-            directed_transport: directed_transport.clone(),
+            quic_failed: Arc::default(),
             decrypt_fail_last: Arc::default(),
             decrypt_fail_count: Arc::default(),
             config: Arc::new(config),
@@ -303,19 +289,6 @@ impl<P: Platform> Engine<P> {
             recent_signals: Arc::default(),
         };
 
-        // Direct messaging receivers.
-        {
-            let ctx = ctx.clone();
-            std::thread::spawn(move || transport::tcp_recv_loop(tcp_listener, ctx));
-        }
-        {
-            let ctx = ctx.clone();
-            std::thread::spawn(move || transport::udp_recv_loop(udp_msg_socket, ctx));
-        }
-        {
-            let ctx = ctx.clone();
-            std::thread::spawn(move || ws::ws_server_loop(ws_listener, ctx));
-        }
         ctx.quic.spawn_accept_loop(ctx.clone());
         if ctx.config.mdns {
             crate::mdns::start(ctx.clone(), ctx.config.mdns_loopback);
@@ -333,7 +306,6 @@ impl<P: Platform> Engine<P> {
             username: Arc::new(Mutex::new(None)),
             disco_send,
             _quic: quic,
-            quic_failed: Mutex::default(),
         };
         engine.detect_nat();
         background::spawn_ip_watcher(engine.handles());
@@ -370,41 +342,13 @@ impl<P: Platform> Engine<P> {
         self.ctx.shutdown.load(Ordering::Relaxed)
     }
 
-    /// Make sure there is a live link to `node_id` if QUIC can provide one:
-    /// returns at once if a link exists; otherwise dials the peer's QUIC port
-    /// (at most ~3 s) unless auto-QUIC is off, the peer has no QUIC port, or a
-    /// dial failed in the last `QUIC_RETRY_AFTER`.
+    /// Make sure there is a live link to `node_id` if QUIC can provide one
+    /// (see `transport::quic::ensure_link`).
     ///
     /// Only call from API threads (`send`, `get_clipboard`): it blocks on the
     /// QUIC runtime, which would panic if called from inside that runtime.
-    fn ensure_link(&self, node_id: &str) {
-        if !self.ctx.config.auto_quic || self.ctx.ws_conns.lock().contains_key(node_id) {
-            return;
-        }
-        let Some(peer) = self.ctx.peers.lock().get(node_id).cloned() else {
-            return;
-        };
-        if peer.quic_port == 0 {
-            return;
-        }
-        if let Some(t) = self.quic_failed.lock().get(node_id) {
-            if t.elapsed() < QUIC_RETRY_AFTER {
-                return;
-            }
-        }
-        let ok = self
-            .ctx
-            .quic
-            .connect_any(self.net_ctx(), &peer.quic_targets())
-            .is_ok()
-            && wait_for_link(&self.ctx, node_id, Duration::from_secs(2));
-        if ok {
-            self.quic_failed.lock().remove(node_id);
-        } else {
-            self.quic_failed
-                .lock()
-                .insert(node_id.to_string(), std::time::Instant::now());
-        }
+    fn ensure_link(&self, node_id: &str) -> bool {
+        transport::quic::ensure_link(&self.ctx, node_id)
     }
 
     fn net_ctx(&self) -> NetCtx<P> {
@@ -413,54 +357,23 @@ impl<P: Platform> Engine<P> {
 
     /// The transport a message to `node_id` should use right now: the active
     /// persistent link (WS/punch/WebRTC) if any, else the directed transport.
-    fn proto_for(&self, node_id: &str) -> transport::SendPath {
-        transport::path_for(&self.ctx, node_id)
-    }
-
-    /// The transport label to *report* for a send. Punch and WebRTC links reuse
-    /// the WS send path (registered in `ws_conns`), so `proto_for` returns `Link`
-    /// for them; resolve the real kind from the live-connection registry so the
-    /// UI shows "punch"/"webrtc" rather than the internal send-path name.
-    fn display_transport(&self, node_id: &str, path: transport::SendPath) -> String {
+    /// The transport label to report for a send: the live link's kind.
+    fn display_transport(&self, node_id: &str) -> String {
         use transport::TransportKind::*;
-        if let Some(c) = self.ctx.p2p_conns.lock().get(node_id) {
-            return match c.kind {
-                Ws => "WS",
-                Udp => "UDP",
-                Punch => "punch",
-                WebRtc => "webrtc",
-                Quic => "QUIC",
-                Relay => "relay",
-            }
-            .to_string();
+        match self.ctx.p2p_conns.lock().get(node_id).map(|c| c.kind) {
+            Some(Punch) => "punch",
+            Some(WebRtc) => "webrtc",
+            Some(Quic) => "QUIC",
+            Some(Relay) => "relay",
+            None => "QUIC",
         }
-        path.label().to_string()
+        .to_string()
     }
 
-    /// Send an already-built control-message JSON to one peer (active connection).
+    /// Send an already-built control-message JSON to one peer over its link.
     fn send_control(&self, node_id: &str, json: &str) -> crate::Result<()> {
         let from = self.ctx.identity.lock().name.clone();
-        let proto = self.proto_for(node_id);
-        transport::send_payload(
-            &self.ctx.peers,
-            &self.ctx.ws_conns,
-            &self.ctx.key,
-            &from,
-            node_id,
-            proto,
-            json,
-        )
-    }
-
-    /// Directed transport setting ("UDP" | "TCP") for peers with no live link.
-    pub fn directed_transport(&self) -> String {
-        self.ctx.directed_transport.lock().label().to_string()
-    }
-
-    /// Set the directed transport ("UDP" default, or "TCP"); anything else maps
-    /// to UDP. Only affects peers without a live persistent connection.
-    pub fn set_directed_transport(&self, t: &str) {
-        *self.ctx.directed_transport.lock() = transport::Directed::parse(t);
+        transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, json)
     }
 
     fn emit_peers(&self) {
@@ -534,20 +447,6 @@ impl<P: Platform> Engine<P> {
             username: self.ctx.platform.kv_get("username").unwrap_or_default(),
         }
     }
-}
-
-/// Wait until `node_id` has an entry in `ws_conns` (a link registered its
-/// outgoing queue). The QUIC dial returns after the handshake; registration
-/// happens a moment later, after the `Hello` exchange.
-fn wait_for_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str, max: Duration) -> bool {
-    let deadline = std::time::Instant::now() + max;
-    while std::time::Instant::now() < deadline {
-        if ctx.ws_conns.lock().contains_key(node_id) {
-            return true;
-        }
-        std::thread::sleep(Duration::from_millis(10));
-    }
-    false
 }
 
 impl<P: Platform> Drop for Engine<P> {

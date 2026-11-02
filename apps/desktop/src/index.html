@@ -180,12 +180,6 @@
             <article class="card">
               <div class="card-head"><span class="card-ic">🛡</span><h3>Connectivity</h3></div>
               <div class="card-body">
-                <label class="muted small" for="set-transport">Direct transport (when no live connection)</label>
-                <div class="seg" id="transport-seg">
-                  <input type="radio" name="dtransport" id="dt-udp" value="UDP" checked /><label for="dt-udp">UDP</label>
-                  <input type="radio" name="dtransport" id="dt-tcp" value="TCP" /><label for="dt-tcp">TCP</label>
-                </div>
-                <p class="hint">Messages always use an active P2P connection when one exists; this only applies to one-off sends to peers you aren't connected to.</p>
                 <button type="button" id="btn-firewall" class="ghost block">Run firewall check</button>
                 <p id="fw-status" class="status"></p>
               </div>
@@ -217,9 +211,7 @@
         <label>Name (optional)<input id="m-name" placeholder="My phone" /></label>
         <label>IP address<input id="m-ip" placeholder="192.168.0.105" required /></label>
         <div class="ports">
-          <label class="grow">TCP<input id="m-tcp" type="number" min="0" max="65535" /></label>
-          <label class="grow">UDP<input id="m-udp" type="number" min="0" max="65535" /></label>
-          <label class="grow">WS<input id="m-ws" type="number" min="0" max="65535" /></label>
+          <label class="grow">QUIC port<input id="m-quic" type="number" min="1" max="65535" required /></label>
         </div>
         <div class="row end gap">
           <button type="button" id="m-cancel" class="secondary">Cancel</button>

@@ -23,21 +23,8 @@ fn pair(test: &str) -> (TestNode, TestNode) {
 }
 
 // ---------------------------------------------------------------------------
-// Chat over each directed transport
+// Chat: every message rides a live link (QUIC unless the ladder found another)
 // ---------------------------------------------------------------------------
-
-/// Like `pair`, but with QUIC disabled, to exercise the legacy directed
-/// transports (one UDP datagram / one TCP connection per message).
-fn pair_without_quic(test: &str) -> (TestNode, TestNode) {
-    let cfg = || mdcore::CoreConfig {
-        auto_quic: false,
-        ..md_testkit::test_config()
-    };
-    let a = TestNode::start_full(MockPlatform::new(&format!("{test}-a")), cfg());
-    let b = TestNode::start_full(MockPlatform::new(&format!("{test}-b")), cfg());
-    TestNode::pair(&a, &b);
-    (a, b)
-}
 
 #[test]
 fn chat_opens_and_reuses_a_quic_link_by_default() {
@@ -58,78 +45,49 @@ fn chat_opens_and_reuses_a_quic_link_by_default() {
 }
 
 #[test]
-fn unreachable_quic_port_falls_back_to_udp_and_is_not_retried_every_send() {
+fn an_unreachable_peer_fails_fast_and_is_not_redialed_every_send() {
     let (a, b) = pair("chat-quic-dead");
     let mut peer = b.as_peer();
     peer.quic_port = 9; // nothing speaks QUIC there
     a.engine.upsert_peer(peer);
 
-    assert_eq!(
-        a.engine.send(&b.node_id(), "after a failed dial").unwrap(),
-        "UDP"
-    );
-    b.sink.wait_for_message("after a failed dial");
+    let err = a.engine.send(&b.node_id(), "nobody home").unwrap_err();
+    assert!(matches!(err, CoreError::NoLink(_)), "got {err:?}");
 
     // The failure is remembered, so the next send doesn't wait for a dial.
     let t = std::time::Instant::now();
-    assert_eq!(a.engine.send(&b.node_id(), "fast now").unwrap(), "UDP");
+    assert!(a.engine.send(&b.node_id(), "still nobody").is_err());
     assert!(
         t.elapsed() < Duration::from_millis(500),
         "took {:?}",
         t.elapsed()
     );
-    b.sink.wait_for_message("fast now");
-}
-
-#[test]
-fn chat_over_udp_when_quic_is_off() {
-    let (a, b) = pair_without_quic("chat-udp");
-    let used = a.engine.send(&b.node_id(), "hello over udp").unwrap();
-    assert_eq!(used, "UDP");
-    let msg = b.sink.wait_for_message("hello over udp");
-    assert!(msg.ok);
-    assert_eq!(msg.protocol, "UDP");
-}
-
-#[test]
-fn chat_over_tcp_when_directed_and_quic_is_off() {
-    let (a, b) = pair_without_quic("chat-tcp");
-    a.engine.set_directed_transport("TCP");
-    let used = a.engine.send(&b.node_id(), "hello over tcp").unwrap();
-    assert_eq!(used, "TCP");
-    assert_eq!(b.sink.wait_for_message("hello over tcp").protocol, "TCP");
-}
-
-#[test]
-fn chat_over_websocket_once_connected() {
-    let (a, b) = pair("chat-ws");
-    a.engine.connect_ws(&b.node_id()).unwrap();
-
-    // Both ends report the link; the receiver learns the sender's node id from
-    // the WS Hello frame.
-    let a_id = a.node_id();
-    let b_id = b.node_id();
-    a.sink
-        .wait_until(WAIT, |e| match e {
-            CoreEvent::WsConnected { node_id } if *node_id == b_id => Some(()),
-            _ => None,
-        })
-        .expect("a sees the WS link");
+    // Nothing was fired off as a lone datagram either.
     b.sink
-        .wait_until(WAIT, |e| match e {
-            CoreEvent::WsConnected { node_id } if *node_id == a_id => Some(()),
-            _ => None,
-        })
-        .expect("b sees the WS link");
+        .assert_no_message("nobody home", Duration::from_millis(300));
+}
 
-    // A live persistent link beats the directed transport.
-    let used = a.engine.send(&b_id, "hello over ws").unwrap();
-    assert_eq!(used, "WS");
-    assert_eq!(b.sink.wait_for_message("hello over ws").protocol, "WS");
+#[test]
+fn with_auto_quic_off_a_send_without_a_link_starts_the_ladder() {
+    let cfg = || mdcore::CoreConfig {
+        auto_quic: false,
+        ..md_testkit::test_config()
+    };
+    let a = TestNode::start_full(MockPlatform::new("no-auto-a"), cfg());
+    let b = TestNode::start_full(MockPlatform::new("no-auto-b"), cfg());
+    TestNode::pair(&a, &b);
 
-    // The link is bidirectional: b can answer on the same socket.
-    assert_eq!(b.engine.send(&a_id, "and back").unwrap(), "WS");
-    a.sink.wait_for_message("and back");
+    assert!(matches!(
+        a.engine.send(&b.node_id(), "too early"),
+        Err(CoreError::NoLink(_))
+    ));
+    // The ladder (rung 0, QUIC) connects in the background; then sends work.
+    assert_eq!(
+        a.wait_connected(&b, Duration::from_secs(10)).as_deref(),
+        Some("quic")
+    );
+    assert_eq!(a.engine.send(&b.node_id(), "now").unwrap(), "QUIC");
+    b.sink.wait_for_message("now");
 }
 
 #[test]
@@ -302,64 +260,26 @@ fn shared_notification_is_posted_on_peer() {
         .assert_no_message("Battery low", Duration::from_millis(200));
 }
 
-// ---------------------------------------------------------------------------
-// TCP receiver hardening
-// ---------------------------------------------------------------------------
-
-/// A correctly encrypted envelope for `text`, as JSON bytes, using the key
-/// every TestNode shares.
-fn valid_envelope_json(text: &str) -> Vec<u8> {
-    let key =
-        mdcore::crypto::derive_key(md_testkit::TEST_PASSPHRASE, md_testkit::TEST_USER).unwrap();
-    let pt = serde_json::to_vec(&mdcore::model::Plaintext {
-        from: "raw".into(),
-        text: text.into(),
-    })
-    .unwrap();
-    serde_json::to_vec(&mdcore::crypto::encrypt(&key, &pt).unwrap()).unwrap()
-}
-
-fn raw_tcp_send(to: &TestNode, body: &[u8]) {
-    use std::io::Write;
-    let port = to.engine.identity().tcp_port;
-    let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
-    // The receiver may close early once it has read past the cap.
-    let _ = s.write_all(body);
-}
-
 #[test]
-fn raw_tcp_envelope_is_delivered() {
-    // Sanity check for the helpers below.
-    let b = TestNode::start("tcp-raw-b");
-    raw_tcp_send(&b, &valid_envelope_json("via raw tcp"));
-    assert_eq!(b.sink.wait_for_message("via raw tcp").protocol, "TCP");
-}
+fn a_hand_entered_peer_is_reached_over_quic_and_relisted_under_its_real_id() {
+    let a = TestNode::start("manual-a");
+    let b = TestNode::start("manual-b");
+    let port = b.engine.identity().quic_port;
+    a.engine
+        .add_manual_peer("my mac", "127.0.0.1", port)
+        .unwrap();
 
-#[test]
-fn oversized_tcp_message_is_rejected() {
-    // Regression: the receiver used read_to_end with no limit. A valid
-    // envelope followed by >4 MiB of JSON whitespace parses fine, so before
-    // the cap this WAS delivered (after buffering everything in memory).
-    let b = TestNode::start("tcp-big-b");
-    let mut body = valid_envelope_json("too big");
-    body.resize(body.len() + 4 * 1024 * 1024 + 16, b' ');
-    raw_tcp_send(&b, &body);
-    b.sink
-        .assert_no_message("too big", Duration::from_millis(1500));
+    assert_eq!(
+        a.engine.send("manual:127.0.0.1", "typed by hand").unwrap(),
+        "QUIC"
+    );
+    b.sink.wait_for_message("typed by hand");
 
-    // ...and the receiver still works afterwards.
-    raw_tcp_send(&b, &valid_envelope_json("still alive"));
-    b.sink.wait_for_message("still alive");
-}
-
-#[test]
-fn idle_tcp_connections_do_not_block_other_senders() {
-    let b = TestNode::start("tcp-idle-b");
-    let port = b.engine.identity().tcp_port;
-    // Ten connections that never send anything (and never close).
-    let _idle: Vec<_> = (0..10)
-        .map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).unwrap())
-        .collect();
-    raw_tcp_send(&b, &valid_envelope_json("not blocked"));
-    b.sink.wait_for_message("not blocked");
+    let peers = a.engine.get_peers();
+    assert!(!peers.iter().any(|p| p.node_id == "manual:127.0.0.1"));
+    let real = peers
+        .iter()
+        .find(|p| p.node_id == b.node_id())
+        .expect("listed under its real node id");
+    assert_eq!(real.name, "my mac");
 }

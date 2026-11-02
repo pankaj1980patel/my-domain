@@ -217,11 +217,10 @@ pub(super) fn spawn_ip_watcher<P: Platform>(h: netchange::NetHandles<P>) {
 }
 
 fn heartbeat<P: Platform>(ctx: NetCtx<P>) {
-    use transport::TransportKind::{Udp, WebRtc};
-    // Same cadence as QUIC's keep-alive (CoreConfig::keepalive). Only the
-    // links without their own liveness need it: plain UDP and WebRTC. QUIC
-    // (direct and punched) has keep-alive + idle timeout built in, and WS /
-    // relay sockets report closure themselves.
+    use transport::TransportKind::WebRtc;
+    // Same cadence as QUIC's keep-alive (CoreConfig::keepalive). Only WebRTC
+    // links need it: QUIC (direct and punched) has keep-alive + idle timeout
+    // built in, and the relay socket reports closure itself.
     let ka = ctx.config.keepalive;
     let every = ka.interval.unwrap_or(ka.idle_timeout / 3);
     let timeout_secs = ka.idle_timeout.as_secs().max(1);
@@ -233,7 +232,7 @@ fn heartbeat<P: Platform>(ctx: NetCtx<P>) {
             .unwrap_or(0);
         let ping = serde_json::json!({ "type": "p2p_ping", "from": me }).to_string();
         for (node_id, kind, last_seen) in transport::live_snapshot(&ctx) {
-            if !matches!(kind, Udp | WebRtc) {
+            if kind != WebRtc {
                 continue;
             }
             if now.saturating_sub(last_seen) > timeout_secs {

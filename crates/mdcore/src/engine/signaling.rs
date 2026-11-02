@@ -74,19 +74,6 @@ impl<P: Platform> Engine<P> {
         });
     }
 
-    /// Tell the registry whether our WS server is currently reachable.
-    pub fn update_ws_open(&self, open: bool) -> crate::Result<()> {
-        let url = self
-            .server_url
-            .lock()
-            .clone()
-            .ok_or(CoreError::NotLoggedIn)?;
-        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-        let node_id = self.ctx.identity.lock().node_id.clone();
-        crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
-            .map_err(Into::into)
-    }
-
     /// Relay a typed signal to a sibling device (via the server's FCM relay).
     pub fn send_signal(&self, to: &str, sig: &Signal) -> crate::Result<()> {
         send_signal_via(&self.server_url, &self.token, &self.ctx, to, sig)
@@ -191,27 +178,6 @@ pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &
         return;
     };
     match sig {
-        // Initiator wants us reachable: our WS server is already listening,
-        // so mark it open and tell them where to dial.
-        Signal::StartWs { sid } => {
-            let id = ctx.identity.lock().clone();
-            let _ = update_ws_open_via(ctx, true);
-            let _ = send_signal_via(
-                &ctx.server_url,
-                &ctx.token,
-                ctx,
-                from,
-                &Signal::WsReady {
-                    sid,
-                    ip: id.ip,
-                    ws_port: id.ws_port,
-                },
-            );
-        }
-        // Responder is reachable: dial it.
-        Signal::WsReady { ip, ws_port, .. } => {
-            let _ = ws::ws_connect(ctx.clone(), &ip, ws_port);
-        }
         // Initiator wants to hole-punch: gather our candidates, answer with
         // them, and punch toward theirs. Off-thread (STUN + HTTP block).
         Signal::PunchOffer {
@@ -329,17 +295,4 @@ pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &
         // RelayOffer/RelayAnswer (TURN) remain a future hook.
         _ => {}
     }
-}
-
-/// Tell the registry whether our WS server is currently reachable.
-fn update_ws_open_via<P: Platform>(ctx: &NetCtx<P>, open: bool) -> crate::Result<()> {
-    let url = ctx
-        .server_url
-        .lock()
-        .clone()
-        .ok_or(CoreError::NotLoggedIn)?;
-    let token = ctx.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
-    let node_id = ctx.identity.lock().node_id.clone();
-    crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
-        .map_err(Into::into)
 }

@@ -16,19 +16,14 @@ pub struct ConnectRungs {
     /// 0. Direct QUIC to the peer's advertised address (reliable, encrypted,
     ///    multiplexed; preferred whenever it works).
     pub quic: bool,
-    /// 1. UDP ping on the same LAN.
-    pub lan_udp: bool,
-    /// 2. Direct WebSocket to an address the peer advertises as reachable.
-    pub direct_ws: bool,
-    /// 3. Exchange QUIC addresses through a signal; both sides dial.
+    /// 1. Exchange QUIC addresses through a signal; both sides dial.
     pub signaled_quic: bool,
-    /// 3b. Ask the peer (via a signal) to open its WebSocket for us.
-    pub signaled_ws: bool,
-    /// 4. STUN + UDP hole punch.
+    /// 3. STUN + UDP hole punch.
     pub punch: bool,
-    /// 5. WebRTC data channel (needs the `webrtc` cargo feature).
+    /// 4. WebRTC data channel (needs the `webrtc` cargo feature).
     pub webrtc: bool,
-    /// 6. Relay through the registry server's WebSocket `/relay`.
+    /// 2. Relay through the registry server's WebSocket `/relay` (brought up
+    ///    before 3 and 4, which then try to upgrade it).
     pub relay: bool,
 }
 
@@ -36,10 +31,7 @@ impl Default for ConnectRungs {
     fn default() -> Self {
         ConnectRungs {
             quic: true,
-            lan_udp: true,
-            direct_ws: true,
             signaled_quic: true,
-            signaled_ws: true,
             punch: true,
             webrtc: true,
             relay: true,
@@ -51,10 +43,7 @@ impl ConnectRungs {
     /// Every rung off; switch on the ones you want (usable in `const`s).
     pub const NONE: Self = ConnectRungs {
         quic: false,
-        lan_udp: false,
-        direct_ws: false,
         signaled_quic: false,
-        signaled_ws: false,
         punch: false,
         webrtc: false,
         relay: false,
