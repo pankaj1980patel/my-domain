@@ -11,17 +11,23 @@
 //! `data` is never parsed here. It carries the same end-to-end-encrypted
 //! frames the peer-to-peer links carry, so the server only ever sees
 //! ciphertext. Frames are forwarded only between devices of the SAME user.
+//!
+//! Fair use: each account gets a token bucket (`RELAY_BYTES_PER_SEC`, default
+//! 4 MiB/s, bursts up to 4x). A sender over budget is SLOWED (we stop reading
+//! its socket for a moment, so TCP pushes back), never dropped: relayed
+//! frames aren't retransmitted, so dropping one would lose a message.
+//! `GET /relay/stats` reports aggregate counters (no per-user data).
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::State;
 use axum::response::IntoResponse;
 use axum::routing::get;
-use axum::Router;
+use axum::{Json, Router};
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
@@ -36,20 +42,86 @@ type Key = (String, String); // (user_id, node_id)
 /// Connected devices: (user, node) -> (connection id, outgoing queue).
 type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<String>)>>>;
 
+/// Per-account token bucket: `rate` bytes/s, holding at most `burst` bytes.
+pub struct Bucket {
+    tokens: f64,
+    last: Instant,
+}
+
+impl Bucket {
+    fn new(burst: f64, now: Instant) -> Self {
+        Bucket {
+            tokens: burst,
+            last: now,
+        }
+    }
+
+    /// Take `n` bytes; returns how long the sender must wait first (zero if
+    /// it's within budget). The debt is paid off by future refill.
+    pub fn take(&mut self, n: usize, rate: f64, burst: f64, now: Instant) -> Duration {
+        let elapsed = now.saturating_duration_since(self.last).as_secs_f64();
+        self.last = now;
+        self.tokens = (self.tokens + elapsed * rate).min(burst) - n as f64;
+        if self.tokens >= 0.0 {
+            Duration::ZERO
+        } else {
+            Duration::from_secs_f64(-self.tokens / rate)
+        }
+    }
+}
+
+/// Aggregate relay counters (served at `GET /relay/stats`).
+#[derive(Default)]
+pub struct Stats {
+    frames: AtomicU64,
+    bytes: AtomicU64,
+    throttled: AtomicU64,
+}
+
 #[derive(Clone)]
 pub struct RelayState {
     jwt_secret: String,
     conns: Conns,
     next_id: Arc<AtomicU64>,
+    /// Bytes per second per account.
+    rate: f64,
+    buckets: Arc<Mutex<HashMap<String, Bucket>>>,
+    stats: Arc<Stats>,
 }
 
 impl RelayState {
     pub fn new(jwt_secret: String) -> Self {
+        let rate = std::env::var("RELAY_BYTES_PER_SEC")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .filter(|r| *r > 0.0)
+            .unwrap_or(4.0 * 1024.0 * 1024.0);
+        Self::with_rate(jwt_secret, rate)
+    }
+
+    pub fn with_rate(jwt_secret: String, rate: f64) -> Self {
         RelayState {
             jwt_secret,
             conns: Arc::default(),
             next_id: Arc::default(),
+            rate,
+            buckets: Arc::default(),
+            stats: Arc::default(),
         }
+    }
+
+    fn burst(&self) -> f64 {
+        self.rate * 4.0
+    }
+
+    /// Charge `n` bytes to `user`; how long to pause before forwarding.
+    fn charge(&self, user: &str, n: usize) -> Duration {
+        let now = Instant::now();
+        let mut buckets = self.buckets.lock().unwrap();
+        let b = buckets
+            .entry(user.to_string())
+            .or_insert_with(|| Bucket::new(self.burst(), now));
+        b.take(n, self.rate, self.burst(), now)
     }
 }
 
@@ -58,12 +130,23 @@ impl RelayState {
 pub fn router(state: RelayState) -> Router {
     Router::new()
         .route("/relay", get(upgrade))
+        .route("/relay/stats", get(stats))
         .with_state(state)
 }
 
 async fn upgrade(ws: WebSocketUpgrade, State(s): State<RelayState>) -> impl IntoResponse {
     ws.max_message_size(MAX_FRAME)
         .on_upgrade(move |socket| serve(socket, s))
+}
+
+async fn stats(State(s): State<RelayState>) -> Json<Value> {
+    let connections = s.conns.lock().unwrap().len();
+    Json(json!({
+        "connections": connections,
+        "frames": s.stats.frames.load(Ordering::Relaxed),
+        "bytes": s.stats.bytes.load(Ordering::Relaxed),
+        "throttled": s.stats.throttled.load(Ordering::Relaxed),
+    }))
 }
 
 async fn serve(mut socket: WebSocket, s: RelayState) {
@@ -100,6 +183,13 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                         _ => break, // closed, error, or binary (unsupported)
                     }
                 };
+                // Fair use: over budget -> pause reading this socket (TCP
+                // backpressure slows the sender); never drop the frame.
+                let wait = s.charge(&user_id, text.len());
+                if !wait.is_zero() {
+                    s.stats.throttled.fetch_add(1, Ordering::Relaxed);
+                    tokio::time::sleep(wait).await;
+                }
                 let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
                 let (Some(to), Some(data)) = (v["to"].as_str(), v.get("data")) else { continue };
                 let target = s.conns.lock().unwrap()
@@ -107,6 +197,10 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                     .map(|(_, q)| q.clone());
                 let out = json!({"from": node_id, "data": data}).to_string();
                 let delivered = target.map(|q| q.send(out).is_ok()).unwrap_or(false);
+                if delivered {
+                    s.stats.frames.fetch_add(1, Ordering::Relaxed);
+                    s.stats.bytes.fetch_add(text.len() as u64, Ordering::Relaxed);
+                }
                 if !delivered {
                     let reply = json!({"error": "offline", "to": to}).to_string();
                     if socket.send(Message::Text(reply)).await.is_err() { break; }
@@ -155,18 +249,33 @@ mod tests {
     const SECRET: &str = "test-secret";
 
     fn start() -> u16 {
+        start_with(RelayState::new(SECRET.into()))
+    }
+
+    fn start_with(state: RelayState) -> u16 {
         let (tx, rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let rt = tokio::runtime::Runtime::new().unwrap();
             rt.block_on(async move {
                 let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
                 tx.send(listener.local_addr().unwrap().port()).unwrap();
-                axum::serve(listener, router(RelayState::new(SECRET.into())))
-                    .await
-                    .unwrap();
+                axum::serve(listener, router(state)).await.unwrap();
             });
         });
         rx.recv().unwrap()
+    }
+
+    fn get_stats(port: u16) -> Value {
+        use std::io::{Read, Write};
+        let mut s = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+        write!(
+            s,
+            "GET /relay/stats HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).unwrap();
+        serde_json::from_str(resp.split("\r\n\r\n").nth(1).unwrap()).unwrap()
     }
 
     type Client = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<std::net::TcpStream>>;
@@ -222,6 +331,51 @@ mod tests {
             .unwrap();
         // Alice is told the target is offline (from her account's view)...
         assert_eq!(next_json(&mut alice)["error"], "offline");
+    }
+
+    #[test]
+    fn bucket_allows_bursts_then_paces_to_the_rate() {
+        let t0 = Instant::now();
+        let mut b = Bucket::new(4000.0, t0);
+        // A burst within the bucket passes at once.
+        assert_eq!(b.take(4000, 1000.0, 4000.0, t0), Duration::ZERO);
+        // The next 1000 bytes owe a full second at 1000 B/s.
+        assert_eq!(b.take(1000, 1000.0, 4000.0, t0), Duration::from_secs(1));
+        // After 3 s the debt is repaid and 2000 bytes are banked again.
+        assert_eq!(
+            b.take(2000, 1000.0, 4000.0, t0 + Duration::from_secs(3)),
+            Duration::ZERO
+        );
+    }
+
+    #[test]
+    fn a_heavy_sender_is_slowed_not_dropped_and_stats_count_it() {
+        // 2 KB/s per account, so a 30 KB burst must take several seconds.
+        let port = start_with(RelayState::with_rate(SECRET.into(), 2000.0));
+        let mut laptop = client(port, &tok("alice"), "laptop");
+        next_json(&mut laptop);
+        let mut phone = client(port, &tok("alice"), "phone");
+        next_json(&mut phone);
+
+        let started = Instant::now();
+        let chunk = "x".repeat(3000);
+        for _ in 0..10 {
+            laptop
+                .send(M::Text(json!({"to": "phone", "data": chunk}).to_string()))
+                .unwrap();
+        }
+        for _ in 0..10 {
+            assert_eq!(next_json(&mut phone)["data"], chunk.as_str()); // every frame arrives
+        }
+        assert!(
+            started.elapsed() >= Duration::from_secs(5),
+            "30 KB at 2 KB/s (8 KB burst) can't finish in {:?}",
+            started.elapsed()
+        );
+        let st = get_stats(port);
+        assert_eq!(st["frames"], 10);
+        assert!(st["throttled"].as_u64().unwrap() > 0);
+        assert_eq!(st["connections"], 2);
     }
 
     #[test]
