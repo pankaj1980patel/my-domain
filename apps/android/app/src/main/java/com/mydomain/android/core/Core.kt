@@ -63,6 +63,16 @@ object Core {
 
     fun engine(): MdEngine? = runningEngine()
 
+    /** Is the app on screen? Off screen, the engine closes idle links
+     *  (battery); a send re-opens them and pushes still arrive. */
+    @Volatile var visible = false
+        private set
+
+    fun setVisible(on: Boolean) {
+        visible = on
+        Thread { engine()?.setBackground(!on) }.start()
+    }
+
     fun peerName(node: String?): String =
         peers.firstOrNull { it.nodeId == node }?.name?.let(::niceName) ?: "a device"
 

@@ -37,8 +37,9 @@ or with less battery.
    - Still to do: once mDNS has proven itself on real networks, send the
      /24 sweep only when mDNS finds nothing.
 8. ~~Keep-alive that suits phones~~: **done** (20 s / 60 s, configurable).
-   - Still to do: close idle links while the screen is off and wake by
-     push. This needs the Android FCM receiver (Phase 3) first.
+   - ~~Close idle links while the screen is off and wake by push~~:
+     **done** (2026-11-02). Still to do: measure the battery saving on the
+     phone over a day.
 9. ~~Connection quality~~: **done** (`Engine::link_stats()`, desktop
    command `link_stats`).
    - Still to do: show it in the new UI.

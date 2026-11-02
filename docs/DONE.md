@@ -285,6 +285,16 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   HTTPS with their own CA (installed by IT) no longer break sign-in with
   "UnknownIssuer". Messages stay end-to-end encrypted.
 
+## Idle links close in the background (2026-11-02)
+
+- `Engine::set_background(true)` (Android: the app's UI is off screen, or a
+  push started it) closes links that carried no messages for
+  `CoreConfig::idle_close_after` (3 min), so their keep-alive pings stop
+  waking the radio every 20 s. A send re-opens a link on demand, and a push
+  reaches a phone with none. Each link records when it last carried a
+  message (`P2pConn::last_used`); keep-alives don't count. Test:
+  `tests/idle_links.rs`.
+
 ## Device lab and dev tools
 
 - **`scripts/lab/start-all.sh`** starts the app on all three devices, logged

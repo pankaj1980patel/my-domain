@@ -103,6 +103,9 @@ pub struct NetCtx<P: Platform> {
     pub signaler: Arc<Mutex<Option<Arc<dyn Signaler>>>>,
     /// Set when the `Engine` is dropped; background loops exit on their next tick.
     pub shutdown: Arc<AtomicBool>,
+    /// The app is in the background (phone screen off / app not visible):
+    /// idle links get closed (`CoreConfig::idle_close_after`).
+    pub background: Arc<AtomicBool>,
     /// Dial/accept QUIC connections (the runtime itself is owned by `Engine`).
     pub quic: transport::quic::QuicLink,
     /// The relay WebSocket to the server, when open (last-resort path).
@@ -145,6 +148,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             config: self.config.clone(),
             signaler: self.signaler.clone(),
             shutdown: self.shutdown.clone(),
+            background: self.background.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
             nat: self.nat.clone(),
@@ -288,6 +292,7 @@ impl<P: Platform> Engine<P> {
             config: Arc::new(config),
             signaler: Arc::default(),
             shutdown: Arc::default(),
+            background: Arc::default(),
             quic: quic.link(),
             relay: Arc::default(),
             nat: Arc::default(),
@@ -356,6 +361,13 @@ impl<P: Platform> Engine<P> {
     }
 
     /// Whether this engine is shutting down (its `Engine` was dropped).
+    /// The app went to the background (`true`) or came back (`false`). In
+    /// the background, links idle for `CoreConfig::idle_close_after` are
+    /// closed to save battery; they re-open when a message needs them.
+    pub fn set_background(&self, background: bool) {
+        self.ctx.background.store(background, Ordering::Relaxed);
+    }
+
     pub fn is_shut_down(&self) -> bool {
         self.ctx.shutdown.load(Ordering::Relaxed)
     }
@@ -391,7 +403,14 @@ impl<P: Platform> Engine<P> {
     /// Send an already-built control-message JSON to one peer over its link.
     fn send_control(&self, node_id: &str, json: &str) -> crate::Result<()> {
         let from = self.ctx.identity.lock().name.clone();
-        transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, json)
+        transport::send_payload(
+            &self.ctx.ws_conns,
+            &self.ctx.p2p_conns,
+            &self.ctx.key,
+            &from,
+            node_id,
+            json,
+        )
     }
 
     fn emit_peers(&self) {

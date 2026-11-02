@@ -241,6 +241,18 @@ impl QuicLink {
         kept
     }
 
+    /// Close `peer`'s QUIC connection (its task then removes the link).
+    /// False when the peer has no QUIC connection.
+    pub fn close_peer(&self, peer: &str, reason: &[u8]) -> bool {
+        match self.conns.lock().get(peer) {
+            Some(pc) => {
+                pc.conn.close(0u32.into(), reason);
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Start accepting incoming connections for this engine.
     pub fn spawn_accept_loop<P: Platform>(&self, ctx: NetCtx<P>) {
         let endpoint = self.endpoint.clone();

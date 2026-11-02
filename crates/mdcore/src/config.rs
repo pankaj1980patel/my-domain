@@ -108,6 +108,11 @@ pub struct CoreConfig {
     /// WebSocket for a signal when one happens to be open (e.g. a relay
     /// session), and FCM otherwise.
     pub signal_channel: bool,
+    /// While the app is in the background (`Engine::set_background`), close
+    /// links that carried no messages for this long, so keep-alive pings
+    /// stop waking the radio. A send re-opens a link on demand, and a push
+    /// reaches a device with none. `None`: never close idle links.
+    pub idle_close_after: Option<std::time::Duration>,
 }
 
 impl Default for CoreConfig {
@@ -127,6 +132,7 @@ impl Default for CoreConfig {
             mdns_loopback: false,
             keepalive: KeepAlive::default(),
             signal_channel: false,
+            idle_close_after: Some(std::time::Duration::from_secs(180)),
         }
     }
 }

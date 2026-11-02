@@ -58,6 +58,8 @@ pub struct P2pConn {
     pub kind: TransportKind,
     pub last_seen: u64,
     pub addr: Option<SocketAddr>,
+    /// Last time a message went over it either way (keep-alives don't count).
+    pub last_used: u64,
 }
 
 /// node_id -> live link.
@@ -92,6 +94,7 @@ pub fn mark_live<P: Platform>(
                     kind,
                     last_seen: now_secs(),
                     addr,
+                    last_used: c.last_used,
                 };
                 true
             }
@@ -109,6 +112,7 @@ pub fn mark_live<P: Platform>(
                         kind,
                         last_seen: now_secs(),
                         addr,
+                        last_used: now_secs(),
                     },
                 );
                 true
@@ -132,6 +136,34 @@ pub fn touch_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     if let Some(c) = ctx.p2p_conns.lock().get_mut(node_id) {
         c.last_seen = now_secs();
     }
+}
+
+/// A message just went over `node_id`'s link (see `P2pConn::last_used`).
+pub fn note_use(p2p: &P2pConns, node_id: &str) {
+    if let Some(c) = p2p.lock().get_mut(node_id) {
+        c.last_used = now_secs();
+    }
+}
+
+/// Links that carried no message for `idle_secs` (for `close_link`).
+pub fn idle_links<P: Platform>(ctx: &NetCtx<P>, idle_secs: u64) -> Vec<String> {
+    let now = now_secs();
+    ctx.p2p_conns
+        .lock()
+        .iter()
+        .filter(|(_, c)| now.saturating_sub(c.last_used) >= idle_secs)
+        .map(|(k, _)| k.clone())
+        .collect()
+}
+
+/// Close a peer's link on purpose (idle in the background). A QUIC link is
+/// closed and its task cleans up; any other link is just forgotten.
+pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    if ctx.quic.close_peer(node_id, b"idle") {
+        return;
+    }
+    ctx.ws_conns.lock().remove(node_id);
+    drop_live(ctx, node_id);
 }
 
 /// Drop a peer's live link. Emits `PeerDisconnected` if it was present.
@@ -213,13 +245,27 @@ fn note_undecryptable<P: Platform>(
 pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
     let from = ctx.identity.lock().name.clone();
     if ctx.ws_conns.lock().contains_key(node_id) {
-        let _ = send_payload(&ctx.ws_conns, &ctx.key, &from, node_id, text);
+        let _ = send_payload(
+            &ctx.ws_conns,
+            &ctx.p2p_conns,
+            &ctx.key,
+            &from,
+            node_id,
+            text,
+        );
         return;
     }
     let (ctx, node_id, text) = (ctx.clone(), node_id.to_string(), text.to_string());
     std::thread::spawn(move || {
         if quic::ensure_link(&ctx, &node_id) {
-            let _ = send_payload(&ctx.ws_conns, &ctx.key, &from, &node_id, &text);
+            let _ = send_payload(
+                &ctx.ws_conns,
+                &ctx.p2p_conns,
+                &ctx.key,
+                &from,
+                &node_id,
+                &text,
+            );
         }
     });
 }
@@ -253,6 +299,9 @@ pub fn handle_incoming<P: Platform>(
     let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) else {
         return;
     };
+    if let Some(node) = from_node {
+        note_use(&ctx.p2p_conns, node);
+    }
 
     // Discrete-feature control message? (clipboard / notification / call / …)
     let control = ctx.control.clone();
@@ -275,6 +324,7 @@ pub fn handle_incoming<P: Platform>(
 /// chat send command and every feature.
 pub fn send_payload(
     ws_conns: &WsConns,
+    p2p: &P2pConns,
     key: &KeyHolder,
     from: &str,
     node_id: &str,
@@ -300,5 +350,6 @@ pub fn send_payload(
     sender
         .send(frame)
         .map_err(|_| CoreError::NoLink("connection closed".into()))?;
+    note_use(p2p, node_id);
     Ok(())
 }

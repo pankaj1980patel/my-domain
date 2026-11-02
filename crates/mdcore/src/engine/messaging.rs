@@ -32,7 +32,14 @@ impl<P: Platform> Engine<P> {
                 "not connected yet; connecting in the background".into(),
             ));
         }
-        transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, text)?;
+        transport::send_payload(
+            &self.ctx.ws_conns,
+            &self.ctx.p2p_conns,
+            &self.ctx.key,
+            &from,
+            node_id,
+            text,
+        )?;
         Ok(self.display_transport(node_id))
     }
 
@@ -67,9 +74,14 @@ impl<P: Platform> Engine<P> {
         let from = self.ctx.identity.lock().name.clone();
         let req = serde_json::json!({ "type": "clipboard_request", "from": me }).to_string();
         self.ensure_link(node_id);
-        if let Err(e) =
-            transport::send_payload(&self.ctx.ws_conns, &self.ctx.key, &from, node_id, &req)
-        {
+        if let Err(e) = transport::send_payload(
+            &self.ctx.ws_conns,
+            &self.ctx.p2p_conns,
+            &self.ctx.key,
+            &from,
+            node_id,
+            &req,
+        ) {
             self.ctx.clip_pending.lock().remove(node_id);
             return Err(e);
         }

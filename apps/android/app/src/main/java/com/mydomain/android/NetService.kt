@@ -71,6 +71,8 @@ class NetService : Service() {
         // back to ANDROID_ID (also stable across restarts/reinstalls).
         runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents, KeystoreSecrets(this)) }
             .onFailure { Log.e("NetService", "engine failed to start", it) }
+        // Started by a push with no UI showing: background until it appears.
+        Core.engine()?.setBackground(!Core.visible)
         Core.reload()
         Fcm.init(this)
 

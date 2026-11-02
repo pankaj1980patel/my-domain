@@ -421,6 +421,13 @@ impl MdEngine {
         self.inner.network_changed(Some(&wifi_ip));
     }
 
+    /// The app's UI went to the background (`true`) or came back. In the
+    /// background, idle links are closed to save battery (they re-open on
+    /// demand, and pushes still arrive).
+    pub fn set_background(&self, background: bool) {
+        self.inner.set_background(background);
+    }
+
     pub fn scan_lan(&self) {
         self.inner.scan_lan();
     }

@@ -78,6 +78,25 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
         let ctx = ctx.clone();
         std::thread::spawn(move || heartbeat(ctx));
     }
+    if let Some(idle) = ctx.config.idle_close_after {
+        let ctx = ctx.clone();
+        std::thread::spawn(move || idle_closer(ctx, idle));
+    }
+}
+
+/// In the background, close links that carried no messages for `idle`.
+/// Their keep-alive pings would otherwise wake the radio every 20 s, all
+/// day; a send re-opens a link on demand, and a push reaches us without one.
+fn idle_closer<P: Platform>(ctx: NetCtx<P>, idle: Duration) {
+    let every = (idle / 4).clamp(Duration::from_millis(100), Duration::from_secs(15));
+    while tick(&ctx, every) {
+        if !ctx.background.load(Ordering::Relaxed) {
+            continue;
+        }
+        for node in transport::idle_links(&ctx, idle.as_secs()) {
+            transport::close_link(&ctx, &node);
+        }
+    }
 }
 
 /// Renew the router's port mapping this often (well inside its lease).

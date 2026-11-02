@@ -45,9 +45,19 @@ class MainActivity : ComponentActivity() {
         setContent { MdTheme { App(prefs) } }
     }
 
+    override fun onStart() {
+        super.onStart()
+        Core.setVisible(true)
+    }
+
     override fun onResume() {
         super.onResume()
         Thread { Core.reload() }.start()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Core.setVisible(false)
     }
 
     /** Device-lab test account from launch extras (scripts/lab/android.sh
