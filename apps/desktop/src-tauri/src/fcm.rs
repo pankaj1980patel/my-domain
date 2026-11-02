@@ -22,15 +22,24 @@
 //   MYDOMAIN_FCM_SENDER_ID   project number (GCM sender id)
 //   MYDOMAIN_FCM_PACKAGE     the Android app's package name
 
+use std::io::{ErrorKind, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
 use fcm_receiver_rs::client::{AndroidApp, FcmClient};
+use fcm_receiver_rs::consts::{
+    FCM_SOCKET_ADDRESS, KMCS_VERSION, K_CLOSE_TAG, K_DATA_MESSAGE_STANZA_TAG,
+    K_HEARTBEAT_ACK_TAG, K_HEARTBEAT_PING_TAG,
+};
+use fcm_receiver_rs::messages::{
+    create_login_request_raw, decode_data_message_stanza, ManualDataMessageStanza,
+};
 
 use crate::Eng;
 
@@ -152,9 +161,47 @@ struct Creds {
 /// The FCM token cell, managed by Tauri so commands can trigger `reregister`.
 pub struct FcmToken(pub Arc<Mutex<Option<String>>>);
 
-/// Bumped by `reregister`; a receiver thread from an older generation stops at
-/// its next reconnect instead of listening on a dead registration forever.
-static GENERATION: AtomicU64 = AtomicU64::new(0);
+/// How long a receiver thread waits (in a sleep or a blocked MTalk read)
+/// before checking whether it has been superseded.
+const POLL: Duration = Duration::from_secs(1);
+
+/// Registration generation. `reregister` bumps it; a receiver thread started
+/// under an older value notices within `POLL` and exits, instead of listening
+/// on a dead registration until its connection happens to drop.
+struct Generation(AtomicU64);
+
+impl Generation {
+    const fn new() -> Self {
+        Generation(AtomicU64::new(0))
+    }
+
+    fn current(&self) -> u64 {
+        self.0.load(Ordering::SeqCst)
+    }
+
+    fn bump(&self) {
+        self.0.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn is_current(&self, generation: u64) -> bool {
+        self.current() == generation
+    }
+
+    /// Sleep for `total`, checking every `POLL`. False if superseded meanwhile.
+    fn sleep(&self, generation: u64, total: Duration) -> bool {
+        let until = Instant::now() + total;
+        while self.is_current(generation) {
+            let left = until.saturating_duration_since(Instant::now());
+            if left.is_zero() {
+                return true;
+            }
+            std::thread::sleep(left.min(POLL));
+        }
+        false
+    }
+}
+
+static GENERATION: Generation = Generation::new();
 
 /// Throw away the saved registration and register a fresh token. Used when
 /// FCM reports our token as unregistered (it expired or was revoked): the old
@@ -164,7 +211,7 @@ pub fn reregister(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
         let _ = std::fs::rename(dir.join(CREDS_FILE), dir.join("fcm_creds.stale.json"));
     }
     *token_cell.lock().unwrap() = None;
-    GENERATION.fetch_add(1, Ordering::SeqCst);
+    GENERATION.bump();
     emit_fcm(
         &app,
         "info",
@@ -196,7 +243,7 @@ pub fn spawn(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
         return;
     };
 
-    let generation = GENERATION.load(Ordering::SeqCst);
+    let generation = GENERATION.current();
     std::thread::spawn(move || {
         let creds = config_dir.join(CREDS_FILE);
         // Google's registration endpoint fails intermittently
@@ -215,8 +262,7 @@ pub fn spawn(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
                 Ok(()) => return,
                 Err(e) => eprintln!("[fcm] registration failed: {e}; retrying in {wait:?}"),
             }
-            std::thread::sleep(wait);
-            if GENERATION.load(Ordering::SeqCst) != generation {
+            if !GENERATION.sleep(generation, wait) {
                 return; // superseded by a fresh registration
             }
             wait = (wait * 2).min(Duration::from_secs(30 * 60));
@@ -270,22 +316,18 @@ fn run(
             }
         }
     });
-    // Web-push messages arrive encrypted and come out of `on_data_message`
-    // as JSON; Android-mode messages arrive in the clear as key/value
-    // `app_data` on `on_raw_message`. Both feed the same handler.
-    let on_json = deliver.clone();
-    client.on_data_message = Some(Arc::new(move |payload: Vec<u8>| on_json(payload)));
-    client.on_raw_message = Some(Arc::new(move |msg| {
+    // Android-mode messages arrive in the clear as key/value `app_data`.
+    let on_message = move |msg: ManualDataMessageStanza| {
         let fields: serde_json::Map<String, serde_json::Value> = msg
             .app_data
             .iter()
             .map(|d| (d.key.clone(), serde_json::Value::String(d.value.clone())))
             .collect();
         deliver(serde_json::Value::Object(fields).to_string().into_bytes());
-    }));
+    };
 
     // Reuse a persisted registration if we have one; otherwise register fresh.
-    let token = match load_creds(&creds_path) {
+    let (token, android_id, security_token) = match load_creds(&creds_path) {
         Some(creds) => {
             client.android_id = creds.android_id;
             client.security_token = creds.security_token;
@@ -294,7 +336,7 @@ fn run(
             client
                 .load_keys(&creds.private_key_base64, &creds.auth_secret_base64)
                 .map_err(|e| e.to_string())?;
-            creds.fcm_token
+            (creds.fcm_token, creds.android_id, creds.security_token)
         }
         None => {
             let (private_key_base64, auth_secret_base64) =
@@ -329,9 +371,12 @@ fn run(
                     auth_secret_base64,
                 },
             );
-            fcm_token
+            (fcm_token, android_id, security_token)
         }
     };
+    if !GENERATION.is_current(generation) {
+        return Ok(()); // superseded while registering: don't publish a stale token
+    }
 
     // Publish the token: the Platform now reports it, and a refresh pushes it to
     // the registry. If we aren't logged in yet, the refresh is a no-op; the
@@ -348,7 +393,8 @@ fn run(
         let _ = engine.refresh_from_server();
     }
 
-    // Listen forever; reconnect with a fixed backoff on any drop.
+    // Listen until superseded; reconnect with a fixed backoff on any drop.
+    let mut received = Vec::new();
     loop {
         emit_fcm(
             &app,
@@ -356,19 +402,157 @@ fn run(
             "",
             "MTalk connected — listening for push signals",
         );
-        if let Err(e) = client.start_listening() {
-            emit_fcm(
-                &app,
-                "error",
-                "",
-                &format!("listen ended: {e}; reconnecting in 10s"),
-            );
-            eprintln!("[fcm] listen ended: {e}; reconnecting in 10s");
+        match listen(android_id, security_token, generation, &mut received, &on_message) {
+            Ok(()) => return Ok(()), // superseded by a fresh registration
+            Err(e) => {
+                emit_fcm(
+                    &app,
+                    "error",
+                    "",
+                    &format!("listen ended: {e}; reconnecting in 10s"),
+                );
+                eprintln!("[fcm] listen ended: {e}; reconnecting in 10s");
+            }
         }
-        std::thread::sleep(Duration::from_secs(10));
-        if GENERATION.load(Ordering::SeqCst) != generation {
+        if !GENERATION.sleep(generation, Duration::from_secs(10)) {
             return Ok(()); // superseded by a fresh registration
         }
+    }
+}
+
+/// Client heartbeat cadence, so an idle connection isn't silently dropped.
+const HEARTBEAT: Duration = Duration::from_secs(5 * 60);
+
+/// One MTalk session. The crate's `start_listening` blocks in a socket read
+/// with no timeout, so a superseded receiver could only notice once the
+/// server sent something; this loop reads with a `POLL` timeout instead and
+/// returns `Ok(())` as soon as `generation` is stale. `Err` means the
+/// connection dropped. `received` holds persistent ids already delivered, so
+/// a message the server redelivers after a reconnect isn't handled twice.
+fn listen(
+    android_id: u64,
+    security_token: u64,
+    generation: u64,
+    received: &mut Vec<String>,
+    on_message: &dyn Fn(ManualDataMessageStanza),
+) -> Result<(), String> {
+    let addr = FCM_SOCKET_ADDRESS
+        .to_socket_addrs()
+        .map_err(|e| e.to_string())?
+        .next()
+        .ok_or("mtalk: no address")?;
+    let tcp = TcpStream::connect_timeout(&addr, Duration::from_secs(15))
+        .map_err(|e| e.to_string())?;
+    let _ = tcp.set_nodelay(true);
+    let _ = tcp.set_read_timeout(Some(Duration::from_secs(15)));
+    let _ = tcp.set_write_timeout(Some(Duration::from_secs(15)));
+    let connector = native_tls::TlsConnector::new().map_err(|e| e.to_string())?;
+    let mut tls = connector
+        .connect("mtalk.google.com", tcp)
+        .map_err(|e| e.to_string())?;
+    tls.get_ref()
+        .set_read_timeout(Some(POLL))
+        .map_err(|e| e.to_string())?;
+    let login = create_login_request_raw(android_id, security_token, received)
+        .map_err(|e| e.to_string())?;
+    send(&mut tls, &login)?;
+
+    let mut frames = Frames::default();
+    let mut buf = [0u8; 16 * 1024];
+    let mut last_beat = Instant::now();
+    loop {
+        if !GENERATION.is_current(generation) {
+            let _ = tls.shutdown();
+            return Ok(());
+        }
+        if last_beat.elapsed() >= HEARTBEAT {
+            send(&mut tls, &[K_HEARTBEAT_PING_TAG, 0])?;
+            last_beat = Instant::now();
+        }
+        match tls.read(&mut buf) {
+            Ok(0) => return Err("connection closed by peer".into()),
+            Ok(n) => frames.push(&buf[..n]),
+            Err(e) if matches!(e.kind(), ErrorKind::WouldBlock | ErrorKind::TimedOut) => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+        while let Some((tag, payload)) = frames.next_frame()? {
+            match tag {
+                K_HEARTBEAT_PING_TAG => send(&mut tls, &[K_HEARTBEAT_ACK_TAG, 0])?,
+                K_CLOSE_TAG => return Err("server closed the stream".into()),
+                K_DATA_MESSAGE_STANZA_TAG => {
+                    let msg = decode_data_message_stanza(&payload).map_err(|e| e.to_string())?;
+                    if let Some(id) = &msg.persistent_id {
+                        if received.contains(id) {
+                            continue;
+                        }
+                        if received.len() >= 100 {
+                            received.remove(0);
+                        }
+                        received.push(id.clone());
+                    }
+                    on_message(msg);
+                }
+                _ => {} // login response, heartbeat ack, iq, ...
+            }
+        }
+    }
+}
+
+fn send(tls: &mut native_tls::TlsStream<TcpStream>, bytes: &[u8]) -> Result<(), String> {
+    tls.write_all(bytes)
+        .and_then(|()| tls.flush())
+        .map_err(|e| e.to_string())
+}
+
+/// MTalk framing: the server opens with a one-byte protocol version, then
+/// sends `tag, varint size, payload` frames.
+#[derive(Default)]
+struct Frames {
+    buf: Vec<u8>,
+    version_seen: bool,
+}
+
+impl Frames {
+    fn push(&mut self, bytes: &[u8]) {
+        self.buf.extend_from_slice(bytes);
+    }
+
+    /// The next complete frame, or `None` until more bytes arrive.
+    fn next_frame(&mut self) -> Result<Option<(u8, Vec<u8>)>, String> {
+        if !self.version_seen {
+            let Some(&version) = self.buf.first() else {
+                return Ok(None);
+            };
+            if version < KMCS_VERSION && version != 38 {
+                return Err(format!("mtalk: bad version {version}"));
+            }
+            self.buf.remove(0);
+            self.version_seen = true;
+        }
+        let Some(&tag) = self.buf.first() else {
+            return Ok(None);
+        };
+        let (mut size, mut shift, mut at) = (0usize, 0, 1);
+        loop {
+            let Some(&b) = self.buf.get(at) else {
+                return Ok(None);
+            };
+            size |= usize::from(b & 0x7f) << shift;
+            at += 1;
+            if b & 0x80 == 0 {
+                break;
+            }
+            shift += 7;
+            if at > 5 {
+                return Err("mtalk: bad frame size".into());
+            }
+        }
+        if self.buf.len() < at + size {
+            return Ok(None);
+        }
+        let payload = self.buf[at..at + size].to_vec();
+        self.buf.drain(..at + size);
+        Ok(Some((tag, payload)))
     }
 }
 
@@ -410,5 +594,68 @@ fn load_creds(path: &Path) -> Option<Creds> {
 fn save_creds(path: &Path, creds: &Creds) {
     if let Ok(bytes) = serde_json::to_vec_pretty(creds) {
         let _ = std::fs::write(path, bytes);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bump_supersedes_older_generations() {
+        let g = Generation::new();
+        let first = g.current();
+        assert!(g.is_current(first));
+        g.bump();
+        assert!(!g.is_current(first));
+        assert!(g.is_current(g.current()));
+    }
+
+    #[test]
+    fn sleep_runs_to_the_end_while_current() {
+        let g = Generation::new();
+        let start = Instant::now();
+        assert!(g.sleep(g.current(), Duration::from_millis(50)));
+        assert!(start.elapsed() >= Duration::from_millis(50));
+    }
+
+    #[test]
+    fn sleep_stops_promptly_when_superseded() {
+        let g = Arc::new(Generation::new());
+        let generation = g.current();
+        let bumper = g.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            bumper.bump();
+        });
+        let start = Instant::now();
+        assert!(!g.sleep(generation, Duration::from_secs(60)));
+        assert!(start.elapsed() < POLL + Duration::from_secs(1));
+    }
+
+    #[test]
+    fn frames_split_across_reads() {
+        let mut f = Frames::default();
+        // version, then a heartbeat ping (tag 0, size 0), then a data frame
+        // whose 200-byte size needs a two-byte varint, delivered in pieces.
+        f.push(&[KMCS_VERSION, K_HEARTBEAT_PING_TAG, 0, K_DATA_MESSAGE_STANZA_TAG, 0xc8]);
+        assert_eq!(f.next_frame().unwrap(), Some((K_HEARTBEAT_PING_TAG, vec![])));
+        assert_eq!(f.next_frame().unwrap(), None);
+        f.push(&[0x01]);
+        f.push(&[7; 150]);
+        assert_eq!(f.next_frame().unwrap(), None);
+        f.push(&[7; 50]);
+        assert_eq!(
+            f.next_frame().unwrap(),
+            Some((K_DATA_MESSAGE_STANZA_TAG, vec![7; 200]))
+        );
+        assert_eq!(f.next_frame().unwrap(), None);
+    }
+
+    #[test]
+    fn frames_reject_old_version() {
+        let mut f = Frames::default();
+        f.push(&[1, 0, 0]);
+        assert!(f.next_frame().is_err());
     }
 }
