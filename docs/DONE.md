@@ -295,6 +295,25 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Device controls (2026-11-02)
+
+- Core: `run_action(node, name, args_json)` → `CoreEvent::Action` on the
+  target (`features/device.rs`; names are short lowercase words). Each app
+  lists the actions it takes in its status (`"actions": [...]`) plus their
+  current values, so the other side shows only buttons that work.
+- Android takes `flashlight {on}`, `volume {step}`, `media {key}`
+  (play_pause / next / previous) and `ringer {mode}` (silent falls back to
+  vibrate without Do Not Disturb access); reports `torch`, `volume`,
+  `ringer`. Desktop takes `volume {step}` (10 %) and `mute {on}` via
+  `osascript` (macOS) or `pactl` (Linux); reports `volume`, `muted`.
+- Both apps show the matching buttons in "Find & control", and ask for the
+  status again after an action. `mdctl`: `action <node> <name> [json]`.
+- Verified live: `mdctl` read the Mac's status and moved its volume
+  86 → 96 → 86. The Android side builds and passes the bridge test; it
+  hasn't been tried on the phone yet.
+- `send` now answers "queued" when the message went to a route that isn't
+  confirmed live yet (a relay route waiting for the peer), not "QUIC".
+
 ## Sending files (2026-11-02)
 
 - `Engine::send_file(node, path)` / `cancel_file(id)` / `set_download_dir`
