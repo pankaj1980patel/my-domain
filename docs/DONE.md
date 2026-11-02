@@ -295,6 +295,22 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Battery: an hour with the screen off (2026-11-03)
+
+- Measured on the phone, simulated unplugged (`dumpsys battery unplug`),
+  screen off, deep Doze, one hour, on the build from before the relay
+  changes. The app held wake locks for 2 min 17 s and used 30 s of CPU.
+  Nearly all of it came from 19 deferred pushes, each holding the 30 s
+  post-push wake lock. All of them came from the Linux desktop, in bursts
+  of three signals.
+- Cause: the desktop's relay link to the phone stayed "live" (the phone
+  never closed its relay socket), so the ladder's background upgrade
+  retried every 60 s, up to 10 times per connection. Each try signals,
+  and that wakes a sleeping phone by push.
+- Fixed: an upgrade try is skipped while the relayed link carried no
+  message in the last minute (`transport::used_within`). The phone now
+  also closes its idle relay socket (below), which ends the "live" link.
+
 ## Relay socket closes when idle in the background (2026-11-02)
 
 - Once a device used the relay, its socket stayed open for good, pinging

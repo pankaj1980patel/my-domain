@@ -158,6 +158,15 @@ pub fn idle_links<P: Platform>(ctx: &NetCtx<P>, idle_secs: u64) -> Vec<String> {
         .collect()
 }
 
+/// Whether the link to `node_id` carried a message in the last `secs`.
+pub fn used_within<P: Platform>(ctx: &NetCtx<P>, node_id: &str, secs: u64) -> bool {
+    let now = now_secs();
+    ctx.p2p_conns
+        .lock()
+        .get(node_id)
+        .is_some_and(|c| now.saturating_sub(c.last_used) < secs)
+}
+
 /// Close a peer's link on purpose (idle in the background). A QUIC link is
 /// closed and its task cleans up; any other link is just forgotten.
 pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {

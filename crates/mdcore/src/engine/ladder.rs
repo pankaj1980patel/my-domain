@@ -309,6 +309,11 @@ fn run_ladder<P: Platform>(
                     if ctx.shutdown.load(Ordering::Relaxed) || !relayed {
                         return;
                     }
+                    // Each try signals the peer, which wakes a sleeping
+                    // phone by push. Only worth it while the link is used.
+                    if !transport::used_within(&ctx, &node_id, UPGRADE_EVERY.as_secs()) {
+                        continue;
+                    }
                     run_ladder(
                         ctx.clone(),
                         url.clone(),
