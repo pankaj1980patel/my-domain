@@ -295,6 +295,14 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Quieter LAN announce; pull to refresh (2026-11-02)
+
+- A LAN announce sends multicast and broadcasts only; the /24 unicast
+  sweep (254 packets per interface) is added from the second round on,
+  and only if no LAN device is known yet (mDNS or a beacon found none).
+- Android Home: pull down to refresh the device list (the Refresh button
+  is gone; the empty state says "Pull down to refresh").
+
 ## Delivery receipts (2026-11-02)
 
 - Every chat message carries an id (`Plaintext.id`). The receiver acks it

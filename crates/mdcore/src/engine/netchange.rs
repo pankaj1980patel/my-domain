@@ -86,7 +86,10 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
     });
 }
 
-/// Beacon ourselves on the LAN a few times (multicast, broadcast, /24 sweep).
+/// Beacon ourselves on the LAN a few times (multicast and broadcasts). The
+/// /24 unicast sweep (254 packets per interface) is added only if, after the
+/// first round, we still know no device on the LAN: mDNS or a beacon reply
+/// normally finds them first, and the sweep is for networks that drop both.
 pub(crate) fn announce<P: Platform>(ctx: &NetCtx<P>, socket: &Arc<UdpSocket>) {
     // No key yet: nobody would accept our beacon (see `crypto::lan_tag`).
     let Some(tag) = crate::crypto::lan_tag_of(&ctx.key) else {
@@ -94,13 +97,25 @@ pub(crate) fn announce<P: Platform>(ctx: &NetCtx<P>, socket: &Arc<UdpSocket>) {
     };
     let id = ctx.identity.lock().clone();
     let socket = socket.clone();
-    let targets = discovery::lan_targets(&ctx.platform.iface_mode());
+    let mode = ctx.platform.iface_mode();
+    let ctx = ctx.clone();
     std::thread::spawn(move || {
-        for _ in 0..3 {
+        let mut targets = discovery::lan_targets(&mode, false);
+        for round in 0..3 {
+            if round == 1 && !knows_a_lan_device(&ctx) {
+                targets = discovery::lan_targets(&mode, true);
+            }
             discovery::send_beacon(&socket, &id, &tag, false, &targets);
-            std::thread::sleep(Duration::from_millis(700));
+            std::thread::sleep(ROUND_GAP);
         }
     });
+}
+
+/// Pause between announce rounds; long enough for mDNS and beacon replies.
+const ROUND_GAP: Duration = Duration::from_millis(700);
+
+fn knows_a_lan_device<P: Platform>(ctx: &NetCtx<P>) -> bool {
+    ctx.peers.lock().values().any(|p| p.source == Source::Lan)
 }
 
 /// Measure our NAT type now (blocks for the STUN round trips) and re-register

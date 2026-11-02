@@ -46,9 +46,10 @@ pub fn bind_multicast(mode: &crate::platform::IfaceMode) -> std::io::Result<UdpS
     Ok(socket.into())
 }
 
-/// Targets for a LAN announce: multicast + global broadcast + per-interface /24
-/// (subnet broadcast + unicast sweep of every host).
-pub fn lan_targets(mode: &crate::platform::IfaceMode) -> Vec<SocketAddr> {
+/// Targets for a LAN announce: multicast + global broadcast + per-interface
+/// subnet broadcast, and with `sweep` a unicast to every other host in the
+/// /24 (for networks that drop multicast and broadcast).
+pub fn lan_targets(mode: &crate::platform::IfaceMode, sweep: bool) -> Vec<SocketAddr> {
     use crate::platform::IfaceMode;
     let mut v = vec![
         SocketAddr::new(MCAST_GROUP.into(), DISCOVERY_PORT),
@@ -67,6 +68,9 @@ pub fn lan_targets(mode: &crate::platform::IfaceMode) -> Vec<SocketAddr> {
             Ipv4Addr::new(o[0], o[1], o[2], 255).into(),
             DISCOVERY_PORT,
         ));
+        if !sweep {
+            continue;
+        }
         for host in 1..=254u8 {
             if host == o[3] {
                 continue;
@@ -215,7 +219,7 @@ mod tests {
     #[test]
     fn lan_targets_cover_multicast_broadcast_and_the_whole_slash_24() {
         let me = Ipv4Addr::new(192, 168, 1, 20);
-        let t = lan_targets(&IfaceMode::Single(me));
+        let t = lan_targets(&IfaceMode::Single(me), true);
         let has =
             |ip: [u8; 4]| t.contains(&SocketAddr::new(Ipv4Addr::from(ip).into(), DISCOVERY_PORT));
         assert!(has([239, 255, 42, 98]), "multicast group");
@@ -228,6 +232,12 @@ mod tests {
         assert!(!has([192, 168, 1, 20]), "never ourselves");
         // 2 global + subnet broadcast + 253 other hosts
         assert_eq!(t.len(), 2 + 1 + 253);
+    }
+
+    #[test]
+    fn without_the_sweep_only_multicast_and_broadcasts_are_sent() {
+        let t = lan_targets(&IfaceMode::Single(Ipv4Addr::new(192, 168, 1, 20)), false);
+        assert_eq!(t.len(), 3, "multicast, global and subnet broadcast");
     }
 
     fn beacon(id: &str, tcp: u16) -> Beacon {
@@ -336,7 +346,7 @@ mod tests {
 
     #[test]
     fn loopback_interfaces_get_no_sweep() {
-        let t = lan_targets(&IfaceMode::Single(Ipv4Addr::LOCALHOST));
+        let t = lan_targets(&IfaceMode::Single(Ipv4Addr::LOCALHOST), true);
         assert_eq!(t.len(), 2, "only multicast + broadcast");
     }
 }

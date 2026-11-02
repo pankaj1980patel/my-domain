@@ -35,8 +35,10 @@ or with less battery.
      answer PCP; UPnP covers it.)
 6. ~~QUIC connection migration~~: **done**.
 7. ~~Standard LAN discovery (mDNS / DNS-SD)~~: **done**.
-   - Still to do: once mDNS has proven itself on real networks, send the
-     /24 sweep only when mDNS finds nothing.
+   - ~~Send the /24 sweep only when mDNS finds nothing~~: **done**
+     (2026-11-02): an announce sends multicast and broadcasts, and adds
+     the 254-host sweep only if no LAN device is known after the first
+     round.
 8. ~~Keep-alive that suits phones~~: **done** (20 s / 60 s, configurable).
    - ~~Close idle links while the screen is off and wake by push~~:
      **done** (2026-11-02). Still to do: measure the battery saving on the
