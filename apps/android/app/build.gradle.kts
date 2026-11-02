@@ -1,3 +1,5 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,6 +18,14 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // Firebase ids for FCM, read from the gitignored
+        // google-services-android.json (see Fcm.kt). Empty = FCM off.
+        val fcm = firebaseIds(applicationId ?: "")
+        buildConfigField("String", "FCM_APP_ID", "\"${fcm["app_id"]}\"")
+        buildConfigField("String", "FCM_API_KEY", "\"${fcm["api_key"]}\"")
+        buildConfigField("String", "FCM_PROJECT_ID", "\"${fcm["project_id"]}\"")
+        buildConfigField("String", "FCM_SENDER_ID", "\"${fcm["sender_id"]}\"")
     }
 
     buildTypes {
@@ -39,7 +49,36 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
+}
+
+/**
+ * Firebase ids from `google-services-android.json` (repo `apps/android/`, or
+ * `app/google-services.json`). Prefers the client registered for this
+ * package, else the first one: we initialise Firebase in code, so the
+ * package name needn't match the way the google-services plugin demands.
+ */
+fun firebaseIds(pkg: String): Map<String, String> {
+    val empty = mapOf("app_id" to "", "api_key" to "", "project_id" to "", "sender_id" to "")
+    val file = listOf(rootProject.file("google-services-android.json"), file("google-services.json"))
+        .firstOrNull { it.exists() } ?: return empty
+    @Suppress("UNCHECKED_CAST")
+    val root = JsonSlurper().parse(file) as Map<String, Any?>
+    val info = root["project_info"] as Map<String, Any?>
+    @Suppress("UNCHECKED_CAST")
+    val clients = root["client"] as List<Map<String, Any?>>
+    fun pkgOf(c: Map<String, Any?>) =
+        ((c["client_info"] as Map<*, *>)["android_client_info"] as Map<*, *>)["package_name"]
+    val client = clients.firstOrNull { pkgOf(it) == pkg } ?: clients.firstOrNull() ?: return empty
+    @Suppress("UNCHECKED_CAST")
+    val keys = client["api_key"] as List<Map<String, Any?>>
+    return mapOf(
+        "app_id" to ((client["client_info"] as Map<*, *>)["mobilesdk_app_id"] as String),
+        "api_key" to (keys.firstOrNull()?.get("current_key") as String? ?: ""),
+        "project_id" to (info["project_id"] as String),
+        "sender_id" to (info["project_number"] as String),
+    )
 }
 
 // Locate the Rust toolchain. Android Studio's Gradle daemon often doesn't
@@ -96,4 +135,8 @@ dependencies {
 
     // Material XML theme used by the activity (Theme.Material3.*).
     implementation("com.google.android.material:material:1.12.0")
+
+    // FCM: signals wake this device without a server-held connection.
+    implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
+    implementation("com.google.firebase:firebase-messaging")
 }

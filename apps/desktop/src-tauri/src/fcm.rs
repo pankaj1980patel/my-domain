@@ -1,23 +1,26 @@
 // Desktop FCM receiver.
 //
 // The desktop has no Firebase SDK (it is a native process, not a browser or an
-// Android app), so we use `fcm_receiver_rs`, which registers with FCM the way a
-// web/Android client would — GCM check-in + register, then a persistent MTalk
-// (mcs) connection to mtalk.google.com:5228 — and delivers data messages.
+// Android app), so we use `fcm_receiver_rs`, which registers with FCM the way
+// an Android app would (GCM check-in + register3), then holds a persistent
+// MTalk (mcs) connection to mtalk.google.com:5228 and delivers data messages.
+//
+// Android mode, not web mode: since late 2026, tokens from the crate's web
+// (Chrome) registration are rejected by the FCM send API as UNREGISTERED the
+// moment they're issued, while Android-style tokens are delivered. We register
+// as the project's Firebase Android app.
 //
 // This mirrors the Android `FirebaseMessagingService` path: obtain a token,
 // publish it to the registry (via the Engine's `fcm_token()` + a refresh), and
 // feed inbound signals into `Engine::on_signal`, which drives the responder side
 // of the connection ladder.
 //
-// Credentials (all overridable by env; the two public web-config values fall
-// back to the project defaults):
-//   MYDOMAIN_FCM_API_KEY     (public web apiKey)        — default baked in
-//   MYDOMAIN_FCM_PROJECT_ID  (Firebase project id)      — default baked in
-//   MYDOMAIN_FCM_APP_ID      (1:NNN:web:xxxx / android)  — REQUIRED
-//   MYDOMAIN_FCM_VAPID_KEY   (Web Push public key)       — REQUIRED
-// Missing APP_ID or VAPID_KEY => the receiver is disabled (logged once), exactly
-// like the server skips FCM when its service-account is absent.
+// Settings (env, else `<config>/fcm_config.json`, else the baked defaults):
+//   MYDOMAIN_FCM_API_KEY     Firebase Android app's API key
+//   MYDOMAIN_FCM_APP_ID      Firebase Android app id (1:NNN:android:xxxx)
+//   MYDOMAIN_FCM_PROJECT_ID  Firebase project id
+//   MYDOMAIN_FCM_SENDER_ID   project number (GCM sender id)
+//   MYDOMAIN_FCM_PACKAGE     the Android app's package name
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,13 +30,14 @@ use std::time::Duration;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
-use fcm_receiver_rs::client::FcmClient;
+use fcm_receiver_rs::client::{AndroidApp, FcmClient};
 
 use crate::Eng;
 
 /// Mirror an FCM lifecycle/message line to the frontend debug panel. `kind` is
 /// one of "token" | "message" | "error" | "info"; the panel renders errors red.
 fn emit_fcm(app: &AppHandle, kind: &str, from: &str, text: &str) {
+    eprintln!("[fcm] {kind}: {text}");
     let _ = app.emit(
         "fcm-event",
         serde_json::json!({ "kind": kind, "from": from, "text": text }),
@@ -49,27 +53,30 @@ fn preview(s: &str) -> String {
     }
 }
 
-/// Public web-config defaults for the `my-domain-c0c36` Firebase project. None
-/// of these are secrets — the web SDK ships them to every browser, and the VAPID
-/// value is the *public* push key (its private half stays on the server). Baking
-/// them means every desktop install can receive push signals out of the box; a
-/// `fcm_config.json` or env var still overrides any of them per machine.
-const DEFAULT_API_KEY: &str = "AIzaSyC15ftHcLqR3kaSp9iFWJQTyOaByEeLves";
+/// Firebase Android app of the `my-domain-c0c36` project. None of these are
+/// secrets: every Android build ships them in its google-services config.
+/// Baking them means every desktop install can receive push signals out of the
+/// box; a `fcm_config.json` or env var still overrides any of them per machine.
+const DEFAULT_API_KEY: &str = "AIzaSyBF8ElZf7hu25ZWLTT9sf-QyuqQBVmBepA";
+const DEFAULT_APP_ID: &str = "1:744722246836:android:f2d00a1c64624738ebfbe1";
 const DEFAULT_PROJECT_ID: &str = "my-domain-c0c36";
-const DEFAULT_APP_ID: &str = "1:744722246836:web:11fa725b96ced3ecebfbe1";
-const DEFAULT_VAPID_KEY: &str =
-    "BGENRpf8b_hvgMPaQ45OJZfjL6_l6-iwVTmYXqJrk0Fn0KcSy_sIX3XcISIBb9ijFkjEoz3uguOHBrkDFy51zxs";
+const DEFAULT_SENDER_ID: &str = "744722246836";
+const DEFAULT_PACKAGE: &str = "com.mydomain";
+/// Signing-cert SHA-1 sent with the registration. FCM doesn't check it for a
+/// Firebase app without SHA restrictions, so a fixed placeholder is enough.
+const PACKAGE_CERT: &str = "0000000000000000000000000000000000000000";
 
+#[derive(Clone)]
 struct FcmConfig {
     api_key: String,
     app_id: String,
     project_id: String,
-    vapid_key: String,
+    sender_id: String,
+    package: String,
 }
 
 impl FcmConfig {
-    /// Env first, then `<config>/fcm_config.json`, then defaults for the public
-    /// values. Returns `None` (receiver disabled) if app_id or vapid_key is unset.
+    /// Env first, then `<config>/fcm_config.json`, then the defaults.
     fn load(config_dir: &Path) -> Option<FcmConfig> {
         let file: FileConfig = std::fs::read(config_dir.join("fcm_config.json"))
             .ok()
@@ -92,12 +99,23 @@ impl FcmConfig {
                 &file.project_id,
                 DEFAULT_PROJECT_ID,
             ),
-            vapid_key: pick("MYDOMAIN_FCM_VAPID_KEY", &file.vapid_key, DEFAULT_VAPID_KEY),
+            sender_id: pick("MYDOMAIN_FCM_SENDER_ID", &file.sender_id, DEFAULT_SENDER_ID),
+            package: pick("MYDOMAIN_FCM_PACKAGE", &file.package, DEFAULT_PACKAGE),
         };
-        if cfg.app_id.trim().is_empty() || cfg.vapid_key.trim().is_empty() {
+        if !cfg.app_id.contains(":android:") {
+            // A web app id from an older fcm_config.json: web tokens are dead.
+            eprintln!("[fcm] disabled: app_id must be a Firebase Android app id");
             return None;
         }
         Some(cfg)
+    }
+
+    fn android_app(&self) -> AndroidApp {
+        AndroidApp {
+            gcm_sender_id: self.sender_id.clone(),
+            android_package: self.package.clone(),
+            android_package_cert: PACKAGE_CERT.into(),
+        }
     }
 }
 
@@ -110,8 +128,14 @@ struct FileConfig {
     #[serde(default)]
     project_id: String,
     #[serde(default)]
-    vapid_key: String,
+    sender_id: String,
+    #[serde(default)]
+    package: String,
 }
+
+/// Saved registration. Named for Android mode, so a web-mode registration
+/// saved by older builds (whose token is dead) is never reused.
+const CREDS_FILE: &str = "fcm_creds_android.json";
 
 /// Persisted registration so we keep the same FCM token (and MTalk identity)
 /// across restarts — re-registering would orphan the old token on the server.
@@ -134,10 +158,10 @@ static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 /// Throw away the saved registration and register a fresh token. Used when
 /// FCM reports our token as unregistered (it expired or was revoked): the old
-/// `fcm_creds.json` is kept as `fcm_creds.stale.json` for debugging.
+/// saved registration is kept as `fcm_creds.stale.json` for debugging.
 pub fn reregister(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
     if let Ok(dir) = app.path().app_config_dir() {
-        let _ = std::fs::rename(dir.join("fcm_creds.json"), dir.join("fcm_creds.stale.json"));
+        let _ = std::fs::rename(dir.join(CREDS_FILE), dir.join("fcm_creds.stale.json"));
     }
     *token_cell.lock().unwrap() = None;
     GENERATION.fetch_add(1, Ordering::SeqCst);
@@ -174,9 +198,28 @@ pub fn spawn(app: AppHandle, token_cell: Arc<Mutex<Option<String>>>) {
 
     let generation = GENERATION.load(Ordering::SeqCst);
     std::thread::spawn(move || {
-        let creds = config_dir.join("fcm_creds.json");
-        if let Err(e) = run(app, token_cell, cfg, creds, generation) {
-            eprintln!("[fcm] receiver stopped: {e}");
+        let creds = config_dir.join(CREDS_FILE);
+        // Google's registration endpoint fails intermittently
+        // (PHONE_REGISTRATION_ERROR, often several times in a row), so a
+        // single attempt at startup left desktops without push for good.
+        // Retry with backoff; a success is saved and reused on later starts.
+        let mut wait = Duration::from_secs(30);
+        loop {
+            match run(
+                app.clone(),
+                token_cell.clone(),
+                cfg.clone(),
+                creds.clone(),
+                generation,
+            ) {
+                Ok(()) => return,
+                Err(e) => eprintln!("[fcm] registration failed: {e}; retrying in {wait:?}"),
+            }
+            std::thread::sleep(wait);
+            if GENERATION.load(Ordering::SeqCst) != generation {
+                return; // superseded by a fresh registration
+            }
+            wait = (wait * 2).min(Duration::from_secs(30 * 60));
         }
     });
 }
@@ -188,14 +231,15 @@ fn run(
     creds_path: PathBuf,
     generation: u64,
 ) -> Result<(), String> {
+    let android_app = cfg.android_app();
     let mut client =
         FcmClient::new(cfg.api_key, cfg.app_id, cfg.project_id).map_err(|e| e.to_string())?;
-    client.vapid_key = cfg.vapid_key;
+    client.android_app = Some(android_app);
 
     // Inbound data message -> Engine::on_signal. The data fields set by the
     // server (server/src/signal.rs) are `type`, `from`, `to`, `payload`.
     let handle = app.clone();
-    client.on_data_message = Some(Arc::new(move |payload: Vec<u8>| {
+    let deliver = Arc::new(move |payload: Vec<u8>| {
         match extract_signal(&payload) {
             Some((from, sig)) => {
                 // Self-test pong: the server echoes our ping as `selfping:<sid>`.
@@ -225,6 +269,19 @@ fn run(
                 );
             }
         }
+    });
+    // Web-push messages arrive encrypted and come out of `on_data_message`
+    // as JSON; Android-mode messages arrive in the clear as key/value
+    // `app_data` on `on_raw_message`. Both feed the same handler.
+    let on_json = deliver.clone();
+    client.on_data_message = Some(Arc::new(move |payload: Vec<u8>| on_json(payload)));
+    client.on_raw_message = Some(Arc::new(move |msg| {
+        let fields: serde_json::Map<String, serde_json::Value> = msg
+            .app_data
+            .iter()
+            .map(|d| (d.key.clone(), serde_json::Value::String(d.value.clone())))
+            .collect();
+        deliver(serde_json::Value::Object(fields).to_string().into_bytes());
     }));
 
     // Reuse a persisted registration if we have one; otherwise register fresh.
@@ -245,8 +302,22 @@ fn run(
             client
                 .load_keys(&private_key_base64, &auth_secret_base64)
                 .map_err(|e| e.to_string())?;
-            let (fcm_token, gcm_token, android_id, security_token) =
-                client.register().map_err(|e| e.to_string())?;
+            // Google refuses a registration made right after check-in
+            // (PHONE_REGISTRATION_ERROR); a retry a few seconds later on the
+            // same checked-in device succeeds. `register` keeps the device
+            // id, so retrying on this client doesn't check in again.
+            let mut attempt = 1;
+            let (fcm_token, gcm_token, android_id, security_token) = loop {
+                match client.register() {
+                    Ok(r) => break r,
+                    Err(e) if attempt < 8 => {
+                        eprintln!("[fcm] register try {attempt}: {e}; retrying");
+                        attempt += 1;
+                        std::thread::sleep(Duration::from_secs(3));
+                    }
+                    Err(e) => return Err(e.to_string()),
+                }
+            };
             save_creds(
                 &creds_path,
                 &Creds {

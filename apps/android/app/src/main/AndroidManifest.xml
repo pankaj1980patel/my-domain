@@ -30,6 +30,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- FCM: connection signals (dial me back, join the relay, punch). -->
+        <service
+            android:name=".MdMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Captures other apps' notifications for the pub/sub sharing feature.
              User must enable it under Settings → Notification access. -->
         <service

@@ -69,6 +69,7 @@ class NetService : Service() {
         val ip = wifiIpv4()
         val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip, filesDir.absolutePath)
         runCatching { myNodeId = JSONObject(identityJson).optString("node_id", "") }
+        Fcm.init(this)
 
         publishInstalledApps()
         startNetworking()

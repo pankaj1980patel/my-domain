@@ -156,6 +156,7 @@ impl FcmClient {
         // is a message-format bug on our side — surfacing it (instead of clearing a
         // valid token) is what makes such bugs debuggable.
         if status.as_u16() == 404 || txt.contains("UNREGISTERED") || txt.contains("NOT_FOUND") {
+            tracing::warn!("FCM rejected token as dead: {status}: {txt}");
             return Err(FcmError::Unregistered);
         }
         Err(FcmError::Send(format!("FCM {status}: {txt}")))
