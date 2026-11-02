@@ -83,6 +83,30 @@ in declaration order, so `link` (the endpoint) closes *before* `_runtime` shuts 
   a worker thread.
 - **`read_exact` on a quinn stream returns quinn's own error type**, not
   `io::Error`, so `?` couldn't convert it. Fixed with `.map_err(io::Error::other)`.
+- **A lock guard in an `if let` lives for the whole block.** This deadlocked
+  the signal-channel keeper (2026-11-02):
+
+  ```rust
+  // BAD: the guard from `ctx.relay.lock()` is a temporary in the scrutinee,
+  // and Rust keeps it alive until the end of the `if let` block, so
+  // ensure_relay (which locks ctx.relay again) waits forever.
+  if let (Some(t), true) = (target, ctx.relay.lock().is_none()) {
+      ensure_relay(&ctx, ..);
+  }
+  // GOOD: copy the answer out first; the guard dies at the `;`.
+  let connected = ctx.relay.lock().is_some();
+  if !connected { ensure_relay(&ctx, ..); }
+  ```
+  Node has no equivalent: there is one thread, so there are no locks to hold.
+  In Rust a `Mutex` guard unlocks when it's dropped, and "when" depends on
+  the scope of the temporary it lives in. Rule of thumb: never call anything
+  that might lock again while a guard can still be alive. Read into a
+  variable first.
+- **Two maps that must agree have to change under one lock.** The QUIC link
+  registry wrote `ws_conns` under its lock, then the QUIC connection map
+  after releasing it. A second connection registering in between saw a link
+  with no QUIC record and orphaned it. The phone's different timing exposed
+  it; the Mac never did. Run concurrency tests on more than one machine.
 
 ## What's next
 Moving the remaining loops (TCP/UDP/WS listeners, discovery, heartbeat) into

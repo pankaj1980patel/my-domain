@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **115** core tests, plus **9** server tests and **1** desktop test |
+| Tests | **116** core tests, plus **10** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -203,6 +203,12 @@ The engine tries each method in order, cheapest first, until one works
 - **Relay first, upgrade later:** a hard-to-reach peer connects through the
   relay within seconds, then hole punching or WebRTC replace it with a
   direct link. Retries continue every 60 s.
+
+- **Signals over the server WebSocket:** while logged in, every device
+  keeps one WebSocket to the server open. The server delivers signals over
+  it instantly and uses FCM only for devices that aren't connected. This
+  fixed desktop signaling, which had broken because Google was rejecting
+  the desktop FCM registrations.
 
 ## Device lab and dev tools
 

@@ -26,8 +26,8 @@ or with less battery.
    - Later: close `:6969` to the public, once no install uses it.
 2. ~~Detect NAT type up front~~: **done**.
 3. ~~Re-check the network when it changes~~: **done**.
-4. ~~IPv6~~: **done**. Still to do: Android doesn't report an IPv6
-   address yet (its platform only knows the Wi-Fi IPv4).
+4. ~~IPv6~~: **done**, on Android too (the phone publishes its global
+   IPv6 on mobile data).
 5. ~~Ask the home router to open a port~~: **done** for UPnP-IGD (verified
    on the home router: the internet reaches the laptop through the
    mapping).
