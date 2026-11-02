@@ -57,6 +57,15 @@ const MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
 /// An offer nobody accepted is given up after this (it has left the
 /// outbox by then, see `transport::outbox`).
 const NEVER_ACCEPTED: Duration = Duration::from_secs(11 * 60);
+/// A transfer paused this long in total (the device never came back) is
+/// given up.
+const GIVE_UP_AFTER: Duration = Duration::from_secs(60 * 60);
+/// A partial incoming file nobody has fed for this long is dropped (the
+/// sender gave up or restarted).
+const INCOMING_IDLE: Duration = Duration::from_secs(2 * 60 * 60);
+/// A gap ack rewinds the sender at most this often (each chunk in flight
+/// after the gap is answered with one).
+const REWIND_EVERY: Duration = Duration::from_millis(500);
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 const PARTIAL_DIR: &str = ".mydomain-partial";
 
@@ -76,6 +85,14 @@ struct Outgoing {
     /// Wait before the next re-offer while the peer has no link.
     backoff: Duration,
     progress_at: Option<Instant>,
+    /// When `acked` last moved (or the sender last rewound): no movement
+    /// for `STALL` means chunks were lost.
+    last_progress: Instant,
+    /// The receiver reported a gap: resend from `acked` now.
+    rewind: bool,
+    rewound_at: Option<Instant>,
+    /// Since when the transfer is paused (no sender running, not done).
+    paused_since: Option<Instant>,
 }
 
 struct Incoming {
@@ -88,6 +105,8 @@ struct Incoming {
     len: u64,
     hasher: Sha256,
     progress_at: Option<Instant>,
+    /// Last offer or chunk for it (see `INCOMING_IDLE`).
+    last_seen: Instant,
 }
 
 /// Transfers in progress, both ways.
@@ -146,7 +165,11 @@ pub fn safe_name(name: &str) -> String {
         .filter(|c| !c.is_control() && !matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|'))
         .take(200)
         .collect();
-    let clean = clean.trim().trim_start_matches('.').trim().to_string();
+    let clean = clean
+        .trim()
+        .trim_start_matches(['.', ' '])
+        .trim_end_matches(['.', ' '])
+        .to_string();
     if clean.is_empty() {
         "file".to_string()
     } else {
@@ -154,20 +177,46 @@ pub fn safe_name(name: &str) -> String {
     }
 }
 
-/// `dir/name`, or `dir/name (1).ext`, ... if that's taken.
-pub fn free_path(dir: &Path, name: &str) -> PathBuf {
-    let first = dir.join(name);
-    if !first.exists() {
-        return first;
+/// `dir/name` for `n == 0`, else `dir/name (n).ext`.
+fn numbered(dir: &Path, name: &str, n: u32) -> PathBuf {
+    if n == 0 {
+        return dir.join(name);
     }
     let (stem, ext) = match name.rfind('.') {
         Some(i) if i > 0 => (&name[..i], &name[i..]),
         _ => (name, ""),
     };
-    (1..)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
+    dir.join(format!("{stem} ({n}){ext}"))
+}
+
+/// `dir/name`, or `dir/name (1).ext`, ... if that's taken.
+pub fn free_path(dir: &Path, name: &str) -> PathBuf {
+    (0..10_000)
+        .map(|n| numbered(dir, name, n))
         .find(|p| !p.exists())
-        .unwrap_or(first)
+        .unwrap_or_else(|| dir.join(name))
+}
+
+/// Move `part` into `dir` under `name` or the first free numbered name,
+/// never over an existing file: the name is claimed with `create_new`
+/// (atomic), so two files finishing at once can't take the same one.
+fn move_into(part: &Path, dir: &Path, name: &str) -> Option<PathBuf> {
+    for n in 0..10_000 {
+        let dest = numbered(dir, name, n);
+        match OpenOptions::new().write(true).create_new(true).open(&dest) {
+            Ok(_) => {
+                // Ours now (empty): replace it with the file.
+                if std::fs::rename(part, &dest).is_ok() {
+                    return Some(dest);
+                }
+                let _ = std::fs::remove_file(&dest);
+                return None;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(_) => return None,
+        }
+    }
+    None
 }
 
 fn sha256_file(path: &Path) -> std::io::Result<String> {
@@ -239,6 +288,10 @@ pub fn start<P: Platform>(
                 offered_at: Some(Instant::now()),
                 backoff: FIRST_BACKOFF,
                 progress_at: None,
+                last_progress: Instant::now(),
+                rewind: false,
+                rewound_at: None,
+                paused_since: None,
             },
         );
         crate::engine::send_reliably(&ctx, &node, &msg.to_string());
@@ -268,70 +321,81 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
     else {
         return;
     };
-    let stop = |ctx: &NetCtx<P>| {
-        if let Some(t) = ctx.files.out.lock().get_mut(&id) {
-            t.running = false;
-        }
+    // Paused: offered again on the next link (see `resume_paused`).
+    let pause = |t: &mut Outgoing| {
+        t.running = false;
+        t.paused_since.get_or_insert_with(Instant::now);
     };
     let Ok(mut file) = File::open(&path) else {
-        stop(&ctx);
-        return;
+        return give_up(&ctx, &id, "the file couldn't be read");
     };
     let mut pos = from;
     let mut buf = vec![0u8; CHUNK];
-    let mut stalls = 0;
-    let mut waited = Duration::ZERO;
+    let (mut stalls, mut seen_acked) = (0, from);
     loop {
-        // Wait for room in the window (or the end), rewinding on a stall.
+        // Wait for room in the window (or the end), rewinding on a stall
+        // or when the receiver reports a gap.
         {
             let mut out = files.out.lock();
-            let Some(t) = out.get(&id) else { return };
-            let acked = t.acked;
-            if acked >= size {
-                return; // all there; `file_done` finishes it
+            let Some(t) = out.get_mut(&id) else { return };
+            if t.acked >= size {
+                // All there; `file_done` finishes it. If that got lost, the
+                // re-offer is answered from the receiver's memory.
+                pause(t);
+                return;
             }
-            if pos >= size || pos.saturating_sub(acked) >= WINDOW {
-                let timed_out = files.acked.wait_for(&mut out, LINK_CHECK).timed_out();
+            if t.acked > seen_acked {
+                (stalls, seen_acked) = (0, t.acked);
+            }
+            if t.rewind {
+                t.rewind = false;
+                pos = t.acked;
+            }
+            pos = pos.max(t.acked);
+            if pos >= size || pos - t.acked >= WINDOW {
+                files.acked.wait_for(&mut out, LINK_CHECK);
                 let Some(t) = out.get_mut(&id) else { return };
                 if !ctx.ws_conns.lock().contains_key(&node) {
-                    t.running = false; // link gone: offered again on the next
-                    return;
+                    return pause(t); // link gone
                 }
-                waited = if timed_out { waited + LINK_CHECK } else { Duration::ZERO };
-                if waited < STALL {
-                    continue;
-                }
-                waited = Duration::ZERO;
-                if t.acked == acked {
+                if t.last_progress.elapsed() >= STALL {
                     stalls += 1;
                     if stalls >= MAX_STALLS {
-                        t.running = false; // paused: offered again on a link
-                        return;
+                        return pause(t);
                     }
                     pos = t.acked;
-                } else {
-                    stalls = 0;
+                    t.last_progress = Instant::now();
                 }
                 continue;
             }
         }
         let n = match file.seek(SeekFrom::Start(pos)).and_then(|_| file.read(&mut buf)) {
             Ok(n) if n > 0 => n,
-            _ => {
-                stop(&ctx);
-                return;
-            }
+            // Shorter than when it was offered, or unreadable now.
+            _ => return give_up(&ctx, &id, "the file couldn't be read"),
         };
         let msg = json!({
             "type": "file_chunk", "from": me(&ctx), "id": id, "off": pos,
             "data": base64::engine::general_purpose::STANDARD.encode(&buf[..n]),
         });
         if send(&ctx, &node, &msg).is_err() {
-            stop(&ctx); // no link: offered again when there is one
+            if let Some(t) = files.out.lock().get_mut(&id) {
+                pause(t); // no link
+            }
             return;
         }
         pos += n as u64;
     }
+}
+
+/// End an outgoing transfer for good: tell the user and the receiver.
+fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
+    let Some(t) = ctx.files.out.lock().remove(id) else {
+        return;
+    };
+    ctx.files.acked.notify_all();
+    failed(ctx, id, &t.node, &t.name, false, why);
+    let _ = send(ctx, &t.node, &json!({ "type": "file_cancel", "from": me(ctx), "id": id }));
 }
 
 /// Offer paused transfers again (called on a timer); the receiver answers
@@ -376,6 +440,30 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     for (id, node, name) in expired {
         failed(ctx, &id, &node, &name, false, "the device wasn't reachable");
     }
+    let stuck: Vec<String> = ctx
+        .files
+        .out
+        .lock()
+        .iter()
+        .filter(|(_, t)| !t.running && t.paused_since.is_some_and(|p| p.elapsed() >= GIVE_UP_AFTER))
+        .map(|(id, _)| id.clone())
+        .collect();
+    for id in stuck {
+        give_up(ctx, &id, "the device wasn't reachable");
+    }
+    // Partial incoming files nobody feeds any more.
+    let idle: Vec<Incoming> = {
+        let mut inc = ctx.files.inc.lock();
+        let ids: Vec<String> = inc
+            .iter()
+            .filter(|(_, t)| t.last_seen.elapsed() >= INCOMING_IDLE)
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.iter().filter_map(|id| inc.remove(id)).collect()
+    };
+    for t in idle {
+        let _ = std::fs::remove_file(&t.part);
+    }
     for (node, msg, linked) in offers {
         if linked {
             let _ = send(ctx, &node, &msg);
@@ -387,11 +475,18 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
 
 /// Stop a transfer, either way, and tell the other side.
 pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
-    let peer = if let Some(t) = ctx.files.out.lock().remove(id) {
+    let outgoing = ctx.files.out.lock().remove(id);
+    let incoming = match outgoing {
+        Some(_) => None,
+        None => ctx.files.inc.lock().remove(id),
+    };
+    let peer = if let Some(t) = outgoing {
         failed(ctx, id, &t.node, &t.name, false, "cancelled");
         Some(t.node)
-    } else if let Some(t) = ctx.files.inc.lock().remove(id) {
+    } else if let Some(t) = incoming {
         let _ = std::fs::remove_file(&t.part);
+        // A re-offer still on its way is answered "cancelled", not restarted.
+        ctx.files.finished(id, Some("cancelled on the other device"));
         failed(ctx, id, &t.from, &t.name, true, "cancelled");
         Some(t.from)
     } else {
@@ -432,9 +527,12 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         return reject("this device can't receive files");
     };
 
-    let mut inc = ctx.files.inc.lock();
-    let offset = if let Some(t) = inc.get(&id) {
+    let known = ctx.files.inc.lock().get_mut(&id).map(|t| {
+        t.last_seen = Instant::now();
         t.len
+    });
+    let offset = if let Some(len) = known {
+        len
     } else {
         let partial = dir.join(PARTIAL_DIR);
         let part = partial.join(format!("{id}.part"));
@@ -446,11 +544,12 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                 .open(&part)
         });
         let Ok(file) = opened else {
-            drop(inc);
             return reject("can't write to the downloads folder");
         };
         // A partial file from before (an earlier link, or a restart):
-        // resume after it, hashing what's already there.
+        // resume after it, hashing what's already there. Outside the lock:
+        // a big partial file takes a while, and chunks of other transfers
+        // shouldn't wait for it.
         let mut hasher = Sha256::new();
         let mut len = 0u64;
         if let Ok(mut f) = File::open(&part) {
@@ -468,23 +567,29 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             hasher = Sha256::new();
             len = 0;
         }
-        inc.insert(
-            id.clone(),
-            Incoming {
-                from: from.to_string(),
-                name: name.clone(),
-                size,
-                sha,
-                part,
-                file,
-                len,
-                hasher,
-                progress_at: None,
-            },
-        );
-        len
+        let mut inc = ctx.files.inc.lock();
+        // Another copy of the offer may have got here first.
+        if let Some(t) = inc.get(&id) {
+            t.len
+        } else {
+            inc.insert(
+                id.clone(),
+                Incoming {
+                    from: from.to_string(),
+                    name: name.clone(),
+                    size,
+                    sha,
+                    part,
+                    file,
+                    len,
+                    hasher,
+                    progress_at: None,
+                    last_seen: Instant::now(),
+                },
+            );
+            len
+        }
     };
-    drop(inc);
     ctx.sink.emit(CoreEvent::FileProgress {
         id: id.clone(),
         node_id: from.to_string(),
@@ -507,24 +612,49 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     if t.from != from {
         return;
     }
+    t.last_seen = Instant::now();
+    // Ahead of what we have: a chunk before it was lost.
+    let gap = off > t.len;
     if off == t.len {
         let Ok(data) = base64::engine::general_purpose::STANDARD.decode(msg.str("data")) else {
             return;
         };
-        if t.len + data.len() as u64 > t.size || t.file.write_all(&data).is_err() {
+        if t.len + data.len() as u64 > t.size {
+            return;
+        }
+        if t.file.write_all(&data).is_err() {
+            // Disk full, most likely: what was half-written is cut off.
+            let t = inc.remove(&id);
+            drop(inc);
+            if let Some(t) = t {
+                drop(t.file);
+                let _ = std::fs::remove_file(&t.part);
+                let why = "couldn't save the file (is the storage full?)";
+                ctx.files.finished(&id, Some(why));
+                failed(ctx, &id, from, &t.name, true, why);
+                let _ = send(
+                    ctx,
+                    from,
+                    &json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": false, "error": why }),
+                );
+            }
             return;
         }
         t.hasher.update(&data);
         t.len += data.len() as u64;
     }
-    // Ack what we have: after a gap the sender rewinds to it.
+    // Ack what we have; a gap makes the sender resend from there.
     let (len, size, name) = (t.len, t.size, t.name.clone());
     let show = t.progress_at.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY) || len == size;
     if show {
         t.progress_at = Some(Instant::now());
     }
     drop(inc);
-    let _ = send(ctx, from, &json!({ "type": "file_ack", "from": me(ctx), "id": id, "upto": len }));
+    let _ = send(
+        ctx,
+        from,
+        &json!({ "type": "file_ack", "from": me(ctx), "id": id, "upto": len, "gap": gap }),
+    );
     if show {
         ctx.sink.emit(CoreEvent::FileProgress {
             id: id.clone(),
@@ -550,11 +680,11 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     drop(t.file);
     let ok = hex(&t.hasher.finalize()) == t.sha;
     let dir = t.part.parent().and_then(Path::parent).map(Path::to_path_buf);
-    let dest = dir.map(|d| free_path(&d, &t.name));
-    let moved = match (&dest, ok) {
-        (Some(dest), true) => std::fs::rename(&t.part, dest).is_ok(),
-        _ => false,
+    let dest = match (&dir, ok) {
+        (Some(dir), true) => move_into(&t.part, dir, &t.name),
+        _ => None,
     };
+    let moved = dest.is_some();
     let me = me(ctx);
     let why = if moved {
         None
@@ -612,6 +742,8 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 }
                 t.started = true;
                 t.backoff = FIRST_BACKOFF;
+                t.paused_since = None;
+                t.last_progress = Instant::now();
                 t.acked = offset.min(t.size);
                 files.acked.notify_all();
                 if !t.running && t.acked < t.size {
@@ -627,7 +759,20 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 if t.node != from {
                     return;
                 }
-                t.acked = upto.min(t.size);
+                let upto = upto.min(t.size);
+                // Acks from a replaced link may arrive late: never go back.
+                if upto > t.acked {
+                    t.acked = upto;
+                    t.last_progress = Instant::now();
+                }
+                // The receiver missed a chunk: resend from what it has,
+                // without waiting for the stall timeout.
+                if msg.json("gap").as_bool() == Some(true)
+                    && t.rewound_at.is_none_or(|at| at.elapsed() >= REWIND_EVERY)
+                {
+                    t.rewind = true;
+                    t.rewound_at = Some(Instant::now());
+                }
                 files.acked.notify_all();
                 let show = t.progress_at.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
                 if show {
@@ -683,6 +828,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 };
                 if let Some(t) = gone_in {
                     let _ = std::fs::remove_file(&t.part);
+                    ctx.files.finished(&id, Some("cancelled on the other device"));
                     failed(ctx, &id, &from, &t.name, true, "cancelled on the other device");
                 }
             }
@@ -703,6 +849,9 @@ mod tests {
         assert_eq!(safe_name(""), "file");
         assert_eq!(safe_name(".."), "file");
         assert_eq!(safe_name("a\u{0}b?.txt"), "ab.txt");
+        assert_eq!(safe_name(".  .."), "file");
+        assert_eq!(safe_name(". ."), "file");
+        assert_eq!(safe_name("report. "), "report");
     }
 
     #[test]

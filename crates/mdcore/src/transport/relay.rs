@@ -274,25 +274,34 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
         return; // e.g. {"error":"offline"}: the ladder's timeout handles it
     };
     match serde_json::from_str::<WsFrame>(data) {
-        Ok(WsFrame::Hello { .. }) => {
-            add_relay_link(ctx, from);
-            let first = ctx
-                .relay
-                .lock()
-                .as_mut()
-                .map(|r| r.confirmed.insert(from.to_string()))
-                .unwrap_or(false);
-            if first {
-                send_hello(ctx, from);
-            }
-            mark_live(ctx, from, TransportKind::Relay, None);
-        }
+        Ok(WsFrame::Hello { .. }) => on_hello(ctx, from),
         Ok(WsFrame::Msg { nonce, ciphertext }) => {
+            // A message from a device we have no way back to (its hello, or
+            // the push that set this up, got lost): route it now, or our
+            // receipts and replies would have nowhere to go.
+            if !ctx.ws_conns.lock().contains_key(from) {
+                on_hello(ctx, from);
+            }
             let env = Envelope { nonce, ciphertext };
             handle_incoming(ctx, &env, Some(from), String::new(), "RELAY");
         }
         Err(_) => {}
     }
+}
+
+/// The peer is on the relay: route it, greet it back once, mark it live.
+fn on_hello<P: Platform>(ctx: &NetCtx<P>, from: &str) {
+    add_relay_link(ctx, from);
+    let first = ctx
+        .relay
+        .lock()
+        .as_mut()
+        .map(|r| r.confirmed.insert(from.to_string()))
+        .unwrap_or(false);
+    if first {
+        send_hello(ctx, from);
+    }
+    mark_live(ctx, from, TransportKind::Relay, None);
 }
 
 fn parse(text: &str) -> Value {

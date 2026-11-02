@@ -170,6 +170,59 @@ fn an_interrupted_transfer_resumes_where_it_stopped() {
 }
 
 #[test]
+fn two_files_at_once_both_arrive_intact() {
+    let (a, b) = pair("file-two");
+    let (src, dst) = (temp_dir("two-src"), temp_dir("two-dst"));
+    b.engine.set_download_dir(dst.to_str().unwrap());
+    let (one, two) = (pattern(2_000_000), pattern(1_500_001));
+    std::fs::write(src.join("one.bin"), &one).unwrap();
+    std::fs::write(src.join("two.bin"), &two).unwrap();
+    let id1 = a.engine.send_file(&b.node_id(), src.join("one.bin").to_str().unwrap()).unwrap();
+    let id2 = a.engine.send_file(&b.node_id(), src.join("two.bin").to_str().unwrap()).unwrap();
+    let (p1, _) = received(&b, &id1);
+    let (p2, _) = received(&b, &id2);
+    assert!(std::fs::read(p1).unwrap() == one);
+    assert!(std::fs::read(p2).unwrap() == two);
+    for d in [&src, &dst] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+fn a_file_that_shrinks_while_sending_fails_on_both_sides() {
+    let (a, b) = pair("file-shrinks");
+    let (src, dst) = (temp_dir("shrink-src"), temp_dir("shrink-dst"));
+    b.engine.set_download_dir(dst.to_str().unwrap());
+    let path = src.join("growing.log");
+    std::fs::write(&path, pattern(30 * 1024 * 1024)).unwrap();
+    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    b.sink
+        .wait_until(BIG_WAIT, |e| match e {
+            CoreEvent::FileProgress { id: got, done, .. } if *got == id && *done > 0 => Some(()),
+            _ => None,
+        })
+        .expect("never started");
+    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(100).unwrap();
+    let failed_on = |n: &TestNode| {
+        n.sink
+            .wait_until(BIG_WAIT, |e| match e {
+                CoreEvent::FileFailed { id: got, reason, .. } if *got == id => Some(reason.clone()),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no failure; got {:#?}", n.sink.all()))
+    };
+    assert!(failed_on(&a).contains("couldn't be read"));
+    failed_on(&b);
+    assert!(
+        !dst.join(".mydomain-partial").join(format!("{id}.part")).exists(),
+        "the partial file is removed"
+    );
+    for d in [&src, &dst] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
 fn a_missing_file_fails_at_once() {
     let (a, b) = pair("file-missing");
     assert!(a.engine.send_file(&b.node_id(), "/no/such/file").is_err());

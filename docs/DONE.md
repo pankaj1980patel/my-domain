@@ -295,6 +295,31 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## File transfer hardening; relay route back (2026-11-02)
+
+From a code review of `features/files.rs`:
+- A sender whose last `file_done` got lost no longer sits at 100 %
+  forever: it pauses, re-offers, and the receiver (which remembers
+  finished and cancelled transfers) answers again.
+- Stalls are measured per transfer (when its acks last moved), so a busy
+  second transfer can't hide a stalled one. A gap report from the receiver
+  makes the sender resend at once instead of after the 5 s stall. Late acks
+  from a replaced link can't move a transfer backwards.
+- A transfer paused for an hour is given up ("the device wasn't
+  reachable"); a source file that can't be read or shrank fails at once on
+  both sides; a partial incoming file idle for 2 hours is deleted.
+- The received file's name is claimed atomically (`create_new`), so two
+  files finishing at once can't overwrite each other or an existing file.
+  A write error (storage full) fails the transfer with that reason.
+- Resuming hashes the partial file outside the lock; names can't end up
+  as `.`/`..` or end in dots or spaces.
+- Tests: two files at once; a file that shrinks while sending.
+
+Relay: a message from a device we had no relay route to (its hello, or
+the push that set it up, was lost) now sets the route up, so our receipts
+and replies reach it. Found live: the phone received `mdctl`'s actions but
+its answers had nowhere to go.
+
 ## Clipboard history (2026-11-02)
 
 - The core keeps the last 20 clipboard values (synced from a device,
