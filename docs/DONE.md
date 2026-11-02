@@ -304,6 +304,15 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   (`relay::close_if_unused`), unless `signal_channel` keeps it open on
   purpose. A send or a push opens it again. Test:
   `in_the_background_an_unused_relay_socket_is_closed`.
+  - Only a socket unused for the whole idle time is closed, so one just
+    opened for a push's relay offer isn't shut before its peer is routed.
+    The closing socket leaves the engine at once, so a link that needs the
+    relay meanwhile opens a fresh one.
+  - Fixed while testing: two relay offers arriving together opened two
+    sockets. The loser's close removed the winner's registration, so the
+    device looked connected to a relay that no longer knew it. Relay
+    connects are now one at a time per device. The fake relay also removed
+    a newer registration on close; it now checks, like the real server.
 
 ## Server: no signals into a sleeping device's relay socket (2026-11-02)
 

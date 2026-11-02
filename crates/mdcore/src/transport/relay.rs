@@ -46,6 +46,9 @@ pub struct RelayConn {
     peers: HashMap<String, u64>,
     /// Peers whose `Hello` we've received (and answered once).
     confirmed: HashSet<String>,
+    /// Opened, or last given a peer to route: an idle socket is closed
+    /// only a while after this (`close_if_unused`).
+    used_at: Instant,
 }
 
 /// The relay URL for a registry base URL: `http://h` -> `ws://h/relay`,
@@ -82,6 +85,32 @@ fn relay_hostport(url: &str) -> Option<String> {
 /// Open the relay connection if it isn't already. Blocks for the WebSocket
 /// handshake and the server's auth reply (a few seconds at most).
 pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result<(), String> {
+    // One attempt at a time per device. Two at once (two signals arriving
+    // together) would both register with the server; the loser's socket
+    // then closes and takes the winner's registration with it, leaving us
+    // "connected" to a relay that no longer knows us.
+    static CONNECTING: std::sync::OnceLock<parking_lot::Mutex<HashSet<String>>> =
+        std::sync::OnceLock::new();
+    let me = ctx.identity.lock().node_id.clone();
+    loop {
+        if ctx.relay.lock().is_some() {
+            return Ok(());
+        }
+        if CONNECTING
+            .get_or_init(Default::default)
+            .lock()
+            .insert(me.clone())
+        {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let result = connect_relay(ctx, url, token);
+    CONNECTING.get_or_init(Default::default).lock().remove(&me);
+    result
+}
+
+fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result<(), String> {
     if ctx.relay.lock().is_some() {
         return Ok(());
     }
@@ -129,6 +158,7 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
             tx,
             peers: HashMap::new(),
             confirmed: HashSet::new(),
+            used_at: Instant::now(),
         });
     }
     let ctx = ctx.clone();
@@ -140,9 +170,15 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
 /// (their links closed as idle). Its 20 s pings would otherwise wake the
 /// radio all day; it opens again when a link needs it. Returns whether it
 /// was closed.
-pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>) -> bool {
+pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>, idle: Duration) -> bool {
     // One lock at a time (other paths take them in the other order).
-    let Some((id, peers)) = ctx.relay.lock().as_ref().map(|r| (r.id, r.peers.clone())) else {
+    let Some((id, peers)) = ctx
+        .relay
+        .lock()
+        .as_ref()
+        .filter(|r| r.used_at.elapsed() >= idle) // not one just opened
+        .map(|r| (r.id, r.peers.clone()))
+    else {
         return false;
     };
     let in_use = {
@@ -154,11 +190,17 @@ pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>) -> bool {
     if in_use {
         return false;
     }
-    let relay = ctx.relay.lock();
-    relay
-        .as_ref()
-        .filter(|r| r.id == id && r.peers.len() == peers.len())
-        .is_some_and(|r| r.tx.send(CLOSE.to_string()).is_ok())
+    // Take it out now, not when its loop gets round to closing: a link
+    // that needs the relay meanwhile must open a fresh connection, not
+    // route through this one as it goes.
+    let closing = {
+        let mut relay = ctx.relay.lock();
+        match relay.as_ref() {
+            Some(r) if r.id == id && r.peers.len() == peers.len() => relay.take(),
+            _ => None,
+        }
+    };
+    closing.is_some_and(|r| r.tx.send(CLOSE.to_string()).is_ok())
 }
 
 /// Route `peer` through the relay: register its outgoing queue in
@@ -191,6 +233,7 @@ pub fn add_relay_link<P: Platform>(ctx: &NetCtx<P>, peer: &str) -> bool {
     }
     if let Some(r) = ctx.relay.lock().as_mut() {
         r.peers.insert(peer.to_string(), conn_id);
+        r.used_at = Instant::now();
     }
     // Wrap this peer's frames for the server. Ends when the link is removed
     // (sender dropped) or the relay socket is gone.
@@ -303,8 +346,11 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
         }
         return;
     }
+    // {"error":"offline"} isn't acted on: it may answer a frame sent while
+    // the peer was away and arrive after it's back. A route that really
+    // went dead shows as unacknowledged messages (`outbox::retry_due`).
     let (Some(from), Some(data)) = (v["from"].as_str(), v["data"].as_str()) else {
-        return; // e.g. {"error":"offline"}: the ladder's timeout handles it
+        return;
     };
     match serde_json::from_str::<WsFrame>(data) {
         Ok(WsFrame::Hello { .. }) => on_hello(ctx, from),

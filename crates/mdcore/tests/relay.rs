@@ -287,6 +287,15 @@ fn the_relay_route_comes_back_after_a_direct_link_dies() {
         _ => None,
     });
     assert!(gone.is_some(), "the direct link closed");
+    // ...and, with nothing routed through it, b's relay socket too.
+    let deadline = std::time::Instant::now() + WAIT;
+    while relay.connected(&b.node_id()) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "b's relay socket stayed open"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
     b.engine.set_background(false);
     // 4. Reconnected (the relay, or b may upgrade to QUIC again first), and
     // a's sends go through. Before the fix a stayed "live" on a relay route

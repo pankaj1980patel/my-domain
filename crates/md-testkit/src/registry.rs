@@ -278,7 +278,7 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
                             .lock()
                             .unwrap()
                             .get(&(token.clone(), s("to")))
-                            .is_some_and(|q| q.send(frame.to_string()).is_ok())
+                            .is_some_and(|(_, q)| q.send(frame.to_string()).is_ok())
                     });
                     if sent {
                         st.signals_via_ws += 1;

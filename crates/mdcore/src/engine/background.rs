@@ -111,7 +111,7 @@ fn idle_closer<P: Platform>(ctx: NetCtx<P>, idle: Duration) {
         // The relay socket too, once nothing goes through it (unless it's
         // kept open on purpose as the signal channel).
         if !ctx.config.signal_channel {
-            transport::relay::close_if_unused(&ctx);
+            transport::relay::close_if_unused(&ctx, idle);
         }
     }
 }

@@ -15,7 +15,9 @@ use tungstenite::Message;
 
 type Key = (String, String); // (token, node_id)
 
-pub(crate) type RelayConns = Arc<Mutex<HashMap<Key, mpsc::Sender<String>>>>;
+/// (token, node) -> (connection id, outgoing queue).
+pub(crate) type RelayConns = Arc<Mutex<HashMap<Key, (u64, mpsc::Sender<String>)>>>;
+static NEXT_CONN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 pub struct FakeRelay {
     url: String,
@@ -61,11 +63,7 @@ impl FakeRelay {
     }
 }
 
-fn serve(
-    stream: std::net::TcpStream,
-    conns: Arc<Mutex<HashMap<Key, mpsc::Sender<String>>>>,
-    forwarded: Arc<Mutex<Vec<Value>>>,
-) {
+fn serve(stream: std::net::TcpStream, conns: RelayConns, forwarded: Arc<Mutex<Vec<Value>>>) {
     let Ok(mut ws) = tungstenite::accept(stream) else {
         return;
     };
@@ -79,7 +77,8 @@ fn serve(
     };
     let key: Key = (token.to_string(), node.to_string());
     let (tx, rx) = mpsc::channel::<String>();
-    conns.lock().unwrap().insert(key.clone(), tx);
+    let my_id = NEXT_CONN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    conns.lock().unwrap().insert(key.clone(), (my_id, tx));
     let _ = ws.send(Message::Text(json!({"ok": true}).to_string()));
     let _ = ws
         .get_ref()
@@ -95,7 +94,7 @@ fn serve(
                         .lock()
                         .unwrap()
                         .get(&(key.0.clone(), to.to_string()))
-                        .cloned();
+                        .map(|(_, q)| q.clone());
                     let out = json!({"from": key.1, "data": data}).to_string();
                     if target.map(|q| q.send(out).is_ok()) != Some(true) {
                         let _ = ws.send(Message::Text(
@@ -116,5 +115,10 @@ fn serve(
             }
         }
     }
-    conns.lock().unwrap().remove(&key);
+    // Only our own registration: the device may have reconnected already
+    // (the real server checks the same way).
+    let mut conns = conns.lock().unwrap();
+    if conns.get(&key).is_some_and(|(id, _)| *id == my_id) {
+        conns.remove(&key);
+    }
 }

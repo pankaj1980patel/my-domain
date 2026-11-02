@@ -15,10 +15,15 @@ pub(crate) fn send_reliably<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &
     if ctx.ws_conns.lock().contains_key(node_id) {
         transport::outbox::pump(ctx, node_id, false, Some(&id));
     } else {
-        let (ctx, node) = (ctx.clone(), node_id.to_string());
-        let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
-        std::thread::spawn(move || super::ladder::run_connect_ladder(ctx, url, token, node));
+        start_ladder(ctx, node_id);
     }
+}
+
+/// Run the connect ladder for `node_id` in the background.
+fn start_ladder<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    let (ctx, node) = (ctx.clone(), node_id.to_string());
+    let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
+    std::thread::spawn(move || super::ladder::run_connect_ladder(ctx, url, token, node));
 }
 
 /// The link to `node_id` carries nothing any more (see
@@ -35,8 +40,7 @@ pub(crate) fn reconnect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
-        super::ladder::run_connect_ladder(ctx, url, token, node);
+        start_ladder(&ctx, &node);
     });
 }
 
