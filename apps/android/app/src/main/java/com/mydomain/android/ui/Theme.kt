@@ -1,10 +1,16 @@
 package com.mydomain.android.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import com.mydomain.android.R
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -14,8 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
 // The same design tokens as the desktop (apps/desktop/ui/src/styles/tokens.css):
-// white and soft greys, near-black text, one accent (the logo navy) for
-// primary actions only. Light and dark follow the system setting.
+// a deep-space theme, always dark.
 
 @Immutable
 data class Tokens(
@@ -35,23 +40,20 @@ data class Tokens(
     val dangerSoft: Color,
 )
 
-private val Light = Tokens(
-    bg = Color(0xFFFAFAFA), surface = Color(0xFFFFFFFF), surface2 = Color(0xFFF4F4F5),
-    border = Color(0xFFE4E4E7), text = Color(0xFF18181B), text2 = Color(0xFF52525B), text3 = Color(0xFF71717A),
-    accent = Color(0xFF0F1A4F), accentText = Color.White,
-    success = Color(0xFF15803D), successSoft = Color(0xFFF0FDF4), warning = Color(0xFFA16207),
-    danger = Color(0xFFB91C1C), dangerSoft = Color(0xFFFEF2F2),
+/** Deep space: a star field behind everything (drawable/space_bg, made by
+ *  docs/brand/space_bg.py), translucent glass panels, white primary actions. */
+private val Space = Tokens(
+    bg = Color(0xFF05070F), surface = Color(0x14FFFFFF), surface2 = Color(0x1FFFFFFF),
+    border = Color(0x1FFFFFFF), text = Color(0xFFF4F4F6), text2 = Color(0xFFB6B8C6), text3 = Color(0xFF8D90A3),
+    accent = Color.White, accentText = Color(0xFF0A0D1A),
+    success = Color(0xFF4ADE80), successSoft = Color(0x244ADE80), warning = Color(0xFFFACC15),
+    danger = Color(0xFFF87171), dangerSoft = Color(0x21F87171),
 )
 
-private val Dark = Tokens(
-    bg = Color(0xFF0A0A0A), surface = Color(0xFF141414), surface2 = Color(0xFF1F1F1F),
-    border = Color(0xFF2A2A2A), text = Color(0xFFFAFAFA), text2 = Color(0xFFA1A1AA), text3 = Color(0xFF8B8B93),
-    accent = Color(0xFFFAFAFA), accentText = Color(0xFF0A0A0A),
-    success = Color(0xFF4ADE80), successSoft = Color(0xFF0F1F14), warning = Color(0xFFFACC15),
-    danger = Color(0xFFF87171), dangerSoft = Color(0xFF1F0F0F),
-)
+/** Solid panel colour for bars and sheets that sit over moving content. */
+val SpaceBar = Color(0xE60D1120)
 
-val LocalTokens = staticCompositionLocalOf { Light }
+val LocalTokens = staticCompositionLocalOf { Space }
 
 /** The current design tokens: `T.text`, `T.border`, ... */
 val T: Tokens
@@ -70,20 +72,27 @@ private val type = Typography(
 
 @Composable
 fun MdTheme(content: @Composable () -> Unit) {
-    val t = if (isSystemInDarkTheme()) Dark else Light
-    val base = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme()
-    val scheme = base.copy(
+    val t = Space
+    val scheme = darkColorScheme().copy(
         primary = t.accent, onPrimary = t.accentText,
         secondaryContainer = t.surface2, onSecondaryContainer = t.text,
-        background = t.bg, onBackground = t.text,
+        background = Color.Transparent, onBackground = t.text,
         surface = t.surface, onSurface = t.text,
         surfaceVariant = t.surface2, onSurfaceVariant = t.text2,
-        surfaceContainer = t.surface, surfaceContainerLow = t.surface, surfaceContainerHigh = t.surface,
-        surfaceContainerHighest = t.surface2,
+        surfaceContainer = SpaceBar, surfaceContainerLow = SpaceBar, surfaceContainerHigh = SpaceBar,
+        surfaceContainerHighest = t.surface2, inverseSurface = t.text, inverseOnSurface = t.accentText,
         outline = t.border, outlineVariant = t.border,
         error = t.danger, onError = Color.White,
     )
     androidx.compose.runtime.CompositionLocalProvider(LocalTokens provides t) {
-        MaterialTheme(colorScheme = scheme, typography = type, content = content)
+        MaterialTheme(colorScheme = scheme, typography = type) {
+            Box(Modifier.fillMaxSize().background(t.bg)) {
+                Image(
+                    painterResource(R.drawable.space_bg), contentDescription = null,
+                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                )
+                content()
+            }
+        }
     }
 }

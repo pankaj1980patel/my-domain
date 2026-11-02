@@ -28,6 +28,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.core.Core
@@ -60,7 +61,7 @@ fun App(prefs: SharedPreferences) {
 
     CompositionLocalProvider(LocalToast provides toast) {
         if (!Core.ready) {
-            Scaffold(snackbarHost = { SnackbarHost(snack) }, containerColor = T.bg) { inner ->
+            Scaffold(snackbarHost = { SnackbarHost(snack) }, containerColor = Color.Transparent) { inner ->
                 Box(Modifier.padding(inner)) { SignInScreen(prefs) }
             }
         } else {
@@ -84,11 +85,11 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     }
 
     Scaffold(
-        containerColor = T.bg,
+        containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
             if (device == null && !developer) {
-                NavigationBar(containerColor = T.surface, tonalElevation = 0.dp) {
+                NavigationBar(containerColor = SpaceBar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,

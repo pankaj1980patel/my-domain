@@ -3,35 +3,36 @@
  * defined. Components use only these variables, so the Android app (Compose)
  * can mirror the same values and both feel like one product.
  *
- * Simple and neutral: white and soft greys, near-black text, and one accent
- * (the logo's navy, #0f1a4f) for primary actions only. Light and dark
- * themes follow the OS setting; every text/background pair meets WCAG AA.
+ * Deep space: every screen sits on a quiet star field (public/space.webp,
+ * made by docs/brand/space_bg.py). Panels are frosted glass over it, text is
+ * near-white, and primary actions are solid white. Every text/background
+ * pair meets WCAG AA against the darkest glass.
  */
 
 :root {
-  /* Brand: the logo's navy */
-  --brand-900: #0f1a4f;
-
   /* Status */
-  --success: #15803d;
-  --success-soft: #f0fdf4;
-  --warning: #a16207;
-  --warning-soft: #fefce8;
-  --danger: #b91c1c;
-  --danger-soft: #fef2f2;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.14);
+  --warning: #facc15;
+  --warning-soft: rgba(250, 204, 21, 0.12);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.13);
 
-  /* Light theme: neutral greys, one accent (the logo navy) */
-  --bg: #fafafa;
-  --surface: #ffffff;
-  --surface-2: #f4f4f5;
-  --border: #e4e4e7;
-  --text: #18181b;
-  --text-2: #52525b;
-  --text-3: #71717a;
-  --accent: var(--brand-900);
-  --accent-text: #ffffff;
-  --accent-soft: #f4f4f5;
-  --focus: #3f3f46;
+  /* Deep-space theme: dark sky, frosted-glass panels, white accent */
+  --bg: #05070f;
+  --bg-image: url("/space.webp");
+  --surface: rgba(255, 255, 255, 0.055);
+  --surface-2: rgba(255, 255, 255, 0.09);
+  --surface-solid: #0d1120;
+  --glass-blur: 18px;
+  --border: rgba(255, 255, 255, 0.11);
+  --text: #f4f4f6;
+  --text-2: #b6b8c6;
+  --text-3: #8d90a3;
+  --accent: #ffffff;
+  --accent-text: #0a0d1a;
+  --accent-soft: rgba(255, 255, 255, 0.09);
+  --focus: #c7d2fe;
 
   /* Type scale */
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", sans-serif;
@@ -59,37 +60,13 @@
   --r-xl: 14px;
   --r-full: 999px;
   --shadow-1: none;
-  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.5);
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --fast: 120ms;
   --normal: 220ms;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0a0a0a;
-    --surface: #141414;
-    --surface-2: #1f1f1f;
-    --border: #2a2a2a;
-    --text: #fafafa;
-    --text-2: #a1a1aa;
-    --text-3: #8b8b93;
-    --accent: #fafafa;
-    --accent-text: #0a0a0a;
-    --accent-soft: #1f1f1f;
-    --focus: #d4d4d8;
-    --success: #4ade80;
-    --success-soft: #0f1f14;
-    --warning: #facc15;
-    --warning-soft: #1f1a08;
-    --danger: #f87171;
-    --danger-soft: #1f0f0f;
-    --shadow-2: none;
-    --shadow-3: 0 8px 24px rgba(0, 0, 0, 0.5);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

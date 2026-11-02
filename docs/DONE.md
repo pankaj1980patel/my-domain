@@ -250,7 +250,7 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 Both apps were rebuilt from scratch for people who aren't technical: plain
 words, no protocol names, technical tools behind a hidden Developer screen
-(tap the version number 7 times). Both use the same neutral design tokens
+(tap the version number 7 times). Both use the same deep-space design tokens (a star-field background from `docs/brand/space_bg.py`, frosted-glass panels)
 and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
 `logo-source.png`).
 - **Desktop** (`apps/desktop/ui`): SolidJS + TypeScript on typed commands

@@ -18,8 +18,20 @@ body {
   font-size: var(--text-md);
   line-height: 1.5;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg) var(--bg-image) center / cover fixed no-repeat;
   -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+/* Frosted glass: every panel blurs the sky behind it. */
+.sidebar,
+.signin-card,
+.device-card,
+.tile,
+.activity,
+.empty {
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
 }
 
 h1,
@@ -119,7 +131,7 @@ input[type="checkbox"][role="switch"]::after {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--surface);
+  background: var(--text-2);
   box-shadow: var(--shadow-1);
   transition: transform var(--normal) var(--ease);
 }
@@ -127,6 +139,7 @@ input[type="checkbox"][role="switch"]:checked {
   background: var(--accent);
 }
 input[type="checkbox"][role="switch"]:checked::after {
+  background: var(--accent-text);
   transform: translateX(16px);
 }
 .switch-row {
@@ -224,7 +237,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   display: grid;
   place-items: center;
   padding: var(--s-6);
-  background: var(--bg);
+  background: transparent;
 }
 .signin-card {
   width: min(420px, 100%);
@@ -499,8 +512,8 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .bubble-out {
   align-self: flex-end;
-  background: var(--text);
-  color: var(--surface);
+  background: var(--accent);
+  color: var(--accent-text);
   border-bottom-right-radius: var(--r-sm);
 }
 .composer {

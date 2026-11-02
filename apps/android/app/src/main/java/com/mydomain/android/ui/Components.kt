@@ -127,7 +127,8 @@ fun Field(
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = T.text2, unfocusedBorderColor = T.border,
-            focusedLabelColor = T.text2, cursorColor = T.text,
+            focusedLabelColor = T.text2, unfocusedLabelColor = T.text3, cursorColor = T.text,
+            focusedContainerColor = T.surface, unfocusedContainerColor = T.surface,
         ),
     )
 }
@@ -143,7 +144,7 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
             checked, onChange,
             colors = SwitchDefaults.colors(
                 checkedTrackColor = T.accent, checkedThumbColor = T.accentText,
-                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.border,
+                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.border, uncheckedThumbColor = T.text2,
             ),
         )
     }
