@@ -32,12 +32,24 @@ use crate::platform::Platform;
 /// describe the carrying chat envelope; field accessors read the JSON body.
 pub struct ControlMsg<'a> {
     pub from: &'a str,
+    /// The sending device as the link knows it (`None` if the link can't
+    /// tell). Trust this over the message's own `"from"` field.
+    pub node: Option<&'a str>,
     pub ip: &'a str,
     pub protocol: &'a str,
     value: Value,
 }
 
 impl<'a> ControlMsg<'a> {
+    /// The sending device's node id: the link's, else the message's
+    /// `"from"` field.
+    pub fn sender(&self) -> String {
+        match self.node {
+            Some(n) if !n.is_empty() => n.to_string(),
+            _ => self.str("from"),
+        }
+    }
+
     pub fn kind(&self) -> &str {
         self.value
             .get("type")
@@ -114,6 +126,7 @@ impl<P: Platform> ControlRegistry<P> {
         &self,
         ctx: &NetCtx<P>,
         from: &str,
+        node: Option<&str>,
         ip: &str,
         protocol: &str,
         text: &str,
@@ -130,6 +143,7 @@ impl<P: Platform> ControlRegistry<P> {
         };
         let msg = ControlMsg {
             from,
+            node,
             ip,
             protocol,
             value,

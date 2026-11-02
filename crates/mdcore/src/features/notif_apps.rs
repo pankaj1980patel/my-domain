@@ -28,7 +28,7 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
         match msg.kind() {
             // Producer: reply with our app list + the requester's subscription.
             "apps_request" => {
-                let from = msg.str("from");
+                let from = msg.sender();
                 if from.is_empty() {
                     return;
                 }
@@ -44,7 +44,7 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
             }
             // Producer: store this peer's subscription (full enabled set).
             "subscribe_apps" => {
-                let from = msg.str("from");
+                let from = msg.sender();
                 if from.is_empty() {
                     return;
                 }
@@ -62,7 +62,7 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
             // Consumer: surface the producer's app list to the UI.
             "apps_list" => {
                 ctx.sink.emit(CoreEvent::AppsList {
-                    from: msg.str("from"),
+                    from: msg.sender(),
                     apps: msg.json("apps"),
                     subscribed: msg.json("subscribed"),
                 });

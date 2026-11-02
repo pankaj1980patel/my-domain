@@ -69,7 +69,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
             }
             // A peer is pulling our clipboard: reply with the current value.
             "clipboard_request" => {
-                let requester = msg.str("from");
+                let requester = msg.sender();
                 if !requester.is_empty() {
                     let me = ctx.identity.lock().node_id.clone();
                     let current = ctx
@@ -88,7 +88,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
             }
             // Reply to a pull we initiated: hand it to the waiting command.
             "clipboard_response" => {
-                if let Some(tx) = ctx.clip_pending.lock().remove(&msg.str("from")) {
+                if let Some(tx) = ctx.clip_pending.lock().remove(&msg.sender()) {
                     let _ = tx.send(msg.str("content"));
                 }
             }

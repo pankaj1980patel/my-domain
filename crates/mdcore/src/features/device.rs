@@ -40,7 +40,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
-        let from = msg.str("from");
+        let from = msg.sender();
         if from.is_empty() {
             return;
         }

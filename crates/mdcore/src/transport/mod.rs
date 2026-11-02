@@ -335,7 +335,7 @@ pub fn handle_incoming<P: Platform>(
 
     // Discrete-feature control message? (clipboard / notification / call / …)
     let control = ctx.control.clone();
-    if control.dispatch(ctx, &msg.from, &ip, protocol, &msg.text) {
+    if control.dispatch(ctx, &msg.from, from_node, &ip, protocol, &msg.text) {
         return;
     }
 

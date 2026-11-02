@@ -121,21 +121,52 @@ pub struct Files {
     /// (`Some(error)` if they failed): an offer repeated because our
     /// `file_done` got lost is answered again instead of starting over.
     finished: Mutex<std::collections::VecDeque<(String, Option<String>)>>,
+    /// `finished` was read back from the platform's store (once per run).
+    finished_loaded: std::sync::atomic::AtomicBool,
 }
 
 /// How many finished transfers are remembered.
 const FINISHED_KEPT: usize = 64;
 
+/// Where `Files::finished` is kept between runs (ids and outcomes only),
+/// so a receiver that restarted still recognises a repeated offer.
+const FINISHED_KEY: &str = "files_finished";
+
 impl Files {
-    fn finished(&self, id: &str, error: Option<&str>) {
+    fn load_finished<P: Platform>(&self, ctx: &NetCtx<P>) {
+        use std::sync::atomic::Ordering;
+        if self.finished_loaded.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        let stored: Vec<(String, Option<String>)> = ctx
+            .platform
+            .kv_get(FINISHED_KEY)
+            .and_then(|s| serde_json::from_str(&s).ok())
+            .unwrap_or_default();
         let mut f = self.finished.lock();
-        if f.len() >= FINISHED_KEPT {
+        for e in stored.into_iter().rev() {
+            f.push_front(e);
+        }
+        while f.len() > FINISHED_KEPT {
             f.pop_front();
         }
-        f.push_back((id.to_string(), error.map(str::to_string)));
     }
 
-    fn how_it_ended(&self, id: &str) -> Option<Option<String>> {
+    fn finished<P: Platform>(&self, ctx: &NetCtx<P>, id: &str, error: Option<&str>) {
+        self.load_finished(ctx);
+        let json = {
+            let mut f = self.finished.lock();
+            if f.len() >= FINISHED_KEPT {
+                f.pop_front();
+            }
+            f.push_back((id.to_string(), error.map(str::to_string)));
+            serde_json::to_string(&*f).unwrap_or_default()
+        };
+        ctx.platform.kv_set(FINISHED_KEY, &json);
+    }
+
+    fn how_it_ended<P: Platform>(&self, ctx: &NetCtx<P>, id: &str) -> Option<Option<String>> {
+        self.load_finished(ctx);
         self.finished.lock().iter().find(|(x, _)| x == id).map(|(_, e)| e.clone())
     }
 }
@@ -486,7 +517,7 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     } else if let Some(t) = incoming {
         let _ = std::fs::remove_file(&t.part);
         // A re-offer still on its way is answered "cancelled", not restarted.
-        ctx.files.finished(id, Some("cancelled on the other device"));
+        ctx.files.finished(ctx, id, Some("cancelled on the other device"));
         failed(ctx, id, &t.from, &t.name, true, "cancelled");
         Some(t.from)
     } else {
@@ -516,7 +547,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": false, "error": why }))
     };
     // Already received (our `file_done` was lost): say so again.
-    if let Some(ended) = ctx.files.how_it_ended(&id) {
+    if let Some(ended) = ctx.files.how_it_ended(ctx, &id) {
         let mut done = json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": ended.is_none() });
         if let Some(why) = ended {
             done["error"] = why.into();
@@ -630,7 +661,7 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                 drop(t.file);
                 let _ = std::fs::remove_file(&t.part);
                 let why = "couldn't save the file (is the storage full?)";
-                ctx.files.finished(&id, Some(why));
+                ctx.files.finished(ctx, &id, Some(why));
                 failed(ctx, &id, from, &t.name, true, why);
                 let _ = send(
                     ctx,
@@ -693,7 +724,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     } else {
         Some("the file arrived damaged")
     };
-    ctx.files.finished(id, why);
+    ctx.files.finished(ctx, id, why);
     if moved {
         let path = dest.unwrap_or_default();
         ctx.sink.emit(CoreEvent::FileReceived {
@@ -724,7 +755,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
-        let from = msg.str("from");
+        let from = msg.sender();
         if from.is_empty() {
             return;
         }
@@ -828,7 +859,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 };
                 if let Some(t) = gone_in {
                     let _ = std::fs::remove_file(&t.part);
-                    ctx.files.finished(&id, Some("cancelled on the other device"));
+                    ctx.files.finished(ctx, &id, Some("cancelled on the other device"));
                     failed(ctx, &id, &from, &t.name, true, "cancelled on the other device");
                 }
             }
