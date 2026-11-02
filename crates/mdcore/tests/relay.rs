@@ -171,3 +171,48 @@ fn relay_comes_up_first_then_a_direct_path_takes_over() {
         "the relay is no longer used"
     );
 }
+
+#[test]
+fn signals_arrive_over_the_servers_websocket_without_any_push_service() {
+    let relay = FakeRelay::start();
+    let reg = FakeRegistry::start_with_relay(&relay);
+    reg.add_user("alice", "alice-pw");
+    // No SignalHub and no FCM: signals go POST /signal -> the server -> the
+    // target's WebSocket. Only signaled QUIC is enabled.
+    let start = |id: &str| {
+        let cfg = CoreConfig {
+            relay_url: Some(relay.url()),
+            signal_channel: true,
+            rungs: ConnectRungs {
+                signaled_quic: true,
+                ..ConnectRungs::none()
+            },
+            ..test_config()
+        };
+        let n = TestNode::start_logged_out_with(md_testkit::MockPlatform::new(id), cfg);
+        n.engine
+            .auth_login(&reg.url(), "alice", "alice-pw")
+            .unwrap();
+        n.engine.set_encryption_key("family key").unwrap();
+        n
+    };
+    let (a, b) = (start("sigws-a"), start("sigws-b"));
+    TestNode::pair(&a, &b);
+    let deadline = std::time::Instant::now() + WAIT;
+    while !(relay.connected(&a.node_id()) && relay.connected(&b.node_id())) {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "signal channels never opened"
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("quic"));
+    assert!(
+        reg.signals_via_ws() >= 2,
+        "offer and answer went over the WebSocket"
+    );
+    a.engine.send(&b.node_id(), "signaled over ws").unwrap();
+    b.sink.wait_for_message("signaled over ws");
+}

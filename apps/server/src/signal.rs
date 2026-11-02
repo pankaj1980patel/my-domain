@@ -1,5 +1,6 @@
 // Signaling relay: a device posts a typed signal addressed to one of its OWN
-// sibling devices; the server pushes it as an FCM data message to that device's
+// sibling devices. The server delivers it over the target's WebSocket when
+// that's connected, else pushes it as an FCM data message to the target's
 // token. Both `from` and `to` must belong to the caller's user (anti-spoof).
 
 use axum::{extract::State, Json};
@@ -48,6 +49,17 @@ pub async fn relay(
         .await?
         .ok_or(AppError::BadRequest("unknown 'to' device".into()))?;
 
+    // 1. The target's WebSocket, if it's connected: instant, and needs no
+    //    push service (desktops are always on; phones while the app runs).
+    let frame = serde_json::json!({
+        "signal": { "type": req.kind, "sender": req.from, "payload": req.data.to_string() }
+    });
+    if s.relay
+        .deliver_signal(&user.user_id, &req.to, frame.to_string())
+    {
+        return Ok(Json(serde_json::json!({ "ok": true, "via": "ws" })));
+    }
+    // 2. Otherwise an FCM push, which can wake a sleeping phone.
     let fcm = s
         .fcm
         .as_ref()

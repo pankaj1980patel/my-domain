@@ -11,4 +11,6 @@ pub struct AppState {
     pub jwt_secret: String,
     /// `None` when no FCM credentials are configured (signaling disabled).
     pub fcm: Option<Arc<FcmClient>>,
+    /// Live device WebSockets: signals go there first, FCM is the fallback.
+    pub relay: crate::relay::RelayState,
 }

@@ -37,6 +37,7 @@ mod session;
 mod sharing;
 mod signaling;
 
+pub(crate) use signaling::handle_signal;
 pub use signaling::FirewallStatus;
 
 pub type KeyHolder = Arc<Mutex<Option<[u8; 32]>>>;
@@ -101,6 +102,11 @@ pub struct NetCtx<P: Platform> {
     pub quic: transport::quic::QuicLink,
     /// The relay WebSocket to the server, when open (last-resort path).
     pub relay: Arc<Mutex<Option<transport::relay::RelayConn>>>,
+    /// The server session (shared with `Engine`): base URL and token. In the
+    /// context so background threads (e.g. the relay reader handling a
+    /// signal) can talk to the server too.
+    pub server_url: Arc<Mutex<Option<String>>>,
+    pub token: Arc<Mutex<Option<String>>>,
     /// Our NAT's mapping behaviour, measured with STUN at start and after
     /// network changes; published to the registry for the connect ladder.
     pub nat: Arc<Mutex<crate::nat::NatKind>>,
@@ -134,6 +140,8 @@ impl<P: Platform> Clone for NetCtx<P> {
             quic: self.quic.clone(),
             relay: self.relay.clone(),
             nat: self.nat.clone(),
+            server_url: self.server_url.clone(),
+            token: self.token.clone(),
         }
     }
 }
@@ -277,6 +285,8 @@ impl<P: Platform> Engine<P> {
             quic: quic.link(),
             relay: Arc::default(),
             nat: Arc::default(),
+            server_url: Arc::new(Mutex::new(None)),
+            token: Arc::new(Mutex::new(None)),
         };
 
         // Direct messaging receivers.
@@ -301,9 +311,9 @@ impl<P: Platform> Engine<P> {
         background::spawn_all(&ctx);
 
         let engine = Engine {
+            server_url: ctx.server_url.clone(),
+            token: ctx.token.clone(),
             ctx,
-            server_url: Arc::new(Mutex::new(None)),
-            token: Arc::new(Mutex::new(None)),
             username: Arc::new(Mutex::new(None)),
             disco_send,
             _quic: quic,
@@ -312,6 +322,7 @@ impl<P: Platform> Engine<P> {
         engine.detect_nat();
         background::spawn_ip_watcher(engine.handles());
         background::spawn_port_mapper(engine.handles());
+        background::spawn_signal_channel(engine.ctx.clone());
         Ok(engine)
     }
 

@@ -85,6 +85,29 @@ pub(super) fn spawn_port_mapper<P: Platform>(h: netchange::NetHandles<P>) {
     });
 }
 
+/// While logged in, keep the server WebSocket (the relay socket) open, so the
+/// server can hand us signals over it instead of an FCM push. Retries every
+/// few seconds while disconnected.
+pub(super) fn spawn_signal_channel<P: Platform>(ctx: NetCtx<P>) {
+    if !ctx.config.signal_channel {
+        return;
+    }
+    std::thread::spawn(move || loop {
+        // Read the lock into a plain bool first: a guard taken inside an
+        // `if let` scrutinee lives for the whole block, and ensure_relay
+        // takes the same lock (that deadlocked this loop once).
+        let connected = ctx.relay.lock().is_some();
+        if !connected {
+            if let Some((url, token)) = signaling::relay_target(&ctx, &ctx.server_url, &ctx.token) {
+                let _ = transport::relay::ensure_relay(&ctx, &url, &token);
+            }
+        }
+        if !tick(&ctx, Duration::from_secs(5)) {
+            return;
+        }
+    });
+}
+
 /// Sleep for `d`; returns `false` once the engine is shutting down.
 fn tick<P: Platform>(ctx: &NetCtx<P>, d: Duration) -> bool {
     std::thread::sleep(d);

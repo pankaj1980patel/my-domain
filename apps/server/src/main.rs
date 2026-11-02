@@ -91,11 +91,13 @@ async fn main() -> anyhow::Result<()> {
     if fcm.is_none() {
         tracing::warn!("FCM not configured (set FCM_SA_JSON or GOOGLE_APPLICATION_CREDENTIALS); /signal disabled");
     }
-    let relay = relay::router(relay::RelayState::new(jwt_secret.clone()));
+    let relay_state = relay::RelayState::new(jwt_secret.clone());
+    let relay = relay::router(relay_state.clone());
     let state = AppState {
         db,
         jwt_secret,
         fcm,
+        relay: relay_state,
     };
 
     let app = Router::new()

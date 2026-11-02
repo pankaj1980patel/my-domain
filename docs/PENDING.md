@@ -78,8 +78,8 @@ or with less battery.
   engine anyway.
 - **Switch `ws_conns` to tokio channels.** This removes the thread that sits
   between the threaded code and the async code (the "bridge thread").
-- **Relay over `wss://` (TLS).** Today the relay only works with an `http://`
-  server.
+- ~~Relay over `wss://` (TLS)~~: **done**. The live test chats through the
+  real HTTPS server's relay.
 - **Test the engine against the real server's relay.** Today the engine has
   only been tested against `FakeRelay`. Both follow the same protocol, but
   the two have never been connected.

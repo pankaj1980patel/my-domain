@@ -118,145 +118,7 @@ impl<P: Platform> Engine<P> {
     /// Handle an inbound signal (delivered by the platform's FCM receiver as the
     /// raw JSON `payload`). Drives the responder side of the connection ladder.
     pub fn on_signal(&self, from: &str, payload: &str) {
-        let Ok(sig) = serde_json::from_str::<Signal>(payload) else {
-            return;
-        };
-        match sig {
-            // Initiator wants us reachable: our WS server is already listening,
-            // so mark it open and tell them where to dial.
-            Signal::StartWs { sid } => {
-                let id = self.ctx.identity.lock().clone();
-                let _ = self.update_ws_open(true);
-                let _ = self.send_signal(
-                    from,
-                    &Signal::WsReady {
-                        sid,
-                        ip: id.ip,
-                        ws_port: id.ws_port,
-                    },
-                );
-            }
-            // Responder is reachable: dial it.
-            Signal::WsReady { ip, ws_port, .. } => {
-                let _ = ws::ws_connect(self.net_ctx(), &ip, ws_port);
-            }
-            // Initiator wants to hole-punch: gather our candidates, answer with
-            // them, and punch toward theirs. Off-thread (STUN + HTTP block).
-            Signal::PunchOffer {
-                sid, candidates, ..
-            } => {
-                let ctx = self.net_ctx();
-                let from = from.to_string();
-                let server_url = self.server_url.clone();
-                let token = self.token.clone();
-                std::thread::spawn(move || {
-                    if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
-                        let _ = send_signal_via(
-                            &server_url,
-                            &token,
-                            &ctx,
-                            &from,
-                            &Signal::PunchAnswer {
-                                sid,
-                                candidates: my_cands,
-                                start_in_ms: 0,
-                            },
-                        );
-                        transport::punch::punch_and_run(ctx, socket, candidates, from);
-                    }
-                });
-            }
-            // Our offer was answered: hand the peer's candidates to the waiting
-            // ladder thread so it can punch.
-            Signal::PunchAnswer {
-                sid, candidates, ..
-            } => {
-                let waiter = self.ctx.punch_waiters.lock().remove(&sid);
-                if let Some(tx) = waiter {
-                    let _ = tx.send(candidates);
-                }
-            }
-            // WebRTC: responder accepts the offer, spawns the driver, answers.
-            #[cfg(feature = "webrtc")]
-            Signal::SdpOffer { sid, sdp } => {
-                let ctx = self.net_ctx();
-                let from = from.to_string();
-                let server_url = self.server_url.clone();
-                let token = self.token.clone();
-                std::thread::spawn(move || {
-                    if let Some(answer) =
-                        transport::rtc::accept_offer_and_run(ctx.clone(), &sdp, from.clone())
-                    {
-                        let _ = send_signal_via(
-                            &server_url,
-                            &token,
-                            &ctx,
-                            &from,
-                            &Signal::SdpAnswer { sid, sdp: answer },
-                        );
-                    }
-                });
-            }
-            // WebRTC: hand the answer SDP to the waiting initiator thread.
-            #[cfg(feature = "webrtc")]
-            Signal::SdpAnswer { sid, sdp } => {
-                let waiter = self.ctx.rtc_waiters.lock().remove(&sid);
-                if let Some(tx) = waiter {
-                    let _ = tx.send(sdp);
-                }
-            }
-            // Signaled QUIC: answer with our addresses, then dial theirs.
-            Signal::QuicOffer { sid, addrs } => {
-                let ctx = self.net_ctx();
-                let from = from.to_string();
-                let server_url = self.server_url.clone();
-                let token = self.token.clone();
-                std::thread::spawn(move || {
-                    let answer = Signal::QuicAnswer {
-                        sid,
-                        addrs: transport::quic::my_addrs(&ctx),
-                    };
-                    let _ = send_signal_via(&server_url, &token, &ctx, &from, &answer);
-                    // The initiator dials our answered addresses right away.
-                    // We dial back only if that hasn't worked within a second
-                    // (it can't reach us). Dialing at once from both sides
-                    // would make two connections, and a message sent on the
-                    // one that loses the tie-break would be lost.
-                    std::thread::sleep(Duration::from_secs(1));
-                    if !transport::is_direct(&ctx, &from) {
-                        let targets = transport::quic::parse_addrs(&addrs);
-                        let _ = ctx.quic.connect_any(ctx.clone(), &targets);
-                    }
-                });
-            }
-            // Our QUIC offer was answered: hand the addresses to the ladder.
-            Signal::QuicAnswer { sid, addrs } => {
-                let waiter = self.ctx.quic_waiters.lock().remove(&sid);
-                if let Some(tx) = waiter {
-                    let _ = tx.send(addrs);
-                }
-            }
-            // Peer can't reach us directly: meet it on the server relay.
-            Signal::RelayOffer { .. } => {
-                let ctx = self.net_ctx();
-                let from = from.to_string();
-                let target = relay_target(&ctx, &self.server_url, &self.token);
-                std::thread::spawn(move || {
-                    if let Some((url, token)) = target {
-                        if transport::relay::ensure_relay(&ctx, &url, &token).is_ok() {
-                            transport::relay::add_relay_link(&ctx, &from);
-                            transport::relay::send_hello(&ctx, &from);
-                        }
-                    }
-                });
-            }
-            // Teardown.
-            Signal::Bye { .. } => {
-                transport::drop_live(&self.net_ctx(), from);
-            }
-            // RelayOffer/RelayAnswer (TURN) remain a future hook.
-            _ => {}
-        }
+        handle_signal(&self.ctx, from, payload);
     }
 }
 
@@ -299,4 +161,165 @@ pub(super) fn relay_target<P: Platform>(
         None => transport::relay::relay_url_for(&server_url.lock().clone()?).ok()?,
     };
     Some((url, token))
+}
+
+/// Handle an inbound signal, from the platform's FCM receiver or from the
+/// server's WebSocket (see transport/relay.rs). Drives the responder side of
+/// the connection ladder.
+pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &str) {
+    let Ok(sig) = serde_json::from_str::<Signal>(payload) else {
+        return;
+    };
+    match sig {
+        // Initiator wants us reachable: our WS server is already listening,
+        // so mark it open and tell them where to dial.
+        Signal::StartWs { sid } => {
+            let id = ctx.identity.lock().clone();
+            let _ = update_ws_open_via(ctx, true);
+            let _ = send_signal_via(
+                &ctx.server_url,
+                &ctx.token,
+                ctx,
+                from,
+                &Signal::WsReady {
+                    sid,
+                    ip: id.ip,
+                    ws_port: id.ws_port,
+                },
+            );
+        }
+        // Responder is reachable: dial it.
+        Signal::WsReady { ip, ws_port, .. } => {
+            let _ = ws::ws_connect(ctx.clone(), &ip, ws_port);
+        }
+        // Initiator wants to hole-punch: gather our candidates, answer with
+        // them, and punch toward theirs. Off-thread (STUN + HTTP block).
+        Signal::PunchOffer {
+            sid, candidates, ..
+        } => {
+            let ctx = ctx.clone();
+            let from = from.to_string();
+            let server_url = ctx.server_url.clone();
+            let token = ctx.token.clone();
+            std::thread::spawn(move || {
+                if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
+                    let _ = send_signal_via(
+                        &server_url,
+                        &token,
+                        &ctx,
+                        &from,
+                        &Signal::PunchAnswer {
+                            sid,
+                            candidates: my_cands,
+                            start_in_ms: 0,
+                        },
+                    );
+                    transport::punch::punch_and_run(ctx, socket, candidates, from);
+                }
+            });
+        }
+        // Our offer was answered: hand the peer's candidates to the waiting
+        // ladder thread so it can punch.
+        Signal::PunchAnswer {
+            sid, candidates, ..
+        } => {
+            let waiter = ctx.punch_waiters.lock().remove(&sid);
+            if let Some(tx) = waiter {
+                let _ = tx.send(candidates);
+            }
+        }
+        // WebRTC: responder accepts the offer, spawns the driver, answers.
+        #[cfg(feature = "webrtc")]
+        Signal::SdpOffer { sid, sdp } => {
+            let ctx = ctx.clone();
+            let from = from.to_string();
+            let server_url = ctx.server_url.clone();
+            let token = ctx.token.clone();
+            std::thread::spawn(move || {
+                if let Some(answer) =
+                    transport::rtc::accept_offer_and_run(ctx.clone(), &sdp, from.clone())
+                {
+                    let _ = send_signal_via(
+                        &server_url,
+                        &token,
+                        &ctx,
+                        &from,
+                        &Signal::SdpAnswer { sid, sdp: answer },
+                    );
+                }
+            });
+        }
+        // WebRTC: hand the answer SDP to the waiting initiator thread.
+        #[cfg(feature = "webrtc")]
+        Signal::SdpAnswer { sid, sdp } => {
+            let waiter = ctx.rtc_waiters.lock().remove(&sid);
+            if let Some(tx) = waiter {
+                let _ = tx.send(sdp);
+            }
+        }
+        // Signaled QUIC: answer with our addresses, then dial theirs.
+        Signal::QuicOffer { sid, addrs } => {
+            let ctx = ctx.clone();
+            let from = from.to_string();
+            let server_url = ctx.server_url.clone();
+            let token = ctx.token.clone();
+            std::thread::spawn(move || {
+                let answer = Signal::QuicAnswer {
+                    sid,
+                    addrs: transport::quic::my_addrs(&ctx),
+                };
+                let _ = send_signal_via(&server_url, &token, &ctx, &from, &answer);
+                // The initiator dials our answered addresses right away.
+                // We dial back only if that hasn't worked within a second
+                // (it can't reach us). Dialing at once from both sides
+                // would make two connections, and a message sent on the
+                // one that loses the tie-break would be lost.
+                std::thread::sleep(Duration::from_secs(1));
+                if !transport::is_direct(&ctx, &from) {
+                    let targets = transport::quic::parse_addrs(&addrs);
+                    let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+                }
+            });
+        }
+        // Our QUIC offer was answered: hand the addresses to the ladder.
+        Signal::QuicAnswer { sid, addrs } => {
+            let waiter = ctx.quic_waiters.lock().remove(&sid);
+            if let Some(tx) = waiter {
+                let _ = tx.send(addrs);
+            }
+        }
+        // Peer can't reach us directly: meet it on the server relay.
+        Signal::RelayOffer { .. } => {
+            let ctx = ctx.clone();
+            let from = from.to_string();
+            let target = relay_target(&ctx, &ctx.server_url, &ctx.token);
+            std::thread::spawn(move || {
+                if let Some((url, token)) = target {
+                    if transport::relay::ensure_relay(&ctx, &url, &token).is_ok() {
+                        transport::relay::add_relay_link(&ctx, &from);
+                        transport::relay::send_hello(&ctx, &from);
+                    }
+                }
+            });
+        }
+        // Teardown.
+        Signal::Bye { .. } => {
+            transport::drop_live(&ctx.clone(), from);
+        }
+        // RelayOffer/RelayAnswer (TURN) remain a future hook.
+        _ => {}
+    }
+}
+
+/// Tell the registry whether our WS server is currently reachable.
+fn update_ws_open_via<P: Platform>(ctx: &NetCtx<P>, open: bool) -> crate::Result<()> {
+    let url = ctx
+        .server_url
+        .lock()
+        .clone()
+        .ok_or(CoreError::NotLoggedIn)?;
+    let token = ctx.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+    let node_id = ctx.identity.lock().node_id.clone();
+    crate::registry::update_device_state(&url, &token, &node_id, Some(open), None, None, None)
+        .map_err(Into::into)
 }

@@ -15,19 +15,23 @@ use tungstenite::Message;
 
 type Key = (String, String); // (token, node_id)
 
+pub(crate) type RelayConns = Arc<Mutex<HashMap<Key, mpsc::Sender<String>>>>;
+
 pub struct FakeRelay {
     url: String,
     forwarded: Arc<Mutex<Vec<Value>>>,
+    pub(crate) conns: RelayConns,
 }
 
 impl FakeRelay {
     pub fn start() -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
-        let conns: Arc<Mutex<HashMap<Key, mpsc::Sender<String>>>> = Arc::default();
+        let conns: RelayConns = Arc::default();
         let forwarded: Arc<Mutex<Vec<Value>>> = Arc::default();
         {
             let forwarded = forwarded.clone();
+            let conns = conns.clone();
             std::thread::spawn(move || {
                 for stream in listener.incoming().flatten() {
                     let (conns, forwarded) = (conns.clone(), forwarded.clone());
@@ -38,11 +42,17 @@ impl FakeRelay {
         FakeRelay {
             url: format!("ws://127.0.0.1:{port}/relay"),
             forwarded,
+            conns,
         }
     }
 
     pub fn url(&self) -> String {
         self.url.clone()
+    }
+
+    /// Whether a device is connected (any account).
+    pub fn connected(&self, node_id: &str) -> bool {
+        self.conns.lock().unwrap().keys().any(|(_, n)| n == node_id)
     }
 
     /// Every `{to, data}` the relay forwarded, in order (what the server sees).

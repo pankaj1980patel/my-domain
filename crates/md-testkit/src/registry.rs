@@ -36,6 +36,11 @@ struct State {
     requests: Vec<String>,
     /// Bodies of POST /signal
     signals: Vec<Value>,
+    /// When set (`start_with_relay`), /signal is delivered over the fake
+    /// relay's WebSocket if the target is connected, like the real server.
+    relay: Option<crate::relay::RelayConns>,
+    /// How many signals went over the WebSocket.
+    signals_via_ws: usize,
 }
 
 pub struct FakeRegistry {
@@ -64,6 +69,19 @@ impl FakeRegistry {
             state,
             server,
         }
+    }
+
+    /// Like `start`, but /signal goes over `relay`'s WebSocket when the
+    /// target device is connected to it (the real server's behaviour).
+    pub fn start_with_relay(relay: &crate::FakeRelay) -> Self {
+        let reg = Self::start();
+        reg.state.lock().unwrap().relay = Some(relay.conns.clone());
+        reg
+    }
+
+    /// Signals delivered over the WebSocket (not left for a push).
+    pub fn signals_via_ws(&self) -> usize {
+        self.state.lock().unwrap().signals_via_ws
     }
 
     pub fn url(&self) -> String {
@@ -130,6 +148,7 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
 
     let mut st = state.lock().unwrap();
     st.requests.push(format!("{method} {path}"));
+    let token = bearer.clone().unwrap_or_default();
     let user = bearer.and_then(|t| st.tokens.get(&t).cloned());
     let s = |k: &str| body[k].as_str().unwrap_or_default().to_string();
 
@@ -224,6 +243,19 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
                     )
                 }
                 ("POST", "/signal") => {
+                    let frame = json!({"signal": {
+                        "type": s("type"), "sender": s("from"), "payload": body["data"].to_string()
+                    }});
+                    let sent = st.relay.as_ref().is_some_and(|conns| {
+                        conns
+                            .lock()
+                            .unwrap()
+                            .get(&(token.clone(), s("to")))
+                            .is_some_and(|q| q.send(frame.to_string()).is_ok())
+                    });
+                    if sent {
+                        st.signals_via_ws += 1;
+                    }
                     st.signals.push(body);
                     drop(st);
                     respond(req, 200, json!({}))

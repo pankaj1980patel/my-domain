@@ -111,6 +111,10 @@ pub struct CoreConfig {
     pub mdns_loopback: bool,
     /// Link keep-alive (QUIC and the connectionless-link heartbeat).
     pub keepalive: KeepAlive,
+    /// While logged in, keep a WebSocket to the server open, so signals
+    /// arrive over it instantly (FCM push is then only needed to wake a
+    /// device that isn't running).
+    pub signal_channel: bool,
 }
 
 impl Default for CoreConfig {
@@ -129,6 +133,7 @@ impl Default for CoreConfig {
             mdns: true,
             mdns_loopback: false,
             keepalive: KeepAlive::default(),
+            signal_channel: true,
         }
     }
 }

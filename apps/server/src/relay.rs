@@ -114,6 +114,18 @@ impl RelayState {
         self.rate * 4.0
     }
 
+    /// Deliver a signal to one of `user_id`'s devices over its WebSocket, if
+    /// it's connected. `false` = not connected (the caller falls back to FCM).
+    pub fn deliver_signal(&self, user_id: &str, to: &str, frame: String) -> bool {
+        let target = self
+            .conns
+            .lock()
+            .unwrap()
+            .get(&(user_id.to_string(), to.to_string()))
+            .map(|(_, q)| q.clone());
+        target.is_some_and(|q| q.send(frame).is_ok())
+    }
+
     /// Charge `n` bytes to `user`; how long to pause before forwarding.
     fn charge(&self, user: &str, n: usize) -> Duration {
         let now = Instant::now();
@@ -376,6 +388,26 @@ mod tests {
         assert_eq!(st["frames"], 10);
         assert!(st["throttled"].as_u64().unwrap() > 0);
         assert_eq!(st["connections"], 2);
+    }
+
+    #[test]
+    fn signals_go_to_a_connected_device_and_report_when_it_is_not() {
+        let state = RelayState::new(SECRET.into());
+        let port = start_with(state.clone());
+        let mut phone = client(port, &tok("alice"), "phone");
+        next_json(&mut phone);
+
+        let frame = json!({"signal": {"type": "signal", "sender": "laptop", "payload": "{}"}});
+        assert!(state.deliver_signal("alice", "phone", frame.to_string()));
+        assert_eq!(next_json(&mut phone), frame);
+        assert!(
+            !state.deliver_signal("alice", "tablet", "{}".into()),
+            "not connected"
+        );
+        assert!(
+            !state.deliver_signal("bob", "phone", "{}".into()),
+            "another user's device"
+        );
     }
 
     #[test]

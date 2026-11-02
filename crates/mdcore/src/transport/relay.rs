@@ -248,6 +248,14 @@ fn relay_loop<P: Platform>(
 }
 
 fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
+    // A signal the server routed to us over this socket (instead of FCM).
+    if let Some(sig) = v.get("signal") {
+        if let (Some(from), Some(payload)) = (sig["sender"].as_str(), sig["payload"].as_str()) {
+            let (ctx, from, payload) = (ctx.clone(), from.to_string(), payload.to_string());
+            std::thread::spawn(move || crate::engine::handle_signal(&ctx, &from, &payload));
+        }
+        return;
+    }
     let (Some(from), Some(data)) = (v["from"].as_str(), v["data"].as_str()) else {
         return; // e.g. {"error":"offline"}: the ladder's timeout handles it
     };
