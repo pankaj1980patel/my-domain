@@ -329,6 +329,9 @@ function NotifyTile() {
 function AppsTile(props: { node: string }) {
   const [q, setQ] = createSignal("");
   const data = () => state.apps[props.node];
+  const name = () => niceName(peerName(props.node));
+  // Opening an app needs the device to say it can (`launch` in its status).
+  const canLaunch = () => !!state.status[props.node]?.actions.includes("launch");
   const shown = () =>
     (data()?.apps ?? []).filter((a) => a.label.toLowerCase().includes(q().toLowerCase())).slice(0, 50);
   return (
@@ -347,16 +350,36 @@ function AppsTile(props: { node: string }) {
         <ul class="app-list">
           <For each={shown()} fallback={<li class="muted small">{t("apps.none")}</li>}>
             {(a) => (
-              <li>
-                <label class="switch-row">
+              <li class="app-row">
+                <label class="switch-row grow">
                   <span>{a.label}</span>
                   <input
                     type="checkbox"
                     role="switch"
                     checked={data()!.subscribed.includes(a.pkg)}
                     onChange={() => toggleApp(props.node, a.pkg).catch((e) => toast(friendlyError(e), "error"))}
+                    aria-label={t("apps.notifyLabel", { app: a.label })}
                   />
                 </label>
+                <Show when={canLaunch()}>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    onClick={() =>
+                      runAction(props.node, "launch", { pkg: a.pkg })
+                        .then((via) =>
+                          toast(
+                            via === "queued"
+                              ? t("apps.openQueued", { app: a.label, name: name() })
+                              : t("apps.opening", { app: a.label, name: name() }),
+                            "ok",
+                          ),
+                        )
+                        .catch((e) => toast(friendlyError(e), "error"))
+                    }
+                  >
+                    {t("apps.open")}
+                  </button>
+                </Show>
               </li>
             )}
           </For>
