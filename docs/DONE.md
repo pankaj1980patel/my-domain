@@ -295,6 +295,18 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Desktop notifications; open a phone app (2026-11-02)
+
+- Desktop system notifications go through `tauri-plugin-notification`
+  (held at 2.4 so tauri stays on 2.11; see Cargo.toml) instead of
+  `osascript`/`notify-send`: ring, and, while the window isn't focused, a
+  chat message, a saved file, and a notification shared from the phone.
+  Settings has a "Show notifications" switch (on by default, kept in
+  `prefs.json`).
+- Android takes a `launch {pkg}` action (opens the app, or a tap-to-open
+  notification when in the background); the desktop's Apps tile has an
+  Open button per app when the phone lists `launch`.
+
 ## File transfer hardening; relay route back (2026-11-02)
 
 From a code review of `features/files.rs`:
