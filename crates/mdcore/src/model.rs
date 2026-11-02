@@ -49,8 +49,9 @@ pub enum Source {
     Manual,
 }
 
-/// A known peer device.
-#[derive(Clone, Debug, PartialEq, Serialize)]
+/// A known peer device. Deserializable too: the peer list is cached on the
+/// device (see engine/background.rs `spawn_peer_cache`).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Peer {
     pub node_id: String,
     pub name: String,

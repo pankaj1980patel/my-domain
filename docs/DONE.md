@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **116** core tests, plus **10** server tests and **1** desktop test |
+| Tests | **119** core tests, plus **10** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -204,11 +204,17 @@ The engine tries each method in order, cheapest first, until one works
   relay within seconds, then hole punching or WebRTC replace it with a
   direct link. Retries continue every 60 s.
 
-- **Signals over the server WebSocket:** while logged in, every device
-  keeps one WebSocket to the server open. The server delivers signals over
-  it instantly and uses FCM only for devices that aren't connected. This
-  fixed desktop signaling, which had broken because Google was rejecting
-  the desktop FCM registrations.
+- **Less dependence on the server.** The principle: the server introduces
+  devices; it isn't needed to keep them connected.
+  - **Peer cache:** every known peer and all its addresses (LAN, IPv6,
+    router mapping, QUIC port) are saved on the device and loaded at start.
+    After a restart a device reconnects directly, even when the server is
+    down.
+  - **On the LAN:** mDNS plus direct QUIC needs no server at all.
+  - **Signals:** the server uses a device's WebSocket for a signal only if
+    one happens to be open (e.g. during a relay session), and FCM otherwise.
+    The always-on WebSocket (`signal_channel`) exists but is **off by
+    default**.
 
 ## Device lab and dev tools
 

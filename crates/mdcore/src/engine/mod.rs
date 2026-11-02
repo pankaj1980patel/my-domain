@@ -308,6 +308,8 @@ impl<P: Platform> Engine<P> {
         }
 
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
+        // Peers remembered from last time: reconnect directly, server or not.
+        background::load_peer_cache(&ctx);
         background::spawn_all(&ctx);
 
         let engine = Engine {

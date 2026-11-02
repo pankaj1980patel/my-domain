@@ -239,9 +239,8 @@ impl RecordingSink {
 pub fn test_config() -> CoreConfig {
     CoreConfig {
         stun_servers: vec![],
-        port_mapper: None,     // never touch the real router from tests
-        mdns: false,           // tests opt in (otherwise every test engine finds every other)
-        signal_channel: false, // tests opt in
+        port_mapper: None, // never touch the real router from tests
+        mdns: false,       // tests opt in (otherwise every test engine finds every other)
         ..CoreConfig::default()
     }
 }

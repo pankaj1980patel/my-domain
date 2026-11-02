@@ -31,7 +31,8 @@ or with less battery.
 5. ~~Ask the home router to open a port~~: **done** for UPnP-IGD (verified
    on the home router: the internet reaches the laptop through the
    mapping).
-   - Still to do: NAT-PMP / PCP, for routers without UPnP.
+   - NAT-PMP / PCP **done** too, tried after UPnP. (The home router doesn't
+     answer PCP; UPnP covers it.)
 6. ~~QUIC connection migration~~: **done**.
 7. ~~Standard LAN discovery (mDNS / DNS-SD)~~: **done**.
    - Still to do: once mDNS has proven itself on real networks, send the
@@ -60,6 +61,13 @@ or with less battery.
       - the UDP/TCP "directed transport" setting
     - That's less code and fewer ways to fail. The ladder tests show what can
       safely go.
+
+- **Even less server dependence** (direction set 2026-11-02):
+  - Signal through a device that's already connected to both peers (e.g.
+    the laptop passes a phone's offer to the desktop) before using the
+    server.
+  - Keep reachable addresses fresh peer-to-peer: devices tell their peers
+    when their own addresses change.
 
 ## 3. Phase 2 leftovers (networking)
 

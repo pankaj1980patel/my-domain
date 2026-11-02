@@ -16,7 +16,60 @@ use super::*;
 const CLIPBOARD_POLL: Duration = Duration::from_millis(1000);
 const IP_POLL: Duration = Duration::from_secs(5);
 
+/// Key in the platform's key-value store for the cached peer list.
+const PEER_CACHE_KEY: &str = "peers";
+/// At most this many peers are cached.
+const PEER_CACHE_MAX: usize = 256;
+
+/// Load the peers saved last time (addresses, ports, IPv6, router mapping),
+/// so the engine can dial them directly after a restart without asking the
+/// server: the server only introduces devices, it shouldn't be needed to
+/// find them again.
+pub(super) fn load_peer_cache<P: Platform>(ctx: &NetCtx<P>) {
+    let Some(json) = ctx.platform.kv_get(PEER_CACHE_KEY) else {
+        return;
+    };
+    let Ok(list) = serde_json::from_str::<Vec<Peer>>(&json) else {
+        return;
+    };
+    let me = ctx.identity.lock().node_id.clone();
+    let mut peers = ctx.peers.lock();
+    for p in list
+        .into_iter()
+        .filter(|p| p.node_id != me)
+        .take(PEER_CACHE_MAX)
+    {
+        peers.entry(p.node_id.clone()).or_insert(p);
+    }
+}
+
+/// Save the peer list whenever it changes (checked every couple of seconds),
+/// and once more on shutdown.
+fn spawn_peer_cache<P: Platform>(ctx: NetCtx<P>) {
+    std::thread::spawn(move || {
+        let snapshot = |ctx: &NetCtx<P>| {
+            let mut list: Vec<Peer> = ctx.peers.lock().values().cloned().collect();
+            list.sort_by(|a, b| a.node_id.cmp(&b.node_id));
+            list.truncate(PEER_CACHE_MAX);
+            serde_json::to_string(&list).unwrap_or_default()
+        };
+        let mut saved = ctx.platform.kv_get(PEER_CACHE_KEY).unwrap_or_default();
+        loop {
+            let alive = tick(&ctx, Duration::from_secs(2));
+            let now = snapshot(&ctx);
+            if now != saved {
+                ctx.platform.kv_set(PEER_CACHE_KEY, &now);
+                saved = now;
+            }
+            if !alive {
+                return;
+            }
+        }
+    });
+}
+
 pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
+    spawn_peer_cache(ctx.clone());
     if ctx.platform.clipboard().is_some() {
         let ctx = ctx.clone();
         std::thread::spawn(move || clipboard_watcher(ctx));

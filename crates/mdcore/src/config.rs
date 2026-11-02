@@ -113,8 +113,11 @@ pub struct CoreConfig {
     /// Link keep-alive (QUIC and the connectionless-link heartbeat).
     pub keepalive: KeepAlive,
     /// While logged in, keep a WebSocket to the server open, so signals
-    /// arrive over it instantly (FCM push is then only needed to wake a
-    /// device that isn't running).
+    /// arrive over it instantly. OFF by default: it would make every device
+    /// depend on the server just to be reachable, and the server should only
+    /// introduce devices. Without it, the server still uses a device's
+    /// WebSocket for a signal when one happens to be open (e.g. a relay
+    /// session), and FCM otherwise.
     pub signal_channel: bool,
 }
 
@@ -134,7 +137,7 @@ impl Default for CoreConfig {
             mdns: true,
             mdns_loopback: false,
             keepalive: KeepAlive::default(),
-            signal_channel: true,
+            signal_channel: false,
         }
     }
 }
