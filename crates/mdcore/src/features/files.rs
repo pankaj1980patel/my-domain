@@ -95,6 +95,27 @@ pub struct Files {
     out: Mutex<HashMap<String, Outgoing>>,
     acked: Condvar,
     inc: Mutex<HashMap<String, Incoming>>,
+    /// Transfers this device finished receiving lately, with how they ended
+    /// (`Some(error)` if they failed): an offer repeated because our
+    /// `file_done` got lost is answered again instead of starting over.
+    finished: Mutex<std::collections::VecDeque<(String, Option<String>)>>,
+}
+
+/// How many finished transfers are remembered.
+const FINISHED_KEPT: usize = 64;
+
+impl Files {
+    fn finished(&self, id: &str, error: Option<&str>) {
+        let mut f = self.finished.lock();
+        if f.len() >= FINISHED_KEPT {
+            f.pop_front();
+        }
+        f.push_back((id.to_string(), error.map(str::to_string)));
+    }
+
+    fn how_it_ended(&self, id: &str) -> Option<Option<String>> {
+        self.finished.lock().iter().find(|(x, _)| x == id).map(|(_, e)| e.clone())
+    }
 }
 
 fn me<P: Platform>(ctx: &NetCtx<P>) -> String {
@@ -384,6 +405,14 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     let reject = |why: &str| {
         reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": false, "error": why }))
     };
+    // Already received (our `file_done` was lost): say so again.
+    if let Some(ended) = ctx.files.how_it_ended(&id) {
+        let mut done = json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": ended.is_none() });
+        if let Some(why) = ended {
+            done["error"] = why.into();
+        }
+        return reply(done);
+    }
     let Some(dir) = ctx.files.download_dir.lock().clone() else {
         return reject("this device can't receive files");
     };
@@ -512,6 +541,14 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
         _ => false,
     };
     let me = me(ctx);
+    let why = if moved {
+        None
+    } else if ok {
+        Some("couldn't save the file")
+    } else {
+        Some("the file arrived damaged")
+    };
+    ctx.files.finished(id, why);
     if moved {
         let path = dest.unwrap_or_default();
         ctx.sink.emit(CoreEvent::FileReceived {
@@ -524,7 +561,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
         let _ = send(ctx, &t.from, &json!({ "type": "file_done", "from": me, "id": id, "ok": true }));
     } else {
         let _ = std::fs::remove_file(&t.part);
-        let why = if ok { "couldn't save the file" } else { "the file arrived damaged" };
+        let why = why.unwrap_or_default();
         failed(ctx, id, &t.from, &t.name, true, why);
         let _ = send(
             ctx,
