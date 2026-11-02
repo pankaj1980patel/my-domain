@@ -31,18 +31,29 @@ fn push_status(app: &AppHandle) {
         status["battery"] = battery.into();
         status["charging"] = charging.into();
     }
+    let mut actions = Vec::new();
     if let Some((volume, muted)) = sound::read() {
         status["volume"] = volume.into();
         status["muted"] = muted.into();
-        status["actions"] = serde_json::json!(["volume", "mute"]);
+        actions.extend(["volume", "mute"]);
+    }
+    if sound::has_media() {
+        actions.push("media");
+    }
+    if screen::can_lock() {
+        actions.push("lock");
+    }
+    if !actions.is_empty() {
+        status["actions"] = actions.into();
     }
     if let Some(engine) = app.try_state::<Eng>() {
         engine.set_device_status(&status.to_string());
     }
 }
 
-/// A sibling asked this computer to run an action (`volume {step}` or
-/// `mute {on}`); then the status is pushed again so it shows the new level.
+/// A sibling asked this computer to run an action (`volume {step}`,
+/// `mute {on}`, `media {key}` or `lock`); then the status is pushed again
+/// so it shows the new level.
 pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
     match name {
         "volume" => sound::step(if args["step"].as_i64().unwrap_or(1) < 0 {
@@ -51,6 +62,8 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
             10
         }),
         "mute" => sound::mute(args["on"].as_bool()),
+        "media" => sound::media(args["key"].as_str().unwrap_or_default()),
+        "lock" => screen::lock(),
         _ => return,
     }
     push_status(app);
@@ -132,6 +145,46 @@ mod sound {
         let _ = run("pactl", &["set-sink-mute", "@DEFAULT_SINK@", v]);
     }
 
+    /// Media keys for whatever is playing, through MPRIS (`playerctl`).
+    #[cfg(target_os = "linux")]
+    pub fn has_media() -> bool {
+        run("playerctl", &["--version"]).is_some()
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn media(key: &str) {
+        let cmd = match key {
+            "play_pause" => "play-pause",
+            "next" => "next",
+            "previous" => "previous",
+            _ => return,
+        };
+        // The player you're listening to, else one you paused: plain
+        // `playerctl` takes the first one listed, maybe an idle browser.
+        let players = run("playerctl", &["--list-all"]).unwrap_or_default();
+        let status = |p: &str| run("playerctl", &["--player", p, "status"]).unwrap_or_default();
+        let pick = ["Playing", "Paused"].iter().find_map(|want| {
+            players
+                .lines()
+                .find(|p| status(p) == *want)
+                .map(str::to_string)
+        });
+        match pick {
+            Some(p) => run("playerctl", &["--player", &p, cmd]),
+            None => run("playerctl", &[cmd]),
+        };
+    }
+
+    // macOS has no command for media keys; posting the key events needs
+    // the Accessibility permission. Not offered yet.
+    #[cfg(not(target_os = "linux"))]
+    pub fn has_media() -> bool {
+        false
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    pub fn media(_key: &str) {}
+
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub fn read() -> Option<(u8, bool)> {
         None
@@ -142,6 +195,105 @@ mod sound {
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub fn mute(_on: Option<bool>) {}
+}
+
+/// Locking the screen ("I walked away and left it open").
+mod screen {
+    use std::process::Command;
+
+    fn ok(cmd: &str, args: &[&str]) -> bool {
+        Command::new(cmd)
+            .args(args)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    /// The display sleeps; with "require password after sleep" on (the
+    /// default), that locks the Mac.
+    #[cfg(target_os = "macos")]
+    pub fn can_lock() -> bool {
+        true
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn lock() {
+        ok("pmset", &["displaysleepnow"]);
+    }
+
+    /// Through logind (works on every desktop that locks on its signal),
+    /// then the freedesktop screensaver as a fallback.
+    #[cfg(target_os = "linux")]
+    pub fn can_lock() -> bool {
+        ok("loginctl", &["--version"])
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn lock() {
+        let sessions = graphical_sessions();
+        for id in &sessions {
+            ok("loginctl", &["lock-session", id]);
+        }
+        // Desktops (GNOME, KDE, Xfce...) lock on logind's signal and say so.
+        std::thread::sleep(std::time::Duration::from_millis(1500));
+        let locked = sessions.iter().any(|id| {
+            Command::new("loginctl")
+                .args(["show-session", id, "-p", "LockedHint", "--value"])
+                .output()
+                .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "yes")
+        });
+        if locked || ok("xdg-screensaver", &["lock"]) {
+            return;
+        }
+        // A bare window manager (i3, sway...) has nobody listening: run its
+        // locker ourselves. It stays up until unlocked, so don't wait.
+        for locker in ["i3lock", "swaylock", "slock"] {
+            if let Ok(mut child) = Command::new(locker).spawn() {
+                std::thread::spawn(move || child.wait());
+                return;
+            }
+        }
+    }
+
+    /// This user's sessions on a screen (X11 or Wayland). Not just
+    /// `XDG_SESSION_ID`: an app started from a terminal over ssh would
+    /// lock that text session instead.
+    #[cfg(target_os = "linux")]
+    fn graphical_sessions() -> Vec<String> {
+        let me = Command::new("id")
+            .arg("-u")
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+            .unwrap_or_default();
+        let list = Command::new("loginctl")
+            .args(["list-sessions", "--no-legend"])
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+            .unwrap_or_default();
+        list.lines()
+            .filter_map(|l| {
+                let mut cols = l.split_whitespace();
+                let (id, uid) = (cols.next()?, cols.next()?);
+                (uid == me).then(|| id.to_string())
+            })
+            .filter(|id| {
+                Command::new("loginctl")
+                    .args(["show-session", id, "-p", "Type", "--value"])
+                    .output()
+                    .is_ok_and(|o| {
+                        let t = String::from_utf8_lossy(&o.stdout);
+                        matches!(t.trim(), "x11" | "wayland")
+                    })
+            })
+            .collect()
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn can_lock() -> bool {
+        false
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn lock() {}
 }
 
 /// (percent 0-100, plugged in), or `None` without a battery.

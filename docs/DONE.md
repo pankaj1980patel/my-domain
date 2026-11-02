@@ -295,6 +295,23 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Desktop media keys and lock (2026-11-02)
+
+- The desktop lists `media` and `lock` in its status when it can do them.
+  The phone's existing media buttons work against a Linux computer.
+  - `media {key}` (Linux): through `playerctl`, aimed at the player that
+    is playing, else a paused one, rather than an idle browser tab.
+    macOS isn't offered yet: posting media keys needs the Accessibility
+    permission.
+  - `lock`: macOS sleeps the display, which locks it when a password is
+    required after sleep. Linux locks the user's graphical sessions
+    through logind. Where nothing answers that (a bare i3 or sway), it
+    runs `i3lock`, `swaylock` or `slock`.
+- Verified live on the Linux laptop (i3) from Mac `mdctl`: play/pause
+  toggled VLC, and lock brought up i3lock. Mac lock not tried, because
+  that Mac is in use. Neither app has a Lock button yet; it's for the new
+  UI.
+
 ## Linux desktop verified; dead links during a transfer (2026-11-02)
 
 - The workspace tests pass on Linux (rustc 1.99.1; specta needs a recent
