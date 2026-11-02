@@ -68,6 +68,23 @@ pub enum CoreEvent {
         title: String,
         body: String,
         app: Option<String>,
+        /// The notification's key on the phone, when it can be acted on
+        /// (`Engine::notification_action`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        key: Option<String>,
+        /// Its buttons, `[{"title": "Reply", "reply": true}, ...]`, in order;
+        /// `reply` ones take text.
+        #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+        actions: serde_json::Value,
+    },
+    /// Another device asks this one to press button `index` of its
+    /// notification `key` (with `text` for a reply), or to dismiss it
+    /// (`index` -1).
+    NotificationAction {
+        from: String,
+        key: String,
+        index: i64,
+        text: Option<String>,
     },
     /// A peer shared an incoming/missed/ended call notification.
     CallNotification {
@@ -163,6 +180,7 @@ impl CoreEvent {
             CoreEvent::ClipboardHistory { .. } => "clipboard-history",
             CoreEvent::CodeCopied { .. } => "code-copied",
             CoreEvent::Notification { .. } => "notification-event",
+            CoreEvent::NotificationAction { .. } => "notification-action-event",
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",
             CoreEvent::AppsList { .. } => "apps-list-event",
@@ -216,6 +234,8 @@ mod tests {
             title: "Hi".into(),
             body: "there".into(),
             app: None,
+            key: None,
+            actions: serde_json::Value::Null,
         }
     }
 

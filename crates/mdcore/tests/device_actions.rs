@@ -119,3 +119,55 @@ fn a_shared_code_lands_on_the_other_clipboard() {
     assert_eq!(code, ("482913".to_string(), Some("Messages".to_string())));
     assert_eq!(b.clip().current().as_deref(), Some("482913"));
 }
+
+#[test]
+fn a_notification_can_be_answered_from_another_device() {
+    let (a, b) = pair("notif-action");
+    // b subscribes to a's Messages app, a forwards one with a reply button.
+    b.engine.send(&a.node_id(), "hi").unwrap();
+    a.sink.wait_for_message("hi");
+    b.engine
+        .subscribe_apps(&a.node_id(), r#"["com.messages"]"#)
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    a.engine.share_app_notification_with(
+        "com.messages",
+        "Messages",
+        "Asha",
+        "Coming tonight?",
+        Some("0|com.messages|7"),
+        r#"[{"title":"Reply","reply":true},{"title":"Mark as read","reply":false}]"#,
+    );
+    let (key, actions) = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Notification {
+                key: Some(k),
+                actions,
+                ..
+            } => Some((k.clone(), actions.clone())),
+            _ => None,
+        })
+        .expect("no notification");
+    assert_eq!(actions[0]["title"], "Reply");
+    b.engine
+        .notification_action(&a.node_id(), &key, 0, Some("Yes, 8pm"))
+        .unwrap();
+    let got = a
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::NotificationAction {
+                key, index, text, ..
+            } => Some((key.clone(), *index, text.clone())),
+            _ => None,
+        })
+        .expect("no action");
+    assert_eq!(
+        got,
+        (
+            "0|com.messages|7".to_string(),
+            0,
+            Some("Yes, 8pm".to_string())
+        )
+    );
+}

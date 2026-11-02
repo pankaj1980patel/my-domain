@@ -279,6 +279,7 @@ impl EventSink for TauriSink {
                 title,
                 body,
                 app: source,
+                ..
             } => {
                 let app = self.app.clone();
                 let (from, title, body, source) =

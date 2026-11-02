@@ -140,6 +140,24 @@ impl<P: Platform> Engine<P> {
         crate::features::files::cancel(&self.ctx, id);
     }
 
+    /// Press button `index` of notification `key` on `node_id` (with `text`
+    /// for a reply button), or dismiss it with `index` -1. Arrives there as
+    /// `CoreEvent::NotificationAction`.
+    pub fn notification_action(
+        &self,
+        node_id: &str,
+        key: &str,
+        index: i64,
+        text: Option<&str>,
+    ) -> crate::Result<String> {
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({
+            "type": "notif_action", "from": me, "key": key, "index": index, "text": text,
+        })
+        .to_string();
+        self.send(node_id, &m)
+    }
+
     // --- app-notification pub/sub ---
 
     /// Set this device's shareable app list (JSON array of {pkg,label}) — pushed
@@ -169,6 +187,22 @@ impl<P: Platform> Engine<P> {
     /// Producer: a local app posted a notification — forward it to every peer
     /// subscribed to that package (as a normal `notification`).
     pub fn share_app_notification(&self, pkg: &str, app: &str, title: &str, body: &str) {
+        self.share_app_notification_with(pkg, app, title, body, None, "")
+    }
+
+    /// `share_app_notification`, plus the notification's `key` and its
+    /// buttons (`actions_json`: `[{"title": "Reply", "reply": true}, ...]`),
+    /// so the other device can act on it (`notification_action`).
+    pub fn share_app_notification_with(
+        &self,
+        pkg: &str,
+        app: &str,
+        title: &str,
+        body: &str,
+        key: Option<&str>,
+        actions_json: &str,
+    ) {
+        let actions: serde_json::Value = serde_json::from_str(actions_json).unwrap_or_default();
         let me = self.ctx.identity.lock().node_id.clone();
         let targets: Vec<String> = self
             .ctx
@@ -179,11 +213,14 @@ impl<P: Platform> Engine<P> {
             .map(|(n, _)| n.clone())
             .collect();
         for n in targets {
-            let m = serde_json::json!({
+            let mut m = serde_json::json!({
                 "type": "notification", "from": me, "title": title, "body": body, "app": app,
-            })
-            .to_string();
-            let _ = self.send_control(&n, &m);
+            });
+            if let Some(key) = key {
+                m["key"] = key.into();
+                m["actions"] = actions.clone();
+            }
+            let _ = self.send_control(&n, &m.to_string());
         }
     }
 }
