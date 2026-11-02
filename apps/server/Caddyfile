@@ -4,10 +4,11 @@
 # The server takes the real client IP from X-Forwarded-For, trusted only
 # from loopback (see client_ip in src/devices.rs).
 #
-# mydomain.work.gd is the server's name (its A record points at
-# 152.67.7.50). The old free sslip.io name stays for installs that still use
-# it; some company web filters block sslip.io names.
-mydomain.work.gd, 152-67-7-50.sslip.io {
+# mydomain.work.gd is the server's name; mydomain.servehttp.com is a second
+# one (both A records point at 152.67.7.50), so a network that filters one
+# free-DNS name can use the other. The old sslip.io name stays for installs
+# that still use it; some company web filters block sslip.io names.
+mydomain.work.gd, mydomain.servehttp.com, 152-67-7-50.sslip.io {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:6969
 }
