@@ -234,6 +234,28 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     assert_eq!(status["charging"], true);
     assert_eq!(status["platform"], "android");
 
+    // The desktop presses a notification's reply button on the phone: a
+    // `notification-action-event` with the key, index and text.
+    desktop
+        .engine
+        .notification_action(&id.node_id, "0|com.app|1|null|10", 0, Some("on my way"))
+        .unwrap();
+    let act = events.wait_for("notification-action-event", |_| true);
+    assert_eq!(act["kind"], "notification_action");
+    assert_eq!(act["from"], desktop.node_id().as_str());
+    assert_eq!(act["key"], "0|com.app|1|null|10");
+    assert_eq!(act["index"], 0);
+    assert_eq!(act["text"], "on my way");
+    // Forwarding with key and buttons (no subscriber here: a no-op).
+    phone.share_app_notification_with(
+        "com.app".into(),
+        "App".into(),
+        "Ann".into(),
+        "hi".into(),
+        Some("0|com.app|1|null|10".into()),
+        r#"[{"title":"Reply","reply":true}]"#.into(),
+    );
+
     // And the phone asks the desktop's.
     phone.request_status(desktop.node_id()).unwrap();
     let st = events.wait_for("device-status-event", |_| true);

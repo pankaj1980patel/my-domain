@@ -538,6 +538,44 @@ impl MdEngine {
         self.inner.share_app_notification(&pkg, &app, &title, &body);
     }
 
+    /// `share_app_notification`, plus the notification's `key` and its
+    /// buttons (`actions_json`: `[{"title":"Reply","reply":true}, ...]`, in
+    /// the notification's action order), so another device can press one
+    /// (it arrives here as a `notification-action-event`).
+    pub fn share_app_notification_with(
+        &self,
+        pkg: String,
+        app: String,
+        title: String,
+        body: String,
+        key: Option<String>,
+        actions_json: String,
+    ) {
+        self.inner.share_app_notification_with(
+            &pkg,
+            &app,
+            &title,
+            &body,
+            key.as_deref(),
+            &actions_json,
+        );
+    }
+
+    /// Press button `index` of notification `key` on `node_id` (with `text`
+    /// for a reply button), or dismiss it with `index` -1. Returns the
+    /// transport used, or "queued".
+    pub fn notification_action(
+        &self,
+        node_id: String,
+        key: String,
+        index: i64,
+        text: Option<String>,
+    ) -> MdResult<String> {
+        Ok(self
+            .inner
+            .notification_action(&node_id, &key, index, text.as_deref())?)
+    }
+
     // --- quick device actions ---
 
     /// This device's status, as a JSON object (e.g.

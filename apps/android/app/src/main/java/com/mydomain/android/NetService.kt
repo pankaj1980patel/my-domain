@@ -235,6 +235,7 @@ class NetService : Service() {
                     when (o.optString("kind")) {
                         "message_received" -> handleIncomingMessage(o)
                         "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
+                        "notification_action" -> NotifListener.onAction(o)
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))

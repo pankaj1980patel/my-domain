@@ -164,6 +164,9 @@
     <string name="act_call_history">Call history received</string>
     <string name="act_clipboard_synced">Clipboard synced</string>
     <string name="act_code_sent">Sent a code to your devices</string>
+    <string name="act_notif_replied">Replied to %1$s from %2$s</string>
+    <string name="act_notif_pressed">Pressed “%1$s” on %2$s from %3$s</string>
+    <string name="act_notif_dismissed">Dismissed a %1$s notification from %2$s</string>
     <string name="act_notification_sent">Sent “%1$s” to your devices</string>
     <string name="act_clipboard_copied">Copied %1$s\'s clipboard</string>
     <string name="act_ring">%1$s rang this phone</string>
