@@ -161,15 +161,34 @@ fn relay_comes_up_first_then_a_direct_path_takes_over() {
     let pos = |s: &str| stages.iter().position(|x| x == s).unwrap();
     assert!(pos("relay") < pos("punching"), "{stages:?}");
 
-    // New traffic goes direct: the relay forwards nothing more.
-    let before = relay.forwarded().len();
+    // B upgrades too (a moment later under load); until then its receipts
+    // may still go by relay.
+    let a_id = a.node_id();
+    b.sink
+        .wait_until(WAIT, |e| match e {
+            mdcore::CoreEvent::PeerConnected { node_id, transport }
+                if *node_id == a_id && *transport != mdcore::transport::TransportKind::Relay =>
+            {
+                Some(())
+            }
+            _ => None,
+        })
+        .expect("b never upgraded");
+
+    // New messages go direct: the relay forwards none to b. (A late hello
+    // may still be greeted back by relay; that's not a message.)
+    let to_b = || {
+        relay
+            .forwarded()
+            .iter()
+            .filter(|v| v["to"].as_str() == Some(id.as_str()))
+            .filter(|v| v["data"].as_str().is_some_and(|d| d.contains("\"msg\"")))
+            .count()
+    };
+    let before = to_b();
     a.engine.send(&b.node_id(), "direct now").unwrap();
     b.sink.wait_for_message("direct now");
-    assert_eq!(
-        relay.forwarded().len(),
-        before,
-        "the relay is no longer used"
-    );
+    assert_eq!(to_b(), before, "the relay is no longer used");
 }
 
 #[test]
