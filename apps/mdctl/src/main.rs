@@ -15,7 +15,8 @@
 //! `MD_DEV_PASS`, `MD_DEV_KEY` (scripts/lab/test-creds.env).
 //!
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
-//! `send <node> <text...>`, `add <name> <ip> <quic_port>`, `forget` (remove
+//! `send <node> <text...>`, `status <node>`, `ring <node>`,
+//! `open <node> <url>`, `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
 //! For scripted tests (`--script FILE`, or the same lines on stdin):
@@ -372,6 +373,18 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let to = resolve(engine, &arg(words.next())?)?;
             let text = words.collect::<Vec<_>>().join(" ");
             Ok(json!({ "via": engine.send(&to, &text)? }))
+        }
+        "status" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            Ok(json!({ "via": engine.request_status(&to)? }))
+        }
+        "ring" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            Ok(json!({ "via": engine.ring(&to)? }))
+        }
+        "open" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            Ok(json!({ "via": engine.open_url(&to, &arg(words.next())?)? }))
         }
         "forget" => {
             engine.unregister_from_server()?;

@@ -77,6 +77,17 @@ pub enum CoreEvent {
         apps: serde_json::Value,       // [{ "pkg": ..., "label": ... }]
         subscribed: serde_json::Value, // [ "pkg", ... ]
     },
+    /// A device answered `request_status` (`from` is its node id). `status`
+    /// holds what its host app reported (`battery`: 0-100, `charging`) plus
+    /// `platform`.
+    DeviceStatus {
+        from: String,
+        status: serde_json::Value,
+    },
+    /// Another of your devices asks this one to ring (find my device).
+    Ring { from: String },
+    /// Another of your devices asks this one to open a web link.
+    OpenUrl { from: String, url: String },
 }
 
 impl CoreEvent {
@@ -102,6 +113,9 @@ impl CoreEvent {
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",
             CoreEvent::AppsList { .. } => "apps-list-event",
+            CoreEvent::DeviceStatus { .. } => "device-status-event",
+            CoreEvent::Ring { .. } => "ring-event",
+            CoreEvent::OpenUrl { .. } => "open-url-event",
         }
     }
 

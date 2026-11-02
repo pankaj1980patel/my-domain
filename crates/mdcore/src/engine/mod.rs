@@ -85,6 +85,8 @@ pub struct NetCtx<P: Platform> {
     pub control: Arc<ControlRegistry<P>>,
     /// Producer's shareable app list as a JSON array string (pushed by the host).
     pub installed_apps: Arc<Mutex<String>>,
+    /// This device's status as last pushed by the host (JSON object).
+    pub device_status: Arc<Mutex<String>>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
     /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC
@@ -145,6 +147,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             clip_pending: self.clip_pending.clone(),
             control: self.control.clone(),
             installed_apps: self.installed_apps.clone(),
+            device_status: self.device_status.clone(),
             subs: self.subs.clone(),
             quic_failed: self.quic_failed.clone(),
             manual_aliases: self.manual_aliases.clone(),
@@ -292,6 +295,7 @@ impl<P: Platform> Engine<P> {
             clip_pending: clip_pending.clone(),
             control: control.clone(),
             installed_apps: installed_apps.clone(),
+            device_status: Arc::new(Mutex::new(String::from("{}"))),
             subs: subs.clone(),
             quic_failed: Arc::default(),
             manual_aliases: Arc::default(),

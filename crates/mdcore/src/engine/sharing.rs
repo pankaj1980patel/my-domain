@@ -36,6 +36,46 @@ impl<P: Platform> Engine<P> {
         transport::broadcast_control(&self.net_ctx(), &msg);
     }
 
+    // --- quick device actions (see features::device) ---
+
+    /// Set this device's status, a JSON object such as
+    /// `{"battery": 80, "charging": true}`, pushed by the host whenever it
+    /// changes. Sent to devices that call `request_status`.
+    pub fn set_device_status(&self, status_json: &str) {
+        *self.ctx.device_status.lock() = status_json.to_string();
+    }
+
+    // These go like chat messages (`send`): held until the device is
+    // reachable (a sleeping phone is woken by push), resent until it
+    // acknowledges, and acted on once. Each returns the transport used, or
+    // `"queued"`.
+
+    /// Ask a device for its status (reply arrives as `CoreEvent::DeviceStatus`).
+    pub fn request_status(&self, node_id: &str) -> crate::Result<String> {
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({ "type": "status_request", "from": me }).to_string();
+        self.send(node_id, &m)
+    }
+
+    /// Make a device ring (`CoreEvent::Ring` on it).
+    pub fn ring(&self, node_id: &str) -> crate::Result<String> {
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({ "type": "ring", "from": me }).to_string();
+        self.send(node_id, &m)
+    }
+
+    /// Open a web link on a device (`CoreEvent::OpenUrl` on it). Only
+    /// http(s) links; the receiving device checks again.
+    pub fn open_url(&self, node_id: &str, url: &str) -> crate::Result<String> {
+        if !crate::features::device::is_openable(url) {
+            return Err("only http and https links can be opened".to_string().into());
+        }
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({ "type": "open_url", "from": me, "url": url.trim() })
+            .to_string();
+        self.send(node_id, &m)
+    }
+
     // --- app-notification pub/sub ---
 
     /// Set this device's shareable app list (JSON array of {pkg,label}) — pushed

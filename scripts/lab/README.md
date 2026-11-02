@@ -42,7 +42,8 @@ printf 'peers\nsend <node_id> hello\nquit\n' | cargo run -q -p mdctl -- --name l
 ```
 
 Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
-`send <node> <text>`, `add <name> <ip> <quic_port>`, `forget` (remove this
+`send <node> <text>`, `status <node>`, `ring <node>`, `open <node> <url>`,
+`add <name> <ip> <quic_port>`, `forget` (remove this
 device from the server), `quit`. `--offline USER --key K` skips the server.
 
 ## Android builds on the Mac

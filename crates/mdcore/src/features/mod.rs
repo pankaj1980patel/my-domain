@@ -13,6 +13,7 @@ pub mod addr_update;
 pub mod call_history;
 pub mod call_notification;
 pub mod clipboard;
+pub mod device;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
@@ -92,6 +93,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(call_notification::CallNotificationHandler));
         r.register(Arc::new(call_history::CallHistoryHandler));
         r.register(Arc::new(notif_apps::NotifAppsHandler));
+        r.register(Arc::new(device::DeviceHandler));
         r.register(Arc::new(p2p_ping::P2pPingHandler));
         r.register(Arc::new(addr_update::AddrUpdateHandler));
         r.register(Arc::new(signal_fwd::SignalFwdHandler));
