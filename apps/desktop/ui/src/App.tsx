@@ -1,8 +1,8 @@
 // App shell: sign in first, then a sidebar with Devices / Activity /
 // Settings. A device opens its detail page; the Developer screen is hidden.
 
-import { createSignal, Match, onMount, Show, Switch } from "solid-js";
-import { dismissRing, peerName, resume, state } from "./lib/core";
+import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
@@ -25,6 +25,11 @@ export default function App() {
   });
   const [view, setView] = createSignal<View>({ name: "home" });
   const go = (v: View) => setView(v);
+  // The tray's "Open" on a device jumps to that device's page.
+  onMount(() => {
+    const off = onOpenDevice((node) => go({ name: "device", node }));
+    onCleanup(() => off.then((f) => f()));
+  });
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
   const connected = () => state.peers.filter((p) => state.links[p.node_id]).length;
 

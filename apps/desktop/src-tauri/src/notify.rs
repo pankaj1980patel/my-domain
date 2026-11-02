@@ -109,7 +109,7 @@ pub fn device_name(app: &AppHandle, node_id: &str) -> String {
         .unwrap_or_else(|| "One of your devices".to_string())
 }
 
-fn nice_name(name: &str) -> String {
+pub(crate) fn nice_name(name: &str) -> String {
     let base = name.strip_suffix(".local").unwrap_or(name);
     let words: Vec<&str> = base.split(['-', '_']).filter(|w| !w.is_empty()).collect();
     let nice = words.join(" ");

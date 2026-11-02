@@ -574,6 +574,12 @@ export async function openFile(path: string) {
 }
 
 /** Silence this device's ring. */
+/** The tray's "Open" on a device: call `cb` with its node id. Resolves to an
+ *  unsubscribe function. */
+export function onOpenDevice(cb: (node: string) => void): Promise<() => void> {
+  return listen<{ node_id: string }>("open-device", (e) => cb(e.payload.node_id));
+}
+
 export function dismissRing() {
   stopRing();
   setState("ringing", null);

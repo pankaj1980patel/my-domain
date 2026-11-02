@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod device;
 mod fcm;
 mod notify;
+mod tray;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
 
@@ -229,6 +230,10 @@ impl EventSink for TauriSink {
         // Ring / open-link need the desktop to act, not just the UI. Off the
         // core's thread: these look up peers and talk to the OS.
         match &ev {
+            // The tray's device submenus follow the peer list and link state.
+            CoreEvent::PeersUpdated { .. }
+            | CoreEvent::PeerConnected { .. }
+            | CoreEvent::PeerDisconnected { .. } => tray::refresh(&self.app),
             CoreEvent::Ring { from } => {
                 let (app, from) = (self.app.clone(), from.clone());
                 std::thread::spawn(move || device::on_ring(&app, &from));
@@ -879,11 +884,31 @@ pub fn run() {
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
             device::spawn_status_reporter(handle.clone());
+            // A missing tray isn't fatal: the window still works.
+            if let Err(e) = tray::init(&handle) {
+                eprintln!("[tray] couldn't create the tray icon: {e}");
+            }
             Ok(())
         })
+        // Closing the window hides it to the tray; the tray's "Quit" exits.
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" && !tray::quitting() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(commands.invoke_handler())
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, _event| {
+            // Clicking the dock icon brings the hidden window back (macOS).
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = _event {
+                tray::show_window(_app);
+            }
+        });
 }
 
 #[cfg(test)]

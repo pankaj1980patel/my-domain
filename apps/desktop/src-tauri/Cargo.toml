@@ -24,7 +24,7 @@ mdcore = { workspace = true, features = ["specta"] }
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }
 tauri-specta = { version = "=2.0.0-rc.26", features = ["derive", "typescript"] }
 specta-typescript = "0.0.13"
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 tauri-plugin-opener = "2"
 # Native "pick a file to send" dialog (used from Rust, see `pick_file`).
 tauri-plugin-dialog = "2"
