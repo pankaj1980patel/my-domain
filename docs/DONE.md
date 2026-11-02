@@ -277,6 +277,9 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   re-registers in the background, so a push that wakes a killed app finds
   it signed in. Signing out deletes them. Test:
   `registry::a_restarted_device_is_still_signed_in_until_it_signs_out`.
+  - Checked on the phone: after its process was killed, it reopened on
+    the device list signed in; a server push (self-ping) to the killed app
+    was handled, not dropped; Sign out emptied the Keystore store.
 - **HTTPS trusts the OS certificate store too** (`mdcore::tls`), for both
   the registry calls and the `wss://` relay. Company proxies that re-sign
   HTTPS with their own CA (installed by IT) no longer break sign-in with

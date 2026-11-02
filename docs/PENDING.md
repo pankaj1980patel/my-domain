@@ -331,10 +331,6 @@ A feature counts as done when it has:
   happens again.
 - **Stale FCM thread:** after re-registering, the old FCM receiver thread
   keeps running until its next reconnect. It's harmless but wastes a thread.
-- **Stay signed in: check on the phone.** The session (token + device key)
-  now survives a restart (Android Keystore / OS keychain; tested in the
-  core). Still to confirm on the phone: kill the app, send it a push, and
-  see it wake signed in.
 - **Office network blocks the server.** The Mac's office Wi-Fi (FortiGuard)
   blocks `152-67-7-50.sslip.io` as a policy violation (HTTP 403 block
   page). Use a hotspot there, ask IT to allow it, or move the server to a
