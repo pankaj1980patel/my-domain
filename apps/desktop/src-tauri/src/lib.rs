@@ -816,11 +816,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
 }
 
 /// Write `ui/src/bindings.ts`.
-fn export_bindings(commands: &tauri_specta::Builder<tauri::Wry>) {
+fn export_bindings(commands: &tauri_specta::Builder<tauri::Wry>) -> Result<(), String> {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../ui/src/bindings.ts");
-    if let Err(e) = commands.export(specta_typescript::Typescript::default(), path) {
-        eprintln!("[specta] failed to export TypeScript bindings: {e}");
-    }
+    commands
+        .export(specta_typescript::Typescript::default(), path)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -828,7 +828,9 @@ pub fn run() {
     let commands = specta_builder();
     // Debug builds keep the UI's TypeScript bindings current.
     #[cfg(debug_assertions)]
-    export_bindings(&commands);
+    if let Err(e) = export_bindings(&commands) {
+        eprintln!("[specta] failed to export TypeScript bindings: {e}");
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -889,7 +891,9 @@ mod bindings {
     /// `cargo test -p my-domain export_bindings` regenerates the bindings.
     #[test]
     fn export_bindings() {
-        super::export_bindings(&super::specta_builder());
+        // Fails (rather than keeping the old file) if a command can't be
+        // exported, e.g. one taking an i64, which TypeScript can't hold.
+        super::export_bindings(&super::specta_builder()).expect("bindings exported");
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../ui/src/bindings.ts");
         let ts = std::fs::read_to_string(path).expect("bindings written");
         assert!(ts.contains("sendMessage"), "commands are exported");
