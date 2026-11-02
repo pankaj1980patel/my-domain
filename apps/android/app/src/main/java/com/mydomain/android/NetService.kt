@@ -41,6 +41,7 @@ class NetService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Core.init(this)
         clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         
         val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
@@ -106,11 +107,11 @@ class NetService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                "net_service", "Networking Service",
+                "net_service", getString(R.string.channel_service),
                 NotificationManager.IMPORTANCE_LOW
             )
             val shared = NotificationChannel(
-                "shared_notif", "Shared notifications",
+                "shared_notif", getString(R.string.channel_shared),
                 NotificationManager.IMPORTANCE_DEFAULT
             )
             val manager = getSystemService(NotificationManager::class.java)
@@ -124,8 +125,8 @@ class NetService : Service() {
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         
         return NotificationCompat.Builder(this, "net_service")
-            .setContentTitle("my-domain is running")
-            .setContentText("Your devices can reach this phone.")
+            .setContentTitle(getString(R.string.service_running))
+            .setContentText(getString(R.string.service_running_body))
             .setSmallIcon(android.R.drawable.ic_menu_share)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
@@ -158,7 +159,7 @@ class NetService : Service() {
     private fun postSharedNotification(title: String, text: String) {
         if (title.isBlank() && text.isBlank()) return
         val n = NotificationCompat.Builder(this, "shared_notif")
-            .setContentTitle(title.ifBlank { "Notification" })
+            .setContentTitle(title.ifBlank { getString(R.string.notification_default_title) })
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setAutoCancel(true)
@@ -180,7 +181,7 @@ class NetService : Service() {
                     when (o.optString("kind")) {
                         "message_received" -> handleIncomingMessage(o)
                         "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
-                        "call_notification" -> postSharedNotification("Call · ${o.optString("caller")}", o.optString("state"))
+                        "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)
@@ -249,7 +250,7 @@ class NetService : Service() {
                 val content = json.optString("content")
                 lastReceivedClipboard = content
                 updateLocalClipboard(content)
-                Core.addActivity("Copied ${Core.peerName(msg.optString("node_id"))}'s clipboard", Tone.Ok)
+                Core.addActivity(getString(R.string.act_clipboard_copied, Core.peerName(msg.optString("node_id"))), Tone.Ok)
             }
         }
     }

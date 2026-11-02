@@ -30,7 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
 import com.mydomain.android.core.friendlyError
@@ -48,11 +50,11 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = T.text) }
-            Text("Your devices", style = MaterialTheme.typography.bodyMedium, color = T.text2)
+            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
+            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.bodyMedium, color = T.text2)
         }
         if (peer == null) {
-            EmptyState("Not in your list", "This device isn't in your list any more.")
+            EmptyState(stringResource(R.string.device_not_found_title), stringResource(R.string.device_not_found_body))
             return
         }
         val s = linkStateOf(node)
@@ -73,7 +75,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                         }
                     }
                     if (s == LinkState.Offline || s == LinkState.Failed) {
-                        PrimaryButton("Connect", {
+                        PrimaryButton(stringResource(R.string.connect), {
                             scope.launch { try { Core.connect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
                         })
                     }
@@ -95,9 +97,9 @@ private fun ChatTile(node: String) {
     var busy by remember { mutableStateOf(false) }
     val thread = Core.messages.filter { it.node == node }.takeLast(50)
 
-    Tile(title = "Messages") {
+    Tile(title = stringResource(R.string.chat_title)) {
         if (thread.isEmpty()) {
-            Muted("Say hi. Messages go straight to this device, encrypted.", Modifier.fillMaxWidth().padding(vertical = 8.dp), center = true)
+            Muted(stringResource(R.string.chat_empty), Modifier.fillMaxWidth().padding(vertical = 8.dp), center = true)
         }
         thread.forEach { m ->
             val waiting = m.queued && m.pending
@@ -110,15 +112,15 @@ private fun ChatTile(node: String) {
                 ) {
                     Text(m.text, color = if (m.incoming) T.text else T.accentText, style = MaterialTheme.typography.bodyMedium)
                     if (waiting) {
-                        Text("Sends when connected", color = T.accentText, style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.chat_sends_when_connected), color = T.accentText, style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Field(text, { text = it }, "Write a message", Modifier.weight(1f))
+            Field(text, { text = it }, stringResource(R.string.chat_hint), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            PrimaryButton("Send", {
+            PrimaryButton(stringResource(R.string.send), {
                 val t = text.trim()
                 if (t.isNotEmpty()) {
                     busy = true
@@ -136,15 +138,16 @@ private fun ClipboardTile(node: String) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    Tile(title = "Clipboard") {
-        Muted("Copy something there, paste it here.")
-        SoftButton(if (busy) "Getting it…" else "Get its clipboard", {
+    val asked = stringResource(R.string.clipboard_asked)
+    Tile(title = stringResource(R.string.clipboard_title)) {
+        Muted(stringResource(R.string.clipboard_body))
+        SoftButton(stringResource(if (busy) R.string.clipboard_getting else R.string.clipboard_get), {
             busy = true
             scope.launch {
-                try { Core.pullClipboard(node); toast("Asked for its clipboard") } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
+                try { Core.pullClipboard(node); toast(asked) } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
             }
         }, Modifier.fillMaxWidth(), enabled = !busy)
-        ClipSyncSwitch("Keep clipboards in sync")
+        ClipSyncSwitch(stringResource(R.string.clipboard_sync))
     }
 }
 
@@ -154,13 +157,14 @@ private fun NotifyTile() {
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }
     var body by remember { mutableStateOf("") }
-    Tile(title = "Send a notification") {
-        Field(title, { title = it }, "Title")
-        Field(body, { body = it }, "Message (optional)")
-        SoftButton("Send to all my devices", {
+    val sent = stringResource(R.string.notify_sent)
+    Tile(title = stringResource(R.string.notify_title)) {
+        Field(title, { title = it }, stringResource(R.string.notify_field_title))
+        Field(body, { body = it }, stringResource(R.string.notify_field_message))
+        SoftButton(stringResource(R.string.notify_send_all), {
             val t = title.trim()
             scope.launch {
-                try { Core.shareNotification(t, body.trim()); title = ""; body = ""; toast("Sent to your devices") } catch (e: Exception) { toast(friendlyError(e)) }
+                try { Core.shareNotification(t, body.trim()); title = ""; body = ""; toast(sent) } catch (e: Exception) { toast(friendlyError(e)) }
             }
         }, Modifier.fillMaxWidth(), enabled = title.isNotBlank())
     }
@@ -172,16 +176,16 @@ private fun AppsTile(node: String) {
     val scope = rememberCoroutineScope()
     var q by remember { mutableStateOf("") }
     val data = Core.apps[node]
-    Tile(title = "App notifications") {
-        Muted("Choose which of its apps can show notifications here.")
+    Tile(title = stringResource(R.string.apps_title)) {
+        Muted(stringResource(R.string.apps_body))
         if (data == null) {
-            SoftButton("Show its apps", {
+            SoftButton(stringResource(R.string.apps_show), {
                 scope.launch { try { Core.requestApps(node) } catch (e: Exception) { toast(friendlyError(e)) } }
             })
         } else {
-            Field(q, { q = it }, "Search apps")
+            Field(q, { q = it }, stringResource(R.string.apps_search))
             val shown = data.apps.filter { it.label.contains(q, ignoreCase = true) }.take(50)
-            if (shown.isEmpty()) Muted("No apps to show.")
+            if (shown.isEmpty()) Muted(stringResource(R.string.apps_none))
             shown.forEach { a ->
                 SwitchRow(a.label, a.pkg in data.subscribed) {
                     scope.launch { try { Core.toggleApp(node, a.pkg) } catch (e: Exception) { toast(friendlyError(e)) } }

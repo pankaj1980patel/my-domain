@@ -23,6 +23,7 @@ data class DevCredentials(val server: String, val user: String, val pass: String
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Core.init(this)
         enableEdgeToEdge()
 
         // Ask for READ_PHONE_STATE so a later launch can use the IMEI as the

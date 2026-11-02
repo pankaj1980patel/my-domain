@@ -1,14 +1,18 @@
 package com.mydomain.android.core
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mydomain.android.BuildConfig
+import com.mydomain.android.R
 import com.mydomain.android.ffi.DeviceIdentity
 import com.mydomain.android.ffi.MdEngine
 import com.mydomain.android.ffi.PeerInfo
@@ -79,6 +83,20 @@ object Core {
 
     fun engine(): MdEngine? = runningEngine()
 
+    /** The app context, for strings built outside the screens (set by
+     *  MainActivity and NetService, whichever starts first). */
+    lateinit var app: Context
+        private set
+
+    fun init(context: Context) {
+        app = context.applicationContext
+    }
+
+    fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
+
+    fun plural(@PluralsRes id: Int, n: Int, vararg args: Any): String =
+        app.resources.getQuantityString(id, n, *args)
+
     /** Is the app on screen? Off screen, the engine closes idle links
      *  (battery); a send re-opens them and pushes still arrive. */
     @Volatile var visible = false
@@ -91,7 +109,7 @@ object Core {
     }
 
     fun peerName(node: String?): String =
-        peers.firstOrNull { it.nodeId == node }?.name?.let(::niceName) ?: "a device"
+        peers.firstOrNull { it.nodeId == node }?.name?.let(::niceName) ?: str(R.string.a_device)
 
     private fun onMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block)
@@ -175,12 +193,12 @@ object Core {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")
                 progress[node] = "connected"
-                if (!was) addActivity("Connected to ${peerName(node)}", Tone.Ok)
+                if (!was) addActivity(str(R.string.act_connected, peerName(node)), Tone.Ok)
             }
             "peer_disconnected" -> {
                 links.remove(node)
                 progress.remove(node)
-                addActivity("${peerName(node)} disconnected")
+                addActivity(str(R.string.act_disconnected, peerName(node)))
             }
             "connect_progress" -> progress[node] = o.optString("stage")
             "message_delivered" -> {
@@ -189,22 +207,23 @@ object Core {
             }
             "message_received" -> {
                 if (!o.optBoolean("ok", true)) {
-                    addActivity("A message couldn't be read: that device uses a different key", Tone.Error)
+                    addActivity(str(R.string.act_unreadable), Tone.Error)
                     return
                 }
                 val text = o.optString("text")
                 if (ClipboardSync.isControl(text)) return
                 val from = node.ifEmpty { peers.firstOrNull { it.ip == o.optString("ip") }?.nodeId ?: "" }
                 messages.add(ChatMessage(++seq, from, true, text, System.currentTimeMillis()))
-                addActivity("${peerName(from)}: $text")
+                addActivity(str(R.string.act_message, peerName(from), text))
             }
             "notification" -> {
+                val title = o.optString("title")
                 val body = o.optString("body")
-                addActivity(o.optString("title") + if (body.isNotEmpty()) " — $body" else "")
+                addActivity(if (body.isNotEmpty()) str(R.string.act_notification, title, body) else title)
             }
-            "call_notification" -> addActivity("Call from ${o.optString("caller")} (${o.optString("state")})")
-            "call_history" -> addActivity("Call history received")
-            "clipboard" -> addActivity("Clipboard synced")
+            "call_notification" -> addActivity(str(R.string.act_call, o.optString("caller"), o.optString("state")))
+            "call_history" -> addActivity(str(R.string.act_call_history))
+            "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
             "apps_list" -> {
                 val from = o.optString("from")
                 val key = peers.firstOrNull { it.nodeId == from || it.name == from }?.nodeId ?: from
@@ -278,7 +297,7 @@ object Core {
 
     suspend fun shareNotification(title: String, body: String) {
         call { it.shareNotification(title, body, "my-domain") }
-        addActivity("Sent “$title” to your devices", Tone.Ok)
+        addActivity(str(R.string.act_notification_sent, title), Tone.Ok)
     }
 
     suspend fun requestApps(node: String) = call { it.requestApps(node) }

@@ -37,6 +37,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.annotation.StringRes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -44,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
 import com.mydomain.android.core.initial
@@ -232,7 +239,7 @@ fun DeviceCard(peer: PeerInfo, onOpen: () -> Unit, onConnect: () -> Unit) {
             }
             if (s == LinkState.Offline || s == LinkState.Failed) {
                 Spacer(Modifier.width(8.dp))
-                GhostButton("Connect", onConnect, small = true)
+                GhostButton(stringResource(R.string.connect), onConnect, small = true)
             }
         }
     }
@@ -270,3 +277,15 @@ fun PageHead(title: String, subtitle: String? = null, action: (@Composable () ->
     }
 }
 
+
+/** A string resource with its one `%1$s` argument in bold (the words around
+ *  it stay one translatable sentence). */
+@Composable
+fun boldArg(@StringRes id: Int, arg: String): AnnotatedString {
+    val parts = stringResource(id).split("%1\$s", limit = 2)
+    return buildAnnotatedString {
+        append(parts[0])
+        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(arg) }
+        if (parts.size > 1) append(parts[1])
+    }
+}

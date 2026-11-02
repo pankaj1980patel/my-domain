@@ -1,4 +1,157 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">my-domain</string>
+
+    <!-- Tabs -->
+    <string name="tab_devices">Devices</string>
+    <string name="tab_activity">Activity</string>
+    <string name="tab_settings">Settings</string>
+
+    <!-- Shared -->
+    <string name="back">Back</string>
+    <string name="connect">Connect</string>
+    <string name="send">Send</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+
+    <!-- Sign in -->
+    <string name="signin_title_create">Create your account</string>
+    <string name="signin_title_welcome">Welcome back</string>
+    <string name="signin_tagline">All your devices, working together. Privately.</string>
+    <string name="signin_username">Username</string>
+    <string name="signin_password">Password</string>
+    <string name="signin_device_key">Device key</string>
+    <string name="signin_generate">Generate</string>
+    <string name="signin_key_hint">Use the same key on all your devices. It encrypts everything they send each other.</string>
+    <string name="signin_hide_advanced">Hide advanced</string>
+    <string name="signin_advanced">Advanced</string>
+    <string name="signin_server">Server</string>
+    <string name="signin_missing_fields">Fill in your username, password and device key.</string>
+    <string name="signin_busy">Signing in…</string>
+    <string name="signin_create_account">Create account</string>
+    <string name="signin_sign_in">Sign in</string>
+    <string name="signin_have_account">Already have an account?</string>
+    <string name="signin_new_here">New here?</string>
+    <string name="signin_create_an_account">Create an account</string>
+
+    <!-- Home -->
+    <string name="home_title">Your devices</string>
+    <string name="home_subtitle_empty">Devices signed in to your account appear here. Pull down to refresh.</string>
+    <plurals name="home_subtitle_connected">
+        <item quantity="one">%1$d of %2$d connected</item>
+        <item quantity="other">%1$d of %2$d connected</item>
+    </plurals>
+    <string name="home_empty_title">No other devices yet</string>
+    <string name="home_empty_body">Install my-domain on your computer or another phone and sign in with the same account. It shows up here by itself.</string>
+    <string name="home_list_updated">Device list updated</string>
+
+    <!-- Activity -->
+    <string name="activity_title">Activity</string>
+    <string name="activity_subtitle">Messages, connections and alerts from your devices.</string>
+    <string name="activity_empty_title">Nothing yet</string>
+    <string name="activity_empty_body">Things your devices do show up here.</string>
+
+    <!-- Device -->
+    <string name="device_not_found_title">Not in your list</string>
+    <string name="device_not_found_body">This device isn\'t in your list any more.</string>
+    <string name="chat_title">Messages</string>
+    <string name="chat_empty">Say hi. Messages go straight to this device, encrypted.</string>
+    <string name="chat_sends_when_connected">Sends when connected</string>
+    <string name="chat_hint">Write a message</string>
+    <string name="clipboard_title">Clipboard</string>
+    <string name="clipboard_body">Copy something there, paste it here.</string>
+    <string name="clipboard_getting">Getting it…</string>
+    <string name="clipboard_get">Get its clipboard</string>
+    <string name="clipboard_asked">Asked for its clipboard</string>
+    <string name="clipboard_sync">Keep clipboards in sync</string>
+    <string name="notify_title">Send a notification</string>
+    <string name="notify_field_title">Title</string>
+    <string name="notify_field_message">Message (optional)</string>
+    <string name="notify_send_all">Send to all my devices</string>
+    <string name="notify_sent">Sent to your devices</string>
+    <string name="apps_title">App notifications</string>
+    <string name="apps_body">Choose which of its apps can show notifications here.</string>
+    <string name="apps_show">Show its apps</string>
+    <string name="apps_search">Search apps</string>
+    <string name="apps_none">No apps to show.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_signed_in_as">Signed in as %1$s</string>
+    <string name="settings_sign_out">Sign out</string>
+    <string name="settings_this_device">This device</string>
+    <string name="settings_seen_as">Other devices see it as %1$s.</string>
+    <string name="settings_clip_sync">Keep clipboards in sync with my devices</string>
+    <string name="settings_device_key">Device key</string>
+    <string name="settings_key_hint">All your devices must use the same key. Changing it here means changing it on every device.</string>
+    <string name="settings_change_key">Change device key</string>
+    <string name="settings_new_key">New device key</string>
+    <string name="settings_your_password">Your password</string>
+    <string name="settings_key_changed">Device key changed</string>
+    <string name="settings_version">my-domain %1$s</string>
+    <string name="settings_developer_unlocked">Developer screen unlocked</string>
+
+    <!-- Connection status (core/Words.kt) -->
+    <string name="link_direct">Connected directly</string>
+    <string name="link_relay">Connected through the internet</string>
+    <string name="link_connecting">Connecting…</string>
+    <string name="link_failed">Couldn\'t reach it</string>
+    <string name="link_offline">Not connected</string>
+    <string name="quality_excellent">Excellent connection</string>
+    <string name="quality_good">Good connection</string>
+    <string name="quality_weak">Weak connection</string>
+    <string name="progress_quic">Looking for it on your networks…</string>
+    <string name="progress_signaled">Asking it to connect back…</string>
+    <string name="progress_relay">Connecting through the internet…</string>
+    <string name="progress_punching">Finding a faster direct route…</string>
+    <string name="progress_failed">Make sure my-domain is open on it and it\'s online.</string>
+
+    <!-- Errors (core/Words.kt) -->
+    <string name="error_no_key">Set your device key first (Settings).</string>
+    <string name="error_peer_not_found">That device isn\'t in your list any more.</string>
+    <string name="error_not_logged_in">You\'re signed out. Sign in again.</string>
+    <string name="error_not_connected">Not connected yet. Connecting now: try again in a moment.</string>
+    <string name="error_connection_closed">The connection dropped. Reconnecting: try again in a moment.</string>
+    <string name="error_bad_credentials">Wrong username or password.</string>
+    <string name="error_username_taken">That username is taken.</string>
+    <string name="error_timeout">That took too long. Check your internet connection.</string>
+    <string name="error_unreachable">Can\'t reach the server. Check your internet connection.</string>
+    <string name="error_not_started">my-domain is still starting. Try again in a moment.</string>
+
+    <!-- Time (core/Words.kt) -->
+    <string name="time_just_now">just now</string>
+    <plurals name="time_seconds_ago">
+        <item quantity="one">%1$ds ago</item>
+        <item quantity="other">%1$ds ago</item>
+    </plurals>
+    <plurals name="time_minutes_ago">
+        <item quantity="one">%1$d min ago</item>
+        <item quantity="other">%1$d min ago</item>
+    </plurals>
+    <plurals name="time_hours_ago">
+        <item quantity="one">%1$d h ago</item>
+        <item quantity="other">%1$d h ago</item>
+    </plurals>
+
+    <!-- Activity feed (core/Core.kt, NetService) -->
+    <string name="a_device">a device</string>
+    <string name="act_connected">Connected to %1$s</string>
+    <string name="act_disconnected">%1$s disconnected</string>
+    <string name="act_unreadable">A message couldn\'t be read: that device uses a different key</string>
+    <string name="act_message">%1$s: %2$s</string>
+    <string name="act_notification">%1$s — %2$s</string>
+    <string name="act_call">Call from %1$s (%2$s)</string>
+    <string name="act_call_history">Call history received</string>
+    <string name="act_clipboard_synced">Clipboard synced</string>
+    <string name="act_notification_sent">Sent “%1$s” to your devices</string>
+    <string name="act_clipboard_copied">Copied %1$s\'s clipboard</string>
+
+    <!-- OS notifications (NetService) -->
+    <string name="channel_service">Networking Service</string>
+    <string name="channel_shared">Shared notifications</string>
+    <string name="service_running">my-domain is running</string>
+    <string name="service_running_body">Your devices can reach this phone.</string>
+    <string name="notification_default_title">Notification</string>
+    <string name="notification_call">Call · %1$s</string>
 </resources>

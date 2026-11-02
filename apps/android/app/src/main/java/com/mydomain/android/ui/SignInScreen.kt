@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
@@ -50,10 +51,11 @@ fun SignInScreen(prefs: SharedPreferences) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
+    val missing = stringResource(R.string.signin_missing_fields)
 
     fun submit() {
         if (user.isBlank() || pass.isEmpty() || key.isBlank()) {
-            error = "Fill in your username, password and device key."; return
+            error = missing; return
         }
         busy = true; error = ""
         scope.launch {
@@ -80,35 +82,35 @@ fun SignInScreen(prefs: SharedPreferences) {
                 painterResource(R.drawable.logo_mark), contentDescription = null,
                 modifier = Modifier.size(112.dp).offset(x = (-14).dp),
             )
-            Text(if (create) "Create your account" else "Welcome back", style = MaterialTheme.typography.headlineSmall, color = T.text)
-            Muted("All your devices, working together. Privately.")
+            Text(stringResource(if (create) R.string.signin_title_create else R.string.signin_title_welcome), style = MaterialTheme.typography.headlineSmall, color = T.text)
+            Muted(stringResource(R.string.signin_tagline))
             Spacer(Modifier.height(4.dp))
 
-            Field(user, { user = it }, "Username")
-            Field(pass, { pass = it }, "Password", password = true)
+            Field(user, { user = it }, stringResource(R.string.signin_username))
+            Field(pass, { pass = it }, stringResource(R.string.signin_password), password = true)
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Field(key, { key = it }, "Device key", Modifier.weight(1f), password = true)
+                Field(key, { key = it }, stringResource(R.string.signin_device_key), Modifier.weight(1f), password = true)
                 if (create) {
-                    GhostButton("Generate", { key = generateKey() }, Modifier.padding(start = 8.dp), small = true)
+                    GhostButton(stringResource(R.string.signin_generate), { key = generateKey() }, Modifier.padding(start = 8.dp), small = true)
                 }
             }
-            Muted("Use the same key on all your devices. It encrypts everything they send each other.")
+            Muted(stringResource(R.string.signin_key_hint))
 
             TextButton(onClick = { advanced = !advanced }) {
-                Text(if (advanced) "Hide advanced" else "Advanced", color = T.text2)
+                Text(stringResource(if (advanced) R.string.signin_hide_advanced else R.string.signin_advanced), color = T.text2)
             }
-            if (advanced) Field(server, { server = it }, "Server")
+            if (advanced) Field(server, { server = it }, stringResource(R.string.signin_server))
 
             if (error.isNotEmpty()) ErrorText(error)
 
             PrimaryButton(
-                if (busy) "Signing in…" else if (create) "Create account" else "Sign in",
+                stringResource(if (busy) R.string.signin_busy else if (create) R.string.signin_create_account else R.string.signin_sign_in),
                 ::submit, Modifier.fillMaxWidth(), enabled = !busy,
             )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                Muted(if (create) "Already have an account?" else "New here?")
+                Muted(stringResource(if (create) R.string.signin_have_account else R.string.signin_new_here))
                 TextButton(onClick = { create = !create; error = "" }) {
-                    Text(if (create) "Sign in" else "Create an account", color = T.text)
+                    Text(stringResource(if (create) R.string.signin_sign_in else R.string.signin_create_an_account), color = T.text)
                 }
             }
         }

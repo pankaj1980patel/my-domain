@@ -20,7 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.Tone
 import com.mydomain.android.core.timeAgo
@@ -29,9 +31,9 @@ import com.mydomain.android.core.timeAgo
 @Composable
 fun ActivityScreen() {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
-        item { PageHead("Activity", "Messages, connections and alerts from your devices.") }
+        item { PageHead(stringResource(R.string.activity_title), stringResource(R.string.activity_subtitle)) }
         if (Core.activity.isEmpty()) {
-            item { EmptyState("Nothing yet", "Things your devices do show up here.") }
+            item { EmptyState(stringResource(R.string.activity_empty_title), stringResource(R.string.activity_empty_body)) }
         }
         items(Core.activity, key = { it.id }) { a ->
             val dot = when (a.tone) {

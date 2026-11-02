@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
@@ -30,7 +31,9 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -38,10 +41,10 @@ import kotlinx.coroutines.launch
 /** Show a short message at the bottom of the screen. */
 val LocalToast = staticCompositionLocalOf<(String) -> Unit> { {} }
 
-private enum class Tab(val label: String, val icon: ImageVector) {
-    Devices("Devices", Icons.Filled.Home),
-    Activity("Activity", Icons.Filled.List),
-    Settings("Settings", Icons.Filled.Settings),
+private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
+    Devices(R.string.tab_devices, Icons.Filled.Home),
+    Activity(R.string.tab_activity, Icons.Filled.List),
+    Settings(R.string.tab_settings, Icons.Filled.Settings),
 }
 
 /** Sign-in until ready; then tabs (Devices, Activity, Settings) plus the
@@ -103,7 +106,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                             selected = tab == t,
                             onClick = { tab = t },
                             icon = { Icon(t.icon, contentDescription = null) },
-                            label = { Text(t.label) },
+                            label = { Text(stringResource(t.label)) },
                             colors = NavigationBarItemDefaults.colors(
                                 selectedIconColor = T.text, selectedTextColor = T.text,
                                 indicatorColor = T.surface2,
