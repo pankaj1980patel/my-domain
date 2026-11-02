@@ -366,8 +366,9 @@ A feature counts as done when it has:
 ## Known issues
 
 - **Linux FCM:** the first fresh registration failed with
-  `PHONE_REGISTRATION_ERROR` and worked after a restart. Watch whether it
-  happens again.
+  `PHONE_REGISTRATION_ERROR` and worked after a restart. Last seen
+  2026-11-02 09:36. None since, across a dozen restarts of the Linux app
+  that evening, and its FCM self-test passes each time.
 - **The office network blocks all three server names.** FortiGuard blocks
   the "Dynamic DNS" category (sslip.io, work.gd, servehttp.com). A paid
   domain would pass; your call.
