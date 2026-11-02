@@ -150,6 +150,7 @@ export const en = {
   "files.reason.saveFailedThere": "that device couldn't save it",
   "files.reason.saveFailedHere": "couldn't save it to your Downloads folder",
   "files.reason.cantRead": "the file couldn't be read",
+  "files.reason.unreachable": "the device wasn't reachable for 10 minutes",
   "files.reason.unknown": "something went wrong",
   "size.b": "{n} B",
   "size.kb": "{n} KB",

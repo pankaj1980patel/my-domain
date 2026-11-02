@@ -54,6 +54,9 @@ const REOFFER_EVERY: Duration = Duration::from_secs(10);
 /// a wait that doubles from this, up to `MAX_BACKOFF`.
 const FIRST_BACKOFF: Duration = Duration::from_secs(15);
 const MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
+/// An offer nobody accepted is given up after this (it has left the
+/// outbox by then, see `transport::outbox`).
+const NEVER_ACCEPTED: Duration = Duration::from_secs(11 * 60);
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 const PARTIAL_DIR: &str = ".mydomain-partial";
 
@@ -338,8 +341,17 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
 pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     let me = me(ctx);
     let mut offers = Vec::new();
+    let mut expired = Vec::new();
     {
         let mut out = ctx.files.out.lock();
+        // Never accepted, and the queued offer has expired from the outbox.
+        out.retain(|id, t| {
+            let stale = !t.started && t.offered_at.is_some_and(|at| at.elapsed() >= NEVER_ACCEPTED);
+            if stale {
+                expired.push((id.clone(), t.node.clone(), t.name.clone()));
+            }
+            !stale
+        });
         for (id, t) in out.iter_mut() {
             if t.running || !t.started {
                 continue;
@@ -360,6 +372,9 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
             });
             offers.push((t.node.clone(), msg, linked));
         }
+    }
+    for (id, node, name) in expired {
+        failed(ctx, &id, &node, &name, false, "the device wasn't reachable");
     }
     for (node, msg, linked) in offers {
         if linked {

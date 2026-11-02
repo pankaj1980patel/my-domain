@@ -124,5 +124,6 @@ export function fileFailReason(reason: string | undefined, incoming: boolean): s
   if (r.includes("downloads folder") || r.includes("couldn't save"))
     return incoming ? t("files.reason.saveFailedHere") : t("files.reason.saveFailedThere");
   if (r.includes("can't read")) return t("files.reason.cantRead");
+  if (r.includes("wasn't reachable")) return t("files.reason.unreachable");
   return reason || t("files.reason.unknown");
 }
