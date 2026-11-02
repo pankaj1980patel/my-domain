@@ -41,8 +41,7 @@ object Fcm {
     /** Hand the token to the core, which registers it with the server. */
     fun publish(token: String) {
         Log.i(TAG, "token ready (${token.take(8)}…)")
-        // nativeSetFcmToken re-registers over the network: keep it off the
-        // main thread.
-        Thread { RustNet.nativeSetFcmToken(token) }.start()
+        // setFcmToken re-registers over the network: keep it off the main thread.
+        Thread { com.mydomain.android.ffi.setFcmToken(token) }.start()
     }
 }

@@ -18,6 +18,7 @@ path = "uniffi-bindgen.rs"
 
 [dependencies]
 mdcore = { workspace = true }
+serde = "1"
 serde_json = "1"
 thiserror = { workspace = true }
 log = "0.4"

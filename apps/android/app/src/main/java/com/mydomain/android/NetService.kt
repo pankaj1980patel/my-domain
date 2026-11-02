@@ -13,12 +13,13 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
+import com.mydomain.android.core.Core
+import com.mydomain.android.core.Tone
 import com.mydomain.android.ffi.EventListener
+import com.mydomain.android.ffi.MdEngine
 import kotlinx.coroutines.*
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 class NetService : Service() {
     private val serviceJob = SupervisorJob()
@@ -49,8 +50,8 @@ class NetService : Service() {
 
         connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         netCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { RustNet.nativeNetworkChanged(wifiIpv4()) }
-            override fun onLost(network: Network) { RustNet.nativeNetworkChanged(wifiIpv4()) }
+            override fun onAvailable(network: Network) { networkChanged() }
+            override fun onLost(network: Network) { networkChanged() }
         }
         runCatching { connectivityManager?.registerDefaultNetworkCallback(netCallback!!) }
 
@@ -62,14 +63,14 @@ class NetService : Service() {
         }
 
         // Restore the clipboard auto-sync ("active" mode) toggle.
-        clipboardSyncEnabled = getSharedPreferences("md", MODE_PRIVATE).getBoolean("clip_sync", false)
+        Core.enableClipSync(getSharedPreferences("md", MODE_PRIVATE).getBoolean("clip_sync", false))
 
         // Initialize Rust core if not already done. Prefer the IMEI as a stable
         // device id; on Android 10+ that's unreadable for normal apps, so fall
         // back to ANDROID_ID (also stable across restarts/reinstalls).
-        val ip = wifiIpv4()
-        val identityJson = RustNet.nativeStart(resolveDeviceId(), Build.MODEL ?: "android", ip, filesDir.absolutePath, coreEvents)
-        runCatching { myNodeId = JSONObject(identityJson).optString("node_id", "") }
+        runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents) }
+            .onFailure { Log.e("NetService", "engine failed to start", it) }
+        Core.reload()
         Fcm.init(this)
 
         publishInstalledApps()
@@ -118,8 +119,8 @@ class NetService : Service() {
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         
         return NotificationCompat.Builder(this, "net_service")
-            .setContentTitle("LAN Messenger Active")
-            .setContentText("Listening for messages and clipboard sync...")
+            .setContentTitle("my-domain is running")
+            .setContentText("Your devices can reach this phone.")
             .setSmallIcon(android.R.drawable.ic_menu_share)
             .setOngoing(true)
             .setContentIntent(pendingIntent)
@@ -141,7 +142,7 @@ class NetService : Service() {
                 }
                 arr.toString()
             }.getOrDefault("[]")
-            RustNet.nativeSetInstalledApps(json)
+            Core.engine()?.setInstalledApps(json)
         }
     }
 
@@ -161,37 +162,30 @@ class NetService : Service() {
     }
 
     /**
-     * Core events, pushed by the Rust core as they happen (UniFFI callback;
-     * this replaced polling every second). Called on core threads, so each
-     * event is handled on the service's scope.
+     * Core events, pushed by the Rust core as they happen (UniFFI callback,
+     * on core threads). The UI state lives in [Core]; the service adds what
+     * needs Android: OS notifications and the clipboard.
      */
     private val coreEvents = object : EventListener {
         override fun onEvent(name: String, payloadJson: String) {
-            // Debug builds log every event, so the device lab can verify
-            // delivery from logcat (tag mydomain_event).
-            if (BuildConfig.DEBUG) Log.i("mydomain_event", "$name ${payloadJson.take(200)}")
+            Core.onEvent(name, payloadJson)
             serviceScope.launch {
                 try {
                     val o = JSONObject(payloadJson)
                     when (o.optString("kind")) {
-                        "message_received" -> {
-                            handleIncomingMessage(o)
-                            // Broadcast for UI
-                            sendBroadcast(Intent("com.mydomain.android.NEW_MESSAGE").apply { putExtra("msg", o.toString()) })
-                        }
-                        "notification", "call_notification", "call_history", "apps_list" -> {
-                            sendBroadcast(Intent("com.mydomain.android.NEW_EVENT").apply { putExtra("event", o.toString()) })
-                            when (o.optString("kind")) {
-                                "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
-                                "call_notification" -> postSharedNotification("Call · ${o.optString("caller")}", o.optString("state"))
-                            }
-                        }
+                        "message_received" -> handleIncomingMessage(o)
+                        "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
+                        "call_notification" -> postSharedNotification("Call · ${o.optString("caller")}", o.optString("state"))
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)
                 }
             }
         }
+    }
+
+    private fun networkChanged() {
+        Core.engine()?.networkChanged(wifiIpv4())
     }
 
     private fun startNetworking() {
@@ -208,7 +202,7 @@ class NetService : Service() {
                     val text = clip.getItemAt(0).text?.toString()
                     if (text != null && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
                         currentLocalClip = text
-                        if (clipboardSyncEnabled) syncClipboard(text)
+                        if (Core.clipSync) syncClipboard(text)
                     }
                 }
             }
@@ -226,7 +220,7 @@ class NetService : Service() {
             // Unsolicited push from a peer in active mode: only apply if we also
             // have auto-sync enabled.
             "clipboard" -> {
-                if (!clipboardSyncEnabled) return
+                if (!Core.clipSync) return
                 val content = json.optString("content")
                 if (content != lastReceivedClipboard) {
                     lastReceivedClipboard = content
@@ -240,7 +234,7 @@ class NetService : Service() {
                     val resp = JSONObject().apply {
                         put("type", "clipboard_response")
                         put("content", currentLocalClip)
-                        put("from", myNodeId)
+                        put("from", Core.me?.nodeId ?: "")
                     }.toString()
                     sendClip(requester, resp)
                 }
@@ -250,6 +244,7 @@ class NetService : Service() {
                 val content = json.optString("content")
                 lastReceivedClipboard = content
                 updateLocalClipboard(content)
+                Core.addActivity("Copied ${Core.peerName(msg.optString("node_id"))}'s clipboard", Tone.Ok)
             }
         }
     }
@@ -258,7 +253,7 @@ class NetService : Service() {
      *  (over the live link; the engine opens a QUIC link if there is none). */
     private fun sendClip(nodeId: String, json: String) {
         serviceScope.launch {
-            RustNet.nativeSend(nodeId, json)
+            runCatching { Core.engine()?.send(nodeId, json) }
         }
     }
 
@@ -285,13 +280,8 @@ class NetService : Service() {
                 put("content", content)
             }.toString()
             
-            val peersJson = RustNet.nativeGetPeers()
-            val peers = JSONArray(peersJson)
-            for (i in 0 until peers.length()) {
-                val p = peers.getJSONObject(i)
-                val nodeId = p.getString("node_id")
-                RustNet.nativeSend(nodeId, json)
-            }
+            val engine = Core.engine() ?: return@launch
+            for (p in engine.peers()) runCatching { engine.send(p.nodeId, json) }
         }
     }
 
@@ -304,12 +294,5 @@ class NetService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return START_STICKY
-    }
-
-    companion object {
-        /** ACTIVE clipboard auto-sync on/off. Shared with the UI (same process). */
-        @Volatile var clipboardSyncEnabled = false
-        /** This device's node_id, captured from the Rust identity on start. */
-        @Volatile var myNodeId = ""
     }
 }

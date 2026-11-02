@@ -436,6 +436,16 @@ impl<P: Platform> Engine<P> {
         self.ctx.p2p_conns.lock().keys().cloned().collect()
     }
 
+    /// Every live link and the transport it rides, by node id.
+    pub fn links(&self) -> Vec<(String, transport::TransportKind)> {
+        self.ctx
+            .p2p_conns
+            .lock()
+            .iter()
+            .map(|(k, c)| (k.clone(), c.kind))
+            .collect()
+    }
+
     pub fn is_ready(&self) -> bool {
         self.token.lock().is_some() && self.ctx.key.lock().is_some()
     }

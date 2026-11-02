@@ -123,6 +123,14 @@ impl From<CoreError> for MdError {
 
 type MdResult<T> = Result<T, MdError>;
 
+/// A serde unit-variant enum as its wire string ("relay", "registry", ...).
+fn as_str(v: impl serde::Serialize) -> String {
+    serde_json::to_value(v)
+        .ok()
+        .and_then(|v| v.as_str().map(str::to_string))
+        .unwrap_or_default()
+}
+
 /// Receives every core event: `name` is e.g. `message-received`,
 /// `peer-connected`, `peers-updated`; `payload_json` is the event as a JSON
 /// object with a `kind` field (`message_received`, ...) and its fields.
@@ -152,6 +160,16 @@ pub struct PeerInfo {
     pub source: String,
     /// Live link right now.
     pub connected: bool,
+    /// The live link's transport ("quic", "relay", "punch", "webrtc"), if any.
+    pub link: Option<String>,
+}
+
+/// Who is signed in, and where.
+#[derive(uniffi::Record)]
+pub struct Session {
+    pub username: Option<String>,
+    pub server_url: Option<String>,
+    pub has_key: bool,
 }
 
 #[derive(uniffi::Record)]
@@ -323,6 +341,15 @@ impl MdEngine {
         self.inner.logout();
     }
 
+    pub fn session(&self) -> Session {
+        let s = self.inner.session_info();
+        Session {
+            username: s.username,
+            server_url: s.server_url,
+            has_key: s.has_key,
+        }
+    }
+
     /// Signed in to the server and holding a key. (An offline `dev_login`
     /// has a key but no server session, so it isn't "ready".)
     pub fn is_ready(&self) -> bool {
@@ -337,17 +364,19 @@ impl MdEngine {
     }
 
     pub fn peers(&self) -> Vec<PeerInfo> {
-        let live: std::collections::HashSet<String> =
-            self.inner.connected_peers().into_iter().collect();
+        let live: std::collections::HashMap<String, String> = self
+            .inner
+            .links()
+            .into_iter()
+            .map(|(node, kind)| (node, as_str(kind)))
+            .collect();
         self.inner
             .get_peers()
             .into_iter()
             .map(|p| PeerInfo {
-                connected: live.contains(&p.node_id),
-                source: serde_json::to_value(p.source)
-                    .ok()
-                    .and_then(|v| v.as_str().map(str::to_string))
-                    .unwrap_or_default(),
+                connected: live.contains_key(&p.node_id),
+                link: live.get(&p.node_id).cloned(),
+                source: as_str(p.source),
                 node_id: p.node_id,
                 name: p.name,
                 ip: p.ip,

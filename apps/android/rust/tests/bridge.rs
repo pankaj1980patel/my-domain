@@ -79,6 +79,9 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         .unwrap();
     // Offline (LAN-only) login: has a key, but isn't signed in to a server.
     assert!(!phone.is_ready());
+    let session = phone.session();
+    assert_eq!(session.username.as_deref(), Some(TEST_USER));
+    assert!(session.has_key && session.server_url.is_none());
     assert!(matches!(
         phone.send("nobody".into(), "hi".into()),
         Err(MdError::PeerNotFound)
@@ -132,6 +135,7 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         .find(|p| p.node_id == desktop.node_id())
         .expect("the desktop is re-listed under its real id");
     assert!(listed.connected);
+    assert_eq!(listed.link.as_deref(), Some("quic"));
     assert_eq!(listed.name, "Desk");
 
     // And the phone answers over the same link.

@@ -1,23 +1,10 @@
 package com.mydomain.android.core
 
-import com.mydomain.android.Peer
-import org.json.JSONArray
 import java.net.Inet4Address
 import java.net.NetworkInterface
-import kotlin.collections.iterator
 
 object NetworkingUtils {
-
-    fun parsePeers(json: String): List<Peer> {
-        val arr = JSONArray(json)
-        return (0 until arr.length()).map {
-            val o = arr.getJSONObject(it)
-            Peer(o.getString("node_id"), o.getString("name"), o.getString("ip"),
-                o.getInt("tcp_port"), o.getInt("udp_port"), o.optInt("ws_port"), o.optString("source", "registry"))
-        }
-    }
-
-
+    /** This device's Wi-Fi IPv4 (any site-local IPv4 as a fallback), or "". */
     fun wifiIpv4(): String {
         fun scan(preferWlan: Boolean): String? {
             val ifaces = runCatching { NetworkInterface.getNetworkInterfaces() }.getOrNull() ?: return null

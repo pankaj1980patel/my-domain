@@ -3,6 +3,7 @@ package com.mydomain.android
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.mydomain.android.core.Core
 
 /**
  * Captures other apps' notifications and hands them to the Rust core, which
@@ -25,7 +26,7 @@ class NotifListener : NotificationListenerService() {
         if (title.isBlank() && text.isBlank()) return
 
         val label = appLabel(n.packageName)
-        runCatching { RustNet.nativeShareAppNotification(n.packageName, label, title, text) }
+        runCatching { Core.engine()?.shareAppNotification(n.packageName, label, title, text) }
     }
 
     private fun appLabel(pkg: String): String = runCatching {

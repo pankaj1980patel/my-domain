@@ -97,9 +97,8 @@ or with less battery.
   `MdEngine`, events pushed to Kotlin, generated bindings; NetService no
   longer polls. Verified on the phone (2026-11-02, mobile data): FCM
   signals in, relay then hole-punched direct link, the message delivered to
-  Kotlin through the listener. Still to do:
-  - Move the screens from the `RustNet` facade to `MdEngine` directly
-    (with the UI rebuild), then delete `RustNet.kt`.
+  Kotlin through the listener. The new Compose screens call `MdEngine`
+  directly and `RustNet.kt` is deleted (2026-11-02).
 - **Desktop UI in SolidJS + TypeScript**, with typed commands (`tauri-specta`)
   and native OS notifications. Why:
   [ADR-0004](../learnings/decisions/ADR-0004-solidjs.md).
@@ -129,10 +128,14 @@ kept up in every later phase.
 The current screens were built to **debug the networking**, so they expose
 internals everywhere. Restyling them would keep the clutter, so both apps get
 **new screens built from scratch** on the design system below:
-- **Desktop:** **built** (2026-11-02, `apps/desktop/ui`): SolidJS + TypeScript on the generated bindings, a simple neutral theme, the old logo, plain-language statuses, a hidden Developer screen (tap the version 7 times). It replaced `apps/desktop/src/index.html`,
+- **Desktop:** **built** (2026-11-02, `apps/desktop/ui`): SolidJS + TypeScript on the generated bindings, a simple neutral theme, the galaxy logo, plain-language statuses, a hidden Developer screen (tap the version 7 times). It replaced `apps/desktop/src/index.html`,
   `main.js` and `styles.css` (about 1,100 lines of vanilla JS).
-- **Android:** new Compose screens replace `MainScreen.kt`,
-  `LoginScreen.kt` and `SettingsDialog.kt`.
+- **Android:** **built** (2026-11-02, `apps/android/app/.../ui`): Compose
+  screens on `MdEngine`, the same tokens, words and screen map as the
+  desktop (sign in, Devices, Device, Activity, Settings, hidden Developer).
+  State lives in `core/Core.kt`, fed by pushed core events. It replaced
+  `MainScreen.kt`, `LoginScreen.kt`, `SettingsDialog.kt` and `RustNet.kt`.
+  Still to do on both apps: QR pairing, and pull-to-refresh on Android.
 
 The old UI is deleted, not kept alongside. The core API stays the same; only
 the screens change.

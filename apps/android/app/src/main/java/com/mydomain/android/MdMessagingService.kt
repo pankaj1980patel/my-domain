@@ -4,6 +4,7 @@ import android.content.Intent
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
+import com.mydomain.android.core.Core
 
 /**
  * Receives connection signals pushed through FCM and feeds them to the core
@@ -24,7 +25,7 @@ class MdMessagingService : FirebaseMessagingService() {
             Log.w(TAG, "signal from $sender dropped: engine not ready")
             return
         }
-        RustNet.nativeOnSignal(sender, payload)
+        Core.engine()?.onSignal(sender, payload)
     }
 
     /** Start the engine if needed; true once it's logged in and ready. */
@@ -40,7 +41,7 @@ class MdMessagingService : FirebaseMessagingService() {
         return false
     }
 
-    private fun ready() = runCatching { RustNet.nativeIsReady() == "true" }.getOrDefault(false)
+    private fun ready() = runCatching { Core.engine()?.isReady() == true }.getOrDefault(false)
 
     private companion object {
         const val TAG = "mydomain_fcm"
