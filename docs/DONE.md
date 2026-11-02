@@ -335,6 +335,17 @@ problems; all are fixed.
 - Fixed: an upgrade try is skipped while the relayed link carried no
   message in the last minute (`transport::used_within`). The phone now
   also closes its idle relay socket (below), which ends the "live" link.
+- Measured again with the fixes (same setup, one hour, deep Doze):
+
+  | | Before | After |
+  |---|---|---|
+  | Pushes received | 19 | 2 |
+  | Wake lock time | 2 min 17 s | 11 s |
+  | CPU time | ~30 s | ~3 s |
+
+  The remaining pushes were three bursts from the Linux desktop (one
+  connection attempt each, the first at its startup), held by Doze until
+  its maintenance windows.
 
 ## Relay socket closes when idle in the background (2026-11-02)
 
