@@ -81,6 +81,20 @@ impl<P: Platform> Engine<P> {
         Ok(())
     }
 
+    /// Remove this device from the registry, so siblings stop listing it
+    /// (e.g. "remove this device", or a test cleaning up after itself).
+    pub fn unregister_from_server(&self) -> crate::Result<()> {
+        let url = self
+            .server_url
+            .lock()
+            .clone()
+            .ok_or(CoreError::NotLoggedIn)?;
+        let token = self.token.lock().clone().ok_or(CoreError::NotLoggedIn)?;
+        let node_id = self.ctx.identity.lock().node_id.clone();
+        crate::registry::registry_unregister(&url, &token, &node_id)?;
+        Ok(())
+    }
+
     pub fn scan_lan(&self) {
         netchange::announce(&self.ctx, &self.disco_send);
     }

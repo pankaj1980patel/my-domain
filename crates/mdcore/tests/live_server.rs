@@ -78,6 +78,11 @@ fn real_server_https_login_and_relay_over_wss() {
         "relay"
     );
     assert_eq!(b.sink.wait_for_message("hello over wss").protocol, "RELAY");
+
+    // Leave no test devices behind on the account.
+    for n in [&a, &b] {
+        n.engine.unregister_from_server().unwrap();
+    }
     b.engine.send(&a.node_id(), "and back").unwrap();
     a.sink.wait_for_message("and back");
     println!("OK: https login + relay over wss via {server}");

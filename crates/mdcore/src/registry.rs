@@ -147,6 +147,16 @@ pub fn send_signal(
     Ok(())
 }
 
+/// Remove a device of ours from the registry.
+pub fn registry_unregister(url: &str, token: &str, node_id: &str) -> Result<(), String> {
+    ureq::post(&format!("{}/devices/unregister", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "node_id": node_id }))
+        .map_err(http_err)?;
+    Ok(())
+}
+
 /// Round-trip FCM self-test: ask the server to push a `ping` to our OWN device
 /// token. The pong is delivered back through the platform's FCM receiver. `sid`
 /// correlates the request with the received pong.
