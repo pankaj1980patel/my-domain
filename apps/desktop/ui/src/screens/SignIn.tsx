@@ -6,7 +6,7 @@ import { commands } from "../bindings";
 import { signIn } from "../lib/core";
 import { friendlyError } from "../lib/words";
 
-const DEFAULT_SERVER = "https://mydomain.work.gd";
+const DEFAULT_SERVER = "https://mydomain.servehttp.com";
 
 export default function SignIn(props: { onDone: () => void }) {
   const [create, setCreate] = createSignal(false);
