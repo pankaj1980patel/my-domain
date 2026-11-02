@@ -122,24 +122,28 @@ The desktop's incoming path is the same, except its `TauriSink` calls
 
 ## Connecting across the internet: the connect ladder
 
-When two devices aren't on the same LAN, `run_connect_ladder` in
-[engine.rs](../crates/mdcore/src/engine.rs) tries the cheapest option first and
-moves on after each timeout:
+`run_connect_ladder` in
+[engine/ladder.rs](../crates/mdcore/src/engine/ladder.rs) tries the cheapest
+option first and moves on after each timeout:
 
 | Rung | Try | Needs |
 |---|---|---|
-| 1 | UDP ping on the LAN | same network |
-| 2 | Direct WebSocket to the peer's public address | the peer accepts inbound connections (`ws_open`, not `inbound_blocked`) |
-| 3 | Ask the peer through the server to open a WS **back** to us (`Signal::StartWs`) | *we* accept inbound |
-| 4 | UDP hole punch: both sides learn their public address from STUN, swap candidates through the server, then fire packets at each other at the same time | NATs that keep the same mapping (most home routers) |
-| 5 | WebRTC data channel (str0m), offer/answer through the server | same as 4 with ICE |
-| ✗ | Relay through a server (TURN) | **not implemented**; added in Phase 2 |
+| 0 | Direct QUIC to the peer's addresses: global IPv6, the router mapping (UPnP / PCP), the LAN IPv4 | the peer accepts inbound UDP on one of them |
+| 1 | Signaled QUIC: swap QUIC addresses through a signal, then **both** sides dial | either side accepts inbound |
+| 2 | Relay through the server's WebSocket, brought up right away so messages flow | the server |
+| 3 | UDP hole punch: both sides learn their public address from STUN, swap candidates through a signal, fire packets at each other, then run QUIC over the punched socket | NATs that keep the same mapping (most home routers) |
+| 4 | WebRTC data channel (str0m), offer/answer through a signal | same as 3, with ICE |
 
-Rungs 3–5 need the **signal** to reach the other device. The server sends it as
-an FCM push. Desktop receives FCM natively
-([apps/desktop/src-tauri/src/fcm.rs](../apps/desktop/src-tauri/src/fcm.rs)). **Android
-has no FCM receiver yet**, so a desktop can't start rungs 3–5 *toward* a phone.
-Phase 3 adds a `FirebaseMessagingService`.
+Rungs 3 and 4 upgrade a relayed link to a direct one, and keep retrying in
+the background. Every message rides a live link; there are no one-off TCP or
+UDP sends.
+
+Signals (rungs 1, 3, 4) go over our own links when possible: straight to the
+target, or forwarded by up to 3 linked devices. Otherwise the server sends
+them as an **FCM** push, which is free: the server holds no connection per
+device. Android receives them with a `FirebaseMessagingService`; the desktop
+with `fcm_receiver_rs`, registered as the project's Android app
+([apps/desktop/src-tauri/src/fcm.rs](../apps/desktop/src-tauri/src/fcm.rs)).
 
 ---
 

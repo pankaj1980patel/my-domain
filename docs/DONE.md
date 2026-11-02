@@ -121,13 +121,15 @@ The engine tries each method in order, cheapest first, until one works
 
 | Rung | Method | Needs the server? | Tested in |
 |---|---|---|---|
-| 0 | Direct QUIC | no | [connect_ladder.rs](../crates/mdcore/tests/connect_ladder.rs) |
-| 1 | UDP ping on the same LAN | no | connect_ladder.rs |
-| 2 | Direct WebSocket | no | connect_ladder.rs |
-| 3 | Ask the peer (via a signal) to open its WebSocket | signal | connect_ladder.rs |
-| 4 | STUN + hole punch, then QUIC on the punched socket | signal + STUN | connect_ladder.rs |
-| 5 | WebRTC | signal | connect_ladder.rs |
-| 6 | Relay through the server | yes | [relay.rs](../crates/mdcore/tests/relay.rs) |
+| 0 | Direct QUIC (IPv6, router mapping, LAN IPv4) | no | [connect_ladder.rs](../crates/mdcore/tests/connect_ladder.rs) |
+| 1 | Signaled QUIC: swap addresses through a signal, both sides dial | signal (own links, else FCM) | connect_ladder.rs |
+| 2 | Relay through the server, right away; the rungs below try to upgrade it | yes | [relay.rs](../crates/mdcore/tests/relay.rs) |
+| 3 | STUN + hole punch, then QUIC on the punched socket | signal + STUN | connect_ladder.rs |
+| 4 | WebRTC | signal | connect_ladder.rs |
+
+Every message rides a live link. The old one-off paths (a TCP connection or
+a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
+ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 ## Connectivity improvements (started 2026-11-02)
 

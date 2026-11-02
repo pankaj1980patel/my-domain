@@ -53,13 +53,9 @@ or with less battery.
       at all.
     - It can also be the out-of-band channel for pairing and for starting
       Wi-Fi Direct.
-12. **Clean up old paths.**
-    - Once QUIC covers every case, delete:
-      - the one-off TCP connection and single-UDP-datagram sending
-      - the WebSocket rungs (2 and 3)
-      - the UDP/TCP "directed transport" setting
-    - That's less code and fewer ways to fail. The ladder tests show what can
-      safely go.
+12. ~~Clean up old paths~~: **done** (2026-11-02). One-off TCP/UDP sends,
+    the WebSocket rungs, the LAN UDP rung and the directed-transport setting
+    are gone; every message rides a live link.
 
 - ~~Even less server dependence~~: **done** (peer cache, `addr_update`,
   signals over our own links, forwarded up to 3 hops, QUIC port kept
@@ -68,16 +64,17 @@ or with less battery.
 
 ## 3. Phase 2 leftovers (networking)
 
-- ~~Signaled QUIC as rung 3~~: **done**. Remove the WebSocket rungs
-  later, with item 12.
+- ~~Signaled QUIC as rung 3~~: **done**, and the WebSocket rungs are
+  removed (item 12).
 - ~~Relay right away, upgrade in the background~~: **done** (relay after
   the quick rungs; punch/WebRTC upgrade it; retries every 60 s).
   - Still to do: race the rungs in parallel instead of in sequence.
   - **Known issue:** a message sent at the exact moment a link is replaced
     (glare, relay to direct) can be lost. Phase 4's RPC layer (request ids
     and retries) fixes this properly.
-- **Move the remaining loops to tokio.** The TCP/UDP/WS listeners,
-  discovery and the heartbeat still run on their own threads. Moving them to
+- **Move the remaining loops to tokio.** Discovery, the heartbeat and the
+  feature/background loops still run on their own threads (the TCP/UDP/WS
+  listeners are gone). Moving them to
   tokio tasks with a `CancellationToken` makes shutdown clean and immediate.
   Probably best done with Phase 3, because the UniFFI bridge wants an async
   engine anyway.
