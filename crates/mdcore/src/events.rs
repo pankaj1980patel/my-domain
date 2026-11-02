@@ -52,7 +52,9 @@ pub enum CoreEvent {
     },
     /// The clipboard history changed (newest first; see
     /// `Engine::clipboard_history`).
-    ClipboardHistory { entries: Vec<crate::model::ClipEntry> },
+    ClipboardHistory {
+        entries: Vec<crate::model::ClipEntry>,
+    },
     /// A peer shared an OS notification.
     Notification {
         from: String,

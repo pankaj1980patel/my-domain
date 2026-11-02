@@ -255,11 +255,19 @@ fn the_clipboard_history_keeps_recent_values_newest_first() {
     let wait_for = |texts: &[&str]| {
         let deadline = std::time::Instant::now() + WAIT;
         loop {
-            let got: Vec<String> = b.engine.clipboard_history().into_iter().map(|e| e.text).collect();
+            let got: Vec<String> = b
+                .engine
+                .clipboard_history()
+                .into_iter()
+                .map(|e| e.text)
+                .collect();
             if got == texts {
                 return;
             }
-            assert!(std::time::Instant::now() < deadline, "history {got:?}, want {texts:?}");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "history {got:?}, want {texts:?}"
+            );
             std::thread::sleep(Duration::from_millis(100));
         }
     };
@@ -267,7 +275,11 @@ fn the_clipboard_history_keeps_recent_values_newest_first() {
     a.clip().user_copies("first");
     wait_for(&["first"]);
     let entry = b.engine.clipboard_history().remove(0);
-    assert_eq!(entry.from.as_deref(), Some(a.node_id().as_str()), "came from a");
+    assert_eq!(
+        entry.from.as_deref(),
+        Some(a.node_id().as_str()),
+        "came from a"
+    );
 
     a.clip().user_copies("second");
     wait_for(&["second", "first"]);
@@ -376,7 +388,9 @@ fn delivered(node: &TestNode, id: &str) -> bool {
 fn the_sender_hears_when_a_message_arrived() {
     let (a, b) = pair("receipt");
     assert_eq!(
-        a.engine.send_with_id(&b.node_id(), "did you get this", "m1").unwrap(),
+        a.engine
+            .send_with_id(&b.node_id(), "did you get this", "m1")
+            .unwrap(),
         "QUIC"
     );
     let msg = b.sink.wait_for_message("did you get this");
@@ -387,10 +401,14 @@ fn the_sender_hears_when_a_message_arrived() {
 #[test]
 fn a_resent_message_is_shown_once_and_still_acknowledged() {
     let (a, b) = pair("receipt-dup");
-    a.engine.send_with_id(&b.node_id(), "only once", "dup").unwrap();
+    a.engine
+        .send_with_id(&b.node_id(), "only once", "dup")
+        .unwrap();
     assert!(delivered(&a, "dup"));
     // The same message again, as a resend after a lost receipt would be.
-    a.engine.send_with_id(&b.node_id(), "only once", "dup").unwrap();
+    a.engine
+        .send_with_id(&b.node_id(), "only once", "dup")
+        .unwrap();
     let receipts = || {
         a.sink
             .all()

@@ -53,9 +53,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     status = serde_json::json!({});
                 }
                 status["platform"] = ctx.platform.platform_kind().into();
-                let reply =
-                    serde_json::json!({ "type": "status", "from": me, "status": status })
-                        .to_string();
+                let reply = serde_json::json!({ "type": "status", "from": me, "status": status })
+                    .to_string();
                 send_control_to(ctx, &from, &reply);
             }
             "status" => ctx.sink.emit(CoreEvent::DeviceStatus {

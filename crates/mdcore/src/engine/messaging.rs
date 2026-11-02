@@ -131,7 +131,9 @@ impl<P: Platform> Engine<P> {
     /// Forget the clipboard history.
     pub fn clear_clipboard_history(&self) {
         self.ctx.clip_history.lock().clear();
-        self.ctx.sink.emit(CoreEvent::ClipboardHistory { entries: vec![] });
+        self.ctx
+            .sink
+            .emit(CoreEvent::ClipboardHistory { entries: vec![] });
     }
 
     /// Put `text` (e.g. an entry from the history) on this device's

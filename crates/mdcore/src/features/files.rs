@@ -167,7 +167,11 @@ impl Files {
 
     fn how_it_ended<P: Platform>(&self, ctx: &NetCtx<P>, id: &str) -> Option<Option<String>> {
         self.load_finished(ctx);
-        self.finished.lock().iter().find(|(x, _)| x == id).map(|(_, e)| e.clone())
+        self.finished
+            .lock()
+            .iter()
+            .find(|(x, _)| x == id)
+            .map(|(_, e)| e.clone())
     }
 }
 
@@ -273,11 +277,7 @@ fn hex(b: &[u8]) -> String {
 /// Start sending `path` to `node`: hashes it (off the caller's thread) and
 /// offers it reliably (`send` queues it while the peer is unreachable).
 /// Returns the transfer id at once.
-pub fn start<P: Platform>(
-    ctx: &NetCtx<P>,
-    node: &str,
-    path: &Path,
-) -> crate::Result<String> {
+pub fn start<P: Platform>(ctx: &NetCtx<P>, node: &str, path: &Path) -> crate::Result<String> {
     let meta = std::fs::metadata(path).map_err(|e| format!("can't read the file: {e}"))?;
     if !meta.is_file() {
         return Err("not a file".to_string().into());
@@ -293,7 +293,12 @@ pub fn start<P: Platform>(
         total: size,
         incoming: false,
     });
-    let (ctx, node, path, id2) = (ctx.clone(), node.to_string(), path.to_path_buf(), id.clone());
+    let (ctx, node, path, id2) = (
+        ctx.clone(),
+        node.to_string(),
+        path.to_path_buf(),
+        id.clone(),
+    );
     std::thread::spawn(move || {
         let sha = match sha256_file(&path) {
             Ok(s) => s,
@@ -330,7 +335,14 @@ pub fn start<P: Platform>(
     Ok(id)
 }
 
-fn failed<P: Platform>(ctx: &NetCtx<P>, id: &str, node: &str, name: &str, incoming: bool, why: &str) {
+fn failed<P: Platform>(
+    ctx: &NetCtx<P>,
+    id: &str,
+    node: &str,
+    name: &str,
+    incoming: bool,
+    why: &str,
+) {
     ctx.sink.emit(CoreEvent::FileFailed {
         id: id.to_string(),
         node_id: node.to_string(),
@@ -400,7 +412,10 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
                 continue;
             }
         }
-        let n = match file.seek(SeekFrom::Start(pos)).and_then(|_| file.read(&mut buf)) {
+        let n = match file
+            .seek(SeekFrom::Start(pos))
+            .and_then(|_| file.read(&mut buf))
+        {
             Ok(n) if n > 0 => n,
             // Shorter than when it was offered, or unreadable now.
             _ => return give_up(&ctx, &id, "the file couldn't be read"),
@@ -426,7 +441,11 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
     };
     ctx.files.acked.notify_all();
     failed(ctx, id, &t.node, &t.name, false, why);
-    let _ = send(ctx, &t.node, &json!({ "type": "file_cancel", "from": me(ctx), "id": id }));
+    let _ = send(
+        ctx,
+        &t.node,
+        &json!({ "type": "file_cancel", "from": me(ctx), "id": id }),
+    );
 }
 
 /// Offer paused transfers again (called on a timer); the receiver answers
@@ -441,7 +460,9 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
         let mut out = ctx.files.out.lock();
         // Never accepted, and the queued offer has expired from the outbox.
         out.retain(|id, t| {
-            let stale = !t.started && t.offered_at.is_some_and(|at| at.elapsed() >= NEVER_ACCEPTED);
+            let stale = !t.started
+                && t.offered_at
+                    .is_some_and(|at| at.elapsed() >= NEVER_ACCEPTED);
             if stale {
                 expired.push((id.clone(), t.node.clone(), t.name.clone()));
             }
@@ -517,7 +538,8 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     } else if let Some(t) = incoming {
         let _ = std::fs::remove_file(&t.part);
         // A re-offer still on its way is answered "cancelled", not restarted.
-        ctx.files.finished(ctx, id, Some("cancelled on the other device"));
+        ctx.files
+            .finished(ctx, id, Some("cancelled on the other device"));
         failed(ctx, id, &t.from, &t.name, true, "cancelled");
         Some(t.from)
     } else {
@@ -525,7 +547,11 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     };
     ctx.files.acked.notify_all();
     if let Some(node) = peer {
-        let _ = send(ctx, &node, &json!({ "type": "file_cancel", "from": me(ctx), "id": id }));
+        let _ = send(
+            ctx,
+            &node,
+            &json!({ "type": "file_cancel", "from": me(ctx), "id": id }),
+        );
     }
 }
 
@@ -548,7 +574,8 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     };
     // Already received (our `file_done` was lost): say so again.
     if let Some(ended) = ctx.files.how_it_ended(ctx, &id) {
-        let mut done = json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": ended.is_none() });
+        let mut done =
+            json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": ended.is_none() });
         if let Some(why) = ended {
             done["error"] = why.into();
         }
@@ -676,7 +703,10 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     }
     // Ack what we have; a gap makes the sender resend from there.
     let (len, size, name) = (t.len, t.size, t.name.clone());
-    let show = t.progress_at.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY) || len == size;
+    let show = t
+        .progress_at
+        .is_none_or(|at| at.elapsed() >= PROGRESS_EVERY)
+        || len == size;
     if show {
         t.progress_at = Some(Instant::now());
     }
@@ -710,7 +740,11 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     let _ = t.file.sync_all();
     drop(t.file);
     let ok = hex(&t.hasher.finalize()) == t.sha;
-    let dir = t.part.parent().and_then(Path::parent).map(Path::to_path_buf);
+    let dir = t
+        .part
+        .parent()
+        .and_then(Path::parent)
+        .map(Path::to_path_buf);
     let dest = match (&dir, ok) {
         (Some(dir), true) => move_into(&t.part, dir, &t.name),
         _ => None,
@@ -734,7 +768,11 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
             path: path.to_string_lossy().into_owned(),
             size: t.size,
         });
-        let _ = send(ctx, &t.from, &json!({ "type": "file_done", "from": me, "id": id, "ok": true }));
+        let _ = send(
+            ctx,
+            &t.from,
+            &json!({ "type": "file_done", "from": me, "id": id, "ok": true }),
+        );
     } else {
         let _ = std::fs::remove_file(&t.part);
         let why = why.unwrap_or_default();
@@ -751,7 +789,14 @@ pub struct FilesHandler;
 
 impl<P: Platform> ControlHandler<P> for FilesHandler {
     fn kinds(&self) -> &'static [&'static str] {
-        &["file_offer", "file_accept", "file_chunk", "file_ack", "file_done", "file_cancel"]
+        &[
+            "file_offer",
+            "file_accept",
+            "file_chunk",
+            "file_ack",
+            "file_done",
+            "file_cancel",
+        ]
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
@@ -805,7 +850,9 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     t.rewound_at = Some(Instant::now());
                 }
                 files.acked.notify_all();
-                let show = t.progress_at.is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
+                let show = t
+                    .progress_at
+                    .is_none_or(|at| at.elapsed() >= PROGRESS_EVERY);
                 if show {
                     t.progress_at = Some(Instant::now());
                     let ev = CoreEvent::FileProgress {
@@ -848,7 +895,14 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 };
                 if let Some(t) = gone_out {
                     files.acked.notify_all();
-                    failed(ctx, &id, &from, &t.name, false, "cancelled on the other device");
+                    failed(
+                        ctx,
+                        &id,
+                        &from,
+                        &t.name,
+                        false,
+                        "cancelled on the other device",
+                    );
                 }
                 let gone_in = {
                     let mut inc = files.inc.lock();
@@ -859,8 +913,16 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 };
                 if let Some(t) = gone_in {
                     let _ = std::fs::remove_file(&t.part);
-                    ctx.files.finished(ctx, &id, Some("cancelled on the other device"));
-                    failed(ctx, &id, &from, &t.name, true, "cancelled on the other device");
+                    ctx.files
+                        .finished(ctx, &id, Some("cancelled on the other device"));
+                    failed(
+                        ctx,
+                        &id,
+                        &from,
+                        &t.name,
+                        true,
+                        "cancelled on the other device",
+                    );
                 }
             }
             _ => {}

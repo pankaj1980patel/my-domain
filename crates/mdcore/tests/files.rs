@@ -33,9 +33,12 @@ const BIG_WAIT: Duration = Duration::from_secs(60);
 fn received(node: &TestNode, id: &str) -> (String, u64) {
     node.sink
         .wait_until(BIG_WAIT, |e| match e {
-            CoreEvent::FileReceived { id: got, path, size, .. } if got == id => {
-                Some((path.clone(), *size))
-            }
+            CoreEvent::FileReceived {
+                id: got,
+                path,
+                size,
+                ..
+            } if got == id => Some((path.clone(), *size)),
             _ => None,
         })
         .unwrap_or_else(|| panic!("not received; got {:#?}", node.sink.all()))
@@ -58,7 +61,10 @@ fn a_file_arrives_intact_under_its_name() {
     let path = src.join("notes.txt");
     std::fs::write(&path, b"hello file").unwrap();
 
-    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     let (got, size) = received(&b, &id);
     assert_eq!(PathBuf::from(&got), dst.join("notes.txt"));
     assert_eq!(size, 10);
@@ -66,7 +72,10 @@ fn a_file_arrives_intact_under_its_name() {
     assert!(sent(&a, &id), "the sender hears it was saved");
 
     // The same name again gets a number instead of overwriting.
-    let id2 = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id2 = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     let (got2, _) = received(&b, &id2);
     assert_eq!(PathBuf::from(got2), dst.join("notes (1).txt"));
 }
@@ -80,7 +89,10 @@ fn a_multi_megabyte_file_goes_through_the_window() {
     let path = src.join("video.bin");
     std::fs::write(&path, &data).unwrap();
 
-    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     let (got, _) = received(&b, &id);
     assert!(std::fs::read(got).unwrap() == data, "content differs");
     assert!(sent(&a, &id));
@@ -91,7 +103,9 @@ fn a_multi_megabyte_file_goes_through_the_window() {
         .sink
         .all()
         .iter()
-        .filter(|e| matches!(e, CoreEvent::FileProgress { id: got, incoming: true, .. } if *got == id))
+        .filter(
+            |e| matches!(e, CoreEvent::FileProgress { id: got, incoming: true, .. } if *got == id),
+        )
         .count();
     assert!(progress >= 2, "progress is reported along the way");
 }
@@ -102,11 +116,16 @@ fn a_device_without_a_downloads_folder_declines() {
     let src = temp_dir("declined-src");
     let path = src.join("x.txt");
     std::fs::write(&path, b"x").unwrap();
-    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     let reason = a
         .sink
         .wait_until(WAIT, |e| match e {
-            CoreEvent::FileFailed { id: got, reason, .. } if *got == id => Some(reason.clone()),
+            CoreEvent::FileFailed {
+                id: got, reason, ..
+            } if *got == id => Some(reason.clone()),
             _ => None,
         })
         .expect("no failure");
@@ -134,15 +153,19 @@ fn an_interrupted_transfer_resumes_where_it_stopped() {
     let path = src.join("movie.bin");
     std::fs::write(&path, &data).unwrap();
 
-    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     // Wait until some, but not all, of it is in.
     b.sink
         .wait_until(BIG_WAIT, |e| match e {
-            CoreEvent::FileProgress { id: got, done, total, .. }
-                if *got == id && *done > 1_000_000 && done < total =>
-            {
-                Some(())
-            }
+            CoreEvent::FileProgress {
+                id: got,
+                done,
+                total,
+                ..
+            } if *got == id && *done > 1_000_000 && done < total => Some(()),
             _ => None,
         })
         .expect("no partial progress");
@@ -177,8 +200,14 @@ fn two_files_at_once_both_arrive_intact() {
     let (one, two) = (pattern(2_000_000), pattern(1_500_001));
     std::fs::write(src.join("one.bin"), &one).unwrap();
     std::fs::write(src.join("two.bin"), &two).unwrap();
-    let id1 = a.engine.send_file(&b.node_id(), src.join("one.bin").to_str().unwrap()).unwrap();
-    let id2 = a.engine.send_file(&b.node_id(), src.join("two.bin").to_str().unwrap()).unwrap();
+    let id1 = a
+        .engine
+        .send_file(&b.node_id(), src.join("one.bin").to_str().unwrap())
+        .unwrap();
+    let id2 = a
+        .engine
+        .send_file(&b.node_id(), src.join("two.bin").to_str().unwrap())
+        .unwrap();
     let (p1, _) = received(&b, &id1);
     let (p2, _) = received(&b, &id2);
     assert!(std::fs::read(p1).unwrap() == one);
@@ -195,18 +224,28 @@ fn a_file_that_shrinks_while_sending_fails_on_both_sides() {
     b.engine.set_download_dir(dst.to_str().unwrap());
     let path = src.join("growing.log");
     std::fs::write(&path, pattern(30 * 1024 * 1024)).unwrap();
-    let id = a.engine.send_file(&b.node_id(), path.to_str().unwrap()).unwrap();
+    let id = a
+        .engine
+        .send_file(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
     b.sink
         .wait_until(BIG_WAIT, |e| match e {
             CoreEvent::FileProgress { id: got, done, .. } if *got == id && *done > 0 => Some(()),
             _ => None,
         })
         .expect("never started");
-    std::fs::OpenOptions::new().write(true).open(&path).unwrap().set_len(100).unwrap();
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(100)
+        .unwrap();
     let failed_on = |n: &TestNode| {
         n.sink
             .wait_until(BIG_WAIT, |e| match e {
-                CoreEvent::FileFailed { id: got, reason, .. } if *got == id => Some(reason.clone()),
+                CoreEvent::FileFailed {
+                    id: got, reason, ..
+                } if *got == id => Some(reason.clone()),
                 _ => None,
             })
             .unwrap_or_else(|| panic!("no failure; got {:#?}", n.sink.all()))
@@ -214,7 +253,9 @@ fn a_file_that_shrinks_while_sending_fails_on_both_sides() {
     assert!(failed_on(&a).contains("couldn't be read"));
     failed_on(&b);
     assert!(
-        !dst.join(".mydomain-partial").join(format!("{id}.part")).exists(),
+        !dst.join(".mydomain-partial")
+            .join(format!("{id}.part"))
+            .exists(),
         "the partial file is removed"
     );
     for d in [&src, &dst] {

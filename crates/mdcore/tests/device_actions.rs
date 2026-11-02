@@ -20,7 +20,8 @@ fn pair(test: &str) -> (TestNode, TestNode) {
 #[test]
 fn a_device_reports_its_status() {
     let (a, b) = pair("status");
-    b.engine.set_device_status(r#"{"battery":42,"charging":true}"#);
+    b.engine
+        .set_device_status(r#"{"battery":42,"charging":true}"#);
     a.engine.request_status(&b.node_id()).unwrap();
     let (from, status) = a
         .sink
@@ -49,15 +50,27 @@ fn ring_reaches_the_device_once_and_is_not_shown_as_chat() {
     assert_eq!(from, a.node_id());
     std::thread::sleep(Duration::from_millis(300));
     let all = b.sink.all();
-    assert_eq!(all.iter().filter(|e| matches!(e, CoreEvent::Ring { .. })).count(), 1);
-    assert!(!all.iter().any(|e| matches!(e, CoreEvent::MessageReceived(_))));
+    assert_eq!(
+        all.iter()
+            .filter(|e| matches!(e, CoreEvent::Ring { .. }))
+            .count(),
+        1
+    );
+    assert!(!all
+        .iter()
+        .any(|e| matches!(e, CoreEvent::MessageReceived(_))));
 }
 
 #[test]
 fn only_web_links_are_sent_and_opened() {
     let (a, b) = pair("open-url");
-    assert!(a.engine.open_url(&b.node_id(), "file:///etc/passwd").is_err());
-    a.engine.open_url(&b.node_id(), " https://example.com/x ").unwrap();
+    assert!(a
+        .engine
+        .open_url(&b.node_id(), "file:///etc/passwd")
+        .is_err());
+    a.engine
+        .open_url(&b.node_id(), " https://example.com/x ")
+        .unwrap();
     let url = b
         .sink
         .wait_until(WAIT, |e| match e {
@@ -72,7 +85,10 @@ fn only_web_links_are_sent_and_opened() {
 fn an_action_reaches_the_device_with_its_arguments() {
     let (a, b) = pair("action");
     assert!(a.engine.run_action(&b.node_id(), "Bad Name", "").is_err());
-    assert!(a.engine.run_action(&b.node_id(), "flashlight", "{nope").is_err());
+    assert!(a
+        .engine
+        .run_action(&b.node_id(), "flashlight", "{nope")
+        .is_err());
     a.engine
         .run_action(&b.node_id(), "flashlight", r#"{"on":true}"#)
         .unwrap();

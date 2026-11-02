@@ -71,8 +71,8 @@ impl<P: Platform> Engine<P> {
             return Err("only http and https links can be opened".to_string().into());
         }
         let me = self.ctx.identity.lock().node_id.clone();
-        let m = serde_json::json!({ "type": "open_url", "from": me, "url": url.trim() })
-            .to_string();
+        let m =
+            serde_json::json!({ "type": "open_url", "from": me, "url": url.trim() }).to_string();
         self.send(node_id, &m)
     }
 
