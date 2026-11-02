@@ -314,6 +314,17 @@ impl<P: Platform> Engine<P> {
             disco_send,
             _quic: quic,
         };
+        // Signed in last time: carry on, and re-register in the background
+        // (the FCM token, our addresses) so a push can reach us again.
+        if engine.restore_session() {
+            let h = engine.handles();
+            std::thread::spawn(move || {
+                let session = h.server_url.lock().clone().zip(h.token.lock().clone());
+                if let Some((url, token)) = session {
+                    let _ = peers::refresh(&h.ctx, &url, &token);
+                }
+            });
+        }
         engine.detect_nat();
         background::spawn_ip_watcher(engine.handles());
         background::spawn_port_mapper(engine.handles());

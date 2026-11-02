@@ -97,8 +97,10 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
     // Keep a handle on the raw socket: under TLS the WebSocket wraps it, and
     // the read timeout is set on the socket itself.
     let raw = stream.try_clone().map_err(|e| e.to_string())?;
-    // Plain for ws://, rustls for wss:// (chosen from the URL scheme).
-    let (mut ws, _) = tungstenite::client_tls_with_config(url, stream, None, None)
+    // Plain for ws://, rustls for wss:// (chosen from the URL scheme), trusting
+    // the OS certificate store too (see crate::tls).
+    let tls = tungstenite::Connector::Rustls(crate::tls::client_config());
+    let (mut ws, _) = tungstenite::client_tls_with_config(url, stream, None, Some(tls))
         .map_err(|e| format!("relay handshake failed: {e}"))?;
 
     let me = ctx.identity.lock().node_id.clone();

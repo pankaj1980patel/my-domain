@@ -36,8 +36,10 @@ struct AndroidPlatform {
     /// Set from Kotlin via `nativeSetFcmToken` once Firebase issues it.
     fcm_token: Arc<Mutex<Option<String>>>,
     /// Session store in the app's private files dir (`Context.filesDir`).
-    /// Before this, Android had no store and forgot the login on restart.
     kv: Option<FileKv>,
+    /// Secrets (session token, derived key), kept by Kotlin in the Android
+    /// Keystore, so the login survives the app being killed.
+    secrets: Arc<dyn SecretStore>,
 }
 
 impl AndroidPlatform {
@@ -83,10 +85,18 @@ impl Platform for AndroidPlatform {
         }
     }
 
+    fn secret_get(&self, key: &str) -> Option<String> {
+        self.secrets.get(key.to_string())
+    }
+
+    fn secret_set(&self, key: &str, value: Option<&str>) {
+        self.secrets.set(key.to_string(), value.map(str::to_string));
+    }
+
     fn fcm_token(&self) -> Option<String> {
         self.fcm_token.lock().unwrap().clone()
     }
-    // kv: in-memory only (None defaults). clipboard: not yet supported.
+    // clipboard: handled in Kotlin (NetService), not through the core.
 }
 
 // ---------------------------------------------------------------------------
@@ -138,6 +148,15 @@ fn as_str(v: impl serde::Serialize) -> String {
 #[uniffi::export(callback_interface)]
 pub trait EventListener: Send + Sync {
     fn on_event(&self, name: String, payload_json: String);
+}
+
+/// The app's secure store for the session token and the derived device key
+/// (Kotlin: AES-GCM under an Android Keystore key). Called on core threads.
+#[uniffi::export(callback_interface)]
+pub trait SecretStore: Send + Sync {
+    fn get(&self, key: String) -> Option<String>;
+    /// `None` deletes the secret.
+    fn set(&self, key: String, value: Option<String>);
 }
 
 /// This device as the core sees it.
@@ -243,6 +262,7 @@ pub fn generate_key() -> String {
 #[uniffi::export]
 impl MdEngine {
     /// Start networking (or return the running engine) and attach `listener`.
+    /// Signed in last time (and the token is still good): starts signed in.
     #[uniffi::constructor]
     pub fn start(
         device_id: String,
@@ -250,6 +270,7 @@ impl MdEngine {
         wifi_ip: String,
         data_dir: String,
         listener: Box<dyn EventListener>,
+        secrets: Box<dyn SecretStore>,
     ) -> MdResult<Arc<MdEngine>> {
         android_logger::init_once(
             android_logger::Config::default()
@@ -271,6 +292,7 @@ impl MdEngine {
             wifi_ip: wifi.clone(),
             fcm_token: fcm_token_cell().clone(),
             kv: (!data_dir.is_empty()).then(|| FileKv::in_dir(&data_dir)),
+            secrets: Arc::from(secrets),
         };
         let sink = Arc::new(ListenerSink::default());
         *sink.listener.lock().unwrap() = Some(listener);

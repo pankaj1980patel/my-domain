@@ -22,7 +22,22 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use serde_json::{json, Value};
+
+/// A JWT-shaped session token valid for 7 days, like the real server's
+/// (the engine reads `exp` to decide whether a saved session is still good).
+fn session_token(username: &str) -> String {
+    let exp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+        + 7 * 24 * 3600;
+    let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
+    let claims = URL_SAFE_NO_PAD
+        .encode(json!({"sub": username, "username": username, "exp": exp}).to_string());
+    format!("{header}.{claims}.fake-signature")
+}
 
 #[derive(Default)]
 struct State {
@@ -164,7 +179,13 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
                 return respond(req, 409, json!({"error": "username already taken"}));
             }
             st.users.insert(u.clone(), p);
-            let token = format!("tok-{u}");
+            // One token per user (the fake relay groups devices by token).
+            let token = st
+                .tokens
+                .iter()
+                .find(|(_, user)| **user == u)
+                .map(|(t, _)| t.clone())
+                .unwrap_or_else(|| session_token(&u));
             st.tokens.insert(token.clone(), u.clone());
             drop(st);
             respond(req, 200, json!({"token": token, "username": u}))
@@ -175,7 +196,13 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
                 drop(st);
                 return respond(req, 401, json!({"error": "invalid username or password"}));
             }
-            let token = format!("tok-{u}");
+            // One token per user (the fake relay groups devices by token).
+            let token = st
+                .tokens
+                .iter()
+                .find(|(_, user)| **user == u)
+                .map(|(t, _)| t.clone())
+                .unwrap_or_else(|| session_token(&u));
             st.tokens.insert(token.clone(), u.clone());
             drop(st);
             respond(req, 200, json!({"token": token, "username": u}))

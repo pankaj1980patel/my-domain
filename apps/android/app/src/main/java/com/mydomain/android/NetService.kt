@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.KeystoreSecrets
 import com.mydomain.android.core.Tone
 import com.mydomain.android.ffi.EventListener
 import com.mydomain.android.ffi.MdEngine
@@ -68,7 +69,7 @@ class NetService : Service() {
         // Initialize Rust core if not already done. Prefer the IMEI as a stable
         // device id; on Android 10+ that's unreadable for normal apps, so fall
         // back to ANDROID_ID (also stable across restarts/reinstalls).
-        runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents) }
+        runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents, KeystoreSecrets(this)) }
             .onFailure { Log.e("NetService", "engine failed to start", it) }
         Core.reload()
         Fcm.init(this)

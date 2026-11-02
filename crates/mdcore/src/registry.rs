@@ -79,7 +79,8 @@ pub fn auth_call(
     username: &str,
     password: &str,
 ) -> Result<TokenResp, String> {
-    ureq::post(&format!("{}{}", base(url), path))
+    crate::tls::http()
+        .post(&format!("{}{}", base(url), path))
         .timeout(Duration::from_secs(10))
         .send_json(serde_json::json!({ "username": username, "password": password }))
         .map_err(http_err)?
@@ -88,7 +89,8 @@ pub fn auth_call(
 }
 
 pub fn verify_password_call(url: &str, username: &str, password: &str) -> Result<bool, String> {
-    match ureq::post(&format!("{}/auth/verify", base(url)))
+    match crate::tls::http()
+        .post(&format!("{}/auth/verify", base(url)))
         .timeout(Duration::from_secs(10))
         .send_json(serde_json::json!({ "username": username, "password": password }))
     {
@@ -107,7 +109,8 @@ pub fn registry_register(
     supports_ipv6: bool,
     nat: crate::nat::NatKind,
 ) -> Result<(), String> {
-    ureq::post(&format!("{}/devices/register", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/devices/register", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({
@@ -139,7 +142,8 @@ pub fn send_signal(
     kind: &str,
     data: serde_json::Value,
 ) -> Result<(), String> {
-    ureq::post(&format!("{}/signal", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/signal", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "from": from, "to": to, "type": kind, "data": data }))
@@ -149,7 +153,8 @@ pub fn send_signal(
 
 /// Remove a device of ours from the registry.
 pub fn registry_unregister(url: &str, token: &str, node_id: &str) -> Result<(), String> {
-    ureq::post(&format!("{}/devices/unregister", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/devices/unregister", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id }))
@@ -161,7 +166,8 @@ pub fn registry_unregister(url: &str, token: &str, node_id: &str) -> Result<(), 
 /// token. The pong is delivered back through the platform's FCM receiver. `sid`
 /// correlates the request with the received pong.
 pub fn send_selfping(url: &str, token: &str, node_id: &str, sid: &str) -> Result<(), String> {
-    ureq::post(&format!("{}/signal/selfping", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/signal/selfping", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id, "sid": sid }))
@@ -179,7 +185,8 @@ pub fn update_device_state(
     reflexive_ip: Option<&str>,
     reflexive_udp_port: Option<u16>,
 ) -> Result<(), String> {
-    ureq::post(&format!("{}/devices/state", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/devices/state", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({
@@ -207,7 +214,8 @@ pub fn probe_inbound(
     node_id: &str,
     checks: &[&str],
 ) -> Result<ProbeResult, String> {
-    ureq::post(&format!("{}/devices/probe", base(url)))
+    crate::tls::http()
+        .post(&format!("{}/devices/probe", base(url)))
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id, "check": checks }))

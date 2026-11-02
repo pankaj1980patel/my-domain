@@ -73,11 +73,20 @@ pub trait Platform: Send + Sync + 'static {
         detect_local_ipv6()
     }
 
-    // --- session persistence (server_url + username only) ---
+    // --- session persistence (server_url, username, QUIC port, peers) ---
     fn kv_get(&self, _key: &str) -> Option<String> {
         None
     }
     fn kv_set(&self, _key: &str, _value: &str) {}
+
+    // --- secrets (session token, derived device key) ---
+    /// Read a secret from the OS secure store (Keychain, Android Keystore,
+    /// Secret Service). The default keeps nothing, so a restart signs out.
+    fn secret_get(&self, _key: &str) -> Option<String> {
+        None
+    }
+    /// Store (`Some`) or delete (`None`) a secret.
+    fn secret_set(&self, _key: &str, _value: Option<&str>) {}
 
     // --- push (roadmap: FCM) ---
     fn fcm_token(&self) -> Option<String> {

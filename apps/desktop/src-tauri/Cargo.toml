@@ -42,4 +42,7 @@ arboard = { version = "3", features = ["wayland-data-control"] }
 # service worker needed). Blocking (reqwest blocking), so it runs in its own
 # thread alongside the Engine's blocking loops.
 fcm_receiver_rs = "0.1.1"
+# The session token and device key, kept in the OS secure store so a restart
+# stays signed in (Linux builds need libdbus-1-dev).
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 

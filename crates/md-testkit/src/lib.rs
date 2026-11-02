@@ -106,6 +106,9 @@ pub struct MockPlatform {
     pub id: String,
     pub name: String,
     pub kv: Arc<Mutex<HashMap<String, String>>>,
+    /// The "OS secure store": share it with a second platform to simulate
+    /// the same device restarting.
+    pub secrets: Arc<Mutex<HashMap<String, String>>>,
     pub clipboard: Option<Arc<MemClipboard>>,
     pub notifier: Arc<RecordingNotifier>,
 }
@@ -116,6 +119,7 @@ impl MockPlatform {
             id: id.to_string(),
             name: id.to_string(),
             kv: Arc::default(),
+            secrets: Arc::default(),
             clipboard: Some(Arc::default()),
             notifier: Arc::default(),
         }
@@ -155,6 +159,16 @@ impl Platform for MockPlatform {
             .lock()
             .unwrap()
             .insert(key.to_string(), value.to_string());
+    }
+    fn secret_get(&self, key: &str) -> Option<String> {
+        self.secrets.lock().unwrap().get(key).cloned()
+    }
+    fn secret_set(&self, key: &str, value: Option<&str>) {
+        let mut s = self.secrets.lock().unwrap();
+        match value {
+            Some(v) => s.insert(key.to_string(), v.to_string()),
+            None => s.remove(key),
+        };
     }
     fn clipboard(&self) -> Option<&dyn Clipboard> {
         self.clipboard.as_deref().map(|c| c as &dyn Clipboard)

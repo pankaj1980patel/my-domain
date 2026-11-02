@@ -198,6 +198,16 @@ export async function signIn(server: string, user: string, pass: string, key: st
   commands.reportFirewall();
 }
 
+/** Started signed in (the session came back from the OS keychain)? Then
+ *  load the app without the sign-in screen. */
+export async function resume(): Promise<boolean> {
+  if (!(await commands.isReady())) return false;
+  await startEvents();
+  await loadAll();
+  refreshDevices().catch(() => {});
+  return true;
+}
+
 export async function sendMessage(node: string, text: string): Promise<string> {
   const via = await unwrap(commands.sendMessage(node, text));
   setState("messages", produce((list) => list.push({ id: ++seq, node, dir: "out", text, ts: now(), via })));

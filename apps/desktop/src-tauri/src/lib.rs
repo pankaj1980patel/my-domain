@@ -77,6 +77,19 @@ struct DesktopPlatform {
 /// Optional test suffix (`TEST=foo npm run tauri dev`) so several instances on
 /// one machine register as distinct devices instead of clobbering the same
 /// machine-uid row. Trimmed; empty/unset => no suffix.
+/// The OS secure store (macOS Keychain, Secret Service on Linux, Windows
+/// Credential Manager) entry for one of the core's secrets. Lab instances on
+/// one machine (`TEST=...`) each get their own.
+fn keyring_entry(key: &str) -> Option<keyring::Entry> {
+    let service = match test_suffix() {
+        Some(suffix) => format!("my-domain-{suffix}"),
+        None => "my-domain".to_string(),
+    };
+    keyring::Entry::new(&service, key)
+        .map_err(|e| eprintln!("[secrets] keyring unavailable: {e}"))
+        .ok()
+}
+
 fn test_suffix() -> Option<String> {
     std::env::var("TEST")
         .ok()
@@ -122,6 +135,26 @@ impl Platform for DesktopPlatform {
 
     fn kv_get(&self, key: &str) -> Option<String> {
         self.kv.as_ref()?.get(key)
+    }
+
+    fn secret_get(&self, key: &str) -> Option<String> {
+        keyring_entry(key)?.get_password().ok()
+    }
+
+    fn secret_set(&self, key: &str, value: Option<&str>) {
+        let Some(entry) = keyring_entry(key) else {
+            return;
+        };
+        let result = match value {
+            Some(v) => entry.set_password(v),
+            None => match entry.delete_credential() {
+                Err(keyring::Error::NoEntry) => Ok(()),
+                other => other,
+            },
+        };
+        if let Err(e) = result {
+            eprintln!("[secrets] {key}: {e}");
+        }
     }
 
     fn kv_set(&self, key: &str, value: &str) {

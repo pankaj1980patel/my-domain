@@ -25,6 +25,7 @@ pub mod registry;
 pub mod service;
 pub mod services;
 pub mod signal;
+pub mod tls;
 pub mod transport;
 pub mod wire;
 

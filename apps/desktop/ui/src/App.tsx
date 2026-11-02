@@ -1,8 +1,8 @@
 // App shell: sign in first, then a sidebar with Devices / Activity /
 // Settings. A device opens its detail page; the Developer screen is hidden.
 
-import { createSignal, Match, Show, Switch } from "solid-js";
-import { state } from "./lib/core";
+import { createSignal, Match, onMount, Show, Switch } from "solid-js";
+import { resume, state } from "./lib/core";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
 import SignIn from "./screens/SignIn";
@@ -15,7 +15,9 @@ import Developer from "./screens/Developer";
 type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "settings" } | { name: "developer" };
 
 export default function App() {
-  const [signedIn, setSignedIn] = createSignal(false);
+  // null while checking for a saved session, so sign-in doesn't flash.
+  const [signedIn, setSignedIn] = createSignal<boolean | null>(null);
+  onMount(() => resume().then(setSignedIn, () => setSignedIn(false)));
   const [view, setView] = createSignal<View>({ name: "home" });
   const go = (v: View) => setView(v);
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
@@ -23,7 +25,8 @@ export default function App() {
 
   return (
     <>
-      <Show when={signedIn()} fallback={<SignIn onDone={() => setSignedIn(true)} />}>
+      <Show when={signedIn() !== null}>
+        <Show when={signedIn()} fallback={<SignIn onDone={() => setSignedIn(true)} />}>
         <div class="shell">
           <nav class="sidebar" aria-label="Main">
             <div class="brand">
@@ -61,6 +64,7 @@ export default function App() {
             </Switch>
           </main>
         </div>
+        </Show>
       </Show>
       <Toasts />
     </>

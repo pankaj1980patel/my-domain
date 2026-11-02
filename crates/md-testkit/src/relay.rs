@@ -1,6 +1,6 @@
 //! A fake of the server's WebSocket `/relay` (apps/server/src/relay.rs):
 //! same JSON protocol, on a loopback port. Devices are grouped by their auth
-//! token. `FakeRegistry` issues `tok-<user>`, so "same token" means "same
+//! token. `FakeRegistry` issues one token per user, so "same token" means "same
 //! user", which is the real server's forwarding rule.
 
 use std::collections::HashMap;

@@ -265,6 +265,23 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
     is pending: the office network's Fortinet firewall intercepts TLS, so
     the Mac can't reach the server from there.
 
+## Stay signed in, and company networks (2026-11-02)
+
+- **The session survives a restart.** The login token (7 days) and the
+  derived device key go to the OS secure store through a new
+  `Platform::secret_get/secret_set` hook: the macOS Keychain, Secret
+  Service or Windows Credential Manager on desktop (`keyring`), and an
+  AES-GCM store under an Android Keystore key on the phone
+  (`KeystoreSecrets.kt`, via a UniFFI `SecretStore` callback). At start the
+  engine restores them if the token has at least an hour left, then
+  re-registers in the background, so a push that wakes a killed app finds
+  it signed in. Signing out deletes them. Test:
+  `registry::a_restarted_device_is_still_signed_in_until_it_signs_out`.
+- **HTTPS trusts the OS certificate store too** (`mdcore::tls`), for both
+  the registry calls and the `wss://` relay. Company proxies that re-sign
+  HTTPS with their own CA (installed by IT) no longer break sign-in with
+  "UnknownIssuer". Messages stay end-to-end encrypted.
+
 ## Device lab and dev tools
 
 - **`scripts/lab/start-all.sh`** starts the app on all three devices, logged

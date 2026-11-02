@@ -6,7 +6,7 @@
 // Test-only file: a panic IS the failure report.
 #![allow(clippy::unwrap_used)]
 
-use md_testkit::{FakeRegistry, TestNode};
+use md_testkit::{FakeRegistry, MockPlatform, TestNode};
 use mdcore::model::Source;
 use mdcore::CoreError;
 
@@ -42,6 +42,41 @@ fn register_then_login_creates_a_session_and_remembers_it() {
         (saved.server_url, saved.username),
         (reg.url(), "alice".to_string())
     );
+}
+
+#[test]
+fn a_restarted_device_is_still_signed_in_until_it_signs_out() {
+    let reg = FakeRegistry::start();
+    reg.add_user("alice", "hunter22");
+    let first = MockPlatform::new("reg-restart");
+    let (kv, secrets) = (first.kv.clone(), first.secrets.clone());
+    let n = TestNode::start_logged_out_with(first, md_testkit::test_config());
+    n.engine
+        .auth_login(&reg.url(), "alice", "hunter22")
+        .unwrap();
+    n.engine.set_encryption_key("family key").unwrap();
+    drop(n);
+
+    // Same device, new process: the token and key come back from the
+    // secret store, and it re-registers with the server by itself.
+    let again = || {
+        let mut p = MockPlatform::new("reg-restart");
+        (p.kv, p.secrets) = (kv.clone(), secrets.clone());
+        TestNode::start_logged_out_with(p, md_testkit::test_config())
+    };
+    let n = again();
+    assert!(n.engine.is_ready());
+    assert_eq!(n.engine.session_info().username.as_deref(), Some("alice"));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while reg.device("alice", "reg-restart").is_none() {
+        assert!(std::time::Instant::now() < deadline, "never re-registered");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+
+    // Signing out forgets the secrets, so the next start is signed out.
+    n.engine.logout();
+    drop(n);
+    assert!(!again().engine.is_ready());
 }
 
 #[test]

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 
 use md_testkit::{TestNode, TEST_PASSPHRASE, TEST_USER};
 use mdcore::model::{Peer, Source};
-use mydomain_net::{running_engine, EventListener, MdEngine, MdError};
+use mydomain_net::{running_engine, EventListener, MdEngine, MdError, SecretStore};
 
 #[derive(Clone, Default)]
 struct Recorder(Arc<Mutex<Vec<(String, serde_json::Value)>>>);
@@ -44,6 +44,23 @@ impl Recorder {
     }
 }
 
+/// The Keystore-backed store Kotlin passes in, kept in memory.
+#[derive(Default)]
+struct MemSecrets(std::sync::Mutex<std::collections::HashMap<String, String>>);
+
+impl SecretStore for MemSecrets {
+    fn get(&self, key: String) -> Option<String> {
+        self.0.lock().unwrap().get(&key).cloned()
+    }
+    fn set(&self, key: String, value: Option<String>) {
+        let mut m = self.0.lock().unwrap();
+        match value {
+            Some(v) => m.insert(key, v),
+            None => m.remove(&key),
+        };
+    }
+}
+
 #[test]
 fn the_bridge_pushes_events_and_types_its_errors() {
     let events = Recorder::default();
@@ -54,6 +71,7 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         "127.0.0.1".into(),
         dir.to_string_lossy().into_owned(),
         Box::new(events.clone()),
+        Box::new(MemSecrets::default()),
     )
     .unwrap();
 
@@ -64,6 +82,7 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         String::new(),
         String::new(),
         Box::new(events.clone()),
+        Box::new(MemSecrets::default()),
     )
     .unwrap();
     assert!(Arc::ptr_eq(&phone, &again));
