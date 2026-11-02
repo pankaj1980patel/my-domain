@@ -20,6 +20,7 @@ import org.json.JSONObject
  *   volume     {step: 1 | -1}            media volume one notch
  *   media      {key: "play_pause" | "next" | "previous"}
  *   ringer     {mode: "normal" | "vibrate" | "silent"}
+ *   launch     {pkg}                     open an app (from the apps list)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -50,7 +51,7 @@ object Controls {
 
     fun actions(): JSONArray = JSONArray().apply {
         if (torchId != null) put("flashlight")
-        put("volume"); put("media"); put("ringer")
+        put("volume"); put("media"); put("ringer"); put("launch")
     }
 
     fun state(ctx: Context): JSONObject {
@@ -70,7 +71,7 @@ object Controls {
     }
 
     /** Run action [name]; returns false if it's unknown or couldn't be done. */
-    fun run(ctx: Context, name: String, args: JSONObject): Boolean {
+    fun run(ctx: Context, name: String, args: JSONObject, fromName: String = ""): Boolean {
         val am = ctx.getSystemService(AudioManager::class.java)
         val ok = runCatching {
             when (name) {
@@ -112,6 +113,7 @@ object Controls {
                     }
                     am != null
                 }
+                "launch" -> DeviceActions.launchApp(ctx, fromName, args.optString("pkg"))
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

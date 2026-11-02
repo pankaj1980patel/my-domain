@@ -226,4 +226,6 @@
     <string name="ctl_ring_normal">Ring</string>
     <string name="ctl_ring_vibrate">Vibrate</string>
     <string name="ctl_ring_silent">Silent</string>
+    <string name="launch_title">%1$s wants to open %2$s</string>
+    <string name="launch_body">Tap to open it.</string>
 </resources>

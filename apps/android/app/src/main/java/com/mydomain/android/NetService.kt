@@ -238,7 +238,7 @@ class NetService : Service() {
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))
-                        "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject())
+                        "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject(), Core.peerName(o.optString("from")))
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
                         "file_failed" -> FileActions.onFailed(this@NetService, o)

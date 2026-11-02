@@ -160,6 +160,29 @@ object DeviceActions {
      * otherwise Android forbids starting an activity from the background, so
      * post a notification that opens it when tapped.
      */
+    /** Open app [pkg] (another device's `launch` action). Like a link: at
+     *  once if this app is on screen, else a notification to tap (Android
+     *  doesn't let a background app start another one). */
+    fun launchApp(ctx: Context, fromName: String, pkg: String): Boolean {
+        val app = ctx.applicationContext
+        val pm = app.packageManager
+        val launch = pm.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return false
+        if (Core.visible && runCatching { app.startActivity(launch) }.isSuccess) return true
+        val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+        val id = linkId.incrementAndGet()
+        val pi = PendingIntent.getActivity(app, id, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(app, CH_LINKS)
+            .setSmallIcon(android.R.drawable.ic_menu_view)
+            .setContentTitle(app.getString(R.string.launch_title, fromName, label))
+            .setContentText(app.getString(R.string.launch_body))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
+        return true
+    }
+
     fun openUrl(ctx: Context, fromName: String, url: String) {
         if (!isWebLink(url)) return
         val app = ctx.applicationContext
