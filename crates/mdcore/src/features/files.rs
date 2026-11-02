@@ -93,11 +93,6 @@ struct Outgoing {
     rewound_at: Option<Instant>,
     /// Since when the transfer is paused (no sender running, not done).
     paused_since: Option<Instant>,
-    /// The last re-offer went over the peer's link and nothing came back
-    /// yet. If the next one is due still unanswered, the link is dead
-    /// (an app killed or a phone gone without saying so, which QUIC only
-    /// notices after its idle timeout): close it and reconnect.
-    offered_on_link: bool,
 }
 
 struct Incoming {
@@ -333,7 +328,6 @@ pub fn start<P: Platform>(ctx: &NetCtx<P>, node: &str, path: &Path) -> crate::Re
                 rewind: false,
                 rewound_at: None,
                 paused_since: None,
-                offered_on_link: false,
             },
         );
         crate::engine::send_reliably(&ctx, &node, &msg.to_string());
@@ -455,14 +449,13 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
 }
 
 /// Offer paused transfers again (called on a timer); the receiver answers
-/// with how much it already has. Over the peer's link if it has one;
-/// otherwise once through the reliable path, which connects (waking the
-/// device by push) and delivers the offer when the link is up.
+/// with how much it already has. Every `REOFFER_EVERY` while the peer has a
+/// live link; without one, after a backoff, since each try may wake it by
+/// push.
 pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     let me = me(ctx);
     let mut offers = Vec::new();
     let mut expired = Vec::new();
-    let mut dead = Vec::new();
     {
         let mut out = ctx.files.out.lock();
         // Never accepted, and the queued offer has expired from the outbox.
@@ -480,20 +473,11 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
                 continue;
             }
             // With no link, each try may wake the device by push: back off.
-            let linked = ctx.ws_conns.lock().contains_key(&t.node);
+            let linked = crate::transport::is_live(ctx, &t.node);
             let every = if linked { REOFFER_EVERY } else { t.backoff };
             if t.offered_at.is_some_and(|at| at.elapsed() < every) {
                 continue;
             }
-            if linked && t.offered_on_link {
-                // Offered again through the reconnecting path on the next
-                // tick, once the link is gone.
-                dead.push(t.node.clone());
-                t.offered_on_link = false;
-                t.offered_at = None;
-                continue;
-            }
-            t.offered_on_link = linked;
             t.offered_at = Some(Instant::now());
             if !linked {
                 t.backoff = (t.backoff * 2).min(MAX_BACKOFF);
@@ -502,7 +486,7 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
                 "type": "file_offer", "from": me, "id": id,
                 "name": t.name, "size": t.size, "sha256": t.sha,
             });
-            offers.push((t.node.clone(), msg, linked));
+            offers.push((t.node.clone(), msg));
         }
     }
     for (id, node, name) in expired {
@@ -532,16 +516,12 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     for t in idle {
         let _ = std::fs::remove_file(&t.part);
     }
-    dead.dedup();
-    for node in dead {
-        crate::transport::close_link(ctx, &node);
-    }
-    for (node, msg, linked) in offers {
-        if linked {
-            let _ = send(ctx, &node, &msg);
-        } else {
-            crate::engine::send_reliably(ctx, &node, &msg.to_string());
-        }
+    // Reliably, linked or not: the outbox resends it on the next link,
+    // connects (waking the device by push) when there's none, and notices
+    // a link that stopped answering (a killed app, a phone that left
+    // without a word) and replaces it.
+    for (node, msg) in offers {
+        crate::engine::send_reliably(ctx, &node, &msg.to_string());
     }
 }
 
@@ -842,7 +822,6 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     return;
                 }
                 t.started = true;
-                t.offered_on_link = false;
                 t.backoff = FIRST_BACKOFF;
                 t.paused_since = None;
                 t.last_progress = Instant::now();

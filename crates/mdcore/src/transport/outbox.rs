@@ -125,7 +125,10 @@ pub fn flush<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
 pub fn retry_due<P: Platform>(ctx: &NetCtx<P>) {
     let nodes: Vec<String> = ctx.outbox.lock().keys().cloned().collect();
     for node in nodes {
-        if !ctx.ws_conns.lock().contains_key(&node) {
+        // Only a live link: a relay route still waiting for the peer's
+        // hello would swallow the resend and look dead after 10 s, and the
+        // reconnect would push the (maybe switched off) device again.
+        if !ctx.ws_conns.lock().contains_key(&node) || !super::is_live(ctx, &node) {
             continue;
         }
         if unanswered(ctx, &node) {

@@ -98,6 +98,44 @@ fn signaled_quic<P: Platform>(
     ctx.quic_waiters.lock().remove(&sid);
 }
 
+/// Marks a ladder to (this device, peer) as running until dropped. A
+/// second request meanwhile is recorded (`again`) instead of running.
+struct Running(String);
+
+impl Running {
+    fn claim<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> Option<Running> {
+        let key = format!("{}>{node_id}", ctx.identity.lock().node_id);
+        let mut running = running_map().lock();
+        if let Some(again) = running.get_mut(&key) {
+            *again = true;
+            return None;
+        }
+        running.insert(key.clone(), false);
+        Some(Running(key))
+    }
+
+    /// Whether another run was asked for since the last check (and reset).
+    fn again(&self) -> bool {
+        running_map()
+            .lock()
+            .get_mut(&self.0)
+            .map(std::mem::take)
+            .unwrap_or(false)
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        running_map().lock().remove(&self.0);
+    }
+}
+
+fn running_map() -> &'static Mutex<std::collections::HashMap<String, bool>> {
+    static MAP: std::sync::OnceLock<Mutex<std::collections::HashMap<String, bool>>> =
+        std::sync::OnceLock::new();
+    MAP.get_or_init(Default::default)
+}
+
 /// How often, and how many times, a relayed peer retries the direct rungs.
 const UPGRADE_EVERY: Duration = Duration::from_secs(60);
 const UPGRADE_TRIES: u32 = 10;
@@ -105,6 +143,34 @@ const UPGRADE_TRIES: u32 = 10;
 /// The ladder. `retry_later`: if we end up on the relay, keep retrying the
 /// direct rungs in the background (false for those retries themselves).
 fn run_ladder<P: Platform>(
+    ctx: NetCtx<P>,
+    server_url: Arc<Mutex<Option<String>>>,
+    token: Arc<Mutex<Option<String>>>,
+    node_id: String,
+    retry_later: bool,
+) {
+    // One ladder per peer at a time: each one signals (pushes) the peer,
+    // and two at once only duplicate each other. Asked again meanwhile (the
+    // first may have started before the peer's address was known), the
+    // running one goes round once more if the peer still isn't live.
+    let Some(running) = Running::claim(&ctx, &node_id) else {
+        return;
+    };
+    loop {
+        ladder_once(
+            ctx.clone(),
+            server_url.clone(),
+            token.clone(),
+            node_id.clone(),
+            retry_later,
+        );
+        if !running.again() || is_live(&ctx, &node_id) {
+            return;
+        }
+    }
+}
+
+fn ladder_once<P: Platform>(
     ctx: NetCtx<P>,
     server_url: Arc<Mutex<Option<String>>>,
     token: Arc<Mutex<Option<String>>>,

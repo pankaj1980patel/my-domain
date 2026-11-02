@@ -91,9 +91,20 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
     // "connected" to a relay that no longer knows us.
     static CONNECTING: std::sync::OnceLock<parking_lot::Mutex<HashSet<String>>> =
         std::sync::OnceLock::new();
+    struct Connecting(String);
+    impl Drop for Connecting {
+        fn drop(&mut self) {
+            CONNECTING
+                .get_or_init(Default::default)
+                .lock()
+                .remove(&self.0);
+        }
+    }
     let me = ctx.identity.lock().node_id.clone();
-    loop {
-        if ctx.relay.lock().is_some() {
+    let _connecting = loop {
+        if let Some(r) = ctx.relay.lock().as_mut() {
+            // About to be used: not "idle" for `close_if_unused`.
+            r.used_at = Instant::now();
             return Ok(());
         }
         if CONNECTING
@@ -101,13 +112,11 @@ pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Res
             .lock()
             .insert(me.clone())
         {
-            break;
+            break Connecting(me);
         }
         std::thread::sleep(Duration::from_millis(20));
-    }
-    let result = connect_relay(ctx, url, token);
-    CONNECTING.get_or_init(Default::default).lock().remove(&me);
-    result
+    };
+    connect_relay(ctx, url, token)
 }
 
 fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result<(), String> {
@@ -181,13 +190,18 @@ pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>, idle: Duration) -> bool {
     else {
         return false;
     };
-    let in_use = {
+    // In use = a live link goes through it. A route that never went live
+    // (the peer never answered) doesn't count, or a socket would stay open
+    // all day for a device that's switched off.
+    let routed: Vec<String> = {
         let conns = ctx.ws_conns.lock();
         peers
             .iter()
-            .any(|(peer, conn)| conns.get(peer).is_some_and(|(c, _)| c == conn))
+            .filter(|(peer, conn)| conns.get(*peer).is_some_and(|(c, _)| c == *conn))
+            .map(|(peer, _)| peer.clone())
+            .collect()
     };
-    if in_use {
+    if routed.iter().any(|p| super::is_live(ctx, p)) {
         return false;
     }
     // Take it out now, not when its loop gets round to closing: a link
@@ -200,7 +214,19 @@ pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>, idle: Duration) -> bool {
             _ => None,
         }
     };
-    closing.is_some_and(|r| r.tx.send(CLOSE.to_string()).is_ok())
+    let Some(r) = closing else {
+        return false;
+    };
+    // Its routes go with it (its loop's teardown no longer finds it).
+    {
+        let mut conns = ctx.ws_conns.lock();
+        for (peer, conn) in &r.peers {
+            if conns.get(peer).is_some_and(|(c, _)| c == conn) {
+                conns.remove(peer);
+            }
+        }
+    }
+    r.tx.send(CLOSE.to_string()).is_ok()
 }
 
 /// Route `peer` through the relay: register its outgoing queue in

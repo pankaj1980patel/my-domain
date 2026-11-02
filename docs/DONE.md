@@ -295,6 +295,31 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Review fixes: fewer pushes to unreachable devices (2026-11-03)
+
+An independent review of the night's networking changes found four
+problems; all are fixed.
+
+- **The outbox's dead-link check fired on links that weren't live.** The
+  relay rung registers its route before the peer answers, so a message
+  to a phone that's off went unacked over it. After 10 s the outbox
+  reconnected, which pushed the phone again, every 10–15 s for 10 minutes.
+  The outbox now resends, and judges links, only when the link is live
+  (`transport::is_live`).
+- **Ladders overlapped.** Each one signals (pushes) the peer. Now only one
+  runs per peer at a time. A request that arrives meanwhile makes the
+  running one go round once more if the peer still isn't live, which
+  covers a first ladder that started before the peer's address was known.
+- **File re-offers skipped their backoff.** The dead-link special case
+  reset it. It's gone: re-offers go through the reliable path, linked or
+  not, so the outbox handles dead links. "Linked" now means a live link.
+  This also removed the false alarm for a receiver that hashes a large
+  partial file before answering: its ack goes out before the handler runs.
+- **The relay socket.** A route that never went live no longer keeps it
+  open, and closing it removes its routes. `ensure_relay` marks an existing
+  socket as just used, so the idle closer can't close it under a relay
+  offer. The connect guard is released even if the connect panics.
+
 ## Battery: an hour with the screen off (2026-11-03)
 
 - Measured on the phone, simulated unplugged (`dumpsys battery unplug`),

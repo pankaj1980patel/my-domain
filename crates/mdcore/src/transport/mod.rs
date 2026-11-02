@@ -66,6 +66,12 @@ pub struct P2pConn {
 /// node_id -> live link.
 pub type P2pConns = Arc<Mutex<HashMap<String, P2pConn>>>;
 
+/// The peer has a live link (any kind). A route in `ws_conns` alone isn't
+/// one: the relay rung registers its route before the peer has answered.
+pub fn is_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
+    ctx.p2p_conns.lock().contains_key(node_id)
+}
+
 /// The peer has a live link that isn't through the relay.
 pub fn is_direct<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     ctx.p2p_conns
