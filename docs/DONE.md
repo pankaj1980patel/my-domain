@@ -295,6 +295,23 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Verification codes to the computer (2026-11-02)
+
+- Android (off by default: Settings "Send verification codes to my
+  computers"): when a notification carries a one-time code (`findCode`,
+  11 JVM unit tests: Indian bank/SMS formats, Google "G-", Hindi, and
+  negatives like amounts, cards, phone numbers, promo codes), the phone
+  shares it. Never logged.
+- Core: `share_code` sends it the reliable way to all your devices (it
+  connects if needed), stamped with the time; a device with a clipboard
+  copies it unless it's older than 2 minutes (`CodeCopied`). The desktop
+  shows "Code copied" and an Activity entry.
+- Verified live: a test OTP notification on the phone was on the Mac's
+  clipboard 4 s later (the phone had no link and connected on demand).
+- Also verified live after the last install: receipts, status (with the
+  phone's actions), media volume up/down, and a 1.2 MB file to the phone
+  (hash matches; the link upgraded from relay to punched mid-transfer).
+
 ## Desktop notifications; open a phone app (2026-11-02)
 
 - Desktop system notifications go through `tauri-plugin-notification`
