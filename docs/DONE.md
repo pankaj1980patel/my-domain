@@ -308,6 +308,15 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   a free name ("notes (1).txt"); names can't escape the folder.
 - Events `FileProgress`, `FileReceived`, `FileSent`, `FileFailed`.
   `mdctl`: `sendfile <node> <path>`, `downloads <dir>`.
+- Desktop: Files tile (system picker, drag and drop onto the window,
+  progress, Cancel, Open / Show in folder); saved to ~/Downloads.
+  Android: Files tile (picker), the share sheet ("Send to" a device),
+  progress and "saved" notifications; saved to Downloads/my-domain via
+  MediaStore.
+- Verified live (2026-11-02): `mdctl` sent 2.5 MB to the Mac app and to
+  the phone on mobile data (over the relay); both copies' SHA-256 match.
+  The same run checked a chat receipt and the phone's status (battery 90%,
+  charging).
 - Tests (`tests/files.rs`): small and 3 MB files, a device without a
   downloads folder declines, a missing file fails at once, and a 40 MB
   transfer interrupted by a receiver restart resumes where it stopped.
