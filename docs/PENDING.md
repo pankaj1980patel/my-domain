@@ -141,8 +141,11 @@ or with less battery.
 - **Simulated-NAT test.** Two engines, each behind its own simulated router
   (Linux network namespaces), must connect by hole punching. Each simulated
   device has to be its own process, which is why this needs `mdctl`.
-- **Lab scenario tests** (`scripts/lab/scenarios/*.toml`), run across the
-  Mac, the laptop and the phone.
+- ~~Lab scenario tests across the Mac, the laptop and the phone~~: **done**
+  (2026-11-02). `scripts/lab/scenarios.sh` runs receipts, controls and
+  file transfer from the Mac against every lab device and prints a
+  pass/fail table. All pass on the laptop and the phone, the phone also
+  over mobile data.
 
 ## 5. UX for everyone (design, colour, polish)
 

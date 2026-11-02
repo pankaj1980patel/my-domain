@@ -295,6 +295,23 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Lab scenario runner; first-contact and stale-link fixes (2026-11-02)
+
+- `scripts/lab/scenarios.sh`: runs the `mdctl` scenarios (receipts,
+  controls, file transfer) from the Mac against each lab device and
+  prints a pass/fail table. It exits non-zero on any failure.
+- Fixed: a file offer delivered as the link came up was accepted with no
+  link back, and the accept was lost, so the transfer stalled for 11 min.
+  Offer replies that can't go out now are queued reliably.
+- Fixed: a message arriving by relay from a peer we hold a QUIC link to
+  now probes that link. It pings and watches QUIC's received-datagram
+  count for 3 s; if nothing comes back, the link is closed and replies go
+  by relay. (A phone that moved off Wi-Fi kept answering into its dead
+  link.)
+- Verified: all scenarios pass against the Linux desktop and the phone,
+  including over mobile data. A 1 MB file sent while the phone dropped
+  Wi-Fi mid-transfer arrived with a matching SHA-256.
+
 ## Desktop media keys and lock (2026-11-02)
 
 - The desktop lists `media` and `lock` in its status when it can do them.

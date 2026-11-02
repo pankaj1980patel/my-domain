@@ -579,8 +579,13 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
 
 fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     let id = msg.str("id");
+    // The offer may have come in before we have a link back (it was
+    // queued and delivered as the link came up): then queue the answer
+    // too, or the sender would wait for an accept that never comes.
     let reply = |m: serde_json::Value| {
-        let _ = send(ctx, from, &m);
+        if send(ctx, from, &m).is_err() {
+            crate::engine::send_reliably(ctx, from, &m.to_string());
+        }
     };
     // Ids are ours (hex); anything else could escape the partial folder.
     if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric()) {

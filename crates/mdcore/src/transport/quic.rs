@@ -214,6 +214,13 @@ impl QuicLink {
         self.port
     }
 
+    /// UDP datagrams received so far on the QUIC link to `peer`. A live
+    /// peer acknowledges anything we send, so a count that doesn't move
+    /// after a send means the link is dead. `None` without a QUIC link.
+    pub fn rx_datagrams(&self, peer: &str) -> Option<u64> {
+        Some(self.conns.lock().get(peer)?.conn.stats().udp_rx.datagrams)
+    }
+
     /// Measured path stats of the QUIC link to `peer`: (RTT, lost packets,
     /// sent packets). `None` when the peer has no QUIC link.
     pub fn path_stats(&self, peer: &str) -> Option<(Duration, u64, u64)> {

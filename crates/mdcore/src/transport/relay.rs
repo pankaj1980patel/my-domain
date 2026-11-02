@@ -281,12 +281,56 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
             // receipts and replies would have nowhere to go.
             if !ctx.ws_conns.lock().contains_key(from) {
                 on_hello(ctx, from);
+            } else {
+                check_direct(ctx, from);
             }
             let env = Envelope { nonce, ciphertext };
             handle_incoming(ctx, &env, Some(from), String::new(), "RELAY");
         }
         Err(_) => {}
     }
+}
+
+/// A message came by relay from a peer we hold a QUIC link to. Either the
+/// peer is still upgrading, or our link died without closing (the phone
+/// moved from Wi-Fi to mobile data): then everything we send it, receipts
+/// included, vanishes. Ping over the link; if QUIC hears nothing back in
+/// `PROBE_WAIT`, close it and answer by relay. At most once per
+/// `PROBE_EVERY` per peer.
+fn check_direct<P: Platform>(ctx: &NetCtx<P>, from: &str) {
+    const PROBE_WAIT: Duration = Duration::from_secs(3);
+    const PROBE_EVERY: Duration = Duration::from_secs(10);
+    static LAST: std::sync::OnceLock<parking_lot::Mutex<HashMap<String, Instant>>> =
+        std::sync::OnceLock::new();
+    let Some(before) = ctx.quic.rx_datagrams(from) else {
+        return;
+    };
+    let key = format!("{}>{from}", ctx.identity.lock().node_id);
+    {
+        let mut last = LAST.get_or_init(Default::default).lock();
+        if last.get(&key).is_some_and(|t| t.elapsed() < PROBE_EVERY) {
+            return;
+        }
+        last.insert(key, Instant::now());
+    }
+    let (ctx, from) = (ctx.clone(), from.to_string());
+    std::thread::spawn(move || {
+        let me = ctx.identity.lock().node_id.clone();
+        let ping = json!({ "type": "p2p_ping", "from": me }).to_string();
+        super::send_control_to(&ctx, &from, &ping);
+        std::thread::sleep(PROBE_WAIT);
+        if ctx.quic.rx_datagrams(&from) != Some(before) {
+            return; // alive (or already gone)
+        }
+        super::close_link(&ctx, &from);
+        for _ in 0..30 {
+            if !ctx.ws_conns.lock().contains_key(&from) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        on_hello(&ctx, &from);
+    });
 }
 
 /// The peer is on the relay: route it, greet it back once, mark it live.
