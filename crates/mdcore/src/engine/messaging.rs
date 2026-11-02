@@ -5,6 +5,22 @@ use super::*;
 /// What `send` returns when the message is waiting for a link.
 pub const QUEUED: &str = "queued";
 
+/// `Engine::send` for code that only has the context (background threads):
+/// hold `text` until `node_id` acknowledges it, sending it now over a live
+/// link, or starting the connect ladder (which wakes a sleeping device).
+pub(crate) fn send_reliably<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
+    let from = ctx.identity.lock().name.clone();
+    let id = transport::outbox::new_id();
+    transport::outbox::hold(ctx, node_id, &id, &from, text);
+    if ctx.ws_conns.lock().contains_key(node_id) {
+        transport::outbox::pump(ctx, node_id, false, Some(&id));
+    } else {
+        let (ctx, node) = (ctx.clone(), node_id.to_string());
+        let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
+        std::thread::spawn(move || super::ladder::run_connect_ladder(ctx, url, token, node));
+    }
+}
+
 impl<P: Platform> Engine<P> {
     // --- messaging ---
 

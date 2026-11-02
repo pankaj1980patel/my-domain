@@ -16,7 +16,8 @@
 //!
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 //! `send <node> <text...>`, `status <node>`, `ring <node>`,
-//! `open <node> <url>`, `add <name> <ip> <quic_port>`, `forget` (remove
+//! `open <node> <url>`, `sendfile <node> <path>`, `downloads <dir>`,
+//! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
 //! For scripted tests (`--script FILE`, or the same lines on stdin):
@@ -385,6 +386,15 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         "open" => {
             let to = resolve(engine, &arg(words.next())?)?;
             Ok(json!({ "via": engine.open_url(&to, &arg(words.next())?)? }))
+        }
+        "sendfile" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            Ok(json!({ "id": engine.send_file(&to, &arg(words.next())?)? }))
+        }
+        "downloads" => {
+            let dir = arg(words.next())?;
+            engine.set_download_dir(&dir);
+            Ok(json!(dir))
         }
         "forget" => {
             engine.unregister_from_server()?;

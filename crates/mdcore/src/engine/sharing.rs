@@ -76,6 +76,29 @@ impl<P: Platform> Engine<P> {
         self.send(node_id, &m)
     }
 
+    // --- files (see features::files) ---
+
+    /// Where files from your other devices are saved. Until this is set,
+    /// offers are declined.
+    pub fn set_download_dir(&self, dir: &str) {
+        *self.ctx.files.download_dir.lock() = Some(dir.into());
+    }
+
+    /// Send a file. Returns the transfer id at once; progress comes as
+    /// `FileProgress`, then `FileSent` or `FileFailed`. Like a message, the
+    /// offer waits for the device to be reachable.
+    pub fn send_file(&self, node_id: &str, path: &str) -> crate::Result<String> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        crate::features::files::start(&self.ctx, node_id, std::path::Path::new(path))
+    }
+
+    /// Stop a transfer (either way); the other device is told.
+    pub fn cancel_file(&self, id: &str) {
+        crate::features::files::cancel(&self.ctx, id);
+    }
+
     // --- app-notification pub/sub ---
 
     /// Set this device's shareable app list (JSON array of {pkg,label}) — pushed

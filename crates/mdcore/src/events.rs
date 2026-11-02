@@ -88,6 +88,38 @@ pub enum CoreEvent {
     Ring { from: String },
     /// Another of your devices asks this one to open a web link.
     OpenUrl { from: String, url: String },
+    /// A file transfer moved on (`incoming`: to this device). `node_id` is
+    /// the other device; `done` of `total` bytes are confirmed.
+    FileProgress {
+        id: String,
+        node_id: String,
+        name: String,
+        done: u64,
+        total: u64,
+        incoming: bool,
+    },
+    /// A file arrived and was saved at `path`.
+    FileReceived {
+        id: String,
+        from: String,
+        name: String,
+        path: String,
+        size: u64,
+    },
+    /// The other device confirmed it saved our file.
+    FileSent {
+        id: String,
+        node_id: String,
+        name: String,
+    },
+    /// A transfer stopped for good (`reason` is for the user).
+    FileFailed {
+        id: String,
+        node_id: String,
+        name: String,
+        incoming: bool,
+        reason: String,
+    },
 }
 
 impl CoreEvent {
@@ -116,6 +148,10 @@ impl CoreEvent {
             CoreEvent::DeviceStatus { .. } => "device-status-event",
             CoreEvent::Ring { .. } => "ring-event",
             CoreEvent::OpenUrl { .. } => "open-url-event",
+            CoreEvent::FileProgress { .. } => "file-progress",
+            CoreEvent::FileReceived { .. } => "file-received",
+            CoreEvent::FileSent { .. } => "file-sent",
+            CoreEvent::FileFailed { .. } => "file-failed",
         }
     }
 

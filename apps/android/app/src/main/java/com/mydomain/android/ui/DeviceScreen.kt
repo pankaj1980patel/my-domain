@@ -212,7 +212,10 @@ private fun FindTile(node: String, name: String) {
     val linkInvalid = stringResource(R.string.find_link_invalid)
 
     // Ask for its battery when the screen opens; the reply fills `status`.
-    LaunchedEffect(node) { runCatching { Core.requestStatus(node) } }
+    // Asked only over a live link (and again when one comes up): asking a
+    // device that isn't connected would wake it by push just to show this.
+    val linked = Core.links.containsKey(node)
+    LaunchedEffect(node, linked) { if (linked) runCatching { Core.requestStatus(node) } }
 
     Tile(title = stringResource(R.string.find_title)) {
         val battery = status?.battery

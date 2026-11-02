@@ -32,6 +32,7 @@ mod background;
 mod ladder;
 mod messaging;
 pub use messaging::QUEUED;
+pub(crate) use messaging::send_reliably;
 mod netchange;
 mod peers;
 pub(crate) use peers::emit_peers;
@@ -87,6 +88,8 @@ pub struct NetCtx<P: Platform> {
     pub installed_apps: Arc<Mutex<String>>,
     /// This device's status as last pushed by the host (JSON object).
     pub device_status: Arc<Mutex<String>>,
+    /// File transfers in progress, both ways (see `features::files`).
+    pub files: Arc<crate::features::files::Files>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
     /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC
@@ -148,6 +151,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             control: self.control.clone(),
             installed_apps: self.installed_apps.clone(),
             device_status: self.device_status.clone(),
+            files: self.files.clone(),
             subs: self.subs.clone(),
             quic_failed: self.quic_failed.clone(),
             manual_aliases: self.manual_aliases.clone(),
@@ -296,6 +300,7 @@ impl<P: Platform> Engine<P> {
             control: control.clone(),
             installed_apps: installed_apps.clone(),
             device_status: Arc::new(Mutex::new(String::from("{}"))),
+            files: Arc::default(),
             subs: subs.clone(),
             quic_failed: Arc::default(),
             manual_aliases: Arc::default(),
