@@ -450,6 +450,34 @@ impl<P: Platform> Engine<P> {
         self.ctx.peers.lock().values().cloned().collect()
     }
 
+    /// Every live link with its measured quality (RTT and loss come from
+    /// QUIC; other link kinds report them as unknown).
+    pub fn link_stats(&self) -> Vec<transport::quality::LinkStats> {
+        use transport::quality::{loss_pct, rate, LinkStats};
+        let live: Vec<(String, transport::TransportKind)> = transport::live_peers(&self.ctx)
+            .into_iter()
+            .map(|(id, kind, _)| (id, kind))
+            .collect();
+        live.into_iter()
+            .map(|(node_id, transport)| {
+                let measured = self.ctx.quic.path_stats(&node_id);
+                let rtt_ms =
+                    measured.map(|(rtt, _, _)| rtt.as_millis().min(u32::MAX as u128) as u32);
+                let loss = measured.and_then(|(_, lost, sent)| loss_pct(lost, sent));
+                let quality = rate(rtt_ms, loss, transport);
+                LinkStats {
+                    direct: transport != transport::TransportKind::Relay,
+                    rtt_ms,
+                    loss_pct: loss,
+                    quality,
+                    label: quality.label(),
+                    node_id,
+                    transport,
+                }
+            })
+            .collect()
+    }
+
     pub fn connected_peers(&self) -> Vec<String> {
         self.ctx.p2p_conns.lock().keys().cloned().collect()
     }

@@ -172,6 +172,15 @@ impl QuicLink {
         self.port
     }
 
+    /// Measured path stats of the QUIC link to `peer`: (RTT, lost packets,
+    /// sent packets). `None` when the peer has no QUIC link.
+    pub fn path_stats(&self, peer: &str) -> Option<(Duration, u64, u64)> {
+        let conns = self.conns.lock();
+        let pc = conns.get(peer)?;
+        let path = pc.conn.stats().path;
+        Some((pc.conn.rtt(), path.lost_packets, path.sent_packets))
+    }
+
     /// Our network changed. Connections we DIALED survive it: QUIC lets the
     /// client change address, and the peer follows the new one as soon as our
     /// next packet (at most a keep-alive away) arrives from it. Connections

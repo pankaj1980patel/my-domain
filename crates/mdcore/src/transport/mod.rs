@@ -6,6 +6,7 @@
 //! binary multiplexed framing (v2) is layered on later in `wire::`.
 
 pub mod punch;
+pub mod quality;
 pub mod quic;
 pub mod relay;
 #[cfg(feature = "webrtc")]

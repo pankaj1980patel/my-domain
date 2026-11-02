@@ -202,6 +202,13 @@ fn dev_credentials() -> Option<DevCredentials> {
     })
 }
 
+/// Live links with their measured quality (RTT, loss, "Excellent"/"Good"/
+/// "Weak connection").
+#[tauri::command]
+fn link_stats(engine: State<Eng>) -> Vec<mdcore::transport::quality::LinkStats> {
+    engine.link_stats()
+}
+
 #[tauri::command]
 fn is_ready(engine: State<Eng>) -> bool {
     engine.is_ready()
@@ -445,6 +452,7 @@ pub fn run() {
             get_peers,
             get_saved_session,
             dev_credentials,
+            link_stats,
             is_ready,
             session_info,
             auth_register,
