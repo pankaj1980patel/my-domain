@@ -41,6 +41,11 @@ or with less battery.
    - ~~Close idle links while the screen is off and wake by push~~:
      **done** (2026-11-02). Still to do: measure the battery saving on the
      phone over a day.
+   - Verified on the phone (vivo I2405): in the background with the screen
+     on, a link closes 3 min after its last message, as designed. With the
+     **screen off**, a punched link dropped within seconds. Likely the
+     phone's power saving cutting a background app's UDP; investigate with
+     `files/events.log` (below) and the battery-optimisation exemption.
 9. ~~Connection quality~~: **done** (`Engine::link_stats()`, desktop
    command `link_stats`).
    - ~~Show it in the new UI~~: **done** (2026-11-02): signal bars and

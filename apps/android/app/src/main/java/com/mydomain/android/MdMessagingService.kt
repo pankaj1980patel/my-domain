@@ -21,6 +21,7 @@ class MdMessagingService : FirebaseMessagingService() {
         val sender = data["sender"] ?: data["from"] ?: return
         val payload = data["payload"] ?: return
         Log.i(TAG, "signal from ${sender.take(8)}: ${data["type"]}")
+        Core.labLog("push from ${sender.take(8)}: ${data["type"]}")
         if (!waitForEngine()) {
             Log.w(TAG, "signal from $sender dropped: engine not ready")
             return

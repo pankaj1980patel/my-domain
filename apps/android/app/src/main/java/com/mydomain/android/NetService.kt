@@ -69,6 +69,8 @@ class NetService : Service() {
         // Initialize Rust core if not already done. Prefer the IMEI as a stable
         // device id; on Android 10+ that's unreadable for normal apps, so fall
         // back to ANDROID_ID (also stable across restarts/reinstalls).
+        Core.labLogFile = java.io.File(filesDir, "events.log")
+        Core.labLog("service start")
         runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents, KeystoreSecrets(this)) }
             .onFailure { Log.e("NetService", "engine failed to start", it) }
         // Started by a push with no UI showing: background until it appears.

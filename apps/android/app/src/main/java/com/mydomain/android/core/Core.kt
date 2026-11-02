@@ -77,6 +77,7 @@ object Core {
 
     fun setVisible(on: Boolean) {
         visible = on
+        labLog(if (on) "app visible" else "app in background")
         Thread { engine()?.setBackground(!on) }.start()
     }
 
@@ -125,9 +126,29 @@ object Core {
 
     // --- events --------------------------------------------------------------
 
+    /** Debug builds: where `labLog` appends (set by NetService). Some phones
+     *  (vivo) rate-limit logcat and mute a chatty app, so the lab reads this
+     *  file instead: `adb shell run-as com.mydomain.android cat files/events.log`. */
+    @Volatile var labLogFile: java.io.File? = null
+
+    /** Debug builds: one timestamped line in logcat and in `labLogFile`
+     *  (rotated at 256 KB). */
+    fun labLog(line: String) {
+        if (!BuildConfig.DEBUG) return
+        Log.i("mydomain_event", line)
+        val f = labLogFile ?: return
+        runCatching {
+            synchronized(this) {
+                if (f.length() > 256 * 1024) f.renameTo(java.io.File(f.path + ".1"))
+                val ts = java.text.SimpleDateFormat("HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+                f.appendText("$ts $line\n")
+            }
+        }
+    }
+
     /** Every core event, from NetService's listener (core threads). */
     fun onEvent(name: String, payloadJson: String) {
-        if (BuildConfig.DEBUG) Log.i("mydomain_event", "$name ${payloadJson.take(200)}")
+        labLog("$name ${payloadJson.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
         val peersNow = if (o.optString("kind") == "peers_updated") engine()?.peers() else null
         onMain {

@@ -62,3 +62,12 @@ different keys, so switching hosts needs `adb uninstall com.mydomain.android`
 first, and the phone gets a new node id (Android scopes `ANDROID_ID` to the
 signing key).
 
+
+## Reading the phone's core events
+
+Some phones (vivo) rate-limit logcat and mute a chatty app. Debug builds
+also append every core event, push and visibility change to a file:
+
+```sh
+adb shell run-as com.mydomain.android cat files/events.log
+```
