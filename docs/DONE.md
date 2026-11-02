@@ -295,6 +295,18 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Strings in resource files; desktop FCM stop (2026-11-02)
+
+- Android UI text is in `res/values/strings.xml` (117 entries, plurals for
+  counts and "time ago"); desktop UI text is in `ui/src/i18n/en.ts` with a
+  typed `t(key, params)` / `tn` (plural) / `tRich` helper. Developer screens
+  stay inline.
+- Desktop FCM: our own MTalk listen loop (1 s read timeout) replaces the
+  crate's, so a receiver replaced by re-registration stops within a second
+  instead of lingering until its next reconnect. It also sends heartbeats
+  on an idle connection and acks the server's. Verified live: connected,
+  self-test round trips and signals from the phone.
+
 ## Faster fallback to the relay (2026-11-02)
 
 - The connect ladder races its two QUIC rungs: direct QUIC first, signaled

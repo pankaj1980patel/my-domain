@@ -226,8 +226,10 @@ version number 7 times. It collects everything a developer needs:
   - Large touch targets.
   - Keyboard navigation on desktop.
   - Works with system font scaling.
-- **Localisation-ready:** all strings in resource files, so other languages
-  (Hindi first?) can be added.
+- ~~Localisation-ready~~: **done** (2026-11-02): Android strings in
+  `res/values/strings.xml` (with plurals), desktop strings in
+  `ui/src/i18n/en.ts` (typed keys, `t`/`tn`). Still to do: a second
+  language (Hindi first?).
 - **How it's checked:**
   - A clickable prototype (Figma) reviewed before building.
   - Usability tests with 3–5 non-technical people per release: can they
