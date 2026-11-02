@@ -52,6 +52,12 @@ export const commands = {
 	requestApps: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("request_apps", { nodeId })),
 	subscribeApps: (nodeId: string, appsJson: string) => typedError<null, string>(__TAURI_INVOKE("subscribe_apps", { nodeId, appsJson })),
 	/**
+	 *  Press one of a shared phone notification's buttons (`index`, in the order
+	 *  the notification listed them), reply to it (`text`, for a `reply` button),
+	 *  or dismiss it (`index` -1). Returns the transport, or "queued".
+	 */
+	notificationAction: (nodeId: string, key: string, index: number, text: string | null) => typedError<string, string>(__TAURI_INVOKE("notification_action", { nodeId, key, index, text })),
+	/**
 	 *  Ask a device for its battery/charging; the answer arrives as
 	 *  `device-status-event`.
 	 */

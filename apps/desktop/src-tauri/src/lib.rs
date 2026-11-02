@@ -596,6 +596,21 @@ fn subscribe_apps(node_id: String, apps_json: String, engine: State<Eng>) -> Res
     engine.subscribe_apps(&node_id, &apps_json)
 }
 
+/// Press one of a shared phone notification's buttons (`index`, in the order
+/// the notification listed them), reply to it (`text`, for a `reply` button),
+/// or dismiss it (`index` -1). Returns the transport, or "queued".
+#[tauri::command]
+#[specta::specta]
+fn notification_action(
+    node_id: String,
+    key: String,
+    index: i32,
+    text: Option<String>,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.notification_action(&node_id, &key, i64::from(index), text.as_deref())
+}
+
 // --- quick device actions (find my device, status, open a link) ---
 //
 // Each returns the transport used, or "queued" when the device isn't
@@ -782,6 +797,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         on_signal,
         request_apps,
         subscribe_apps,
+        notification_action,
         request_status,
         ring_device,
         open_url_on,

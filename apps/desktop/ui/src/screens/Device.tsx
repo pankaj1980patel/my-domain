@@ -8,6 +8,7 @@ import {
   connect,
   copyText,
   loadClipHistory,
+  notificationAction,
   openFile,
   openUrlOn,
   peerName,
@@ -25,6 +26,7 @@ import {
   state,
   toggleApp,
   type DeviceStatus,
+  type PhoneNotification,
   type Transfer,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
@@ -84,6 +86,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
 
           <div class="tiles">
             <ChatTile node={props.node} />
+            <NotificationsTile node={props.node} />
             <ClipboardTile node={props.node} />
             <FilesTile node={props.node} />
             <ControlTile node={props.node} />
@@ -152,6 +155,103 @@ function ChatTile(props: { node: string }) {
         </button>
       </form>
     </article>
+  );
+}
+
+function NotificationsTile(props: { node: string }) {
+  const list = () => state.notifications[props.node] ?? [];
+  return (
+    <article class="tile tile-wide">
+      <h2>{t("notifications.title")}</h2>
+      <Show when={list().length} fallback={<p class="muted small">{t("notifications.empty")}</p>}>
+        <ul class="notif-list">
+          <For each={list()}>{(n) => <NotificationRow n={n} />}</For>
+        </ul>
+        <p class="muted small">{t("notifications.hint")}</p>
+      </Show>
+    </article>
+  );
+}
+
+function NotificationRow(props: { n: PhoneNotification }) {
+  const [reply, setReply] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const name = () => niceName(peerName(props.n.from));
+  const actionable = () => !!props.n.key && !props.n.handled;
+  // Buttons keep their index in the device's list; the first `reply` one
+  // becomes the reply box.
+  const buttons = () => props.n.actions.map((a, i) => ({ ...a, i })).filter((a) => !a.reply);
+  const replyIndex = () => props.n.actions.findIndex((a) => a.reply);
+
+  const act = async (index: number, text?: string) => {
+    setBusy(true);
+    try {
+      const via = await notificationAction(props.n, index, text);
+      const queued = via === "queued";
+      if (text !== undefined) {
+        setReply("");
+        toast(queued ? t("notifications.replyQueued", { name: name() }) : t("notifications.replied"), "ok");
+      } else if (index >= 0) {
+        toast(queued ? t("notifications.doneQueued", { name: name() }) : t("notifications.done"), "ok");
+      }
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = (e: Event) => {
+    e.preventDefault();
+    const text = reply().trim();
+    if (text) act(replyIndex(), text);
+  };
+
+  return (
+    <li class="notif" classList={{ "notif-handled": !!props.n.handled }}>
+      <div class="row">
+        <span class="small muted grow notif-app">{props.n.app || name()}</span>
+        <Show when={props.n.handled}>
+          <span class="small muted">{t("notifications.handled")}</span>
+        </Show>
+        <button
+          class="btn btn-ghost btn-sm"
+          disabled={busy()}
+          onClick={() => act(-1)}
+          aria-label={t("notifications.dismissLabel", { title: props.n.title })}
+        >
+          {t("notifications.dismiss")}
+        </button>
+      </div>
+      <strong class="notif-title">{props.n.title}</strong>
+      <Show when={props.n.body}>
+        <p class="notif-body small">{props.n.body}</p>
+      </Show>
+      <Show when={actionable() && buttons().length}>
+        <div class="row">
+          <For each={buttons()}>
+            {(b) => (
+              <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={() => act(b.i)}>
+                {b.title}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
+      <Show when={actionable() && replyIndex() >= 0}>
+        <form class="composer" onSubmit={send}>
+          <input
+            placeholder={props.n.actions[replyIndex()]?.title || t("notifications.replyPlaceholder")}
+            value={reply()}
+            onInput={(e) => setReply(e.currentTarget.value)}
+            aria-label={t("notifications.replyLabel", { title: props.n.title })}
+          />
+          <button class="btn btn-soft" type="submit" disabled={busy() || !reply().trim()}>
+            {t("notifications.reply")}
+          </button>
+        </form>
+      </Show>
+    </li>
   );
 }
 

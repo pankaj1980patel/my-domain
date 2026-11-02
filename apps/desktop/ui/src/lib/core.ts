@@ -41,6 +41,25 @@ export type ActivityItem = {
 
 export type AppEntry = { pkg: string; label: string };
 
+/** A button on a phone notification; `reply` ones take text. */
+export type NotifAction = { title: string; reply: boolean };
+
+/** A notification a device shared from one of its subscribed apps. */
+export type PhoneNotification = {
+  id: number;
+  /** The device it came from (node id). */
+  from: string;
+  app?: string;
+  title: string;
+  body: string;
+  /** Its key on the device; without one it can't be acted on. */
+  key?: string;
+  actions: NotifAction[];
+  ts: number;
+  /** A button was pressed or a reply sent from here. */
+  handled?: boolean;
+};
+
 /** What a device reported about itself (answer to requestStatus). */
 /** A clipboard value in the history; `from` is the device (none: this one). */
 export type ClipEntry = { text: string; from?: string; ts: number };
@@ -93,6 +112,8 @@ type State = {
   messages: ChatMessage[];
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
+  /** node_id -> recent notifications from it, newest first (memory only). */
+  notifications: Record<string, PhoneNotification[]>;
   clipSync: boolean;
   /** Recent clipboard values from all your devices, newest first. */
   clipHistory: ClipEntry[];
@@ -115,6 +136,7 @@ export const [state, setState] = createStore<State>({
   messages: [],
   activity: [],
   apps: {},
+  notifications: {},
   clipSync: false,
   clipHistory: [],
   status: {},
@@ -157,6 +179,33 @@ function logDev(name: string, payload: unknown) {
       list.unshift({ ts: now(), name, payload });
       if (list.length > 500) list.length = 500;
     }),
+  );
+}
+
+const MAX_NOTIFICATIONS = 30;
+
+/** Keep a shared notification in its device's list (newest first, capped).
+ *  The same key again (an update on the phone) replaces the older one. */
+function addNotification(n: { from: string; title: string; body: string; app?: string | null; key?: string | null; actions?: unknown }) {
+  const node = state.peers.find((p) => p.node_id === n.from || p.name === n.from)?.node_id ?? n.from;
+  if (!node) return;
+  const actions: NotifAction[] = Array.isArray(n.actions)
+    ? n.actions
+        .filter((a): a is { title: unknown; reply?: unknown } => !!a && typeof a === "object" && typeof (a as { title?: unknown }).title === "string")
+        .map((a) => ({ title: a.title as string, reply: a.reply === true }))
+    : [];
+  const item: PhoneNotification = {
+    id: ++seq,
+    from: node,
+    app: n.app ?? undefined,
+    title: n.title ?? "",
+    body: n.body ?? "",
+    key: n.key ?? undefined,
+    actions,
+    ts: now(),
+  };
+  setState("notifications", node, (list = []) =>
+    [item, ...list.filter((x) => !item.key || x.key !== item.key)].slice(0, MAX_NOTIFICATIONS),
   );
 }
 
@@ -222,8 +271,12 @@ export async function startEvents() {
       );
       addActivity({ icon: "💬", tone: "info", node, text: t("activity.message", { name: peerName(node), text: m.text }) });
     }),
-    on<{ from: string; title: string; body: string; app?: string | null }>("notification-event", (n) =>
-      addActivity({ icon: "🔔", tone: "info", text: n.body ? t("activity.notificationWithBody", { title: n.title, body: n.body }) : t("activity.notification", { title: n.title }) }),
+    on<{ from: string; title: string; body: string; app?: string | null; key?: string | null; actions?: unknown }>(
+      "notification-event",
+      (n) => {
+        addActivity({ icon: "🔔", tone: "info", text: n.body ? t("activity.notificationWithBody", { title: n.title, body: n.body }) : t("activity.notification", { title: n.title }) });
+        addNotification(n);
+      },
     ),
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
@@ -429,6 +482,25 @@ export async function pullClipboard(node: string): Promise<string> {
 export async function shareNotification(title: string, body: string) {
   await commands.shareNotification(title, body, "my-domain");
   addActivity({ icon: "🔔", tone: "ok", text: t("activity.notificationSent", { title }) });
+}
+
+/** Press a shared notification's button (`index`), reply to it (`text`), or
+ *  dismiss it (-1: also drops it from the list). Pressing or replying marks
+ *  it handled. Returns the transport, or "queued". */
+export async function notificationAction(n: PhoneNotification, index: number, text?: string): Promise<string> {
+  const drop = () => setState("notifications", n.from, (list = []) => list.filter((x) => x.id !== n.id));
+  if (!n.key) {
+    // Nothing to tell the device; dismissing just forgets it here.
+    if (index < 0) {
+      drop();
+      return "local";
+    }
+    throw new Error(t("notifications.cantAct"));
+  }
+  const via = await unwrap(commands.notificationAction(n.from, n.key, index, text ?? null));
+  if (index < 0) drop();
+  else setState("notifications", n.from, (x) => x.id === n.id, "handled", true);
+  return via;
 }
 
 export async function requestApps(node: string) {
