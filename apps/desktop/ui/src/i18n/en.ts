@@ -187,6 +187,9 @@ export const en = {
   "activity.openedLink": "{name} opened {url} here",
   "activity.sentLink": "Sent {url} to {name}",
   "activity.fileSaved": "Saved {name} from {device}",
+  "activity.codeCopied": "Copied a code from {device}",
+  "code.copied": "A code from {device} is on your clipboard",
+  "code.copiedFrom": "A code from {app} on {device} is on your clipboard",
 
   // Settings
   "settings.title": "Settings",

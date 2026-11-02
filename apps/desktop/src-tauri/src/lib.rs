@@ -254,6 +254,19 @@ impl EventSink for TauriSink {
                     notify::post_if_away(&app, &title, &text);
                 });
             }
+            CoreEvent::CodeCopied { from, app: src, .. } => {
+                let (app, from, src) = (self.app.clone(), from.clone(), src.clone());
+                std::thread::spawn(move || {
+                    let device = notify::device_name(&app, &from);
+                    let body = match src {
+                        Some(s) if !s.is_empty() => {
+                            format!("A code from {s} on {device} is on your clipboard")
+                        }
+                        _ => format!("A code from {device} is on your clipboard"),
+                    };
+                    notify::post(&app, "Code copied", &body);
+                });
+            }
             CoreEvent::FileReceived { from, name, .. } => {
                 let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
                 std::thread::spawn(move || {

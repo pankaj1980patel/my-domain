@@ -228,6 +228,11 @@ export async function startEvents() {
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),
+    on<{ from: string; code: string; app?: string | null }>("code-copied", ({ from, app }) => {
+      const device = niceName(peerName(from));
+      addActivity({ icon: "", tone: "ok", node: from, text: t("activity.codeCopied", { device }) });
+      toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
+    }),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
