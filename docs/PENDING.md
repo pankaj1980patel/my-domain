@@ -57,9 +57,11 @@ or with less battery.
        finishes before the phone sleeps again.
      - Result: 13 of 14 status requests answered over 6 min with the
        screen off; the recovered ones took about 13 s.
-     - The one miss: FCM stopped delivering after a burst of silent
-       high-priority pushes. FCM may deprioritize data pushes that don't
-       show a notification.
+     - The one miss: no push arrived. Most likely the server sent those
+       signals over the phone's relay socket, joined earlier, instead of
+       pushing; fixed on the server (redeploy needed). FCM deprioritizing
+       silent data pushes may also play a part: watch for it after the
+       redeploy.
      - With the app exempt from battery optimisation (`deviceidle
        whitelist`), 14 of 14 were answered instantly and the link never
        dropped.
