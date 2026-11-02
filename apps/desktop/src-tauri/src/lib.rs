@@ -68,15 +68,30 @@ struct DesktopPlatform {
     /// before, so existing saved sessions keep working). `None` if the OS
     /// gave us no config dir.
     kv: Option<FileKv>,
+    /// Debug builds keep the session secrets here instead of the OS keychain
+    /// (`<app config dir>/dev-secrets.json`, owner-only). Every rebuild of an
+    /// unsigned dev app looks like a new app to macOS, which then asks for
+    /// the login password before each keychain read. Release builds (signed,
+    /// with a stable identity) use the keychain. `None` in release builds.
+    dev_secrets: Option<FileKv>,
     clipboard: DesktopClipboard,
     /// Set by the FCM receiver thread once Firebase issues a token; reported to
     /// the registry on refresh so siblings can signal this device.
     fcm_token: Arc<std::sync::Mutex<Option<String>>>,
 }
 
-/// Optional test suffix (`TEST=foo npm run tauri dev`) so several instances on
-/// one machine register as distinct devices instead of clobbering the same
-/// machine-uid row. Trimmed; empty/unset => no suffix.
+/// Make a secrets file readable by this user only.
+fn owner_only(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
 /// The OS secure store (macOS Keychain, Secret Service on Linux, Windows
 /// Credential Manager) entry for one of the core's secrets. Lab instances on
 /// one machine (`TEST=...`) each get their own.
@@ -90,6 +105,9 @@ fn keyring_entry(key: &str) -> Option<keyring::Entry> {
         .ok()
 }
 
+/// Optional test suffix (`TEST=foo npm run tauri dev`) so several instances on
+/// one machine register as distinct devices instead of clobbering the same
+/// machine-uid row. Trimmed; empty/unset => no suffix.
 fn test_suffix() -> Option<String> {
     std::env::var("TEST")
         .ok()
@@ -138,10 +156,23 @@ impl Platform for DesktopPlatform {
     }
 
     fn secret_get(&self, key: &str) -> Option<String> {
+        if let Some(file) = &self.dev_secrets {
+            return file.get(key);
+        }
         keyring_entry(key)?.get_password().ok()
     }
 
     fn secret_set(&self, key: &str, value: Option<&str>) {
+        if let Some(file) = &self.dev_secrets {
+            let result = match value {
+                Some(v) => file.set(key, v).and_then(|()| owner_only(file.path())),
+                None => file.remove(key),
+            };
+            if let Err(e) = result {
+                eprintln!("[secrets] {key}: {e}");
+            }
+            return;
+        }
         let Some(entry) = keyring_entry(key) else {
             return;
         };
@@ -530,6 +561,16 @@ pub fn run() {
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
                 kv: handle.path().app_config_dir().ok().map(FileKv::in_dir),
+                dev_secrets: cfg!(debug_assertions)
+                    .then(|| handle.path().app_config_dir().ok())
+                    .flatten()
+                    .map(|dir| {
+                        let name = match test_suffix() {
+                            Some(suffix) => format!("dev-secrets-{suffix}.json"),
+                            None => "dev-secrets.json".to_string(),
+                        };
+                        FileKv::new(dir.join(name))
+                    }),
                 clipboard: DesktopClipboard::new(),
                 fcm_token: fcm_token.clone(),
             };
