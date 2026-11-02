@@ -1,23 +1,30 @@
 // One device: its status, then a tile per feature.
 
-import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
+  cancelFile,
   connect,
+  openFile,
   openUrlOn,
   peerName,
+  pickAndSendFile,
   pullClipboard,
   requestApps,
   requestStatus,
+  revealFile,
   ringDevice,
+  sendFile,
   sendMessage,
   setClipSync,
   shareNotification,
   state,
   toggleApp,
+  type Transfer,
 } from "../lib/core";
-import { friendlyError, initial, niceName, progressLabel } from "../lib/words";
+import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
 import { linkStateOf, StatusPill, toast } from "../components/ui";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -73,6 +80,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
           <div class="tiles">
             <ChatTile node={props.node} />
             <ClipboardTile node={props.node} />
+            <FilesTile node={props.node} />
             <ControlTile node={props.node} />
             <NotifyTile />
             <AppsTile node={props.node} />
@@ -314,5 +322,123 @@ function AppsTile(props: { node: string }) {
         </ul>
       </Show>
     </article>
+  );
+}
+
+function FilesTile(props: { node: string }) {
+  const [busy, setBusy] = createSignal(false);
+  const [dropping, setDropping] = createSignal(false);
+  const name = () => niceName(peerName(props.node));
+  const list = () =>
+    Object.values(state.transfers)
+      .filter((x) => x.node === props.node)
+      .sort((a, b) => b.ts - a.ts);
+
+  const sendAll = async (paths: string[]) => {
+    try {
+      for (const p of paths) await sendFile(props.node, p);
+      toast(tn("files.started", paths.length, { name: name() }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  };
+
+  const pick = async () => {
+    setBusy(true);
+    try {
+      if (await pickAndSendFile(props.node)) toast(tn("files.started", 1, { name: name() }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Files dropped anywhere on the window go to this device.
+  onMount(async () => {
+    const unlisten = await getCurrentWebview().onDragDropEvent((ev) => {
+      const p = ev.payload;
+      if (p.type === "enter" || p.type === "over") setDropping(true);
+      else if (p.type === "leave") setDropping(false);
+      else if (p.type === "drop") {
+        setDropping(false);
+        if (p.paths.length) sendAll(p.paths);
+      }
+    });
+    onCleanup(unlisten);
+  });
+
+  return (
+    <article class="tile" classList={{ "tile-drop": dropping() }}>
+      <h2>{t("files.title")}</h2>
+      <p class="muted small">{dropping() ? t("files.dropHere", { name: name() }) : t("files.hint")}</p>
+      <button class="btn btn-soft btn-block" disabled={busy()} onClick={pick}>
+        {busy() ? t("files.choosing") : t("files.send")}
+      </button>
+      <Show when={list().length} fallback={<p class="muted small">{t("files.empty")}</p>}>
+        <ul class="transfers">
+          <For each={list()}>{(x) => <TransferRow x={x} device={name()} />}</For>
+        </ul>
+      </Show>
+    </article>
+  );
+}
+
+function TransferRow(props: { x: Transfer; device: string }) {
+  const active = () => ["waiting", "sending", "receiving"].includes(props.x.state);
+  const pct = () => (props.x.total ? Math.min(100, (props.x.done / props.x.total) * 100) : 0);
+  const line = () => {
+    const x = props.x;
+    const done = humanSize(x.done);
+    const total = humanSize(x.total);
+    switch (x.state) {
+      case "waiting":
+        return t("files.waiting", { name: props.device });
+      case "sending":
+        return t("files.sending", { done, total });
+      case "receiving":
+        return t("files.receiving", { done, total });
+      case "sent":
+        return t("files.sent", { size: total });
+      case "saved":
+        return t("files.saved", { size: total });
+      default:
+        return t("files.failed", { reason: fileFailReason(x.reason, x.incoming) });
+    }
+  };
+  const run = (f: () => Promise<void>) => () => f().catch((e) => toast(friendlyError(e), "error"));
+  return (
+    <li class="transfer">
+      <div class="transfer-head">
+        <strong class="transfer-name">{props.x.name}</strong>
+        <Show when={active()}>
+          <button
+            class="btn btn-ghost btn-sm"
+            onClick={run(() => cancelFile(props.x.id))}
+            aria-label={t("files.cancelLabel", { name: props.x.name })}
+          >
+            {t("files.cancel")}
+          </button>
+        </Show>
+      </div>
+      <Show when={active()}>
+        <div class="progress">
+          <span style={{ width: `${pct()}%` }} />
+        </div>
+      </Show>
+      <p class="muted small" classList={{ "text-error": props.x.state === "failed" }}>
+        {line()}
+      </p>
+      <Show when={props.x.state === "saved" && props.x.path}>
+        <div class="row">
+          <button class="btn btn-ghost btn-sm" onClick={run(() => openFile(props.x.path!))}>
+            {t("files.open")}
+          </button>
+          <button class="btn btn-ghost btn-sm" onClick={run(() => revealFile(props.x.path!))}>
+            {t("files.show")}
+          </button>
+        </div>
+      </Show>
+    </li>
   );
 }

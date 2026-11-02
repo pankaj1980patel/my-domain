@@ -9,6 +9,8 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
+import { niceName } from "./words";
+import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
 export type Identity = Identity_Serialize;
@@ -42,6 +44,25 @@ export type AppEntry = { pkg: string; label: string };
 /** What a device reported about itself (answer to requestStatus). */
 export type DeviceStatus = { battery?: number; charging?: boolean; platform?: string; ts: number };
 
+/** A file going to or coming from a device. `waiting`: offered, the device
+ *  hasn't started taking it yet (or isn't reachable). */
+export type TransferState = "waiting" | "sending" | "receiving" | "sent" | "saved" | "failed";
+export type Transfer = {
+  id: string;
+  /** The other device. */
+  node: string;
+  name: string;
+  done: number;
+  total: number;
+  incoming: boolean;
+  state: TransferState;
+  /** Why it failed (the core's words; see fileFailReason). */
+  reason?: string;
+  /** Where a received file was saved. */
+  path?: string;
+  ts: number;
+};
+
 /** Raw event log for the Developer screen. */
 export type DevEvent = { ts: number; name: string; payload: unknown };
 
@@ -63,6 +84,8 @@ type State = {
   status: Record<string, DeviceStatus>;
   /** Set while another device is ringing this one (find my device). */
   ringing: { from: string } | null;
+  /** transfer id -> file transfer (both ways) */
+  transfers: Record<string, Transfer>;
   devLog: DevEvent[];
 };
 
@@ -79,6 +102,7 @@ export const [state, setState] = createStore<State>({
   clipSync: false,
   status: {},
   ringing: null,
+  transfers: {},
   devLog: [],
 });
 
@@ -213,6 +237,71 @@ export async function startEvents() {
     on<{ from: string; url: string }>("open-url-event", ({ from, url }) =>
       addActivity({ icon: "", tone: "info", node: from, text: t("activity.openedLink", { name: peerName(from), url }) }),
     ),
+    // Files. A transfer may be first seen by any of these (a fast progress
+    // event can beat sendFile's reply), so each one creates it if missing.
+    on<{ id: string; node_id: string; name: string; done: number; total: number; incoming: boolean }>(
+      "file-progress",
+      ({ id, node_id, name, done, total, incoming }) => {
+        const cur = state.transfers[id];
+        if (cur && (cur.state === "sent" || cur.state === "saved" || cur.state === "failed")) return;
+        setState("transfers", id, {
+          id,
+          node: node_id,
+          name,
+          done,
+          total,
+          incoming,
+          state: incoming ? "receiving" : "sending",
+          ts: cur?.ts ?? now(),
+        });
+      },
+    ),
+    on<{ id: string; from: string; name: string; path: string; size: number }>("file-received", ({ id, from, name, path, size }) => {
+      setState("transfers", id, {
+        id,
+        node: from,
+        name,
+        done: size,
+        total: size,
+        incoming: true,
+        state: "saved",
+        path,
+        ts: state.transfers[id]?.ts ?? now(),
+      });
+      const device = niceName(peerName(from));
+      addActivity({ icon: "", tone: "ok", node: from, text: t("activity.fileSaved", { name, device }) });
+      toast(t("files.savedToast", { name, device }), "ok");
+    }),
+    on<{ id: string; node_id: string; name: string }>("file-sent", ({ id, node_id, name }) => {
+      const cur = state.transfers[id];
+      setState("transfers", id, {
+        id,
+        node: node_id,
+        name,
+        done: cur?.total ?? 0,
+        total: cur?.total ?? 0,
+        incoming: false,
+        state: "sent",
+        ts: cur?.ts ?? now(),
+      });
+    }),
+    on<{ id: string; node_id: string; name: string; incoming: boolean; reason: string }>(
+      "file-failed",
+      ({ id, node_id, name, incoming, reason }) => {
+        const cur = state.transfers[id];
+        setState("transfers", id, {
+          id,
+          node: node_id,
+          name,
+          done: cur?.done ?? 0,
+          total: cur?.total ?? 0,
+          incoming,
+          state: "failed",
+          reason,
+          ts: cur?.ts ?? now(),
+        });
+      },
+    ),
     on<unknown>("fcm-event", () => {}),
   ]);
 }
@@ -323,6 +412,40 @@ export async function openUrlOn(node: string, url: string): Promise<string> {
   const via = await unwrap(commands.openUrlOn(node, url));
   addActivity({ icon: "", tone: "ok", node, text: t("activity.sentLink", { name: peerName(node), url }) });
   return via;
+}
+
+/** Send a file (a path on this computer). It shows as `waiting` until the
+ *  device starts taking it; returns the transfer id. */
+export async function sendFile(node: string, path: string): Promise<string> {
+  const id = await unwrap(commands.sendFile(node, path));
+  if (!state.transfers[id]) {
+    const name = path.split(/[\\/]/).pop() || path;
+    setState("transfers", id, { id, node, name, done: 0, total: 0, incoming: false, state: "waiting", ts: now() });
+  }
+  return id;
+}
+
+/** Choose a file in the system dialog and send it; false if none was chosen. */
+export async function pickAndSendFile(node: string): Promise<boolean> {
+  const path = await commands.pickFile();
+  if (!path) return false;
+  await sendFile(node, path);
+  return true;
+}
+
+/** Stop a transfer; the core answers with file-failed ("cancelled"). */
+export async function cancelFile(id: string) {
+  await commands.cancelFile(id);
+}
+
+/** Show a received file in Finder / Explorer. */
+export async function revealFile(path: string) {
+  await unwrap(commands.revealFile(path));
+}
+
+/** Open a received file with its default app. */
+export async function openFile(path: string) {
+  await unwrap(commands.openFile(path));
 }
 
 /** Silence this device's ring. */

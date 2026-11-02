@@ -544,6 +544,97 @@ fn open_url_on(node_id: String, url: String, engine: State<Eng>) -> Result<Strin
     engine.open_url(&node_id, &url)
 }
 
+// --- files ---
+
+/// Where received files are saved (set once at startup).
+struct DownloadDir(std::path::PathBuf);
+
+/// The folder incoming files go to: the user's Downloads (the app data dir
+/// if the OS has none). Dev instances started with `TEST=...` each get their
+/// own subfolder, so two of them on one machine don't save over each other.
+fn download_dir(app: &AppHandle) -> Option<std::path::PathBuf> {
+    let base = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_data_dir())
+        .ok()?;
+    let dir = match test_suffix() {
+        Some(suffix) if cfg!(debug_assertions) => base.join(format!("my-domain-{suffix}")),
+        _ => base,
+    };
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        eprintln!("[files] can't create {}: {e}", dir.display());
+    }
+    Some(dir)
+}
+
+/// Send a file to a device. Returns the transfer id; progress arrives as
+/// `file-progress`, then `file-sent` or `file-failed`.
+#[tauri::command]
+#[specta::specta]
+fn send_file(node_id: String, path: String, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.send_file(&node_id, &path)
+}
+
+/// Stop a transfer, either way.
+#[tauri::command]
+#[specta::specta]
+fn cancel_file(id: String, engine: State<Eng>) {
+    engine.cancel_file(&id)
+}
+
+/// The native "choose a file" dialog; `None` if the user closed it. Async so
+/// it doesn't run on (and block) the main thread the dialog needs.
+#[tauri::command]
+#[specta::specta]
+async fn pick_file(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog().file().pick_file(move |file| {
+        let _ = tx.send(file.and_then(|f| f.into_path().ok()));
+    });
+    tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten())
+        .await
+        .ok()
+        .flatten()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
+/// A received file, checked to be inside the downloads folder: the UI may
+/// only open or reveal what this app saved.
+fn received_file(path: &str, dir: &DownloadDir) -> Result<std::path::PathBuf, CoreError> {
+    let bad = || CoreError::InvalidInput("not a received file".into());
+    let file = std::fs::canonicalize(path).map_err(|_| bad())?;
+    let dir = std::fs::canonicalize(&dir.0).map_err(|_| bad())?;
+    if file.starts_with(&dir) && file.is_file() {
+        Ok(file)
+    } else {
+        Err(bad())
+    }
+}
+
+/// Show a received file in Finder / Explorer / the file manager.
+#[tauri::command]
+#[specta::specta]
+fn reveal_file(path: String, app: AppHandle, dir: State<DownloadDir>) -> Result<(), CoreError> {
+    use tauri_plugin_opener::OpenerExt;
+    let file = received_file(&path, &dir)?;
+    app.opener()
+        .reveal_item_in_dir(file)
+        .map_err(|e| CoreError::Other(e.to_string()))
+}
+
+/// Open a received file with its default app.
+#[tauri::command]
+#[specta::specta]
+fn open_file(path: String, app: AppHandle, dir: State<DownloadDir>) -> Result<(), CoreError> {
+    use tauri_plugin_opener::OpenerExt;
+    let file = received_file(&path, &dir)?;
+    app.opener()
+        .open_path(file.to_string_lossy(), None::<&str>)
+        .map_err(|e| CoreError::Other(e.to_string()))
+}
+
 // ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
@@ -587,7 +678,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         subscribe_apps,
         request_status,
         ring_device,
-        open_url_on
+        open_url_on,
+        send_file,
+        cancel_file,
+        pick_file,
+        reveal_file,
+        open_file
     ])
 }
 
@@ -608,6 +704,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let handle = app.handle().clone();
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
@@ -632,6 +729,12 @@ pub fn run() {
             });
             match Engine::start(platform, sink) {
                 Ok(engine) => {
+                    // Without a downloads folder the core declines offers.
+                    let dir = download_dir(&handle);
+                    if let Some(dir) = &dir {
+                        engine.set_download_dir(&dir.to_string_lossy());
+                    }
+                    app.manage(DownloadDir(dir.unwrap_or_default()));
                     app.manage(engine);
                 }
                 Err(e) => {

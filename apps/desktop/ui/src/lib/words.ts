@@ -100,3 +100,29 @@ export function timeAgo(ts: number): string {
   if (h < 24) return t("time.hoursAgo", { count: h });
   return new Date(ts).toLocaleDateString();
 }
+
+/** 1536 -> "1.5 KB": whole bytes, one decimal below 100 of a larger unit. */
+export function humanSize(bytes: number): string {
+  if (bytes < 1024) return t("size.b", { n: bytes });
+  const units = ["size.kb", "size.mb", "size.gb", "size.tb"] as const;
+  let v = bytes / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return t(units[i], { n: v >= 100 ? Math.round(v) : Math.round(v * 10) / 10 });
+}
+
+/** The core's reason a transfer stopped, in the user's words. */
+export function fileFailReason(reason: string | undefined, incoming: boolean): string {
+  const r = (reason ?? "").toLowerCase();
+  if (r === "cancelled") return t("files.reason.cancelled");
+  if (r.includes("cancelled on the other device")) return t("files.reason.cancelledThere");
+  if (r.includes("damaged")) return t("files.reason.damaged");
+  if (r.includes("can't receive files")) return incoming ? t("files.reason.noFolderHere") : t("files.reason.cantReceive");
+  if (r.includes("downloads folder") || r.includes("couldn't save"))
+    return incoming ? t("files.reason.saveFailedHere") : t("files.reason.saveFailedThere");
+  if (r.includes("can't read")) return t("files.reason.cantRead");
+  return reason || t("files.reason.unknown");
+}

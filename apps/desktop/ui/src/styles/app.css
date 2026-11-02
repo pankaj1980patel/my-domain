@@ -794,3 +794,49 @@ input[type="checkbox"][role="switch"]:checked::after {
     animation: none;
   }
 }
+
+/* Files tile */
+.tile-drop {
+  outline: 2px dashed var(--accent);
+  outline-offset: -6px;
+}
+.transfers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.transfer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.transfer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+.text-error {
+  color: var(--danger);
+}

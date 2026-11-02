@@ -60,6 +60,22 @@ export const commands = {
 	ringDevice: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("ring_device", { nodeId })),
 	/**  Open a web link (http/https only) on a device. */
 	openUrlOn: (nodeId: string, url: string) => typedError<string, string>(__TAURI_INVOKE("open_url_on", { nodeId, url })),
+	/**
+	 *  Send a file to a device. Returns the transfer id; progress arrives as
+	 *  `file-progress`, then `file-sent` or `file-failed`.
+	 */
+	sendFile: (nodeId: string, path: string) => typedError<string, string>(__TAURI_INVOKE("send_file", { nodeId, path })),
+	/**  Stop a transfer, either way. */
+	cancelFile: (id: string) => __TAURI_INVOKE<void>("cancel_file", { id }),
+	/**
+	 *  The native "choose a file" dialog; `None` if the user closed it. Async so
+	 *  it doesn't run on (and block) the main thread the dialog needs.
+	 */
+	pickFile: () => __TAURI_INVOKE<string | null>("pick_file"),
+	/**  Show a received file in Finder / Explorer / the file manager. */
+	revealFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_file", { path })),
+	/**  Open a received file with its default app. */
+	openFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("open_file", { path })),
 };
 
 /* Types */
