@@ -100,6 +100,8 @@
     <string name="settings_this_device">This device</string>
     <string name="settings_seen_as">Other devices see it as %1$s.</string>
     <string name="settings_clip_sync">Keep clipboards in sync with my devices</string>
+    <string name="settings_share_codes">Send verification codes to my computers</string>
+    <string name="settings_share_codes_hint">When a code arrives in a notification, it\'s copied on your computers so you can paste it there.</string>
     <string name="settings_device_key">Device key</string>
     <string name="settings_key_hint">All your devices must use the same key. Changing it here means changing it on every device.</string>
     <string name="settings_change_key">Change device key</string>
@@ -161,6 +163,7 @@
     <string name="act_call">Call from %1$s (%2$s)</string>
     <string name="act_call_history">Call history received</string>
     <string name="act_clipboard_synced">Clipboard synced</string>
+    <string name="act_code_sent">Sent a code to your devices</string>
     <string name="act_notification_sent">Sent “%1$s” to your devices</string>
     <string name="act_clipboard_copied">Copied %1$s\'s clipboard</string>
     <string name="act_ring">%1$s rang this phone</string>

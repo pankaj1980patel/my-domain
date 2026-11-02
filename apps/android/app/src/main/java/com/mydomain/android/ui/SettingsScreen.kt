@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.BuildConfig
+import com.mydomain.android.NotifListener
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
@@ -40,6 +41,19 @@ fun ClipSyncSwitch(label: String) {
         Core.enableClipSync(on)
         prefs.edit().putBoolean("clip_sync", on).apply()
     }
+}
+
+/** Sending verification codes found in notifications to the computers
+ *  (NotifListener reads the same "share_codes" pref). Off by default. */
+@Composable
+fun ShareCodesSwitch() {
+    val prefs = LocalContext.current.getSharedPreferences("md", Context.MODE_PRIVATE)
+    var on by remember { mutableStateOf(prefs.getBoolean(NotifListener.PREF_SHARE_CODES, false)) }
+    SwitchRow(stringResource(R.string.settings_share_codes), on) {
+        on = it
+        prefs.edit().putBoolean(NotifListener.PREF_SHARE_CODES, it).apply()
+    }
+    Muted(stringResource(R.string.settings_share_codes_hint))
 }
 
 /** Account, this device, and preferences. Tap the version 7 times for the
@@ -75,6 +89,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
             )
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
+            ShareCodesSwitch()
         }
 
         Tile(title = stringResource(R.string.settings_device_key)) {

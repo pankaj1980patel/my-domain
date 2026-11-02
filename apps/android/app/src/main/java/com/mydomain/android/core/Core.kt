@@ -238,7 +238,8 @@ object Core {
 
     /** Every core event, from NetService's listener (core threads). */
     fun onEvent(name: String, payloadJson: String) {
-        labLog("$name ${payloadJson.take(200)}")
+        // A code event's payload holds the code itself: never log it.
+        labLog(if (name.startsWith("code")) name else "$name ${payloadJson.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
         val kind = o.optString("kind")
         val peersNow = if (kind == "peers_updated") engine()?.peers() else null

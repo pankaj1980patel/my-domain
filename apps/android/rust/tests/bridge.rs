@@ -105,6 +105,15 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         phone.send("nobody".into(), "hi".into()),
         Err(MdError::PeerNotFound)
     ));
+    // Verification codes: a code goes out (no linked devices: a no-op),
+    // anything else is refused.
+    phone
+        .share_code("482913".into(), Some("Messages".into()))
+        .unwrap();
+    assert!(matches!(
+        phone.share_code("hello".into(), None),
+        Err(MdError::Failed(_))
+    ));
 
     // A desktop messages the phone: the listener hears it, kind-tagged.
     // (The phone knows the desktop only by address, as typed by hand.)

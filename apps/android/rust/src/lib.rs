@@ -499,6 +499,13 @@ impl MdEngine {
         self.inner.share_notification(&title, &body, app.as_deref());
     }
 
+    /// A verification code the host found in a notification, for your
+    /// connected devices; those with a clipboard copy it. Throws if it
+    /// doesn't look like a code.
+    pub fn share_code(&self, code: String, app: Option<String>) -> MdResult<()> {
+        Ok(self.inner.share_code(&code, app.as_deref())?)
+    }
+
     pub fn share_call_notification(&self, caller: String, number: Option<String>, state: String) {
         self.inner
             .share_call_notification(&caller, number.as_deref(), &state);
