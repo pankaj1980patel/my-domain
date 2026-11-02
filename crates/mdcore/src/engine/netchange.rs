@@ -70,6 +70,9 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
             let _ = peers::refresh(&h.ctx, url, token);
         }
         detect_nat_now(&h.ctx, &h.server_url, &h.token);
+        // Peers on links that survived the move learn our new addresses
+        // directly (no server needed to find us again).
+        crate::features::addr_update::announce(&h.ctx, None);
 
         std::thread::sleep(REDIAL_AFTER);
         for node in was_live {

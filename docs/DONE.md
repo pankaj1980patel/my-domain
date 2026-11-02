@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **119** core tests, plus **10** server tests and **1** desktop test |
+| Tests | **121** core tests, plus **10** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -210,6 +210,10 @@ The engine tries each method in order, cheapest first, until one works
     router mapping, QUIC port) are saved on the device and loaded at start.
     After a restart a device reconnects directly, even when the server is
     down.
+  - **Addresses stay fresh peer-to-peer:** a device sends its current
+    addresses (LAN, IPv6, router mapping) over its live links when a link
+    comes up, after a network change, and when its mapping changes. Peers
+    update their cache with no server involved.
   - **On the LAN:** mDNS plus direct QUIC needs no server at all.
   - **Signals:** the server uses a device's WebSocket for a signal only if
     one happens to be open (e.g. during a relay session), and FCM otherwise.

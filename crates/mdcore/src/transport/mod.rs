@@ -124,6 +124,10 @@ pub fn mark_live<P: Platform>(
             node_id: node_id.to_string(),
             transport: kind,
         });
+        // Give the peer our current addresses (it may only know stale ones
+        // from the server), off this thread: sending may block.
+        let (ctx, peer) = (ctx.clone(), node_id.to_string());
+        std::thread::spawn(move || crate::features::addr_update::announce(&ctx, Some(&[peer])));
     }
 }
 

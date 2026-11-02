@@ -119,6 +119,9 @@ pub(super) fn spawn_port_mapper<P: Platform>(h: netchange::NetHandles<P>) {
                     let mut id = h.ctx.identity.lock();
                     std::mem::replace(&mut id.mapped_quic, published.clone()) != published
                 };
+                if changed {
+                    crate::features::addr_update::announce(&h.ctx, None);
+                }
                 let session = h.server_url.lock().clone().zip(h.token.lock().clone());
                 if let (true, Some((url, tok))) = (changed, session) {
                     let _ = peers::register_self(&h.ctx, &url, &tok);

@@ -9,6 +9,7 @@
 //! Streaming features (audio/video, remote control) need the binary channel-mux
 //! (protocol v2) instead; that seam is documented in `crate::service`.
 
+pub mod addr_update;
 pub mod call_history;
 pub mod call_notification;
 pub mod clipboard;
@@ -91,6 +92,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(call_history::CallHistoryHandler));
         r.register(Arc::new(notif_apps::NotifAppsHandler));
         r.register(Arc::new(p2p_ping::P2pPingHandler));
+        r.register(Arc::new(addr_update::AddrUpdateHandler));
         r
     }
 

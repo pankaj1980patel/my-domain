@@ -66,8 +66,7 @@ or with less battery.
   - Signal through a device that's already connected to both peers (e.g.
     the laptop passes a phone's offer to the desktop) before using the
     server.
-  - Keep reachable addresses fresh peer-to-peer: devices tell their peers
-    when their own addresses change.
+  - ~~Keep addresses fresh peer-to-peer~~: **done** (`addr_update`).
 
 ## 3. Phase 2 leftovers (networking)
 
