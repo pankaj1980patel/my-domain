@@ -83,3 +83,25 @@ fn the_mapping_is_removed_when_the_engine_stops() {
         router.log().contains(&format!("unmap {port}"))
     });
 }
+
+/// Asks the REAL router on this network for a PCP / NAT-PMP mapping, prints
+/// what it got, and removes it. Ignored by default (touches real hardware):
+///   cargo test -p mdcore --test port_mapping -- --ignored --nocapture
+#[test]
+#[ignore = "talks to the real home router"]
+fn real_router_pcp_or_natpmp() {
+    use mdcore::nat::portmap::{PcpMapper, PortMapper, UpnpMapper};
+    let ip: std::net::Ipv4Addr = mdcore::platform::detect_local_ip().parse().unwrap();
+    let sock = std::net::UdpSocket::bind((ip, 0)).unwrap();
+    let local = std::net::SocketAddrV4::new(ip, sock.local_addr().unwrap().port());
+    for (name, m) in [
+        ("UPnP", Box::new(UpnpMapper) as Box<dyn PortMapper>),
+        ("PCP/NAT-PMP", Box::new(PcpMapper::default())),
+    ] {
+        let got = m.map_udp(local, 120);
+        println!("{name}: {local} -> {got:?}");
+        if let Some(p) = got {
+            m.unmap_udp(p.port());
+        }
+    }
+}
