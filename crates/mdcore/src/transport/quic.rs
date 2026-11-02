@@ -118,6 +118,38 @@ fn bind_udp() -> std::io::Result<std::net::UdpSocket> {
     Ok(sock.into())
 }
 
+/// Our QUIC endpoint's addresses to hand a peer in a signal: global IPv6,
+/// the router mapping (UPnP), and the LAN IPv4, as `ip:port` strings.
+pub fn my_addrs<P: Platform>(ctx: &NetCtx<P>) -> Vec<String> {
+    let id = ctx.identity.lock();
+    let mut out = Vec::new();
+    if let Some(v6) = id.ipv6.as_deref().and_then(|s| s.parse::<IpAddr>().ok()) {
+        out.push(SocketAddr::new(v6, id.quic_port).to_string());
+    }
+    if let Some(m) = id.mapped_quic.clone() {
+        out.push(m);
+    }
+    if let Ok(v4) = id.ip.parse::<Ipv4Addr>() {
+        if !v4.is_unspecified() {
+            out.push(SocketAddr::new(v4.into(), id.quic_port).to_string());
+        }
+    }
+    out
+}
+
+/// Parse addresses a peer sent us (at most 6, port non-zero, deduped).
+pub fn parse_addrs(addrs: &[String]) -> Vec<SocketAddr> {
+    let mut out: Vec<SocketAddr> = Vec::new();
+    for a in addrs.iter().take(6) {
+        if let Ok(sa) = a.trim().parse::<SocketAddr>() {
+            if sa.port() != 0 && !out.contains(&sa) {
+                out.push(sa);
+            }
+        }
+    }
+    out
+}
+
 /// `::ffff:1.2.3.4` (how a dual-stack socket sees IPv4 peers) -> `1.2.3.4`.
 fn canonical(addr: SocketAddr) -> SocketAddr {
     SocketAddr::new(addr.ip().to_canonical(), addr.port())
@@ -355,45 +387,59 @@ async fn run_connection<P: Platform>(
         _ => return,
     };
 
-    // Register as this peer's live link. One link per peer: if one exists,
-    // keep it (both sides dialed at once), UNLESS it is a QUIC link from a
-    // different address: then the peer moved networks and the old link is
-    // stale, so the new one replaces it.
+    // Register as this peer's live link. One link per peer. If the peer
+    // already has one:
+    // - a relay link (or one that never went live): replace it, direct wins;
+    // - another direct non-QUIC link (WS, UDP, WebRTC): keep it;
+    // - a QUIC link in the SAME direction from a different address: the peer
+    //   moved networks, so the new one replaces the stale one;
+    // - a QUIC link in the OPPOSITE direction (both sides dialed at once):
+    //   keep the connection whose client has the lower node id. Both ends
+    //   apply the same rule, so they keep the same connection.
     let my_conn_id = QUIC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let remote = canonical(conn.remote_address());
+    let me = ctx.identity.lock().node_id.clone();
     let (tx, rx) = std::sync::mpsc::channel::<String>();
     {
         let mut g = ctx.ws_conns.lock();
         if let Some((existing_id, _)) = g.get(&peer_id) {
-            let stale = ctx
+            let existing = ctx
                 .quic
                 .conns
                 .lock()
                 .get(&peer_id)
-                .filter(|pc| pc.id == *existing_id && pc.remote != remote)
-                .map(|pc| pc.conn.clone());
-            match stale {
-                Some(old) => {
-                    g.remove(&peer_id);
-                    old.close(0u32.into(), b"peer moved");
-                }
-                None => {
-                    conn.close(0u32.into(), b"duplicate");
-                    return;
-                }
+                .filter(|pc| pc.id == *existing_id)
+                .map(|pc| (pc.dialed, pc.remote, pc.conn.clone()));
+            let replace = match &existing {
+                // Not QUIC: replace the relay (or a link that never went
+                // live); keep a working direct link (WS, UDP, WebRTC).
+                None => !super::is_direct(&ctx, &peer_id),
+                Some((was_dialed, was_remote, _)) if *was_dialed == dialer => *was_remote != remote,
+                Some(_) => dialer == (me < peer_id),
+            };
+            if !replace {
+                conn.close(0u32.into(), b"duplicate");
+                return;
+            }
+            g.remove(&peer_id);
+            if let Some((_, _, old)) = existing {
+                old.close(0u32.into(), b"replaced");
             }
         }
         g.insert(peer_id.clone(), (my_conn_id, tx));
+        // Record the QUIC side under the SAME lock: a second connection
+        // registering in between would otherwise find a link with no QUIC
+        // record, mistake it for a dead non-QUIC link, and orphan it.
+        ctx.quic.conns.lock().insert(
+            peer_id.clone(),
+            PeerConn {
+                id: my_conn_id,
+                remote,
+                conn: conn.clone(),
+                dialed: dialer,
+            },
+        );
     }
-    ctx.quic.conns.lock().insert(
-        peer_id.clone(),
-        PeerConn {
-            id: my_conn_id,
-            remote,
-            conn: conn.clone(),
-            dialed: dialer,
-        },
-    );
     mark_live(&ctx, &peer_id, kind, Some(remote));
 
     // Bridge: the engine queues outgoing frames on a std channel; forward them
@@ -428,6 +474,14 @@ async fn run_connection<P: Platform>(
 
     // Cleanup: only remove our own entry (a newer link may have replaced it).
     writer.abort();
+    // The PEER closed this as the loser of a simultaneous dial (or as stale):
+    // the winning connection is on its way. Give it a moment to take over
+    // before reporting the peer disconnected, so the UI doesn't flap.
+    if let Some(quinn::ConnectionError::ApplicationClosed(c)) = conn.close_reason() {
+        if c.reason.as_ref() == b"replaced" || c.reason.as_ref() == b"duplicate" {
+            tokio::time::sleep(Duration::from_millis(1500)).await;
+        }
+    }
     {
         let mut qc = ctx.quic.conns.lock();
         if qc.get(&peer_id).is_some_and(|pc| pc.id == my_conn_id) {

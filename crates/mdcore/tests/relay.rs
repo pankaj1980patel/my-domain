@@ -115,3 +115,59 @@ fn different_accounts_cannot_reach_each_other_through_the_relay() {
     bob.engine.connect(&alice.node_id()).unwrap();
     assert_eq!(bob.wait_connected(&alice, Duration::from_secs(10)), None);
 }
+
+#[test]
+fn relay_comes_up_first_then_a_direct_path_takes_over() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    // Relay + hole punch: the quick direct rungs are off, so the relay comes
+    // up first and the punch upgrades it.
+    let cfg = || CoreConfig {
+        relay_url: Some(relay.url()),
+        rungs: ConnectRungs {
+            relay: true,
+            punch: true,
+            ..ConnectRungs::none()
+        },
+        auto_quic: false,
+        ..test_config()
+    };
+    let start = |id: &str| {
+        let n = TestNode::start_on_hub(id, &hub, cfg());
+        n.engine
+            .auth_login(&reg.url(), "alice", "alice-pw")
+            .unwrap();
+        n.engine.set_encryption_key("family key").unwrap();
+        n
+    };
+    let (a, b) = (start("upgrade-a"), start("upgrade-b"));
+    TestNode::pair(&a, &b);
+
+    a.engine.connect(&b.node_id()).unwrap();
+    // First the relay...
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("relay"));
+    // ...then the direct path replaces it (a second PeerConnected).
+    let id = b.node_id();
+    let upgraded = a.sink.wait_until(WAIT, |e| match e {
+        mdcore::CoreEvent::PeerConnected { node_id, transport }
+            if *node_id == id && *transport != mdcore::transport::TransportKind::Relay =>
+        {
+            Some(*transport)
+        }
+        _ => None,
+    });
+    assert_eq!(upgraded, Some(mdcore::transport::TransportKind::Punch));
+    let stages = a.ladder_stages(&b);
+    let pos = |s: &str| stages.iter().position(|x| x == s).unwrap();
+    assert!(pos("relay") < pos("punching"), "{stages:?}");
+
+    // New traffic goes direct: the relay forwards nothing more.
+    let before = relay.forwarded().len();
+    a.engine.send(&b.node_id(), "direct now").unwrap();
+    b.sink.wait_for_message("direct now");
+    assert_eq!(
+        relay.forwarded().len(),
+        before,
+        "the relay is no longer used"
+    );
+}

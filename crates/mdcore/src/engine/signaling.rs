@@ -205,6 +205,37 @@ impl<P: Platform> Engine<P> {
                     let _ = tx.send(sdp);
                 }
             }
+            // Signaled QUIC: answer with our addresses, then dial theirs.
+            Signal::QuicOffer { sid, addrs } => {
+                let ctx = self.net_ctx();
+                let from = from.to_string();
+                let server_url = self.server_url.clone();
+                let token = self.token.clone();
+                std::thread::spawn(move || {
+                    let answer = Signal::QuicAnswer {
+                        sid,
+                        addrs: transport::quic::my_addrs(&ctx),
+                    };
+                    let _ = send_signal_via(&server_url, &token, &ctx, &from, &answer);
+                    // The initiator dials our answered addresses right away.
+                    // We dial back only if that hasn't worked within a second
+                    // (it can't reach us). Dialing at once from both sides
+                    // would make two connections, and a message sent on the
+                    // one that loses the tie-break would be lost.
+                    std::thread::sleep(Duration::from_secs(1));
+                    if !transport::is_direct(&ctx, &from) {
+                        let targets = transport::quic::parse_addrs(&addrs);
+                        let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+                    }
+                });
+            }
+            // Our QUIC offer was answered: hand the addresses to the ladder.
+            Signal::QuicAnswer { sid, addrs } => {
+                let waiter = self.ctx.quic_waiters.lock().remove(&sid);
+                if let Some(tx) = waiter {
+                    let _ = tx.send(addrs);
+                }
+            }
             // Peer can't reach us directly: meet it on the server relay.
             Signal::RelayOffer { .. } => {
                 let ctx = self.net_ctx();

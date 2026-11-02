@@ -67,6 +67,14 @@ pub struct P2pConn {
 /// node_id -> live link.
 pub type P2pConns = Arc<Mutex<HashMap<String, P2pConn>>>;
 
+/// The peer has a live link that isn't through the relay.
+pub fn is_direct<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
+    ctx.p2p_conns
+        .lock()
+        .get(node_id)
+        .is_some_and(|c| c.kind != TransportKind::Relay)
+}
+
 /// Mark a peer live (first time) or refresh an existing link. The transport is
 /// fixed at establishment by whoever created the link (ws/punch/webrtc); a
 /// refresh (e.g. a heartbeat ping) only bumps `last_seen` and never downgrades
@@ -81,6 +89,16 @@ pub fn mark_live<P: Platform>(
     let newly = {
         let mut m = ctx.p2p_conns.lock();
         match m.get_mut(node_id) {
+            // A relayed peer that now has a direct link is UPGRADED (and the
+            // UI told, with the new transport). Never the other way round.
+            Some(c) if c.kind == TransportKind::Relay && kind != TransportKind::Relay => {
+                *c = P2pConn {
+                    kind,
+                    last_seen: now_secs(),
+                    addr,
+                };
+                true
+            }
             Some(c) => {
                 c.last_seen = now_secs();
                 if addr.is_some() {

@@ -53,6 +53,18 @@ fn is_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
 }
 
 /// Poll for the peer to become live, up to `ms` milliseconds.
+/// Wait for a link that isn't through the relay.
+fn wait_direct<P: Platform>(ctx: &NetCtx<P>, node_id: &str, ms: u64) -> bool {
+    let deadline = std::time::Instant::now() + Duration::from_millis(ms);
+    while std::time::Instant::now() < deadline {
+        if transport::is_direct(ctx, node_id) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    transport::is_direct(ctx, node_id)
+}
+
 fn wait_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str, ms: u64) -> bool {
     let steps = ms / 100;
     for _ in 0..steps {
@@ -84,7 +96,7 @@ fn udp_ping_connect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     {
         return false;
     }
-    wait_live(ctx, node_id, 2000)
+    wait_direct(ctx, node_id, 2000)
 }
 
 pub(super) fn run_connect_ladder<P: Platform>(
@@ -92,6 +104,22 @@ pub(super) fn run_connect_ladder<P: Platform>(
     server_url: Arc<Mutex<Option<String>>>,
     token: Arc<Mutex<Option<String>>>,
     node_id: String,
+) {
+    run_ladder(ctx, server_url, token, node_id, true);
+}
+
+/// How often, and how many times, a relayed peer retries the direct rungs.
+const UPGRADE_EVERY: Duration = Duration::from_secs(60);
+const UPGRADE_TRIES: u32 = 10;
+
+/// The ladder. `retry_later`: if we end up on the relay, keep retrying the
+/// direct rungs in the background (false for those retries themselves).
+fn run_ladder<P: Platform>(
+    ctx: NetCtx<P>,
+    server_url: Arc<Mutex<Option<String>>>,
+    token: Arc<Mutex<Option<String>>>,
+    node_id: String,
+    retry_later: bool,
 ) {
     let emit = |stage: &str, detail: Option<String>| {
         ctx.sink.emit(CoreEvent::ConnectProgress {
@@ -101,7 +129,8 @@ pub(super) fn run_connect_ladder<P: Platform>(
         });
     };
 
-    if is_live(&ctx, &node_id) {
+    // Already direct: nothing to do. (Relayed: carry on, to upgrade.)
+    if transport::is_direct(&ctx, &node_id) {
         emit("connected", None);
         return;
     }
@@ -121,7 +150,7 @@ pub(super) fn run_connect_ladder<P: Platform>(
             .quic
             .connect_any(ctx.clone(), &peer.quic_targets())
             .is_ok()
-            && wait_live(&ctx, &node_id, 3000)
+            && wait_direct(&ctx, &node_id, 3000)
         {
             return; // the link emits PeerConnected
         }
@@ -139,13 +168,39 @@ pub(super) fn run_connect_ladder<P: Platform>(
     if rungs.direct_ws && peer.ws_port != 0 && peer.ws_open && !peer_inbound_blocked(&peer) {
         emit("direct_ws", None);
         if ws::ws_connect(ctx.clone(), &peer.ip, peer.ws_port).is_ok()
-            && wait_live(&ctx, &node_id, 3000)
+            && wait_direct(&ctx, &node_id, 3000)
         {
             return; // WS handler emits PeerConnected
         }
     }
 
-    // Rung 3 — FCM-coordinated WS: ask the peer to open its WS and reply WsReady,
+    // Rung 3 — signaled QUIC: swap QUIC addresses through a signal and BOTH
+    // sides dial. Works when only one side can be dialed, and with addresses
+    // fresher than the registry's. (1 signal round trip.)
+    if rungs.signaled_quic {
+        emit("signaled_quic", None);
+        let sid = uuid::Uuid::new_v4().to_string();
+        let (tx, rx) = mpsc::channel::<Vec<String>>();
+        ctx.quic_waiters.lock().insert(sid.clone(), tx);
+        let offer = Signal::QuicOffer {
+            sid: sid.clone(),
+            addrs: transport::quic::my_addrs(&ctx),
+        };
+        if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
+            if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
+                let targets = transport::quic::parse_addrs(&addrs);
+                let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+            }
+            // The peer dials us too, so a link may exist even if ours failed.
+            if wait_direct(&ctx, &node_id, 3000) {
+                ctx.quic_waiters.lock().remove(&sid);
+                return;
+            }
+        }
+        ctx.quic_waiters.lock().remove(&sid);
+    }
+
+    // Rung 3b — FCM-coordinated WS: ask the peer to open its WS and reply WsReady,
     // which our on_signal dials. (1 FCM round trip.)
     if rungs.signaled_ws {
         emit("via_signal", None);
@@ -158,9 +213,32 @@ pub(super) fn run_connect_ladder<P: Platform>(
             &Signal::StartWs { sid },
         )
         .is_ok()
-            && wait_live(&ctx, &node_id, 8000)
+            && wait_direct(&ctx, &node_id, 8000)
         {
             return;
+        }
+    }
+
+    // Relay through the server, BEFORE the slow rungs: if the quick rungs
+    // failed, messages flow through the relay right away, while hole
+    // punching and WebRTC keep trying to upgrade the link in the background
+    // (a direct link replaces the relayed one when it comes up).
+    if rungs.relay && !is_live(&ctx, &node_id) {
+        if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
+            emit("relay", None);
+            if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
+                transport::relay::add_relay_link(&ctx, &node_id);
+                let sid = uuid::Uuid::new_v4().to_string();
+                let _ = send_signal_via(
+                    &server_url,
+                    &token,
+                    &ctx,
+                    &node_id,
+                    &Signal::RelayOffer { sid },
+                );
+                transport::relay::send_hello(&ctx, &node_id);
+                wait_live(&ctx, &node_id, 8000);
+            }
         }
     }
 
@@ -198,7 +276,7 @@ pub(super) fn run_connect_ladder<P: Platform>(
                         node_id.clone(),
                     );
                     // hole_punch (≤8s) + bidirectional confirmation (≤3s).
-                    if wait_live(&ctx, &node_id, 12000) {
+                    if wait_direct(&ctx, &node_id, 12000) {
                         return;
                     }
                 } else {
@@ -233,7 +311,7 @@ pub(super) fn run_connect_ladder<P: Platform>(
                         pending,
                         &answer_sdp,
                         node_id.clone(),
-                    ) && wait_live(&ctx, &node_id, 12000)
+                    ) && wait_direct(&ctx, &node_id, 12000)
                     {
                         return;
                     }
@@ -246,28 +324,31 @@ pub(super) fn run_connect_ladder<P: Platform>(
         }
     }
 
-    // Rung 6 — relay through the server: always reachable if the server is.
-    // Both sides open a WebSocket to /relay; the server forwards frames
-    // (ciphertext) between them.
-    if rungs.relay {
-        if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
-            emit("relay", None);
-            if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
-                transport::relay::add_relay_link(&ctx, &node_id);
-                let sid = uuid::Uuid::new_v4().to_string();
-                let _ = send_signal_via(
-                    &server_url,
-                    &token,
-                    &ctx,
-                    &node_id,
-                    &Signal::RelayOffer { sid },
-                );
-                transport::relay::send_hello(&ctx, &node_id);
-                if wait_live(&ctx, &node_id, 8000) {
-                    return;
+    if transport::is_direct(&ctx, &node_id) {
+        return;
+    }
+    if is_live(&ctx, &node_id) {
+        // On the relay. Keep looking for a direct path in the background.
+        if retry_later && !hopeless {
+            let (ctx, url, tok) = (ctx.clone(), server_url.clone(), token.clone());
+            std::thread::spawn(move || {
+                for _ in 0..UPGRADE_TRIES {
+                    std::thread::sleep(UPGRADE_EVERY);
+                    let relayed = is_live(&ctx, &node_id) && !transport::is_direct(&ctx, &node_id);
+                    if ctx.shutdown.load(Ordering::Relaxed) || !relayed {
+                        return;
+                    }
+                    run_ladder(
+                        ctx.clone(),
+                        url.clone(),
+                        tok.clone(),
+                        node_id.clone(),
+                        false,
+                    );
                 }
-            }
+            });
         }
+        return;
     }
 
     emit("failed", Some("no reachable path".into()));

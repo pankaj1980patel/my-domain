@@ -50,6 +50,9 @@ pub type Subs = Arc<Mutex<HashMap<String, Vec<String>>>>;
 /// In-flight punch negotiations: sid -> sender that delivers the peer's answered
 /// candidates to the waiting initiator thread.
 pub type PunchWaiters = Arc<Mutex<HashMap<String, mpsc::Sender<Vec<crate::signal::Candidate>>>>>;
+/// In-flight signaled-QUIC negotiations: sid -> sender delivering the peer's
+/// answered QUIC addresses.
+pub type QuicWaiters = Arc<Mutex<HashMap<String, mpsc::Sender<Vec<String>>>>>;
 /// In-flight WebRTC negotiations: sid -> sender delivering the answer SDP string.
 pub type RtcWaiters = Arc<Mutex<HashMap<String, mpsc::Sender<String>>>>;
 
@@ -70,6 +73,8 @@ pub struct NetCtx<P: Platform> {
     pub punch_waiters: PunchWaiters,
     /// In-flight WebRTC negotiations (initiator side).
     pub rtc_waiters: RtcWaiters,
+    /// In-flight signaled-QUIC negotiations (initiator side).
+    pub quic_waiters: QuicWaiters,
     pub sink: Arc<dyn EventSink>,
     pub clip_active: Arc<AtomicBool>,
     pub clip_last: Arc<Mutex<String>>,
@@ -112,6 +117,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             p2p_conns: self.p2p_conns.clone(),
             punch_waiters: self.punch_waiters.clone(),
             rtc_waiters: self.rtc_waiters.clone(),
+            quic_waiters: self.quic_waiters.clone(),
             sink: self.sink.clone(),
             clip_active: self.clip_active.clone(),
             clip_last: self.clip_last.clone(),
@@ -254,6 +260,7 @@ impl<P: Platform> Engine<P> {
             p2p_conns: p2p_conns.clone(),
             punch_waiters: punch_waiters.clone(),
             rtc_waiters: rtc_waiters.clone(),
+            quic_waiters: Arc::default(),
             sink: sink.clone(),
             clip_active: clip_active.clone(),
             clip_last: clip_last.clone(),

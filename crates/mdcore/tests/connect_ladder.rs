@@ -317,3 +317,58 @@ fn one_easy_nat_still_tries_the_hole_punch() {
     wait_for_stage(&a, &b, "punching");
     assert!(!a.ladder_stages(&b).contains(&"nat_skip".to_string()));
 }
+
+#[test]
+fn rung3_signaled_quic_swaps_addresses_and_both_sides_dial() {
+    let (a, b, hub) = pair_on_hub(
+        "rung-sigquic",
+        ConnectRungs {
+            signaled_quic: true,
+            ..ConnectRungs::none()
+        },
+    );
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LADDER_WAIT).as_deref(), Some("quic"));
+    assert_eq!(b.wait_connected(&a, LADDER_WAIT).as_deref(), Some("quic"));
+    let kinds = hub.kinds();
+    assert!(kinds.contains(&"quic_offer".to_string()), "{kinds:?}");
+    assert!(kinds.contains(&"quic_answer".to_string()), "{kinds:?}");
+
+    a.engine.send(&b.node_id(), "via signaled quic").unwrap();
+    b.sink.wait_for_message("via signaled quic");
+}
+
+#[test]
+fn both_sides_connecting_at_once_settle_on_one_link() {
+    let (a, b, _hub) = pair_on_hub(
+        "glare",
+        ConnectRungs {
+            signaled_quic: true,
+            ..ConnectRungs::none()
+        },
+    );
+    // Both dial each other at the same moment (QUIC glare).
+    a.engine.connect(&b.node_id()).unwrap();
+    b.engine.connect(&a.node_id()).unwrap();
+    assert!(a.wait_connected(&b, LADDER_WAIT).is_some());
+    assert!(b.wait_connected(&a, LADDER_WAIT).is_some());
+    std::thread::sleep(Duration::from_millis(1500)); // let the losers close
+
+    // Both ends kept the same connection: nobody saw the link go down...
+    let downs = |n: &TestNode, peer: &TestNode| {
+        let id = peer.node_id();
+        n.sink
+            .all()
+            .iter()
+            .filter(
+                |e| matches!(e, mdcore::CoreEvent::PeerDisconnected { node_id } if *node_id == id),
+            )
+            .count()
+    };
+    assert_eq!((downs(&a, &b), downs(&b, &a)), (0, 0));
+    // ...and it carries traffic both ways.
+    a.engine.send(&b.node_id(), "a to b").unwrap();
+    b.sink.wait_for_message("a to b");
+    b.engine.send(&a.node_id(), "b to a").unwrap();
+    a.sink.wait_for_message("b to a");
+}

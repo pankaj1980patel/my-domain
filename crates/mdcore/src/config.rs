@@ -20,7 +20,9 @@ pub struct ConnectRungs {
     pub lan_udp: bool,
     /// 2. Direct WebSocket to an address the peer advertises as reachable.
     pub direct_ws: bool,
-    /// 3. Ask the peer (via a signal) to open its WebSocket for us.
+    /// 3. Exchange QUIC addresses through a signal; both sides dial.
+    pub signaled_quic: bool,
+    /// 3b. Ask the peer (via a signal) to open its WebSocket for us.
     pub signaled_ws: bool,
     /// 4. STUN + UDP hole punch.
     pub punch: bool,
@@ -36,6 +38,7 @@ impl Default for ConnectRungs {
             quic: true,
             lan_udp: true,
             direct_ws: true,
+            signaled_quic: true,
             signaled_ws: true,
             punch: true,
             webrtc: true,
@@ -50,6 +53,7 @@ impl ConnectRungs {
         quic: false,
         lan_udp: false,
         direct_ws: false,
+        signaled_quic: false,
         signaled_ws: false,
         punch: false,
         webrtc: false,

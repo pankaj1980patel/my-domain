@@ -65,6 +65,22 @@ pub enum Signal {
         reason: String,
     },
 
+    /// "Here are my QUIC addresses; tell me yours." We dial the answered
+    /// addresses at once; the peer dials ours if we haven't connected within
+    /// a second (we can't reach it but it can reach us). Carries fresh
+    /// addresses too (a peer that changed networks, or a registry without
+    /// QUIC ports).
+    QuicOffer {
+        sid: String,
+        /// `ip:port` socket addresses of our QUIC endpoint (IPv6, router
+        /// mapping, LAN IPv4).
+        addrs: Vec<String>,
+    },
+    QuicAnswer {
+        sid: String,
+        addrs: Vec<String>,
+    },
+
     /// "Join the server relay and say hello to me": the last-resort path when
     /// nothing direct works (see transport/relay.rs). The reply is the peer's
     /// `Hello` arriving through the relay, not another signal.
