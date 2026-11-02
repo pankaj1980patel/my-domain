@@ -73,8 +73,9 @@ or with less battery.
   the quick rungs; punch/WebRTC upgrade it; retries every 60 s).
   - Still to do: race the rungs in parallel instead of in sequence.
   - **Known issue:** a message sent at the exact moment a link is replaced
-    (glare, relay to direct) can be lost. Phase 4's RPC layer (request ids
-    and retries) fixes this properly.
+    (glare, relay to direct) can be lost. Messages sent with no link at
+    all now wait in the outbox; Phase 4's RPC layer (request ids, acks and
+    retries) covers the in-flight case.
 - **Move the remaining loops to tokio.** Discovery, the heartbeat and the
   feature/background loops still run on their own threads (the TCP/UDP/WS
   listeners are gone). Moving them to

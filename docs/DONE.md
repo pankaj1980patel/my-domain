@@ -295,6 +295,21 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Messages wait for a link; relay route fix (2026-11-02)
+
+- **Outbox:** a message sent while a device has no link is held
+  (`transport::outbox`; up to 100 per device, 10 minutes) and sent the
+  moment a link comes up; `send` returns `"queued"` instead of a "not
+  connected yet, try again" error. Both apps show such a message dimmed,
+  with "Sends when connected", until the link is up. Checked live: Mac
+  (`mdctl`) to the sleeping, locked phone: queued, woken by push, relay,
+  then a punched link.
+- **Fix: a relayed peer could stay "live" with nowhere to send.** When a
+  direct link replaced the relay route and then died, the next relay
+  connection skipped creating the peer's outgoing queue. Found live on the
+  phone; regression test
+  `relay::the_relay_route_comes_back_after_a_direct_link_dies`.
+
 ## Device lab and dev tools
 
 - **`scripts/lab/start-all.sh`** starts the app on all three devices, logged

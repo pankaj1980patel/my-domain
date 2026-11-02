@@ -18,6 +18,8 @@ export type ChatMessage = {
   text: string;
   ts: number;
   via?: string;
+  /** Held by the core until the device is connected. */
+  pending?: boolean;
 };
 
 export type ActivityItem = {
@@ -134,6 +136,8 @@ export async function startEvents() {
       const was = state.links[node_id];
       setState("links", node_id, transport);
       setState("progress", node_id, "connected");
+      // The core sends held messages the moment a link is up.
+      setState("messages", (m) => m.node === node_id && !!m.pending, "pending", false);
       if (!was) addActivity({ icon: "🔗", tone: "ok", node: node_id, text: `Connected to ${peerName(node_id)}` });
     }),
     on<string>("peer-disconnected", (node_id) => {
@@ -222,7 +226,8 @@ export async function resume(): Promise<boolean> {
 
 export async function sendMessage(node: string, text: string): Promise<string> {
   const via = await unwrap(commands.sendMessage(node, text));
-  setState("messages", produce((list) => list.push({ id: ++seq, node, dir: "out", text, ts: now(), via })));
+  const pending = via === "queued";
+  setState("messages", produce((list) => list.push({ id: ++seq, node, dir: "out", text, ts: now(), via, pending })));
   return via;
 }
 

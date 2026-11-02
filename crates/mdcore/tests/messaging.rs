@@ -53,12 +53,18 @@ fn an_unreachable_peer_fails_fast_and_is_not_redialed_every_send() {
     peer.quic_port = 9; // nothing speaks QUIC there
     a.engine.upsert_peer(peer);
 
-    let err = a.engine.send(&b.node_id(), "nobody home").unwrap_err();
-    assert!(matches!(err, CoreError::NoLink(_)), "got {err:?}");
+    // Held for later (the ladder carries on in the background).
+    assert_eq!(
+        a.engine.send(&b.node_id(), "nobody home").unwrap(),
+        mdcore::engine::QUEUED
+    );
 
     // The failure is remembered, so the next send doesn't wait for a dial.
     let t = std::time::Instant::now();
-    assert!(a.engine.send(&b.node_id(), "still nobody").is_err());
+    assert_eq!(
+        a.engine.send(&b.node_id(), "still nobody").unwrap(),
+        mdcore::engine::QUEUED
+    );
     assert!(
         t.elapsed() < Duration::from_millis(500),
         "took {:?}",
@@ -70,7 +76,7 @@ fn an_unreachable_peer_fails_fast_and_is_not_redialed_every_send() {
 }
 
 #[test]
-fn with_auto_quic_off_a_send_without_a_link_starts_the_ladder() {
+fn with_auto_quic_off_a_send_without_a_link_is_held_and_delivered_once_connected() {
     let cfg = || mdcore::CoreConfig {
         auto_quic: false,
         ..md_testkit::test_config()
@@ -79,15 +85,33 @@ fn with_auto_quic_off_a_send_without_a_link_starts_the_ladder() {
     let b = TestNode::start_full(MockPlatform::new("no-auto-b"), cfg());
     TestNode::pair(&a, &b);
 
-    assert!(matches!(
-        a.engine.send(&b.node_id(), "too early"),
-        Err(CoreError::NoLink(_))
-    ));
-    // The ladder (rung 0, QUIC) connects in the background; then sends work.
+    // No link yet: the message is held, and the ladder starts.
+    assert_eq!(
+        a.engine.send(&b.node_id(), "too early").unwrap(),
+        mdcore::engine::QUEUED
+    );
+    assert_eq!(
+        a.engine.send(&b.node_id(), "also early").unwrap(),
+        mdcore::engine::QUEUED
+    );
+    // The ladder (rung 0, QUIC) connects in the background, and the held
+    // messages go out by themselves, in order.
     assert_eq!(
         a.wait_connected(&b, Duration::from_secs(10)).as_deref(),
         Some("quic")
     );
+    b.sink.wait_for_message("too early");
+    b.sink.wait_for_message("also early");
+    let texts: Vec<String> = b
+        .sink
+        .all()
+        .into_iter()
+        .filter_map(|e| match e {
+            CoreEvent::MessageReceived(m) => Some(m.text),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts, ["too early", "also early"]);
     assert_eq!(a.engine.send(&b.node_id(), "now").unwrap(), "QUIC");
     b.sink.wait_for_message("now");
 }

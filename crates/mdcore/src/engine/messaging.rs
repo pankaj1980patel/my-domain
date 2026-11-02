@@ -2,13 +2,17 @@
 
 use super::*;
 
+/// What `send` returns when the message is waiting for a link.
+pub const QUEUED: &str = "queued";
+
 impl<P: Platform> Engine<P> {
     // --- messaging ---
 
     /// Send a chat message over the peer's live link, opening a QUIC link
     /// first if there is none. With no way to reach the peer right now, the
-    /// connect ladder starts in the background and this returns `NoLink`.
-    /// Returns the transport used so the UI can report it.
+    /// message is held (`transport::outbox`), the connect ladder starts in
+    /// the background, and this returns `"queued"`: the message goes out as
+    /// soon as a link is up. Otherwise returns the transport used.
     pub fn send(&self, node_id: &str, text: &str) -> crate::Result<String> {
         let from = self
             .username
@@ -27,10 +31,9 @@ impl<P: Platform> Engine<P> {
         let linked = self.ensure_link(node_id);
         let node_id = &self.resolve_manual(node_id);
         if !linked && !self.ctx.ws_conns.lock().contains_key(node_id.as_str()) {
+            transport::outbox::hold(&self.ctx, node_id, &from, text);
             let _ = self.connect(node_id);
-            return Err(CoreError::NoLink(
-                "not connected yet; connecting in the background".into(),
-            ));
+            return Ok(QUEUED.to_string());
         }
         transport::send_payload(
             &self.ctx.ws_conns,

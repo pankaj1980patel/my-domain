@@ -29,6 +29,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
@@ -100,14 +101,17 @@ private fun ChatTile(node: String) {
         }
         thread.forEach { m ->
             Box(Modifier.fillMaxWidth(), contentAlignment = if (m.incoming) Alignment.CenterStart else Alignment.CenterEnd) {
-                Text(
-                    m.text,
+                Column(
                     Modifier.widthIn(max = 280.dp)
+                        .alpha(if (m.pending) 0.7f else 1f)
                         .background(if (m.incoming) T.surface2 else T.accent, RoundedCornerShape(14.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = if (m.incoming) T.text else T.accentText,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
+                ) {
+                    Text(m.text, color = if (m.incoming) T.text else T.accentText, style = MaterialTheme.typography.bodyMedium)
+                    if (m.pending) {
+                        Text("Sends when connected", color = T.accentText, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

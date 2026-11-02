@@ -545,6 +545,14 @@ input[type="checkbox"][role="switch"]:checked::after {
   color: var(--accent-text);
   border-bottom-right-radius: var(--r-sm);
 }
+.bubble-pending {
+  opacity: 0.7;
+}
+.bubble-note {
+  display: block;
+  font-size: var(--text-xs);
+  opacity: 0.8;
+}
 .composer {
   display: flex;
   gap: var(--s-2);

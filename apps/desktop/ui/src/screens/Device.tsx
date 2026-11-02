@@ -98,8 +98,11 @@ function ChatTile(props: { node: string }) {
         <Show when={thread().length > 0} fallback={<p class="muted small center">Say hi. Messages go straight to this device, encrypted.</p>}>
           <For each={thread()}>
             {(m) => (
-              <div class={`bubble bubble-${m.dir}`}>
+              <div class={`bubble bubble-${m.dir}`} classList={{ "bubble-pending": !!m.pending }}>
                 <span>{m.text}</span>
+                <Show when={m.pending}>
+                  <small class="bubble-note">Sends when connected</small>
+                </Show>
               </div>
             )}
           </For>

@@ -31,6 +31,7 @@ use crate::transport::{self, P2pConns};
 mod background;
 mod ladder;
 mod messaging;
+pub use messaging::QUEUED;
 mod netchange;
 mod peers;
 pub(crate) use peers::emit_peers;
@@ -106,6 +107,8 @@ pub struct NetCtx<P: Platform> {
     /// The app is in the background (phone screen off / app not visible):
     /// idle links get closed (`CoreConfig::idle_close_after`).
     pub background: Arc<AtomicBool>,
+    /// Messages waiting for a peer's link (see `transport::outbox`).
+    pub outbox: transport::outbox::Outbox,
     /// Dial/accept QUIC connections (the runtime itself is owned by `Engine`).
     pub quic: transport::quic::QuicLink,
     /// The relay WebSocket to the server, when open (last-resort path).
@@ -149,6 +152,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             signaler: self.signaler.clone(),
             shutdown: self.shutdown.clone(),
             background: self.background.clone(),
+            outbox: self.outbox.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
             nat: self.nat.clone(),
@@ -293,6 +297,7 @@ impl<P: Platform> Engine<P> {
             signaler: Arc::default(),
             shutdown: Arc::default(),
             background: Arc::default(),
+            outbox: Arc::default(),
             quic: quic.link(),
             relay: Arc::default(),
             nat: Arc::default(),

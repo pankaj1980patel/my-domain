@@ -19,7 +19,11 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class ChatMessage(val id: Long, val node: String, val incoming: Boolean, val text: String, val ts: Long)
+/** `pending`: held by the core until the device is connected. */
+data class ChatMessage(
+    val id: Long, val node: String, val incoming: Boolean, val text: String, val ts: Long,
+    val pending: Boolean = false,
+)
 
 enum class Tone { Info, Ok, Warn, Error }
 
@@ -141,6 +145,8 @@ object Core {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")
                 progress[node] = "connected"
+                // The core sends held messages the moment a link is up.
+                messages.replaceAll { if (it.node == node && it.pending) it.copy(pending = false) else it }
                 if (!was) addActivity("Connected to ${peerName(node)}", Tone.Ok)
             }
             "peer_disconnected" -> {
@@ -211,7 +217,8 @@ object Core {
     /** Send a chat message; returns the transport used. */
     suspend fun sendMessage(node: String, text: String): String {
         val via = call { it.send(node, text) }
-        onMain { messages.add(ChatMessage(++seq, node, false, text, System.currentTimeMillis())) }
+        val pending = via == "queued"
+        onMain { messages.add(ChatMessage(++seq, node, false, text, System.currentTimeMillis(), pending)) }
         return via
     }
 

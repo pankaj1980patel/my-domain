@@ -5,6 +5,7 @@
 //! or a single UDP datagram per message, and direct WebSocket links) are
 //! gone: QUIC covers each of those cases, encrypted and reliable.
 
+pub mod outbox;
 pub mod punch;
 pub mod quality;
 pub mod quic;
@@ -124,6 +125,7 @@ pub fn mark_live<P: Platform>(
             node_id: node_id.to_string(),
             transport: kind,
         });
+        outbox::flush(ctx, node_id);
         // Give the peer our current addresses (it may only know stale ones
         // from the server), off this thread: sending may block.
         let (ctx, peer) = (ctx.clone(), node_id.to_string());
