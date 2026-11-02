@@ -4,7 +4,10 @@ import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Sh
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import {
   cancelFile,
+  clearClipHistory,
   connect,
+  copyText,
+  loadClipHistory,
   openFile,
   openUrlOn,
   peerName,
@@ -154,6 +157,7 @@ function ChatTile(props: { node: string }) {
 
 function ClipboardTile(props: { node: string }) {
   const [busy, setBusy] = createSignal(false);
+  onMount(() => loadClipHistory());
   return (
     <article class="tile">
       <h2>{t("clipboard.title")}</h2>
@@ -184,6 +188,38 @@ function ClipboardTile(props: { node: string }) {
           onChange={(e) => setClipSync(e.currentTarget.checked)}
         />
       </label>
+      <Show when={state.clipHistory.length}>
+        <div class="row">
+          <span class="small grow">{t("clipboard.recent")}</span>
+          <button class="btn btn-ghost btn-sm" onClick={() => clearClipHistory()}>
+            {t("clipboard.clear")}
+          </button>
+        </div>
+        <ul class="clip-history">
+          <For each={state.clipHistory.slice(0, 8)}>
+            {(e) => (
+              <li class="clip-entry">
+                <div class="grow clip-text">
+                  <span class="clip-value">{e.text}</span>
+                  <span class="muted small">{e.from ? niceName(peerName(e.from)) : t("clipboard.fromHere")}</span>
+                </div>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  aria-label={t("clipboard.copyLabel")}
+                  onClick={() =>
+                    copyText(e.text)
+                      .then(() => toast(t("clipboard.copied"), "ok"))
+                      .catch((err) => toast(friendlyError(err), "error"))
+                  }
+                >
+                  {t("clipboard.copy")}
+                </button>
+              </li>
+            )}
+          </For>
+        </ul>
+        <p class="muted small">{t("clipboard.recentHint")}</p>
+      </Show>
     </article>
   );
 }

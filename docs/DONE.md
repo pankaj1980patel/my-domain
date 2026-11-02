@@ -295,6 +295,18 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Clipboard history (2026-11-02)
+
+- The core keeps the last 20 clipboard values (synced from a device,
+  pulled, or copied here while sync is on), newest first, each with the
+  device it came from; a repeat moves to the top. In memory only, so codes
+  and passwords never reach the disk. `Engine::clipboard_history`,
+  `clear_clipboard_history`, `copy_to_clipboard`; event
+  `clipboard-history`.
+- Desktop: "Recent" list in the Clipboard tile with Copy and Clear.
+  Android keeps its clipboard in the app layer, so it has no history yet.
+- Test: `the_clipboard_history_keeps_recent_values_newest_first`.
+
 ## Device controls (2026-11-02)
 
 - Core: `run_action(node, name, args_json)` → `CoreEvent::Action` on the

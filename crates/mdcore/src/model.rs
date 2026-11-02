@@ -237,3 +237,13 @@ mod tests {
         );
     }
 }
+
+/// One clipboard value in the history: what it was, which device it came
+/// from (`None`: copied on this one) and when (unix seconds).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct ClipEntry {
+    pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
+    pub ts: u64,
+}

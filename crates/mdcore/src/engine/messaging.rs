@@ -118,7 +118,30 @@ impl<P: Platform> Engine<P> {
         })?;
         clip.set(&content);
         *self.ctx.clip_last.lock() = content.clone();
+        crate::features::clipboard::remember(&self.ctx, &content, Some(node_id));
         Ok(content)
+    }
+
+    /// Recent clipboard values from all your devices, newest first (also
+    /// sent as `ClipboardHistory` whenever it changes).
+    pub fn clipboard_history(&self) -> Vec<crate::model::ClipEntry> {
+        self.ctx.clip_history.lock().iter().cloned().collect()
+    }
+
+    /// Forget the clipboard history.
+    pub fn clear_clipboard_history(&self) {
+        self.ctx.clip_history.lock().clear();
+        self.ctx.sink.emit(CoreEvent::ClipboardHistory { entries: vec![] });
+    }
+
+    /// Put `text` (e.g. an entry from the history) on this device's
+    /// clipboard. With auto-sync on, it then goes to your other devices too.
+    pub fn copy_to_clipboard(&self, text: &str) -> crate::Result<()> {
+        let clip = self.ctx.platform.clipboard().ok_or(CoreError::Unsupported(
+            "clipboard not supported on this device",
+        ))?;
+        clip.set(text);
+        Ok(())
     }
 
     /// `manual:<ip>` placeholders are replaced by the real node id once a

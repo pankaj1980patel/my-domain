@@ -42,6 +42,9 @@ export type ActivityItem = {
 export type AppEntry = { pkg: string; label: string };
 
 /** What a device reported about itself (answer to requestStatus). */
+/** A clipboard value in the history; `from` is the device (none: this one). */
+export type ClipEntry = { text: string; from?: string; ts: number };
+
 export type DeviceStatus = {
   battery?: number;
   charging?: boolean;
@@ -91,6 +94,8 @@ type State = {
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
   clipSync: boolean;
+  /** Recent clipboard values from all your devices, newest first. */
+  clipHistory: ClipEntry[];
   /** node_id -> latest reported battery/charging */
   status: Record<string, DeviceStatus>;
   /** Set while another device is ringing this one (find my device). */
@@ -111,6 +116,7 @@ export const [state, setState] = createStore<State>({
   activity: [],
   apps: {},
   clipSync: false,
+  clipHistory: [],
   status: {},
   ringing: null,
   transfers: {},
@@ -222,6 +228,7 @@ export async function startEvents() {
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),
+    on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
     ),
@@ -389,6 +396,23 @@ export async function connect(node: string) {
 export async function setClipSync(on: boolean) {
   await (on ? commands.enableClipboardSync() : commands.disableClipboardSync());
   setState("clipSync", on);
+}
+
+export async function loadClipHistory() {
+  try {
+    setState("clipHistory", JSON.parse(await commands.clipboardHistory()) as ClipEntry[]);
+  } catch {
+    setState("clipHistory", []);
+  }
+}
+
+export async function clearClipHistory() {
+  await commands.clearClipboardHistory();
+}
+
+/** Copy a history entry back onto this computer's clipboard. */
+export async function copyText(text: string) {
+  await unwrap(commands.copyToClipboard(text));
 }
 
 export async function pullClipboard(node: string): Promise<string> {

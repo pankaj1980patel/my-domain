@@ -235,6 +235,7 @@ fn clipboard_watcher<P: Platform>(ctx: NetCtx<P>) {
             }
         };
         if changed {
+            crate::features::clipboard::remember(&ctx, &cur, None);
             let me = ctx.identity.lock().node_id.clone();
             let msg =
                 serde_json::json!({ "type": "clipboard", "content": cur, "from": me }).to_string();

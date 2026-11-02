@@ -27,7 +27,7 @@ use crate::events::CoreEvent;
 use crate::model::{Envelope, IncomingMessage, Plaintext, WsFrame};
 use crate::platform::Platform;
 
-fn now_secs() -> u64 {
+pub(crate) fn now_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)

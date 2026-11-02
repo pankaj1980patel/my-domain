@@ -50,6 +50,9 @@ pub enum CoreEvent {
         protocol: String,
         action: String,
     },
+    /// The clipboard history changed (newest first; see
+    /// `Engine::clipboard_history`).
+    ClipboardHistory { entries: Vec<crate::model::ClipEntry> },
     /// A peer shared an OS notification.
     Notification {
         from: String,
@@ -148,6 +151,7 @@ impl CoreEvent {
             CoreEvent::PeerDisconnected { .. } => "peer-disconnected",
             CoreEvent::ConnectProgress { .. } => "connect-progress",
             CoreEvent::Clipboard { .. } => "clipboard-event",
+            CoreEvent::ClipboardHistory { .. } => "clipboard-history",
             CoreEvent::Notification { .. } => "notification-event",
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",

@@ -10,6 +10,36 @@ use crate::transport::send_control_to;
 
 use super::{ControlHandler, ControlMsg};
 
+/// Values kept in the clipboard history (newest first).
+pub const HISTORY_LEN: usize = 20;
+/// Longer values are kept cut to this many characters.
+const HISTORY_MAX_CHARS: usize = 100_000;
+
+/// Put `text` at the top of the clipboard history (moving it there if it's
+/// already in it) and tell the UI. Kept in memory only: clipboards hold
+/// passwords and codes, which shouldn't end up on disk.
+pub fn remember<P: Platform>(ctx: &NetCtx<P>, text: &str, from: Option<&str>) {
+    if text.trim().is_empty() {
+        return;
+    }
+    let text: String = text.chars().take(HISTORY_MAX_CHARS).collect();
+    let entries = {
+        let mut h = ctx.clip_history.lock();
+        if h.front().is_some_and(|e| e.text == text) {
+            return;
+        }
+        h.retain(|e| e.text != text);
+        h.push_front(crate::model::ClipEntry {
+            text,
+            from: from.map(str::to_string),
+            ts: crate::transport::now_secs(),
+        });
+        h.truncate(HISTORY_LEN);
+        h.iter().cloned().collect()
+    };
+    ctx.sink.emit(CoreEvent::ClipboardHistory { entries });
+}
+
 pub struct ClipboardHandler;
 
 impl<P: Platform> ControlHandler<P> for ClipboardHandler {
@@ -27,6 +57,7 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
                         let c = msg.str("content");
                         *ctx.clip_last.lock() = c.clone();
                         clip.set(&c);
+                        remember(ctx, &c, msg.opt("from").as_deref());
                         ctx.sink.emit(CoreEvent::Clipboard {
                             from: msg.from.to_string(),
                             ip: msg.ip.to_string(),

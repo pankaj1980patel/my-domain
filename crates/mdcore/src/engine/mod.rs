@@ -82,6 +82,8 @@ pub struct NetCtx<P: Platform> {
     pub sink: Arc<dyn EventSink>,
     pub clip_active: Arc<AtomicBool>,
     pub clip_last: Arc<Mutex<String>>,
+    /// Recent clipboard values, newest first (`features::clipboard::remember`).
+    pub clip_history: Arc<Mutex<std::collections::VecDeque<crate::model::ClipEntry>>>,
     pub clip_pending: ClipPending,
     pub control: Arc<ControlRegistry<P>>,
     /// Producer's shareable app list as a JSON array string (pushed by the host).
@@ -147,6 +149,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             sink: self.sink.clone(),
             clip_active: self.clip_active.clone(),
             clip_last: self.clip_last.clone(),
+            clip_history: self.clip_history.clone(),
             clip_pending: self.clip_pending.clone(),
             control: self.control.clone(),
             installed_apps: self.installed_apps.clone(),
@@ -296,6 +299,7 @@ impl<P: Platform> Engine<P> {
             sink: sink.clone(),
             clip_active: clip_active.clone(),
             clip_last: clip_last.clone(),
+            clip_history: Arc::default(),
             clip_pending: clip_pending.clone(),
             control: control.clone(),
             installed_apps: installed_apps.clone(),

@@ -74,6 +74,15 @@ export const commands = {
 	pickFile: () => __TAURI_INVOKE<string | null>("pick_file"),
 	/**  Run an action a device listed in its status (`actions`). */
 	runAction: (nodeId: string, name: string, argsJson: string) => typedError<string, string>(__TAURI_INVOKE("run_action", { nodeId, name, argsJson })),
+	/**
+	 *  Recent clipboard values from your devices, newest first, as JSON
+	 *  (`[{text, from?, ts}]`; the same list the `clipboard-history` event
+	 *  carries).
+	 */
+	clipboardHistory: () => __TAURI_INVOKE<string>("clipboard_history"),
+	clearClipboardHistory: () => __TAURI_INVOKE<void>("clear_clipboard_history"),
+	/**  Put a value (e.g. from the history) on this computer's clipboard. */
+	copyToClipboard: (text: string) => typedError<null, string>(__TAURI_INVOKE("copy_to_clipboard", { text })),
 	/**  Show a received file in Finder / Explorer / the file manager. */
 	revealFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_file", { path })),
 	/**  Open a received file with its default app. */

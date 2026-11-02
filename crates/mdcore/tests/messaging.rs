@@ -248,6 +248,42 @@ fn clipboard_auto_sync_pushes_changes_when_both_enabled() {
 }
 
 #[test]
+fn the_clipboard_history_keeps_recent_values_newest_first() {
+    let (a, b) = pair("clip-history");
+    a.engine.enable_clipboard_sync();
+    b.engine.enable_clipboard_sync();
+    let wait_for = |texts: &[&str]| {
+        let deadline = std::time::Instant::now() + WAIT;
+        loop {
+            let got: Vec<String> = b.engine.clipboard_history().into_iter().map(|e| e.text).collect();
+            if got == texts {
+                return;
+            }
+            assert!(std::time::Instant::now() < deadline, "history {got:?}, want {texts:?}");
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    };
+
+    a.clip().user_copies("first");
+    wait_for(&["first"]);
+    let entry = b.engine.clipboard_history().remove(0);
+    assert_eq!(entry.from.as_deref(), Some(a.node_id().as_str()), "came from a");
+
+    a.clip().user_copies("second");
+    wait_for(&["second", "first"]);
+    // A value copied again moves to the top instead of repeating.
+    a.clip().user_copies("first");
+    wait_for(&["first", "second"]);
+    // Copied on b itself: from this device.
+    b.clip().user_copies("local");
+    wait_for(&["local", "first", "second"]);
+    assert_eq!(b.engine.clipboard_history()[0].from, None);
+
+    b.engine.clear_clipboard_history();
+    assert!(b.engine.clipboard_history().is_empty());
+}
+
+#[test]
 fn clipboard_push_is_ignored_when_receiver_disabled_sync() {
     let (a, b) = pair("clip-push-off");
     a.engine.enable_clipboard_sync();

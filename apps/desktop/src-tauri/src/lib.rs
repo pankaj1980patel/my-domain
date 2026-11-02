@@ -404,6 +404,28 @@ fn disable_clipboard_sync(engine: State<Eng>) {
     engine.disable_clipboard_sync()
 }
 
+/// Recent clipboard values from your devices, newest first, as JSON
+/// (`[{text, from?, ts}]`; the same list the `clipboard-history` event
+/// carries).
+#[tauri::command]
+#[specta::specta]
+fn clipboard_history(engine: State<Eng>) -> String {
+    serde_json::to_string(&engine.clipboard_history()).unwrap_or_else(|_| "[]".into())
+}
+
+#[tauri::command]
+#[specta::specta]
+fn clear_clipboard_history(engine: State<Eng>) {
+    engine.clear_clipboard_history()
+}
+
+/// Put a value (e.g. from the history) on this computer's clipboard.
+#[tauri::command]
+#[specta::specta]
+fn copy_to_clipboard(text: String, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.copy_to_clipboard(&text)
+}
+
 #[tauri::command]
 #[specta::specta]
 fn clipboard_sync_enabled(engine: State<Eng>) -> bool {
@@ -694,6 +716,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         cancel_file,
         pick_file,
         run_action,
+        clipboard_history,
+        clear_clipboard_history,
+        copy_to_clipboard,
         reveal_file,
         open_file
     ])
