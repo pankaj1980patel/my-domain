@@ -2,7 +2,8 @@
 // Settings. A device opens its detail page; the Developer screen is hidden.
 
 import { createSignal, Match, onMount, Show, Switch } from "solid-js";
-import { resume, state } from "./lib/core";
+import { dismissRing, peerName, resume, state } from "./lib/core";
+import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
 import SignIn from "./screens/SignIn";
@@ -18,7 +19,10 @@ type View = { name: "home" } | { name: "device"; node: string } | { name: "activ
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
   const [signedIn, setSignedIn] = createSignal<boolean | null>(null);
-  onMount(() => resume().then(setSignedIn, () => setSignedIn(false)));
+  onMount(() => {
+    unlockAudio();
+    resume().then(setSignedIn, () => setSignedIn(false));
+  });
   const [view, setView] = createSignal<View>({ name: "home" });
   const go = (v: View) => setView(v);
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
@@ -69,6 +73,18 @@ export default function App() {
           </main>
         </div>
         </Show>
+      </Show>
+      <Show when={state.ringing}>
+        {(r) => (
+          // Another device is looking for this one: any click silences it.
+          <div class="ring-banner" role="alertdialog" aria-live="assertive" onClick={dismissRing}>
+            <span class="ring-pulse" aria-hidden="true" />
+            <strong>{t("ring.title", { name: niceName(peerName(r().from)) })}</strong>
+            <button class="btn btn-primary" onClick={dismissRing} autofocus>
+              {t("ring.stop")}
+            </button>
+          </div>
+        )}
       </Show>
       <Toasts />
     </>

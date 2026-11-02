@@ -89,6 +89,24 @@ export const en = {
   "apps.show": "Show its apps",
   "apps.search": "Search apps",
   "apps.none": "No apps to show.",
+  "control.title": "Find & control",
+  "control.hint": "Ring it to find it, or open a link on it.",
+  "control.ring": "Ring",
+  "control.ringing": "Ringing {name}",
+  "control.ringQueued": "Will ring when {name} is reachable",
+  "control.openLink": "Open a link",
+  "control.linkPlaceholder": "https://…",
+  "control.linkLabel": "Link to open on this device",
+  "control.send": "Send",
+  "control.linkSent": "Opening the link on {name}",
+  "control.linkQueued": "Will open the link when {name} is reachable",
+  "control.battery": "Battery {level}%",
+  "control.batteryCharging": "Battery {level}%, charging",
+  "control.noBattery": "No battery",
+
+  // Ring banner (another device is looking for this one)
+  "ring.title": "{name} is looking for this computer",
+  "ring.stop": "Stop",
 
   // Activity
   "activity.title": "Activity",
@@ -107,6 +125,9 @@ export const en = {
   "activity.clipboardCopied": "Copied {name}'s clipboard",
   "activity.notificationSent": "Sent “{title}” to your devices",
   "activity.someDevice": "a device",
+  "activity.ringing": "{name} rang this computer",
+  "activity.openedLink": "{name} opened {url} here",
+  "activity.sentLink": "Sent {url} to {name}",
 
   // Settings
   "settings.title": "Settings",
@@ -135,6 +156,7 @@ export const en = {
   "error.signedOut": "You're signed out. Sign in again.",
   "error.badCredentials": "Wrong username or password.",
   "error.noClipboard": "That device didn't answer. Is my-domain open on it?",
+  "error.badLink": "Only web links (starting with http:// or https://) can be opened.",
   "error.timeout": "That took too long. Check your internet connection.",
   "error.network": "Can't reach the server. Check your internet connection.",
 

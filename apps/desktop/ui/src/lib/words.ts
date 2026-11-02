@@ -73,6 +73,7 @@ export function friendlyError(e: unknown): string {
   if (m.includes("not logged in")) return t("error.signedOut");
   if (m.includes("invalid credentials") || m.includes("401")) return t("error.badCredentials");
   if (m.includes("no clipboard response")) return t("error.noClipboard");
+  if (m.includes("only http and https")) return t("error.badLink");
   if (m.includes("timed out") || m.includes("timeout")) return t("error.timeout");
   if (m.includes("dns") || m.includes("connection refused") || m.includes("network"))
     return t("error.network");

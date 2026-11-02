@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod device;
 mod fcm;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
@@ -223,6 +224,19 @@ impl EventSink for TauriSink {
             let payload = ev.ui_payload().to_string();
             let short: String = payload.chars().take(200).collect();
             eprintln!("[event] {} {short}", ev.name());
+        }
+        // Ring / open-link need the desktop to act, not just the UI. Off the
+        // core's thread: these look up peers and talk to the OS.
+        match &ev {
+            CoreEvent::Ring { from } => {
+                let (app, from) = (self.app.clone(), from.clone());
+                std::thread::spawn(move || device::on_ring(&app, &from));
+            }
+            CoreEvent::OpenUrl { url, .. } => {
+                let (app, url) = (self.app.clone(), url.clone());
+                std::thread::spawn(move || device::on_open_url(&app, &url));
+            }
+            _ => {}
         }
         let _ = self.app.emit(ev.name(), ev.ui_payload());
     }
@@ -503,6 +517,33 @@ fn subscribe_apps(node_id: String, apps_json: String, engine: State<Eng>) -> Res
     engine.subscribe_apps(&node_id, &apps_json)
 }
 
+// --- quick device actions (find my device, status, open a link) ---
+//
+// Each returns the transport used, or "queued" when the device isn't
+// reachable yet (it's delivered once it is).
+
+/// Ask a device for its battery/charging; the answer arrives as
+/// `device-status-event`.
+#[tauri::command]
+#[specta::specta]
+fn request_status(node_id: String, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.request_status(&node_id)
+}
+
+/// Make a device ring.
+#[tauri::command]
+#[specta::specta]
+fn ring_device(node_id: String, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.ring(&node_id)
+}
+
+/// Open a web link (http/https only) on a device.
+#[tauri::command]
+#[specta::specta]
+fn open_url_on(node_id: String, url: String, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.open_url(&node_id, &url)
+}
+
 // ---------------------------------------------------------------------------
 // Startup
 // ---------------------------------------------------------------------------
@@ -543,7 +584,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         report_firewall,
         on_signal,
         request_apps,
-        subscribe_apps
+        subscribe_apps,
+        request_status,
+        ring_device,
+        open_url_on
     ])
 }
 
@@ -598,6 +642,7 @@ pub fn run() {
             // Start the FCM receiver (needs the managed Engine for on_signal).
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
+            device::spawn_status_reporter(handle.clone());
             Ok(())
         })
         .invoke_handler(commands.invoke_handler())

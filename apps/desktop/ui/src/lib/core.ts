@@ -8,6 +8,7 @@ import { createStore, produce } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
 import { commands, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
+import { startRing, stopRing } from "./ring";
 
 export type Peer = Peer_Serialize;
 export type Identity = Identity_Serialize;
@@ -38,6 +39,9 @@ export type ActivityItem = {
 
 export type AppEntry = { pkg: string; label: string };
 
+/** What a device reported about itself (answer to requestStatus). */
+export type DeviceStatus = { battery?: number; charging?: boolean; platform?: string; ts: number };
+
 /** Raw event log for the Developer screen. */
 export type DevEvent = { ts: number; name: string; payload: unknown };
 
@@ -55,6 +59,10 @@ type State = {
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
   clipSync: boolean;
+  /** node_id -> latest reported battery/charging */
+  status: Record<string, DeviceStatus>;
+  /** Set while another device is ringing this one (find my device). */
+  ringing: { from: string } | null;
   devLog: DevEvent[];
 };
 
@@ -69,6 +77,8 @@ export const [state, setState] = createStore<State>({
   activity: [],
   apps: {},
   clipSync: false,
+  status: {},
+  ringing: null,
   devLog: [],
 });
 
@@ -184,6 +194,25 @@ export async function startEvents() {
       const node = state.peers.find((p) => p.name === a.from || p.node_id === a.from)?.node_id ?? a.from;
       setState("apps", node, { apps: a.apps ?? [], subscribed: a.subscribed ?? [] });
     }),
+    on<{ from: string; status: { battery?: unknown; charging?: unknown; platform?: unknown } }>("device-status-event", ({ from, status }) =>
+      setState("status", from, {
+        battery: typeof status?.battery === "number" ? Math.round(status.battery) : undefined,
+        charging: typeof status?.charging === "boolean" ? status.charging : undefined,
+        platform: typeof status?.platform === "string" ? status.platform : undefined,
+        ts: now(),
+      }),
+    ),
+    // The backend brings the window forward and shows the OS notification;
+    // the sound and the banner are here.
+    on<{ from: string }>("ring-event", ({ from }) => {
+      setState("ringing", { from });
+      startRing(() => setState("ringing", null));
+      addActivity({ icon: "", tone: "warn", node: from, text: t("activity.ringing", { name: peerName(from) }) });
+    }),
+    // The backend opens it in the browser.
+    on<{ from: string; url: string }>("open-url-event", ({ from, url }) =>
+      addActivity({ icon: "", tone: "info", node: from, text: t("activity.openedLink", { name: peerName(from), url }) }),
+    ),
     on<unknown>("fcm-event", () => {}),
   ]);
 }
@@ -277,6 +306,29 @@ export async function toggleApp(node: string, pkg: string) {
   const next = cur.includes(pkg) ? cur.filter((p) => p !== pkg) : [...cur, pkg];
   await unwrap(commands.subscribeApps(node, JSON.stringify(next)));
   setState("apps", node, "subscribed", next);
+}
+
+/** Ask a device for its battery; the answer lands in `state.status`. */
+export async function requestStatus(node: string) {
+  await unwrap(commands.requestStatus(node));
+}
+
+/** Returns the transport, or "queued" (rings once the device is reachable). */
+export async function ringDevice(node: string): Promise<string> {
+  return unwrap(commands.ringDevice(node));
+}
+
+/** Returns the transport, or "queued" (opens once the device is reachable). */
+export async function openUrlOn(node: string, url: string): Promise<string> {
+  const via = await unwrap(commands.openUrlOn(node, url));
+  addActivity({ icon: "", tone: "ok", node, text: t("activity.sentLink", { name: peerName(node), url }) });
+  return via;
+}
+
+/** Silence this device's ring. */
+export function dismissRing() {
+  stopRing();
+  setState("ringing", null);
 }
 
 export async function signOut() {

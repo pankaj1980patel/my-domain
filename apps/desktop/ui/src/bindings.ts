@@ -51,6 +51,15 @@ export const commands = {
 	onSignal: (from: string, payload: string) => __TAURI_INVOKE<void>("on_signal", { from, payload }),
 	requestApps: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("request_apps", { nodeId })),
 	subscribeApps: (nodeId: string, appsJson: string) => typedError<null, string>(__TAURI_INVOKE("subscribe_apps", { nodeId, appsJson })),
+	/**
+	 *  Ask a device for its battery/charging; the answer arrives as
+	 *  `device-status-event`.
+	 */
+	requestStatus: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("request_status", { nodeId })),
+	/**  Make a device ring. */
+	ringDevice: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("ring_device", { nodeId })),
+	/**  Open a web link (http/https only) on a device. */
+	openUrlOn: (nodeId: string, url: string) => typedError<string, string>(__TAURI_INVOKE("open_url_on", { nodeId, url })),
 };
 
 /* Types */

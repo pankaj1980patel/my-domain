@@ -1,10 +1,14 @@
 // One device: its status, then a tile per feature.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
 import {
   connect,
+  openUrlOn,
+  peerName,
   pullClipboard,
   requestApps,
+  requestStatus,
+  ringDevice,
   sendMessage,
   setClipSync,
   shareNotification,
@@ -18,6 +22,15 @@ import { t } from "../i18n";
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
   const s = () => linkStateOf(props.node);
+  // Ask for its battery whenever this page opens (answer: device-status-event).
+  // Asked only over a live link (and again when one comes up): asking a
+  // device that isn't connected would wake it by push just to show this.
+  createEffect(
+    on(
+      () => [props.node, !!state.links[props.node]] as const,
+      ([node, linked]) => linked && requestStatus(node).catch(() => {}),
+    ),
+  );
 
   return (
     <Show
@@ -60,6 +73,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
           <div class="tiles">
             <ChatTile node={props.node} />
             <ClipboardTile node={props.node} />
+            <ControlTile node={props.node} />
             <NotifyTile />
             <AppsTile node={props.node} />
           </div>
@@ -160,6 +174,78 @@ function ClipboardTile(props: { node: string }) {
           onChange={(e) => setClipSync(e.currentTarget.checked)}
         />
       </label>
+    </article>
+  );
+}
+
+function ControlTile(props: { node: string }) {
+  const [url, setUrl] = createSignal("");
+  const [busy, setBusy] = createSignal(false);
+  const name = () => niceName(peerName(props.node));
+  const status = () => state.status[props.node];
+  const battery = () => {
+    const st = status();
+    if (!st) return undefined;
+    if (st.battery === undefined) return t("control.noBattery");
+    return st.charging ? t("control.batteryCharging", { level: st.battery }) : t("control.battery", { level: st.battery });
+  };
+
+  const ring = async () => {
+    setBusy(true);
+    try {
+      const via = await ringDevice(props.node);
+      toast(via === "queued" ? t("control.ringQueued", { name: name() }) : t("control.ringing", { name: name() }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const send = async (e: Event) => {
+    e.preventDefault();
+    let link = url().trim();
+    if (!link) return;
+    // "example.com" means the web page.
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(link)) link = `https://${link}`;
+    setBusy(true);
+    try {
+      const via = await openUrlOn(props.node, link);
+      toast(via === "queued" ? t("control.linkQueued", { name: name() }) : t("control.linkSent", { name: name() }), "ok");
+      setUrl("");
+    } catch (err) {
+      toast(friendlyError(err), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <article class="tile">
+      <h2>{t("control.title")}</h2>
+      <p class="muted small">{t("control.hint")}</p>
+      <Show when={battery()}>
+        <p class="small">{battery()}</p>
+      </Show>
+      <button class="btn btn-soft btn-block" disabled={busy()} onClick={ring}>
+        {t("control.ring")}
+      </button>
+      <form class="stack" onSubmit={send}>
+        <span class="small">{t("control.openLink")}</span>
+        <div class="composer">
+          <input
+            type="text"
+            inputMode="url"
+            placeholder={t("control.linkPlaceholder")}
+            value={url()}
+            onInput={(e) => setUrl(e.currentTarget.value)}
+            aria-label={t("control.linkLabel")}
+          />
+          <button class="btn btn-soft" type="submit" disabled={busy() || !url().trim()}>
+            {t("control.send")}
+          </button>
+        </div>
+      </form>
     </article>
   );
 }
