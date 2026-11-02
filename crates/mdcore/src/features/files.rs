@@ -44,10 +44,16 @@ pub const CHUNK: usize = 64 * 1024;
 const WINDOW: u64 = 16 * CHUNK as u64;
 /// No ack for this long: rewind to the last acked byte.
 const STALL: Duration = Duration::from_secs(5);
+/// How often a waiting sender checks that the link is still there.
+const LINK_CHECK: Duration = Duration::from_millis(500);
 /// Stalls in a row before the transfer pauses until the next link.
 const MAX_STALLS: u32 = 3;
-/// Paused transfers are offered again at most this often.
+/// Paused transfers are offered again at most this often over a link...
 const REOFFER_EVERY: Duration = Duration::from_secs(10);
+/// ...and, with no link (each try connects, maybe waking it by push), after
+/// a wait that doubles from this, up to `MAX_BACKOFF`.
+const FIRST_BACKOFF: Duration = Duration::from_secs(15);
+const MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 const PARTIAL_DIR: &str = ".mydomain-partial";
 
@@ -64,8 +70,8 @@ struct Outgoing {
     /// The receiver accepted at least once (so it's worth re-offering).
     started: bool,
     offered_at: Option<Instant>,
-    /// A re-offer is waiting in the outbox for the next link.
-    queued: bool,
+    /// Wait before the next re-offer while the peer has no link.
+    backoff: Duration,
     progress_at: Option<Instant>,
 }
 
@@ -207,7 +213,7 @@ pub fn start<P: Platform>(
                 running: false,
                 started: false,
                 offered_at: Some(Instant::now()),
-                queued: false,
+                backoff: FIRST_BACKOFF,
                 progress_at: None,
             },
         );
@@ -250,6 +256,7 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
     let mut pos = from;
     let mut buf = vec![0u8; CHUNK];
     let mut stalls = 0;
+    let mut waited = Duration::ZERO;
     loop {
         // Wait for room in the window (or the end), rewinding on a stall.
         {
@@ -260,9 +267,18 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
                 return; // all there; `file_done` finishes it
             }
             if pos >= size || pos.saturating_sub(acked) >= WINDOW {
-                let timed_out = files.acked.wait_for(&mut out, STALL).timed_out();
+                let timed_out = files.acked.wait_for(&mut out, LINK_CHECK).timed_out();
                 let Some(t) = out.get_mut(&id) else { return };
-                if timed_out && t.acked == acked {
+                if !ctx.ws_conns.lock().contains_key(&node) {
+                    t.running = false; // link gone: offered again on the next
+                    return;
+                }
+                waited = if timed_out { waited + LINK_CHECK } else { Duration::ZERO };
+                if waited < STALL {
+                    continue;
+                }
+                waited = Duration::ZERO;
+                if t.acked == acked {
                     stalls += 1;
                     if stalls >= MAX_STALLS {
                         t.running = false; // paused: offered again on a link
@@ -304,16 +320,19 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     {
         let mut out = ctx.files.out.lock();
         for (id, t) in out.iter_mut() {
-            let due = t.offered_at.is_none_or(|at| at.elapsed() >= REOFFER_EVERY);
-            if t.running || !t.started || !due {
+            if t.running || !t.started {
                 continue;
             }
+            // With no link, each try may wake the device by push: back off.
             let linked = ctx.ws_conns.lock().contains_key(&t.node);
-            if !linked && t.queued {
-                continue; // already waiting in the outbox for a link
+            let every = if linked { REOFFER_EVERY } else { t.backoff };
+            if t.offered_at.is_some_and(|at| at.elapsed() < every) {
+                continue;
             }
             t.offered_at = Some(Instant::now());
-            t.queued = !linked;
+            if !linked {
+                t.backoff = (t.backoff * 2).min(MAX_BACKOFF);
+            }
             let msg = json!({
                 "type": "file_offer", "from": me, "id": id,
                 "name": t.name, "size": t.size, "sha256": t.sha,
@@ -540,7 +559,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     return;
                 }
                 t.started = true;
-                t.queued = false;
+                t.backoff = FIRST_BACKOFF;
                 t.acked = offset.min(t.size);
                 files.acked.notify_all();
                 if !t.running && t.acked < t.size {

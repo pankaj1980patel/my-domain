@@ -271,9 +271,9 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 
 | Wave | Features |
 |---|---|
-| A: quick wins | Battery and device info, ring device, open link, launch app, flashlight, DND/ringer, volume, clipboard history, notification actions |
+| A: quick wins | ~~Battery and device info, ring device, open link~~ (done 2026-11-02), launch app, flashlight, DND/ringer, volume, clipboard history, notification actions |
 | B: media and phone | Media control for any app, call log, live call alert, dial and speaker, answer/end, contacts, SMS, OTP → desktop clipboard |
-| C: files | File push (resumable), browse, download, gallery, photo backup, **Wi-Fi Direct fast path** for big transfers (below) |
+| C: files | ~~File push (resumable)~~ (core done 2026-11-02; app screens in progress), browse, download, gallery, photo backup, **Wi-Fi Direct fast path** for big transfers (below) |
 | D: screen and control | Screen share, remote input, phone as touchpad/keyboard, presentation remote |
 | E: connectivity (Shizuku, see [ADR-0006](../learnings/decisions/ADR-0006-shizuku.md)) | Wi-Fi scan/toggle/connect, Bluetooth, airplane mode, mobile data, hotspot |
 | F: find, security, automation | Locate, lost mode, wipe, triggers, scenes, schedules, webhooks |

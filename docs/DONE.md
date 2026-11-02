@@ -295,6 +295,37 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Sending files (2026-11-02)
+
+- `Engine::send_file(node, path)` / `cancel_file(id)` / `set_download_dir`
+  (`features/files.rs`). 64 KiB chunks, at most 1 MiB unacknowledged; the
+  receiver writes `<downloads>/.mydomain-partial/<id>.part` and acks its
+  length (a gap makes the sender rewind). The offer goes the reliable way
+  (queued, wakes a sleeping device). A dropped link pauses the transfer;
+  it is offered again on the next link (with no link: retries back off
+  from 15 s to 10 min) and resumes from the partial file, also after the
+  receiver restarts. SHA-256 checked at the end; the file is saved under
+  a free name ("notes (1).txt"); names can't escape the folder.
+- Events `FileProgress`, `FileReceived`, `FileSent`, `FileFailed`.
+  `mdctl`: `sendfile <node> <path>`, `downloads <dir>`.
+- Tests (`tests/files.rs`): small and 3 MB files, a device without a
+  downloads folder declines, a missing file fails at once, and a 40 MB
+  transfer interrupted by a receiver restart resumes where it stopped.
+
+## Ring, open a link, battery (2026-11-02)
+
+- Core (`features/device.rs`): `request_status`, `ring`, `open_url` go the
+  reliable way (queued; a sleeping phone is woken by push), `set_device_status`
+  is pushed by the host. Only http(s) links are sent or opened.
+- Android: ring plays the alarm tone at alarm volume for up to 30 s with a
+  Stop notification; a link opens directly when the app is on screen,
+  otherwise as a notification; battery pushed on change.
+- Desktop: ring shows and focuses the window with a chime and a system
+  notification; links open in the default browser; battery from `pmset`
+  (macOS) or `/sys/class/power_supply` (Linux).
+- Both: a "Find & control" tile (Ring, Open a link, battery). Status is
+  asked only over a live link, so opening a device's screen never wakes it.
+
 ## Strings in resource files; desktop FCM stop (2026-11-02)
 
 - Android UI text is in `res/values/strings.xml` (117 entries, plurals for
