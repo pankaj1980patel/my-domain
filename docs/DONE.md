@@ -305,6 +305,11 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
 - A session that hasn't opened its channel now stops after 30 s
   (`OPEN_WITHIN`), or as soon as the peer is linked directly another way.
 - Measured on the laptop: idle CPU went from 3.3 s to 0.55 s per 2 minutes.
+- The background loops polled for shutdown every 100 ms, so six threads
+  each woke 10 times a second for nothing. They now sleep on a condition
+  variable that `Engine::drop` signals (`engine::Shutdown`), so they still
+  stop at once. The idle desktop went from over 3,600 to about 1,100
+  wakeups a minute, and to 18 CPU ticks a minute.
 
 ## Review fixes: fewer pushes to unreachable devices (2026-11-03)
 

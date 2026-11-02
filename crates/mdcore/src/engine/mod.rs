@@ -110,7 +110,7 @@ pub struct NetCtx<P: Platform> {
     /// Overrides how signals are delivered; `None` = the registry over HTTP.
     pub signaler: Arc<Mutex<Option<Arc<dyn Signaler>>>>,
     /// Set when the `Engine` is dropped; background loops exit on their next tick.
-    pub shutdown: Arc<AtomicBool>,
+    pub shutdown: Arc<Shutdown>,
     /// The app is in the background (phone screen off / app not visible):
     /// idle links get closed (`CoreConfig::idle_close_after`).
     pub background: Arc<AtomicBool>,
@@ -519,6 +519,40 @@ impl<P: Platform> Engine<P> {
             server_url: self.ctx.platform.kv_get("server_url").unwrap_or_default(),
             username: self.ctx.platform.kv_get("username").unwrap_or_default(),
         }
+    }
+}
+
+/// The engine is going away. Background loops sleep on it (`wait`) instead
+/// of waking every few milliseconds to check, and are woken at once by
+/// `store(true)`.
+#[derive(Default)]
+pub struct Shutdown {
+    flag: AtomicBool,
+    lock: parking_lot::Mutex<()>,
+    woken: parking_lot::Condvar,
+}
+
+impl Shutdown {
+    pub fn load(&self, order: Ordering) -> bool {
+        self.flag.load(order)
+    }
+
+    pub fn store(&self, value: bool, order: Ordering) {
+        let _guard = self.lock.lock();
+        self.flag.store(value, order);
+        self.woken.notify_all();
+    }
+
+    /// Sleep for `d`, or until shut down. False once shut down.
+    pub fn wait(&self, d: std::time::Duration) -> bool {
+        let deadline = std::time::Instant::now() + d;
+        let mut guard = self.lock.lock();
+        while !self.flag.load(Ordering::Relaxed) {
+            if self.woken.wait_until(&mut guard, deadline).timed_out() {
+                return !self.flag.load(Ordering::Relaxed);
+            }
+        }
+        false
     }
 }
 
