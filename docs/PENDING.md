@@ -20,7 +20,8 @@ In priority order. Each item makes devices connect in more places, faster,
 or with less battery.
 
 1. ~~Serve the server on port 443 with HTTPS~~: **done**. Live at
-   `https://152-67-7-50.sslip.io` (Caddy + Let's Encrypt); both apps
+   `https://mydomain.work.gd` (Caddy + Let's Encrypt; the old
+   `152-67-7-50.sslip.io` name is still served); both apps
    default to it.
    - Later: close `:6969` to the public, once no install uses it.
 2. ~~Detect NAT type up front~~: **done**.
@@ -333,9 +334,8 @@ A feature counts as done when it has:
   happens again.
 - **Stale FCM thread:** after re-registering, the old FCM receiver thread
   keeps running until its next reconnect. It's harmless but wastes a thread.
-- **Office network blocks the server.** The Mac's office Wi-Fi (FortiGuard)
-  blocks `152-67-7-50.sslip.io` as a policy violation (HTTP 403 block
-  page). Use a hotspot there, ask IT to allow it, or move the server to a
-  real domain.
+- **Office network blocked the old server name.** FortiGuard blocks
+  `152-67-7-50.sslip.io`; the apps now default to `mydomain.work.gd`.
+  Check it passes the office filter once Caddy serves it.
 - **QUIC peers aren't authenticated yet.** Messages are still end-to-end
   encrypted. Fixed in Phase 4.

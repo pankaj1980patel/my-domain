@@ -35,7 +35,7 @@ import com.mydomain.android.core.friendlyError
 import com.mydomain.android.ffi.generateKey
 import kotlinx.coroutines.launch
 
-const val DEFAULT_SERVER = "https://152-67-7-50.sslip.io"
+const val DEFAULT_SERVER = "https://mydomain.work.gd"
 
 /** Welcome / sign in. The server is pre-filled and tucked under "Advanced":
  *  nobody should have to type a URL. */

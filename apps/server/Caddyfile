@@ -1,13 +1,13 @@
 # HTTPS front for the registry on oracle-dev (installed at /etc/caddy/Caddyfile).
-# Caddy gets and renews the Let's Encrypt certificate itself, and proxies
+# Caddy gets and renews the Let's Encrypt certificates itself, and proxies
 # everything (HTTP API, /signal, the /relay WebSocket) to the server on :6969.
 # The server takes the real client IP from X-Forwarded-For, trusted only
 # from loopback (see client_ip in src/devices.rs).
 #
-# The hostname is a free sslip.io name that resolves to the server's IP.
-# To move to your own domain, change it here and point the domain's A record
-# at the server.
-152-67-7-50.sslip.io {
+# mydomain.work.gd is the server's name (its A record points at
+# 152.67.7.50). The old free sslip.io name stays for installs that still use
+# it; some company web filters block sslip.io names.
+mydomain.work.gd, 152-67-7-50.sslip.io {
 	encode zstd gzip
 	reverse_proxy 127.0.0.1:6969
 }

@@ -6,7 +6,7 @@ import { commands } from "../bindings";
 import { signIn } from "../lib/core";
 import { friendlyError } from "../lib/words";
 
-const DEFAULT_SERVER = "https://152-67-7-50.sslip.io";
+const DEFAULT_SERVER = "https://mydomain.work.gd";
 
 export default function SignIn(props: { onDone: () => void }) {
   const [create, setCreate] = createSignal(false);
