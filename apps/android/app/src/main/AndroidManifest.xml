@@ -39,6 +39,23 @@
             android:name=".DeviceActionReceiver"
             android:exported="false" />
 
+        <!-- The receiving-file notification's Cancel action. -->
+        <receiver
+            android:name=".FileActionReceiver"
+            android:exported="false" />
+
+        <!-- Received files on Android 9 and older (kept in the app's folder):
+             shared with the app that opens them. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <!-- FCM: connection signals (dial me back, join the relay, punch). -->
         <service
             android:name=".MdMessagingService"
@@ -69,6 +86,13 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Share files from other apps to one of your devices. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
     </application>

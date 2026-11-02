@@ -1,6 +1,7 @@
 package com.mydomain.android.core
 
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -18,7 +19,10 @@ import com.mydomain.android.ffi.MdEngine
 import com.mydomain.android.ffi.PeerInfo
 import com.mydomain.android.ffi.Session
 import com.mydomain.android.ffi.runningEngine
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -84,6 +88,13 @@ object Core {
 
     /** node id -> its latest reported status (battery, charging). */
     val deviceStatus = mutableStateMapOf<String, DeviceStatus>()
+
+    /** File transfers, newest first (this process only). */
+    val transfers = mutableStateListOf<Transfer>()
+
+    /** Files shared to the app from another app (share sheet), waiting for
+     *  the user to pick a device. */
+    var pendingShare by mutableStateOf<List<Uri>>(emptyList()); private set
 
     /** Clipboard auto-sync with the other devices (NetService acts on it). */
     var clipSync by mutableStateOf(false); private set
@@ -184,7 +195,10 @@ object Core {
     fun onEvent(name: String, payloadJson: String) {
         labLog("$name ${payloadJson.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
-        val peersNow = if (o.optString("kind") == "peers_updated") engine()?.peers() else null
+        val kind = o.optString("kind")
+        val peersNow = if (kind == "peers_updated") engine()?.peers() else null
+        // An outgoing transfer ended: its cache copy can go.
+        if (kind == "file_sent" || (kind == "file_failed" && !o.optBoolean("incoming"))) OutgoingFiles.end(o.optString("id"))
         onMain {
             devLog.add(0, DevEvent(System.currentTimeMillis(), name, payloadJson))
             if (devLog.size > 500) devLog.removeRange(500, devLog.size)
@@ -240,6 +254,36 @@ object Core {
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
+            "file_progress" -> updateTransfer(o.optString("id"), { Transfer(it, node, o.optString("name"), o.optBoolean("incoming")) }) {
+                if (it.state != TransferState.Active) it
+                else it.copy(done = o.optLong("done"), total = o.optLong("total"))
+            }
+            "file_received" -> {
+                val from = o.optString("from")
+                val name = o.optString("name")
+                updateTransfer(o.optString("id"), { Transfer(it, from, name, true) }) {
+                    it.copy(state = TransferState.Done, done = o.optLong("size"), total = o.optLong("size"))
+                }
+                addActivity(str(R.string.act_file_saved, name, peerName(from)), Tone.Ok)
+            }
+            "file_sent" -> {
+                val name = o.optString("name")
+                updateTransfer(o.optString("id"), { Transfer(it, node, name, false) }) {
+                    it.copy(state = TransferState.Done, done = it.total)
+                }
+                addActivity(str(R.string.act_file_sent, name, peerName(node)), Tone.Ok)
+            }
+            "file_failed" -> {
+                val name = o.optString("name")
+                val incoming = o.optBoolean("incoming")
+                val reason = o.optString("reason")
+                updateTransfer(o.optString("id"), { Transfer(it, node, name, incoming) }) {
+                    it.copy(state = TransferState.Failed, reason = reason)
+                }
+                if (reason != "cancelled") {
+                    addActivity(str(if (incoming) R.string.act_file_receive_failed else R.string.act_file_send_failed, name, peerName(node), reason), Tone.Error)
+                }
+            }
             "apps_list" -> {
                 val from = o.optString("from")
                 val key = peers.firstOrNull { it.nodeId == from || it.name == from }?.nodeId ?: from
@@ -253,6 +297,29 @@ object Core {
             }
         }
     }
+
+    /** Update transfer [id] (main thread), creating it first if unknown. */
+    private fun updateTransfer(id: String, create: (String) -> Transfer, change: (Transfer) -> Transfer) {
+        if (id.isEmpty()) return
+        val i = transfers.indexOfFirst { it.id == id }
+        if (i < 0) {
+            transfers.add(0, change(create(id)))
+            if (transfers.size > 100) transfers.removeRange(100, transfers.size)
+        } else {
+            transfers[i] = change(transfers[i])
+        }
+    }
+
+    /** NetService moved received file [id] into Downloads: it can be opened. */
+    fun fileSaved(id: String, uri: Uri, mime: String) = onMain {
+        val i = transfers.indexOfFirst { it.id == id }
+        if (i >= 0) transfers[i] = transfers[i].copy(uri = uri.toString(), mime = mime)
+    }
+
+    /** Files shared from another app; the UI asks which device gets them. */
+    fun shareFiles(uris: List<Uri>) = onMain { pendingShare = uris }
+
+    fun clearShare() = onMain { pendingShare = emptyList() }
 
     // --- actions -------------------------------------------------------------
 
@@ -329,6 +396,54 @@ object Core {
 
     /** Open a web link on a device. */
     suspend fun openUrl(node: String, url: String): String = call { it.openUrl(node, url) }
+
+    /**
+     * Send a picked or shared file ([uri]) to a device: copied to the cache
+     * first (the core sends from a path), then handed to the core. Returns
+     * the transfer id; progress and the outcome arrive as events.
+     */
+    suspend fun sendFile(node: String, uri: Uri): String {
+        val file = withContext(Dispatchers.IO) { OutgoingFiles.copy(app, uri) }
+        val id = try {
+            call { it.sendFile(node, file.path) }
+        } catch (e: Exception) {
+            OutgoingFiles.discard(file)
+            throw e
+        }
+        OutgoingFiles.track(id, file)
+        val size = file.length()
+        onMain {
+            updateTransfer(id, { Transfer(it, node, file.name, false) }) {
+                if (it.total == 0L) it.copy(total = size) else it
+            }
+        }
+        return id
+    }
+
+    /** Process-wide work that must outlive a screen (copying a big file
+     *  for sending keeps going when the user navigates away). */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Send [uris] to [node] one after another, off the screen's lifetime.
+     *  [onError] gets the first failure (each file is tried). */
+    fun sendFiles(node: String, uris: List<Uri>, onDone: () -> Unit = {}, onError: (Throwable) -> Unit = {}) {
+        appScope.launch {
+            var failed: Throwable? = null
+            for (u in uris) {
+                try { sendFile(node, u) } catch (e: Exception) { if (failed == null) failed = e }
+            }
+            failed?.let(onError)
+            onDone()
+        }
+    }
+
+    /** Stop a transfer either way (a `file_failed` "cancelled" follows). */
+    suspend fun cancelFile(id: String) = call { it.cancelFile(id) }
+
+    /** [cancelFile] from a click handler (no coroutine there). */
+    fun cancelFileAsync(id: String) {
+        appScope.launch { runCatching { cancelFile(id) } }
+    }
 
     suspend fun toggleApp(node: String, pkg: String) {
         val cur = apps[node] ?: return

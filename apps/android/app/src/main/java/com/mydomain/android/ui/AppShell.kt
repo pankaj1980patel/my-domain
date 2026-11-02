@@ -69,6 +69,7 @@ fun App(prefs: SharedPreferences) {
             }
         } else {
             Main(prefs, snack)
+            ShareChooser()
         }
     }
 }

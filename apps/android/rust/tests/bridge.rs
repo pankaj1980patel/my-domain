@@ -230,5 +230,45 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     let st = events.wait_for("device-status-event", |_| true);
     assert_eq!(st["kind"], "device_status");
     assert_eq!(st["from"], desktop.node_id().as_str());
+
+    // Files: the desktop sends the phone a file; it lands in the phone's
+    // download dir and the listener hears `file-received`.
+    let inbox = dir.join("inbox");
+    std::fs::create_dir_all(&inbox).unwrap();
+    phone.set_download_dir(inbox.to_string_lossy().into_owned());
+    let src = dir.join("hello.txt");
+    let body: Vec<u8> = (0..200_000u32).map(|i| (i % 251) as u8).collect();
+    std::fs::write(&src, &body).unwrap();
+    let fid = desktop
+        .engine
+        .send_file(&id.node_id, src.to_str().unwrap())
+        .unwrap();
+    let got = events.wait_for("file-received", |v| v["id"] == fid.as_str());
+    assert_eq!(got["kind"], "file_received");
+    assert_eq!(got["from"], desktop.node_id().as_str());
+    assert_eq!(got["name"], "hello.txt");
+    assert_eq!(got["size"], body.len() as u64);
+    assert_eq!(std::fs::read(got["path"].as_str().unwrap()).unwrap(), body);
+    let prog = events.wait_for("file-progress", |v| v["id"] == fid.as_str());
+    assert_eq!(prog["incoming"], true);
+
+    // ...and the phone sends one back: `file-sent` once the desktop has it.
+    let desk_inbox = dir.join("desk-inbox");
+    std::fs::create_dir_all(&desk_inbox).unwrap();
+    desktop
+        .engine
+        .set_download_dir(desk_inbox.to_str().unwrap());
+    let out = phone
+        .send_file(desktop.node_id(), src.to_string_lossy().into_owned())
+        .unwrap();
+    let sent = events.wait_for("file-sent", |v| v["id"] == out.as_str());
+    assert_eq!(sent["kind"], "file_sent");
+    assert_eq!(sent["node_id"], desktop.node_id().as_str());
+    // Unknown devices are typed errors; cancelling an unknown id is a no-op.
+    assert!(matches!(
+        phone.send_file("nobody".into(), src.to_string_lossy().into_owned()),
+        Err(MdError::PeerNotFound)
+    ));
+    phone.cancel_file("no-such-transfer".into());
     let _ = std::fs::remove_dir_all(dir);
 }

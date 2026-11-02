@@ -75,8 +75,13 @@ class NetService : Service() {
         // back to ANDROID_ID (also stable across restarts/reinstalls).
         Core.labLogFile = java.io.File(filesDir, "events.log")
         Core.labLog("service start")
+        // A fresh engine (new process): copies of files being sent by an
+        // earlier process are orphans (their transfers died with it).
+        if (Core.engine() == null) com.mydomain.android.core.OutgoingFiles.clearAll(this)
         runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents, KeystoreSecrets(this)) }
             .onFailure { Log.e("NetService", "engine failed to start", it) }
+        // Received files land in an app-private folder, then move to Downloads.
+        Core.engine()?.setDownloadDir(FileActions.downloadDir(this).absolutePath)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
         Core.reload()
@@ -153,6 +158,7 @@ class NetService : Service() {
             manager?.createNotificationChannel(shared)
         }
         DeviceActions.createChannels(this)
+        FileActions.createChannels(this)
     }
 
     private fun createNotification(): Notification {
@@ -219,6 +225,9 @@ class NetService : Service() {
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))
+                        "file_progress" -> FileActions.onProgress(this@NetService, o)
+                        "file_received" -> FileActions.onReceived(this@NetService, o)
+                        "file_failed" -> FileActions.onFailed(this@NetService, o)
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)

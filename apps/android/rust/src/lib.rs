@@ -556,4 +556,26 @@ impl MdEngine {
     pub fn open_url(&self, node_id: String, url: String) -> MdResult<String> {
         Ok(self.inner.open_url(&node_id, &url)?)
     }
+
+    // --- files ---
+
+    /// Where files from your other devices are saved (an app-private dir;
+    /// the app moves each one into the public Downloads). Until this is
+    /// set, offers are declined.
+    pub fn set_download_dir(&self, dir: String) {
+        self.inner.set_download_dir(&dir);
+    }
+
+    /// Send the file at `path`. Returns the transfer id at once; progress
+    /// arrives as `file-progress`, then `file-sent` or `file-failed`. Like a
+    /// message, the offer waits for the device to be reachable.
+    pub fn send_file(&self, node_id: String, path: String) -> MdResult<String> {
+        Ok(self.inner.send_file(&node_id, &path)?)
+    }
+
+    /// Stop a transfer, either way (a `file-failed` with reason
+    /// "cancelled" follows; the other device is told).
+    pub fn cancel_file(&self, id: String) {
+        self.inner.cancel_file(&id);
+    }
 }

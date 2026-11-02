@@ -83,6 +83,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                 }
             }
             item { ChatTile(node) }
+            item { FilesTile(node) }
             item { FindTile(node, niceName(peer.name)) }
             item { ClipboardTile(node) }
             item { NotifyTile() }

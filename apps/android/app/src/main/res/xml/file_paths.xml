@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Where received files are kept (FileActions.downloadDir), for Android 9
+     and older, which open them through the FileProvider. -->
+<paths>
+    <external-files-path name="downloads" path="Download/" />
+    <files-path name="downloads_internal" path="downloads/" />
+</paths>

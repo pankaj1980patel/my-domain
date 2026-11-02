@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -43,8 +44,30 @@ class MainActivity : ComponentActivity() {
         // Device lab: sign in with the test account in the background, so it
         // works even when the phone is locked (Compose only runs on screen).
         devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
+        if (savedInstanceState == null) takeShare(intent)
         setContent { MdTheme { App(prefs) } }
     }
+
+    /** Files shared from another app (share sheet): the UI asks which
+     *  device gets them. */
+    private fun takeShare(intent: Intent?) {
+        val uris: List<Uri> = when (intent?.action) {
+            Intent.ACTION_SEND -> listOfNotNull(streamExtra(intent))
+            Intent.ACTION_SEND_MULTIPLE -> streamListExtra(intent)
+            else -> return
+        }
+        if (uris.isNotEmpty()) Core.shareFiles(uris)
+    }
+
+    @Suppress("DEPRECATION")
+    private fun streamExtra(intent: Intent): Uri? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        else intent.getParcelableExtra(Intent.EXTRA_STREAM)
+
+    @Suppress("DEPRECATION")
+    private fun streamListExtra(intent: Intent): List<Uri> =
+        (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+        else intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)).orEmpty()
 
     override fun onStart() {
         super.onStart()
@@ -56,6 +79,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
+        takeShare(intent)
     }
 
     override fun onResume() {

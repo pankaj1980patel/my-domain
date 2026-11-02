@@ -173,4 +173,36 @@
     <string name="ring_body">Tap to stop ringing.</string>
     <string name="ring_stop">Stop</string>
     <string name="link_title">%1$s sent a link</string>
+    <!-- Files -->
+    <string name="channel_file_progress">File transfers</string>
+    <string name="channel_files">Files from your devices</string>
+    <string name="files_title">Files</string>
+    <string name="files_body">Send photos, documents or anything else, straight to this device.</string>
+    <string name="files_send">Send a file</string>
+    <string name="files_preparing">Preparing…</string>
+    <string name="file_waiting">Waiting for the device…</string>
+    <string name="file_sending">Sending %1$s of %2$s</string>
+    <string name="file_receiving">Receiving %1$s of %2$s</string>
+    <string name="file_sent">Sent</string>
+    <string name="file_saved">Saved to Downloads</string>
+    <string name="file_cancelled">Cancelled</string>
+    <string name="file_failed">Didn\'t finish: %1$s</string>
+    <string name="file_open">Open</string>
+    <string name="file_no_app">No app here can open this file</string>
+    <string name="file_receiving_title">Receiving %1$s</string>
+    <string name="file_receiving_body">From %1$s, %2$d%%</string>
+    <string name="file_saved_title">%1$s from %2$s</string>
+    <string name="file_saved_body">Saved to Downloads. Tap to open.</string>
+    <string name="file_failed_title">%1$s didn\'t arrive</string>
+    <string name="act_file_saved">Saved %1$s from %2$s</string>
+    <string name="act_file_sent">Sent %1$s to %2$s</string>
+    <string name="act_file_receive_failed">%1$s from %2$s didn\'t arrive: %3$s</string>
+    <string name="act_file_send_failed">%1$s didn\'t reach %2$s: %3$s</string>
+    <string name="share_title">Send to</string>
+    <plurals name="share_body">
+        <item quantity="one">Choose the device that gets this file.</item>
+        <item quantity="other">Choose the device that gets these %1$d files.</item>
+    </plurals>
+    <string name="share_no_devices">No devices yet. Sign in on another device first.</string>
+    <string name="share_sending">Sending to %1$s</string>
 </resources>
