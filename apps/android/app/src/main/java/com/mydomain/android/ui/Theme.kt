@@ -40,8 +40,8 @@ data class Tokens(
     val dangerSoft: Color,
 )
 
-/** Deep space: a star field behind everything (drawable/space_bg, made by
- *  docs/brand/space_bg.py), translucent glass panels, white primary actions. */
+/** Deep space: a star field behind everything (drawable/space_bg, cropped from
+ *  docs/brand/space-source.png), translucent glass panels, white primary actions. */
 private val Space = Tokens(
     bg = Color(0xFF02080F), surface = Color(0x14FFFFFF), surface2 = Color(0x1FFFFFFF),
     border = Color(0x1FFFFFFF), text = Color(0xFFF4F4F6), text2 = Color(0xFFB6B8C6), text3 = Color(0xFF8D90A3),
