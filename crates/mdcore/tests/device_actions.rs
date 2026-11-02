@@ -102,3 +102,22 @@ fn an_action_reaches_the_device_with_its_arguments() {
     assert_eq!(name, "flashlight");
     assert_eq!(args["on"], true);
 }
+
+#[test]
+fn a_shared_code_lands_on_the_other_clipboard() {
+    let (a, b) = pair("code");
+    assert!(a.engine.share_code("hello", None).is_err());
+    // A link first: codes only go to connected devices.
+    a.engine.send(&b.node_id(), "hi").unwrap();
+    b.sink.wait_for_message("hi");
+    a.engine.share_code("482913", Some("Messages")).unwrap();
+    let code = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::CodeCopied { code, app, .. } => Some((code.clone(), app.clone())),
+            _ => None,
+        })
+        .expect("no code");
+    assert_eq!(code, ("482913".to_string(), Some("Messages".to_string())));
+    assert_eq!(b.clip().current().as_deref(), Some("482913"));
+}

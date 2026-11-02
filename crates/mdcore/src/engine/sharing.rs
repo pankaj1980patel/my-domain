@@ -16,6 +16,23 @@ impl<P: Platform> Engine<P> {
         transport::broadcast_control(&self.net_ctx(), &msg);
     }
 
+    /// Share a verification code (found by the host in a notification) with
+    /// your connected devices; those with a clipboard copy it
+    /// (`CoreEvent::CodeCopied`). Best effort: not queued.
+    pub fn share_code(&self, code: &str, app: Option<&str>) -> crate::Result<()> {
+        if !crate::features::code::is_code(code) {
+            return Err("that doesn't look like a code".to_string().into());
+        }
+        let from = self.ctx.identity.lock().node_id.clone();
+        let msg = serde_json::json!({ "type": "code", "code": code, "app": app, "from": from })
+            .to_string();
+        let linked: Vec<String> = self.ctx.ws_conns.lock().keys().cloned().collect();
+        for node in linked {
+            crate::transport::send_control_to(&self.net_ctx(), &node, &msg);
+        }
+        Ok(())
+    }
+
     /// Share an incoming/missed/ended call notification.
     pub fn share_call_notification(&self, caller: &str, number: Option<&str>, state: &str) {
         let from = self.ctx.identity.lock().node_id.clone();

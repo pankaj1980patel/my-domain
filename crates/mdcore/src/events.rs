@@ -55,6 +55,13 @@ pub enum CoreEvent {
     ClipboardHistory {
         entries: Vec<crate::model::ClipEntry>,
     },
+    /// A verification code from another device was put on this device's
+    /// clipboard.
+    CodeCopied {
+        from: String,
+        code: String,
+        app: Option<String>,
+    },
     /// A peer shared an OS notification.
     Notification {
         from: String,
@@ -154,6 +161,7 @@ impl CoreEvent {
             CoreEvent::ConnectProgress { .. } => "connect-progress",
             CoreEvent::Clipboard { .. } => "clipboard-event",
             CoreEvent::ClipboardHistory { .. } => "clipboard-history",
+            CoreEvent::CodeCopied { .. } => "code-copied",
             CoreEvent::Notification { .. } => "notification-event",
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",
