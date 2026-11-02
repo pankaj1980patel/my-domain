@@ -4,15 +4,20 @@
   "version": "0.1.0",
   "identifier": "com.landiscover.app",
   "build": {
-    "frontendDist": "../src"
+    "beforeDevCommand": "npm --prefix ui run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm --prefix ui run build",
+    "frontendDist": "../ui/dist"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "title": "my-domain",
-        "width": 800,
-        "height": 600
+        "width": 1100,
+        "height": 740,
+        "minWidth": 420,
+        "minHeight": 520
       }
     ],
     "security": {

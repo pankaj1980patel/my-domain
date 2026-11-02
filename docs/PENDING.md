@@ -129,7 +129,7 @@ kept up in every later phase.
 The current screens were built to **debug the networking**, so they expose
 internals everywhere. Restyling them would keep the clutter, so both apps get
 **new screens built from scratch** on the design system below:
-- **Desktop:** a new SolidJS app replaces `apps/desktop/src/index.html`,
+- **Desktop:** **built** (2026-11-02, `apps/desktop/ui`): SolidJS + TypeScript on the generated bindings, a simple neutral theme, the old logo, plain-language statuses, a hidden Developer screen (tap the version 7 times). It replaced `apps/desktop/src/index.html`,
   `main.js` and `styles.css` (about 1,100 lines of vanilla JS).
 - **Android:** new Compose screens replace `MainScreen.kt`,
   `LoginScreen.kt` and `SettingsDialog.kt`.

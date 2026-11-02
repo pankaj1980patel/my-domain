@@ -14,7 +14,7 @@ send them messages over **UDP** or **TCP**.
   ports (advertised in its beacon). Sending over **TCP** opens a short connection per
   message; sending over **UDP** fires a single datagram.
 - The Rust backend (`src-tauri/src/lib.rs`) emits `peers-updated` and
-  `message-received` events to the web UI (`src/main.js`), and exposes the commands
+  `message-received` events to the UI (`ui/`, SolidJS), and exposes the commands
   `get_identity`, `get_peers`, `send_message`, and `set_display_name`.
 
 ## Run
@@ -32,5 +32,5 @@ LAN/Wi-Fi (the network must allow UDP multicast; some guest/corporate networks b
 ## Project layout
 
 - `src-tauri/src/lib.rs` — discovery, TCP/UDP send & receive, Tauri commands.
-- `src/index.html`, `src/main.js`, `src/styles.css` — the UI.
+- `ui/` — the UI: SolidJS + TypeScript (Vite). `ui/src/bindings.ts` is generated from the Rust commands (`cargo test -p my-domain export_bindings`).
 - `src-tauri/tauri.conf.json` — Tauri config (`withGlobalTauri` enabled for vanilla JS).

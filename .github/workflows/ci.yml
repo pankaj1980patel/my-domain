@@ -47,6 +47,27 @@ jobs:
       # nextest does not run doctests; run them separately.
       - run: cargo test --workspace --locked --doc
 
+  desktop-ui:
+    name: desktop UI (typecheck + build, bindings current)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/desktop/ui/package-lock.json
+      - run: npm ci
+        working-directory: apps/desktop/ui
+      - run: npm run build
+        working-directory: apps/desktop/ui
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/linux-deps
+      - uses: Swatinem/rust-cache@v2
+      # The TypeScript bindings must match the Rust commands.
+      - run: cargo test -p my-domain --locked export_bindings
+      - run: git diff --exit-code apps/desktop/ui/src/bindings.ts
+
   android:
     name: android (assembleDebug)
     runs-on: ubuntu-latest

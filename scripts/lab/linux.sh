@@ -13,7 +13,7 @@ cmd="${1:-test}"
 case "$cmd" in
   check)   remote "cargo check --workspace --locked" ;;
   test)    remote "cargo test --workspace --locked" ;;
-  desktop) remote "cd apps/desktop && npm install --silent && DISPLAY=\${DISPLAY:-:0} npm run tauri dev" ;;
+  desktop) remote "cd apps/desktop && npm install --silent && npm --prefix ui install --silent && DISPLAY=\${DISPLAY:-:0} npm run tauri dev" ;;
   start)
     # Detached so this returns. setsid puts npm + cargo + the app in their own
     # process group, recorded in a pid file so a re-run stops the old one.
@@ -23,7 +23,7 @@ case "$cmd" in
     # would run it.)
     remote "PIDF=\$HOME/.my-domain-desktop.pid; [ -f \$PIDF ] && xargs -I{} kill -- -{} < \$PIDF 2>/dev/null; sleep 1;
       set -a && . scripts/lab/test-creds.env && set +a &&
-      cd apps/desktop && npm install --silent &&
+      cd apps/desktop && npm install --silent && npm --prefix ui install --silent &&
       { DISPLAY=\${DISPLAY:-:0} setsid nohup npm run tauri dev > \$HOME/my-domain-desktop.log 2>&1 < /dev/null & echo \$! > \$PIDF; } &&
       echo started: tail -f ~/my-domain-desktop.log" ;;
   *) echo "usage: $0 {check|test|desktop|start}"; exit 1 ;;

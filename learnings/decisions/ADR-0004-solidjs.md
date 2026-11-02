@@ -5,7 +5,7 @@
 
 ## Context
 The desktop UI is one 615-line vanilla-JS file
-([apps/desktop/src/main.js](../../apps/desktop/src/main.js)) that builds DOM by
+(the old `apps/desktop/src/main.js`, replaced 2026-11-02) that builds DOM by
 hand. The feature catalogue adds dozens of screens: grant editor, media
 controller, file browser, screen viewer, and more. Vanilla JS won't scale to that.
 

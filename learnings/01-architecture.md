@@ -15,7 +15,7 @@ section instead of being rewritten, so the history stays readable.
                       │ HTTPS (ureq)              │                              │ FCM data msg
                       │                           │                              ▼
 ┌─ desktop app (Tauri) ────────────────┐      ┌─ android app ─────────────────────────────────┐
-│  src/main.js  (vanilla JS UI)        │      │  Kotlin / Compose UI, NetService, NotifListener │
+│  ui/  (SolidJS + TypeScript UI)      │      │  Kotlin / Compose UI, NetService, NotifListener │
 │      │ invoke("send_message") ▲ emit │      │      │ RustNet.nativeSend()   ▲ nativePollEvents│
 │  src-tauri/src/lib.rs (Tauri cmds)   │      │  rust/src/lib.rs  (JNI functions)              │
 │      │                         │     │      │      │                        │               │
@@ -81,7 +81,7 @@ The table below describes the original layout. Since Phase 1:
 The user types "hi" on the desktop, sends it to their phone, and the phone shows it.
 
 **Desktop, outgoing**
-1. [apps/desktop/src/main.js](../apps/desktop/src/main.js) calls
+1. The UI ([apps/desktop/ui/src/lib/core.ts](../apps/desktop/ui/src/lib/core.ts)) calls
    `invoke("send_message", { nodeId, text })`. Tauri's `invoke` is IPC from the
    web view to Rust, much like `ipcRenderer.invoke` in Electron.
 2. [apps/desktop/src-tauri/src/lib.rs](../apps/desktop/src-tauri/src/lib.rs):

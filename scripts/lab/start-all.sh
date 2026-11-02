@@ -17,7 +17,7 @@ PIDF="$MD_REPO_ROOT/target/my-domain-mac.pid"
 pkill -f "$MD_REPO_ROOT/apps/desktop/node_modules/.bin/tauri" 2>/dev/null || true
 pkill -f "$MD_REPO_ROOT/target/debug/my-domain" 2>/dev/null || true
 sleep 1
-(cd "$MD_REPO_ROOT/apps/desktop" && npm install --silent &&
+(cd "$MD_REPO_ROOT/apps/desktop" && npm install --silent && npm --prefix ui install --silent &&
   MD_DEV_SERVER="$MD_DEV_SERVER" MD_DEV_USER="$MD_DEV_USER" MD_DEV_PASS="$MD_DEV_PASS" MD_DEV_KEY="$MD_DEV_KEY" \
   nohup npm run tauri dev > "$MD_REPO_ROOT/target/my-domain-mac.log" 2>&1 < /dev/null & echo $! > "$PIDF")
 

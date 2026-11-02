@@ -1,0 +1,87 @@
+// Small shared pieces: toasts, the status pill, the device card.
+
+import { createSignal, For, Show, type JSX } from "solid-js";
+import { state, type Peer } from "../lib/core";
+import { initial, linkLabel, linkState, niceName, type LinkState } from "../lib/words";
+
+// --- toasts -------------------------------------------------------------------
+
+type Toast = { id: number; text: string; tone: "ok" | "error" | "info" };
+const [toasts, setToasts] = createSignal<Toast[]>([]);
+let toastSeq = 0;
+
+export function toast(text: string, tone: Toast["tone"] = "info") {
+  const id = ++toastSeq;
+  setToasts((t) => [...t, { id, text, tone }]);
+  setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 6000 : 3500);
+}
+
+export function Toasts() {
+  return (
+    <div class="toasts" role="status" aria-live="polite">
+      <For each={toasts()}>{(t) => <div class={`toast toast-${t.tone}`}>{t.text}</div>}</For>
+    </div>
+  );
+}
+
+// --- status -------------------------------------------------------------------
+
+export function linkStateOf(node: string): LinkState {
+  return linkState(state.links[node], state.progress[node]);
+}
+
+export function StatusPill(props: { node: string }) {
+  const s = () => linkStateOf(props.node);
+  return (
+    <span class={`pill pill-${s()}`}>
+      <span class="dot" aria-hidden="true" />
+      {linkLabel(s())}
+    </span>
+  );
+}
+
+// --- device card ----------------------------------------------------------------
+
+export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: () => void }) {
+  const s = () => linkStateOf(props.peer.node_id);
+  const unread = () => state.messages.filter((m) => m.node === props.peer.node_id && m.dir === "in").length;
+  return (
+    <article class="device-card" onClick={props.onOpen} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && props.onOpen()}>
+      <div class="device-avatar" aria-hidden="true">
+        {initial(props.peer.name)}
+      </div>
+      <div class="device-main">
+        <h3>{niceName(props.peer.name)}</h3>
+        <StatusPill node={props.peer.node_id} />
+      </div>
+      <Show when={unread() > 0}>
+        <span class="badge" aria-label={`${unread()} messages`}>
+          {unread()}
+        </span>
+      </Show>
+      <Show when={s() === "offline" || s() === "failed"}>
+        <button
+          class="btn btn-soft btn-sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onConnect();
+          }}
+        >
+          Connect
+        </button>
+      </Show>
+    </article>
+  );
+}
+
+export function Empty(props: { icon: string; title: string; children?: JSX.Element }) {
+  return (
+    <div class="empty">
+      <div class="empty-icon" aria-hidden="true">
+        {props.icon}
+      </div>
+      <h3>{props.title}</h3>
+      <div class="empty-body">{props.children}</div>
+    </div>
+  );
+}

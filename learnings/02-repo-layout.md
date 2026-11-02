@@ -91,7 +91,7 @@ plain text on disk and was shared in a conversation.
 | A wire type / RPC message | `crates/md-proto` (Phase 1+) |
 | A feature (battery, media, …) | `crates/md-features/<feature>/` + platform impls in each app |
 | A Kotlin screen | `apps/android/app-phone/…` (after Phase 3's module split) |
-| A desktop screen | `apps/desktop/src/…` (SolidJS after Phase 3) |
+| A desktop screen | `apps/desktop/ui/src/screens/…` (SolidJS) |
 | A server route | `apps/server/src/` |
 | A real-device test | `scripts/lab/scenarios/` |
 | An explanation of a decision | `learnings/decisions/ADR-XXXX-*.md` |
