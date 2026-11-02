@@ -36,26 +36,17 @@ or with less battery.
 7. ~~Standard LAN discovery (mDNS / DNS-SD)~~: **done**.
    - Still to do: once mDNS has proven itself on real networks, send the
      /24 sweep only when mDNS finds nothing.
-8. **Keep-alive that suits phones.**
-   - The fixed 5 s keep-alive and 20 s idle timeout cost a phone battery.
-   - Instead: about 25 s keep-alive (just under typical router timeouts),
-     idle links closed while the screen is off, and wake-up by push when
-     needed.
-   - Tune it per platform and per link type: the relay and LAN can afford
-     less chatter.
-9. **Connection quality.**
-   - Read RTT, packet loss and throughput from each QUIC connection (quinn
-     stats).
-   - Use them to choose between paths, e.g. prefer LAN over relay even when
-     both are up.
-   - Show it in plain words ("Excellent", "Weak connection") in the device
-     card, with details on the Developer screen.
-10. **Better relay.**
-    - Relays in more than one region; clients pick the closest by measured
-      RTT.
-    - Move the relay from WebSocket to QUIC, so it has no head-of-line
-      blocking and copes better with lossy mobile networks.
-    - A per-account bandwidth cap, plus metrics on relay usage.
+8. ~~Keep-alive that suits phones~~: **done** (20 s / 60 s, configurable).
+   - Still to do: close idle links while the screen is off and wake by
+     push. This needs the Android FCM receiver (Phase 3) first.
+9. ~~Connection quality~~: **done** (`Engine::link_stats()`, desktop
+   command `link_stats`).
+   - Still to do: show it in the new UI.
+   - Still to do: use it to choose between two live paths.
+10. **Better relay:** per-account fair-use cap and `/relay/stats` are
+    **done**. Still to do:
+    - Relays in more than one region.
+    - A QUIC-based relay.
 11. **Bluetooth LE.**
     - Find nearby devices and send small commands (ring, media keys, wake,
       "connect to my hotspot") when there is no shared Wi-Fi or no internet
@@ -72,53 +63,14 @@ or with less battery.
 
 ## 3. Phase 2 leftovers (networking)
 
-- **Signaled QUIC as rung 3** (replaces the signaled WebSocket rung).
-  - We send `QuicOffer { sid, our addresses }` through the server.
-  - The peer dials us over QUIC **and** replies `QuicAnswer { its addresses }`,
-    which we dial too.
-  - The first connection to succeed wins. If both succeed, keep the one
-    opened by the lower `node_id`, the same tie-break the hole punch uses.
-  - It fixes two gaps in today's rungs:
-    - **Stale or missing addresses:** the live server returns no
-      `quic_port`, and a peer may have changed networks since it last
-      checked in. The signal carries its current LAN and public addresses.
-    - **One-way reachability:** when only one side accepts incoming
-      connections (a firewalled Mac, a phone on mobile data), dialing from
-      both ends still connects.
-  - Later, remove the WebSocket rungs (2 and 3); QUIC covers them.
-  - New ladder: direct QUIC → LAN UDP → **signaled QUIC** → hole punch +
-    QUIC → WebRTC → relay.
-  - Test: a ladder test with `SignalHub` where only one side can be dialed.
-- **Relay right away, upgrade in the background.** Today the rungs run one
-  after another, so a peer that's hard to reach takes up to about 66 s to
-  connect, or to fail. Planned instead (the approach Tailscale and WebRTC
-  use):
-  1. **Connect fast:** if the quick rungs (0–3) don't succeed within a few
-     seconds, bring up the **relay as a temporary link**. Messages flow
-     immediately.
-  2. **Keep looking for a direct path:** the hole punch and WebRTC keep
-     trying in the background, and are retried every so often (e.g. on a
-     network change, or every 30–60 s) while the peer is on the relay.
-  3. **Upgrade without a hiccup:** when a direct path comes up, move traffic
-     to it and close the relay link. Nothing in flight is lost, because the
-     old link is closed only after the new one has carried a confirmation
-     both ways.
-  4. **Fall back the same way:** if the direct path drops, switch back to
-     the relay instead of disconnecting.
-  - Better still: **race the rungs instead of queueing them**, like "Happy
-    Eyeballs" in browsers. Start direct QUIC, signaled QUIC and the relay
-    together, use whichever works first, and keep upgrading to the cheapest
-    working path.
-  - Cost: the relay only carries traffic until something better is found,
-    so server load stays low. Large transfers should wait a moment for an
-    upgrade, or trigger the Wi-Fi Direct fast path (Phase 5, wave C).
-  - The UI shows the path in plain words: "Connected via relay, looking for
-    a faster route…", then "Connected directly".
-  - Tests:
-    - Peer reachable only via the relay → connects within a few seconds.
-    - Direct path appears later → traffic moves over, no message lost.
-    - Direct path drops → falls back to the relay.
-  - Needs the latest server deployed, because the live one has no `/relay`.
+- ~~Signaled QUIC as rung 3~~: **done**. Remove the WebSocket rungs
+  later, with item 12.
+- ~~Relay right away, upgrade in the background~~: **done** (relay after
+  the quick rungs; punch/WebRTC upgrade it; retries every 60 s).
+  - Still to do: race the rungs in parallel instead of in sequence.
+  - **Known issue:** a message sent at the exact moment a link is replaced
+    (glare, relay to direct) can be lost. Phase 4's RPC layer (request ids
+    and retries) fixes this properly.
 - **Move the remaining loops to tokio.** The TCP/UDP/WS listeners,
   discovery and the heartbeat still run on their own threads. Moving them to
   tokio tasks with a `CancellationToken` makes shutdown clean and immediate.

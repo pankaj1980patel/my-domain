@@ -8,7 +8,7 @@ left is in [PENDING.md](PENDING.md).
 
 | | |
 |---|---|
-| Tests | **105** core tests, plus **7** server tests and **1** desktop test |
+| Tests | **115** core tests, plus **9** server tests and **1** desktop test |
 | Where the core tests pass | macOS (dev Mac), Linux (Manjaro laptop), **Android phone** (I2405, Android 16, ARM64, run on the device) |
 | Where the server and desktop tests pass | macOS and Linux |
 | Default transport | QUIC (encrypted, reliable, multiplexed) |
@@ -186,6 +186,23 @@ The engine tries each method in order, cheapest first, until one works
   shipped a **stale, pre-QUIC Rust core**, because Gradle's JNI merge kept
   reporting UP-TO-DATE. The merge now always re-runs, and the phone runs the
   current core.
+
+- **Phone-friendly keep-alive:** pings every 20 s with a 60 s idle timeout
+  (was 5 s / 20 s), configurable. The app-level heartbeat now only covers
+  UDP and WebRTC links; QUIC has its own.
+- **Connection quality:** RTT and loss from QUIC, rated "Excellent",
+  "Good" or "Weak connection" (`link_stats`).
+- **Relay fair use:** a per-account token bucket (default 4 MiB/s, 4x
+  burst) that slows heavy senders and never drops their frames; aggregate
+  counters at `/relay/stats`.
+- **Signaled QUIC (rung 3):** devices swap their QUIC addresses through a
+  signal, and the responder dials back when it can't be reached.
+- **Glare-safe links:** when both sides dial at once, they agree on one
+  connection (the one dialed by the lower node id), with no "disconnected"
+  flap.
+- **Relay first, upgrade later:** a hard-to-reach peer connects through the
+  relay within seconds, then hole punching or WebRTC replace it with a
+  direct link. Retries continue every 60 s.
 
 ## Device lab and dev tools
 
