@@ -295,6 +295,14 @@ and the galaxy logo (`docs/brand/logo-1024.png`, cropped as-is from
   message (`P2pConn::last_used`); keep-alives don't count. Test:
   `tests/idle_links.rs`.
 
+## Faster fallback to the relay (2026-11-02)
+
+- The connect ladder races its two QUIC rungs: direct QUIC first, signaled
+  QUIC after a 500 ms head start (so a reachable peer still costs no
+  signal). If neither gives a direct link within 3 s the relay comes up,
+  instead of after up to 14 s; signaled QUIC carries on and can still
+  upgrade the link. Hole punching and WebRTC start once both are done.
+
 ## Quieter LAN announce; pull to refresh (2026-11-02)
 
 - A LAN announce sends multicast and broadcasts only; the /24 unicast

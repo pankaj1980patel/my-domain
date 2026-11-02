@@ -78,7 +78,10 @@ or with less battery.
   removed (item 12).
 - ~~Relay right away, upgrade in the background~~: **done** (relay after
   the quick rungs; punch/WebRTC upgrade it; retries every 60 s).
-  - Still to do: race the rungs in parallel instead of in sequence.
+  - ~~Race the rungs~~: **done** (2026-11-02) for the QUIC rungs: direct
+    QUIC gets a 500 ms head start, then signaled QUIC joins; the relay
+    comes up after 3 s without a direct link (was up to 14 s) while
+    signaled QUIC keeps trying. Punch and WebRTC still run after them.
   - ~~A message sent as a link is replaced could be lost~~: **fixed**
     (2026-11-02) by delivery receipts: every chat message has an id, the
     receiver acks it and drops repeats, and the sender resends until acked.
@@ -339,8 +342,6 @@ A feature counts as done when it has:
 - **Linux FCM:** the first fresh registration failed with
   `PHONE_REGISTRATION_ERROR` and worked after a restart. Watch whether it
   happens again.
-- **Stale FCM thread:** after re-registering, the old FCM receiver thread
-  keeps running until its next reconnect. It's harmless but wastes a thread.
 - **The office network blocks all three server names.** FortiGuard blocks
   the "Dynamic DNS" category (sslip.io, work.gd, servehttp.com). A paid
   domain would pass; your call.

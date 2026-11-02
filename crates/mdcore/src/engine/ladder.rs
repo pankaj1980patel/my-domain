@@ -66,6 +66,38 @@ pub(super) fn run_connect_ladder<P: Platform>(
     run_ladder(ctx, server_url, token, node_id, true);
 }
 
+/// How long direct QUIC gets before signaled QUIC joins the race.
+const HEAD_START: Duration = Duration::from_millis(500);
+/// How long the QUIC rungs get on their own before the relay comes up too.
+const QUICK_WAIT: Duration = Duration::from_millis(3000);
+
+/// Rung 3: offer our QUIC addresses by signal, dial the ones the peer
+/// answers with, and give the link (ours, or the peer's dial to us) time to
+/// come up.
+fn signaled_quic<P: Platform>(
+    ctx: &NetCtx<P>,
+    server_url: &Arc<Mutex<Option<String>>>,
+    token: &Arc<Mutex<Option<String>>>,
+    node_id: &str,
+) {
+    let sid = uuid::Uuid::new_v4().to_string();
+    let (tx, rx) = mpsc::channel::<Vec<String>>();
+    ctx.quic_waiters.lock().insert(sid.clone(), tx);
+    let offer = Signal::QuicOffer {
+        sid: sid.clone(),
+        addrs: transport::quic::my_addrs(ctx),
+    };
+    if send_signal_via(server_url, token, ctx, node_id, &offer).is_ok() {
+        if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
+            let targets = transport::quic::parse_addrs(&addrs);
+            let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+        }
+        // The peer dials us too, so a link may exist even if ours failed.
+        wait_direct(ctx, node_id, 3000);
+    }
+    ctx.quic_waiters.lock().remove(&sid);
+}
+
 /// How often, and how many times, a relayed peer retries the direct rungs.
 const UPGRADE_EVERY: Duration = Duration::from_secs(60);
 const UPGRADE_TRIES: u32 = 10;
@@ -99,67 +131,86 @@ fn run_ladder<P: Platform>(
 
     let rungs = ctx.config.rungs.clone();
 
-    // Rung 0 — direct QUIC to the peer's advertised address. One handshake
-    // round trip; works on the LAN and to any peer that accepts inbound UDP.
-    if rungs.quic && peer.quic_port != 0 {
-        emit("quic", None);
-        if ctx
-            .quic
-            .connect_any(ctx.clone(), &peer.quic_targets())
-            .is_ok()
-            && wait_direct(&ctx, &node_id, 3000)
-        {
-            return; // the link emits PeerConnected
+    // The two QUIC rungs race (they share one QUIC endpoint, and a second
+    // link to the same peer is merged), and the relay comes up as soon as
+    // neither has a direct link after `QUICK_WAIT`: messages flow through
+    // it while signaled QUIC carries on and may still upgrade the link.
+    // Hole punching and WebRTC start only once both QUIC rungs are done, so
+    // two kinds of direct link never race each other.
+    let direct = std::thread::scope(|s| {
+        let mut quick = Vec::new();
+        // Rung 0 — direct QUIC to the peer's advertised address. One
+        // handshake round trip; works on the LAN and to any peer that
+        // accepts inbound UDP.
+        if rungs.quic && peer.quic_port != 0 {
+            emit("quic", None);
+            let (ctx, node_id, targets) = (&ctx, &node_id, peer.quic_targets());
+            quick.push(s.spawn(move || {
+                // Done = failed, or the link is registered.
+                if ctx.quic.connect_any(ctx.clone(), &targets).is_ok() {
+                    wait_direct(ctx, node_id, 1000);
+                }
+            }));
         }
-    }
+        // Rung 3 — signaled QUIC: swap QUIC addresses through a signal and
+        // BOTH sides dial. Works when only one side can be dialed, and with
+        // addresses fresher than the registry's. (1 signal round trip.)
+        // Started once rung 0 has had `HEAD_START` (a LAN handshake takes
+        // milliseconds), so a reachable peer costs no signal.
+        let start = std::time::Instant::now();
+        let deadline = start + QUICK_WAIT;
+        let mut signaled = !rungs.signaled_quic;
+        while std::time::Instant::now() < deadline {
+            if transport::is_direct(&ctx, &node_id) {
+                return true;
+            }
+            let rung0_done = quick.iter().all(|h| h.is_finished());
+            if !signaled && (rung0_done || start.elapsed() >= HEAD_START) {
+                signaled = true;
+                emit("signaled_quic", None);
+                let (ctx, server_url, token, node_id) = (&ctx, &server_url, &token, &node_id);
+                quick.push(s.spawn(move || signaled_quic(ctx, server_url, token, node_id)));
+            }
+            if signaled && quick.iter().all(|h| h.is_finished()) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        // A link that just came up still has to register.
+        if !quick.is_empty() && wait_direct(&ctx, &node_id, 300) {
+            return true;
+        }
 
-    // Rung 3 — signaled QUIC: swap QUIC addresses through a signal and BOTH
-    // sides dial. Works when only one side can be dialed, and with addresses
-    // fresher than the registry's. (1 signal round trip.)
-    if rungs.signaled_quic {
-        emit("signaled_quic", None);
-        let sid = uuid::Uuid::new_v4().to_string();
-        let (tx, rx) = mpsc::channel::<Vec<String>>();
-        ctx.quic_waiters.lock().insert(sid.clone(), tx);
-        let offer = Signal::QuicOffer {
-            sid: sid.clone(),
-            addrs: transport::quic::my_addrs(&ctx),
-        };
-        if send_signal_via(&server_url, &token, &ctx, &node_id, &offer).is_ok() {
-            if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
-                let targets = transport::quic::parse_addrs(&addrs);
-                let _ = ctx.quic.connect_any(ctx.clone(), &targets);
-            }
-            // The peer dials us too, so a link may exist even if ours failed.
-            if wait_direct(&ctx, &node_id, 3000) {
-                ctx.quic_waiters.lock().remove(&sid);
-                return;
-            }
-        }
-        ctx.quic_waiters.lock().remove(&sid);
-    }
-
-    // Relay through the server, BEFORE the slow rungs: if the quick rungs
-    // failed, messages flow through the relay right away, while hole
-    // punching and WebRTC keep trying to upgrade the link in the background
-    // (a direct link replaces the relayed one when it comes up).
-    if rungs.relay && !is_live(&ctx, &node_id) {
-        if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
-            emit("relay", None);
-            if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
-                transport::relay::add_relay_link(&ctx, &node_id);
-                let sid = uuid::Uuid::new_v4().to_string();
-                let _ = send_signal_via(
-                    &server_url,
-                    &token,
-                    &ctx,
-                    &node_id,
-                    &Signal::RelayOffer { sid },
-                );
-                transport::relay::send_hello(&ctx, &node_id);
-                wait_live(&ctx, &node_id, 8000);
+        // Relay through the server, BEFORE the slow rungs: if the quick
+        // rungs failed, messages flow through the relay right away, while
+        // signaled QUIC, hole punching and WebRTC keep trying to upgrade the
+        // link in the background (a direct link replaces the relayed one
+        // when it comes up).
+        if rungs.relay && !is_live(&ctx, &node_id) {
+            if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
+                emit("relay", None);
+                if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
+                    transport::relay::add_relay_link(&ctx, &node_id);
+                    let sid = uuid::Uuid::new_v4().to_string();
+                    let _ = send_signal_via(
+                        &server_url,
+                        &token,
+                        &ctx,
+                        &node_id,
+                        &Signal::RelayOffer { sid },
+                    );
+                    transport::relay::send_hello(&ctx, &node_id);
+                    wait_live(&ctx, &node_id, 8000);
+                }
             }
         }
+        for h in quick {
+            let _ = h.join();
+        }
+        transport::is_direct(&ctx, &node_id)
+    });
+    if direct {
+        return; // the link emits PeerConnected
     }
 
     // Both behind symmetric NATs: STUN addresses are useless to the other
