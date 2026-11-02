@@ -110,6 +110,7 @@ impl<P: Platform> Engine<P> {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct FirewallStatus {
     pub outbound_ok: bool,
     pub inbound_blocked: bool,

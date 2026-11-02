@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 /// How our NAT maps a socket's outgoing traffic, as far as hole punching cares.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum NatKind {
     /// Not measured (no STUN configured, offline, or only one server answered).
     #[default]

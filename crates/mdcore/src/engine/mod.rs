@@ -156,6 +156,7 @@ impl<P: Platform> Clone for NetCtx<P> {
 }
 
 #[derive(Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SessionInfo {
     pub username: Option<String>,
     pub server_url: Option<String>,
@@ -163,6 +164,7 @@ pub struct SessionInfo {
 }
 
 #[derive(Serialize, Default)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct SavedSession {
     pub server_url: String,
     pub username: String,

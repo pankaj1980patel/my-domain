@@ -84,6 +84,15 @@ impl Serialize for CoreError {
     }
 }
 
+/// Commands return the error's message (see `Serialize` above), so it is a
+/// plain string in TypeScript too.
+#[cfg(feature = "specta")]
+impl specta::Type for CoreError {
+    fn definition(types: &mut specta::Types) -> specta::datatype::DataType {
+        <String as specta::Type>::definition(types)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -42,6 +42,7 @@ fn now_secs() -> u64 {
 /// Which transport a live P2P link is using. Serializes lowercase for the UI.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum TransportKind {
     Punch,
     WebRtc,

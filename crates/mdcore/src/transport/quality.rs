@@ -8,6 +8,7 @@ use super::TransportKind;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Quality {
     Excellent,
     Good,
@@ -30,6 +31,7 @@ impl Quality {
 
 /// One live link, as the UI and the path-choosing logic see it.
 #[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct LinkStats {
     pub node_id: String,
     pub transport: TransportKind,

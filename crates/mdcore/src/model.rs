@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 /// This device's own endpoints, advertised to peers and the registry.
 #[derive(Clone, Debug, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Identity {
     pub node_id: String,
     pub name: String,
@@ -43,6 +44,7 @@ pub struct Beacon {
 /// to stay compatible with the existing frontend / Kotlin JSON.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum Source {
     Registry,
     Lan,
@@ -52,6 +54,7 @@ pub enum Source {
 /// A known peer device. Deserializable too: the peer list is cached on the
 /// device (see engine/background.rs `spawn_peer_cache`).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Peer {
     pub node_id: String,
     pub name: String,
