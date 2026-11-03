@@ -153,6 +153,13 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 - Tests: `a_device_id_with_another_key_is_refused` (impostor refused, the
   real device back at once after a restart) and the unit tests in
   `device_key.rs`.
+- Mistake, fixed the same morning (649609d): the first build kept the key
+  under `device_key`, the secret the session already used for the
+  passphrase key, and overwrote it. The phone, restarted on that build,
+  lost its passphrase key and has to sign in again. The key now lives
+  under `identity_key`; a key found in the wrong place is moved there and
+  the place cleared. Tests: `the_session_key_is_left_alone`,
+  `a_misplaced_key_is_moved_and_its_place_cleared`.
 
 ## Simulated routers: hole punching tested (2026-11-03)
 
