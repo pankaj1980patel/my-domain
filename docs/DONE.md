@@ -167,9 +167,11 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
   this one. So the full-screen pad also has buttons for the swipes (◀ App,
   App ▶, All windows, ◀ Desktop, Desktop ▶, Show desktop); all six reached
   mdctl as the right `gesture` events.
-- Not tried yet: the arrow/Enter/Backspace/Esc buttons from the phone,
-  two-finger scroll, input played back on a real desktop (the running Mac
-  app wasn't restarted), and backup per computer on the phone.
+- The ←, ↑, ↓, →, Enter, ⌫ and Esc buttons: all seven arrived as `key`
+  events.
+- Not tried yet: two-finger scroll and real finger swipes (adb fakes one
+  finger), input played back on a real desktop (the running Mac app wasn't
+  restarted), and backup per computer on the phone.
 
 - **Photo backup remembers each computer** (`features/backup.rs`). What was
   sent is kept per target device (`backup_sent_<tag>_<n>` chunks, the tag
