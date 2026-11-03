@@ -90,9 +90,12 @@ fn with_auto_quic_off_a_send_without_a_link_is_held_and_delivered_once_connected
         a.engine.send(&b.node_id(), "too early").unwrap(),
         mdcore::engine::QUEUED
     );
-    assert_eq!(
-        a.engine.send(&b.node_id(), "also early").unwrap(),
-        mdcore::engine::QUEUED
+    // The link may already be up for the second one (a fast machine): either
+    // way both arrive, in order (checked below).
+    let second = a.engine.send(&b.node_id(), "also early").unwrap();
+    assert!(
+        second == mdcore::engine::QUEUED || second == "QUIC",
+        "{second}"
     );
     // The ladder (rung 0, QUIC) connects in the background, and the held
     // messages go out by themselves, in order.
