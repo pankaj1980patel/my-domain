@@ -282,4 +282,20 @@
     <string name="backup_status_charging">Waiting for the charger. %1$d waiting.</string>
     <string name="backup_status_retry">Trying again soon: %1$s</string>
     <string name="settings_battery_alerts">Tell my devices when the battery is low or full</string>
+    <string name="touchpad_title">Touchpad &amp; keyboard</string>
+    <string name="touchpad_body">Use your phone as this computer\'s touchpad and keyboard.</string>
+    <string name="touchpad_needs_accessibility">On the Mac, allow my-domain under System Settings &gt; Privacy &amp; Security &gt; Accessibility first.</string>
+    <string name="touchpad_needs_display">This computer needs an X11 session (or XWayland) for the touchpad.</string>
+    <string name="touchpad_pad_hint">Drag to move · tap to click\nTwo fingers: scroll, or tap to right-click</string>
+    <string name="touchpad_left_click">Left click</string>
+    <string name="touchpad_right_click">Right click</string>
+    <string name="touchpad_type_hint">Type on the computer</string>
+    <string name="touchpad_type">Type</string>
+    <string name="touchpad_key_left">←</string>
+    <string name="touchpad_key_up">↑</string>
+    <string name="touchpad_key_down">↓</string>
+    <string name="touchpad_key_right">→</string>
+    <string name="touchpad_key_enter">Enter</string>
+    <string name="touchpad_key_backspace">⌫</string>
+    <string name="touchpad_key_esc">Esc</string>
 </resources>

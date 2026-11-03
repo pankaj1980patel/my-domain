@@ -99,6 +99,8 @@ class NetService : Service() {
         Controls.onChange = { serviceScope.launch { pushStatus() } }
         Controls.init(this)
         watchBattery()
+        // Your computers hear when this phone goes into Do Not Disturb.
+        DndWatch.start(this)
         startNetworking()
         BleLink.start(this)
     }
@@ -464,6 +466,7 @@ class NetService : Service() {
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
         BleLink.stop()
         PhotoBackup.stop()
+        DndWatch.stop(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

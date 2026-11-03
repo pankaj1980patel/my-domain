@@ -87,6 +87,10 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             item { ChatTile(node) }
             item { FilesTile(node) }
             item { FindTile(node, niceName(peer.name)) }
+            // A computer that lets the phone control it (it lists "input").
+            Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
+                item { TouchpadTile(node, st) }
+            }
             item { ClipboardTile(node) }
             item { NotifyTile() }
             item { AppsTile(node) }

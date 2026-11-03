@@ -936,4 +936,43 @@ impl MdEngine {
     pub fn keep_awake(&self, node_id: String, minutes: u32) -> MdResult<String> {
         Ok(self.inner.keep_awake(&node_id, minutes)?)
     }
+
+    // --- touchpad and keyboard for a computer ---
+
+    /// Move a computer's pointer by `dx`, `dy` pixels. Moves add up and go
+    /// out together (about 50 a second), so call it for every touch move;
+    /// it only adds to what's pending. Fails when there's no link (and
+    /// starts connecting): input is never queued.
+    pub fn input_move(&self, node_id: String, dx: i32, dy: i32) -> MdResult<()> {
+        Ok(self.inner.input_move(&node_id, dx, dy)?)
+    }
+
+    /// Scroll a computer by `dx`, `dy` pixels (positive `dy`: down, towards
+    /// the end of the page). Batched like moves.
+    pub fn input_scroll(&self, node_id: String, dx: i32, dy: i32) -> MdResult<()> {
+        Ok(self.inner.input_scroll(&node_id, dx, dy)?)
+    }
+
+    /// Click "left" or "right".
+    pub fn input_click(&self, node_id: String, button: String) -> MdResult<()> {
+        Ok(self.inner.input_click(&node_id, &button)?)
+    }
+
+    /// Type `text` on a computer.
+    pub fn input_text(&self, node_id: String, text: String) -> MdResult<()> {
+        Ok(self.inner.input_text(&node_id, &text)?)
+    }
+
+    /// Press "enter", "backspace", "left", "right", "up", "down" or "esc".
+    pub fn input_key(&self, node_id: String, key: String) -> MdResult<()> {
+        Ok(self.inner.input_key(&node_id, &key)?)
+    }
+
+    // --- Do Not Disturb ---
+
+    /// This phone's Do Not Disturb state (read from the OS); your other
+    /// devices are told when it changes.
+    pub fn set_dnd(&self, on: bool) {
+        self.inner.set_dnd(on);
+    }
 }

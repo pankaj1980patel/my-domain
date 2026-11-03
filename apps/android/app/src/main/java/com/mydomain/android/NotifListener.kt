@@ -35,6 +35,12 @@ class NotifListener : NotificationListenerService() {
         live = this
     }
 
+    /** Do Not Disturb changed (the broadcast says so too; the core sends
+     *  only real changes). */
+    override fun onInterruptionFilterChanged(interruptionFilter: Int) {
+        DndWatch.onFilter(interruptionFilter)
+    }
+
     override fun onListenerDisconnected() {
         if (live === this) live = null
         super.onListenerDisconnected()

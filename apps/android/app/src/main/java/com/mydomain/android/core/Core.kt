@@ -71,6 +71,9 @@ data class DeviceStatus(
     /** Why a computer has no slide remote: "accessibility" (macOS
      *  permission), "xdotool" or "wtype" (tool to install). */
     val slidesNeeds: String? = null,
+    /** Why a computer's touchpad can't work yet: "accessibility" (macOS
+     *  permission) or "display" (no X11 session). */
+    val inputNeeds: String? = null,
     val storageFree: Long? = null, val storageTotal: Long? = null,
 )
 
@@ -376,6 +379,7 @@ object Core {
                     wifiSignal = st.optJSONObject("wifi")?.let { if (it.has("signal")) it.optInt("signal") else null },
                     bluetooth = if (st.has("bluetooth")) st.optBoolean("bluetooth") else null,
                     slidesNeeds = st.optString("slides_needs").ifEmpty { null },
+                    inputNeeds = st.optString("input_needs").ifEmpty { null },
                     ramFree = st.optJSONObject("ram")?.optLong("free"),
                     ramTotal = st.optJSONObject("ram")?.optLong("total"),
                     storageFree = st.optJSONObject("storage")?.optLong("free"),
@@ -693,6 +697,28 @@ object Core {
     /** Keep [node] awake for [minutes] (0 = stop), if it lists "keep_awake". */
     suspend fun keepAwake(node: String, minutes: Int): String =
         call { it.keepAwake(node, minutes.coerceAtLeast(0).toUInt()) }
+
+    // --- touchpad and keyboard for a computer -----------------------------------
+
+    /** Move [node]'s pointer by [dx], [dy] pixels. Not a suspend call: the
+     *  core only adds it to what's pending and sends that about 50 times a
+     *  second, so call it for every touch move. Returns the error, if any
+     *  (no link yet: the core starts connecting). */
+    fun inputMove(node: String, dx: Int, dy: Int): Throwable? =
+        runCatching { engine()?.inputMove(node, dx, dy) }.exceptionOrNull()
+
+    /** Scroll [node] by [dx], [dy] pixels (positive [dy]: down). Batched like moves. */
+    fun inputScroll(node: String, dx: Int, dy: Int): Throwable? =
+        runCatching { engine()?.inputScroll(node, dx, dy) }.exceptionOrNull()
+
+    /** Click "left" or "right" on [node]. */
+    suspend fun inputClick(node: String, button: String) = call { it.inputClick(node, button) }
+
+    /** Type [text] on [node]. */
+    suspend fun inputText(node: String, text: String) = call { it.inputText(node, text) }
+
+    /** Press "enter", "backspace", "left", "right", "up", "down" or "esc" on [node]. */
+    suspend fun inputKey(node: String, key: String) = call { it.inputKey(node, key) }
 
     suspend fun toggleApp(node: String, pkg: String) {
         val cur = apps[node] ?: return
