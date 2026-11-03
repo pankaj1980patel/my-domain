@@ -12,6 +12,11 @@
 //! restart doesn't send it again. A resend can overtake a newer message,
 //! so a device keeps only the newest `at` from each sender.
 //!
+//! A receiver keeps the state in memory only, so whenever a link to a
+//! device comes up, a device in Do Not Disturb tells it again (same `at`):
+//! a computer that restarted meanwhile learns it without waiting for the
+//! next change. Only a change makes a `CoreEvent::Dnd`.
+//!
 //! A receiving device keeps who is in Do Not Disturb (`Engine::dnd_active`)
 //! and gets `CoreEvent::Dnd`. A state it hasn't heard again for `FORGET_AFTER`
 //! is dropped, so a phone that went away mid-"on" doesn't hold pop-ups for
@@ -33,6 +38,8 @@ use super::{ControlHandler, ControlMsg};
 pub const FORGET_AFTER: Duration = Duration::from_secs(12 * 60 * 60);
 
 const SENT_KEY: &str = "dnd_sent";
+/// When the state in `SENT_KEY` was set (unix ms).
+const SENT_AT_KEY: &str = "dnd_sent_at";
 
 /// This device's last reported state, and which other devices are in Do
 /// Not Disturb (since when).
@@ -65,12 +72,36 @@ pub fn set<P: Platform>(ctx: &NetCtx<P>, on: bool) {
         *sent = Some(on);
         ctx.platform.kv_set(SENT_KEY, if on { "on" } else { "off" });
     }
-    let me = ctx.identity.lock().node_id.clone();
-    let msg = json!({ "type": "dnd", "from": me, "on": on, "at": now_ms() }).to_string();
+    let at = now_ms();
+    ctx.platform.kv_set(SENT_AT_KEY, &at.to_string());
+    let msg = message(ctx, on, at);
     let peers: Vec<String> = ctx.peers.lock().keys().cloned().collect();
     for node in peers.iter().filter(|n| !n.starts_with("manual:")) {
         crate::engine::send_reliably(ctx, node, &msg);
     }
+}
+
+fn message<P: Platform>(ctx: &NetCtx<P>, on: bool, at: u64) -> String {
+    let me = ctx.identity.lock().node_id.clone();
+    json!({ "type": "dnd", "from": me, "on": on, "at": at }).to_string()
+}
+
+/// A link to `node` just came up: if this device is in Do Not Disturb, say
+/// so again (it may have restarted and forgotten).
+pub fn link_up<P: Platform>(ctx: &NetCtx<P>, node: &str) {
+    let on = {
+        let mut sent = ctx.extras.dnd.sent.lock();
+        *sent.get_or_insert_with(|| ctx.platform.kv_get(SENT_KEY).as_deref() == Some("on"))
+    };
+    if !on || node.starts_with("manual:") || !ctx.peers.lock().contains_key(node) {
+        return;
+    }
+    let at = ctx
+        .platform
+        .kv_get(SENT_AT_KEY)
+        .and_then(|a| a.parse().ok())
+        .unwrap_or(0);
+    crate::engine::send_reliably(ctx, node, &message(ctx, true, at));
 }
 
 /// The devices in Do Not Disturb right now.
@@ -105,14 +136,16 @@ impl<P: Platform> ControlHandler<P> for DndHandler {
             }
             newest.insert(from.clone(), at);
         }
-        {
+        let changed = {
             let mut o = ctx.extras.dnd.others.lock();
             if on {
-                o.insert(from.clone(), Instant::now());
+                o.insert(from.clone(), Instant::now()).is_none()
             } else {
-                o.remove(&from);
+                o.remove(&from).is_some()
             }
+        };
+        if changed {
+            ctx.sink.emit(CoreEvent::Dnd { from, on });
         }
-        ctx.sink.emit(CoreEvent::Dnd { from, on });
     }
 }

@@ -104,7 +104,10 @@ struct Running(String);
 
 impl Running {
     fn claim<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> Option<Running> {
-        let key = format!("{}>{node_id}", ctx.identity.lock().node_id);
+        // Per engine (its QUIC `boot`), not per device id: a ladder still
+        // running in an engine that was just replaced (restart in the same
+        // process, or tests) mustn't stop the new engine's.
+        let key = format!("{}>{node_id}", ctx.quic.boot);
         let mut running = running_map().lock();
         if let Some(again) = running.get_mut(&key) {
             *again = true;

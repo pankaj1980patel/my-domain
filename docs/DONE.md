@@ -271,6 +271,25 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## First CI run on main (2026-11-03)
+
+`monorepo` fast-forwarded into `main` (307 commits) and CI run. Fixed what
+it found:
+- A flaky DND test that was a real bug: the connect ladder's "already
+  running" guard was process-wide, keyed by device id, so a ladder left
+  over from a replaced engine silently stopped the new engine's. Now keyed
+  per engine (its QUIC `boot`).
+- Restarts: a peer back with a new `boot` gets the outbox, our addresses
+  and our Do Not Disturb again; a computer that restarted learns the
+  phone's DND when the link comes up (test
+  `a_restarted_computer_learns_the_state_when_the_link_comes_up`).
+- The wake test accepts "couldn't send" (CI's macOS can't broadcast).
+- The Android job's SDK setup asked for the removed `tools` package.
+- cargo-deny: rustls 0.23.46, rustls-webpki 0.103.16, webpki-roots
+  1.0.11, tokio 1.54.1, anyhow 1.0.104; the advisories with no reachable
+  fix are listed in `deny.toml` with a reason each.
+- Server redeployed from the CI release build.
+
 ## The phone's radios from a computer (2026-11-03)
 
 Wave E's first step ([ADR-0006](../learnings/decisions/ADR-0006-shizuku.md),

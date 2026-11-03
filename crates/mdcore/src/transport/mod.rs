@@ -140,13 +140,23 @@ pub fn mark_live<P: Platform>(
             node_id: node_id.to_string(),
             transport: kind,
         });
-        outbox::flush(ctx, node_id);
         crate::engine::learn_unknown(ctx, node_id);
-        // Give the peer our current addresses (it may only know stale ones
-        // from the server), off this thread: sending may block.
-        let (ctx, peer) = (ctx.clone(), node_id.to_string());
-        std::thread::spawn(move || crate::features::addr_update::announce(&ctx, Some(&[peer])));
+        peer_came_up(ctx, node_id);
     }
+}
+
+/// A link to `node_id` is new, or its peer restarted (a QUIC `Hello` with
+/// a new `boot`, which replaces the old link without a new `PeerConnected`):
+/// send what waited for it, and tell it what a fresh start doesn't know.
+pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    outbox::flush(ctx, node_id);
+    // Our current addresses (it may only know stale ones from the server)
+    // and our Do Not Disturb, if on; off this thread: sending may block.
+    let (ctx, peer) = (ctx.clone(), node_id.to_string());
+    std::thread::spawn(move || {
+        crate::features::addr_update::announce(&ctx, Some(std::slice::from_ref(&peer)));
+        crate::features::dnd::link_up(&ctx, &peer);
+    });
 }
 
 /// Refresh `last_seen` for an existing live peer (e.g. on pong/keepalive).

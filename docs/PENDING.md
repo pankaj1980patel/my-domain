@@ -8,7 +8,6 @@ and in [learnings/](../learnings/README.md).
 
 | Item | Why |
 |---|---|
-| **Redeploy the server** (`apps/server/deploy.sh`) | Signals now go by push when a device's relay socket has been silent for over 30 s. A phone that went to sleep while on the relay was getting no wake-up push. |
 | **Rotate the server `JWT_SECRET`** | The old value was in a committed file before it was redacted. Changing it logs every device out once. |
 | **Change the laptop password** | It was shared in chat. |
 | **Dirty NTFS partition** on the laptop (`/dev/nvme0n1p6`) | Was already dirty before this work; left untouched. Fix it from Windows (`chkdsk`) or with `ntfsfix`. |
@@ -396,8 +395,15 @@ A feature counts as done when it has:
     mobile data and asleep, nothing reached it for over 10 minutes, even
     from a freshly started mdctl: no push arrived and the relay never
     joined. Most likely the server still sent the signals down the old
-    process's relay socket, which the undeployed server fix (push once a
-    relay socket has been silent 30 s) addresses: **redeploy**.
+    process's relay socket, which the server fix (push once a relay socket
+    has been silent 30 s) addresses: redeployed 2026-11-03 16:50, to be
+    tried again.
+  - Fixed in the core (2026-11-03): a peer that comes back with a new
+    `boot` now gets what a new link gets (the outbox resent, our
+    addresses, our Do Not Disturb); any QUIC link that replaces another
+    resends what isn't acknowledged at once instead of after 10 s; and the
+    "already connecting" guard is per engine, so a connect left over from
+    an engine that was just replaced no longer blocks the new one.
 
 - **Linux FCM:** the first fresh registration failed with
   `PHONE_REGISTRATION_ERROR` and worked after a restart. Last seen

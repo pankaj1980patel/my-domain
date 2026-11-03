@@ -82,3 +82,32 @@ fn a_restarted_phone_does_not_repeat_its_state() {
     phone.engine.set_dnd(false);
     wait_dnd(&pc, false);
 }
+
+#[test]
+fn a_restarted_computer_learns_the_state_when_the_link_comes_up() {
+    let (store, secrets) = (Arc::default(), Arc::default());
+    let pc_platform = || MockPlatform {
+        kv: Arc::clone(&store),
+        secrets: Arc::clone(&secrets),
+        ..MockPlatform::new("dnd-pc-restart-pc")
+    };
+    let phone = TestNode::start("dnd-pc-restart-phone");
+    let pc = TestNode::start_with(pc_platform());
+    TestNode::pair(&phone, &pc);
+    phone.engine.set_dnd(true);
+    wait_dnd(&pc, true);
+
+    // The computer restarts: it forgot, and the phone's state hasn't
+    // changed, so only the new link tells it.
+    drop(pc);
+    let pc = TestNode::start_with(pc_platform());
+    assert!(pc.engine.dnd_active().is_empty());
+    TestNode::pair(&phone, &pc);
+    pc.engine.connect(&phone.node_id()).unwrap();
+    wait_dnd(&pc, true);
+    assert_eq!(pc.engine.dnd_active(), [phone.node_id()]);
+
+    // Heard again on a later link, it isn't a new event.
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(heard(&pc).len(), 1);
+}

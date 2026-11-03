@@ -6,6 +6,34 @@
 [advisories]
 version = 2
 yanked = "warn"
+# Each one: why it can't be upgraded here, and why it's acceptable for
+# now. Look again whenever the crate that pulls it in has a new version.
+ignore = [
+  # Vulnerable, with no fixed version reachable from our dependencies:
+  # h2 0.3 (fixed only in 0.4): from reqwest 0.11 in fcm_receiver_rs, a
+  # client of Google's servers only; the issue is a server-side DoS.
+  { id = "RUSTSEC-2026-0258", reason = "h2 0.3 via fcm_receiver_rs; client only" },
+  # quick-xml 0.39 via plist via tauri: parses the app's own plist files.
+  { id = "RUSTSEC-2026-0194", reason = "quick-xml via tauri/plist; local files only" },
+  { id = "RUSTSEC-2026-0195", reason = "quick-xml via tauri/plist; local files only" },
+  # crypto-bigint 0.5 via elliptic-curve 0.13 via str0m's DTLS (fixed only
+  # in 0.7): timing side channels; WebRTC is the last-resort rung.
+  { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 via str0m; waits on upstream" },
+  # Unmaintained, no replacement reachable (all transitive):
+  { id = "RUSTSEC-2026-0374", reason = "basic-toml: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0141", reason = "bincode: unmaintained, transitive" },
+  { id = "RUSTSEC-2024-0436", reason = "paste: unmaintained, transitive" },
+  { id = "RUSTSEC-2024-0370", reason = "proc-macro-error: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0081", reason = "unic-*: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0075", reason = "unic-*: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0080", reason = "unic-*: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0100", reason = "unic-*: unmaintained, transitive" },
+  { id = "RUSTSEC-2025-0098", reason = "unic-*: unmaintained, transitive" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names: unmaintained, transitive (Linux D-Bus)" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained, transitive (Linux D-Bus)" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: unmaintained, transitive (Linux D-Bus)" },
+]
 
 [bans]
 multiple-versions = "warn"

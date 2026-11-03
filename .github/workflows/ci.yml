@@ -82,6 +82,9 @@ jobs:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android,i686-linux-android
       - uses: Swatinem/rust-cache@v2
       - uses: android-actions/setup-android@v3
+        with:
+          # The default also asks for "tools", which the SDK no longer has.
+          packages: platform-tools
       - name: Install the NDK version the app pins
         run: |
           NDK=$(grep -oP 'ndkVersion = "\K[^"]+' apps/android/app/build.gradle.kts)

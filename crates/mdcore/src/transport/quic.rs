@@ -96,7 +96,7 @@ pub struct QuicLink {
     /// stale link, and tells us which links survive OUR network change.
     conns: PeerConns,
     /// New for every start; sent in our `Hello` (see `WsFrame::Hello`).
-    boot: String,
+    pub(crate) boot: String,
 }
 
 /// One UDP socket for both IP versions: IPv6 with IPv4-mapped addresses
@@ -459,6 +459,9 @@ async fn run_connection<P: Platform>(
     let remote = canonical(conn.remote_address());
     let me = ctx.identity.lock().node_id.clone();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    // This link replaced another one, and whether the peer restarted since
+    // (a new `boot`).
+    let (mut replaced, mut restarted) = (false, false);
     {
         let mut g = ctx.ws_conns.lock();
         if let Some((existing_id, _)) = g.get(&peer_id) {
@@ -483,6 +486,8 @@ async fn run_connection<P: Platform>(
                 conn.close(0u32.into(), b"duplicate");
                 return;
             }
+            replaced = existing.is_some();
+            restarted = matches!(&existing, Some((_, _, _, was_boot)) if !boot.is_empty() && *was_boot != boot);
             g.remove(&peer_id);
             if let Some((_, _, old, _)) = existing {
                 old.close(0u32.into(), b"replaced");
@@ -506,7 +511,15 @@ async fn run_connection<P: Platform>(
             },
         );
     }
+    let was_live = super::is_live(&ctx, &peer_id);
     mark_live(&ctx, &peer_id, kind, Some(remote));
+    if was_live && restarted {
+        super::peer_came_up(&ctx, &peer_id);
+    } else if was_live && replaced {
+        // A message may have gone out on the link just closed: resend what
+        // isn't acknowledged (the receiver drops repeats).
+        super::outbox::flush(&ctx, &peer_id);
+    }
 
     // Writer: the frames the engine queued for this peer (the queue closes
     // when the link is removed).

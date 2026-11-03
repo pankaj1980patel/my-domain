@@ -276,5 +276,10 @@ fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
         .expect("no status");
     // Remembered, so it works while the computer sleeps and says nothing.
     assert!(phone.engine.can_wake(&pc.node_id()));
-    phone.engine.wake_device(&pc.node_id()).unwrap();
+    // Sending needs a network that allows broadcasts (CI's macOS machines
+    // don't): only "couldn't send" may stop it, never "doesn't know how".
+    match phone.engine.wake_device(&pc.node_id()) {
+        Ok(()) | Err(mdcore::CoreError::NoLink(_)) => {}
+        Err(e) => panic!("wake failed: {e}"),
+    }
 }
