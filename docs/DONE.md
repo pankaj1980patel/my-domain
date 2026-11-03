@@ -150,6 +150,11 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 ## Browse and download; send text; storage (2026-11-03)
 
+- Verified live 2026-11-03 against the phone from mdctl on the Mac: the
+  shared folders and Download/my-domain listed, a 1 MiB file downloaded
+  identical to the phone's copy, and text sent to the clipboard showed as
+  a notification on the phone.
+
 - **Browse another device's folders and pull a file** (`features/browse.rs`).
   Each device chooses what it shares: `Engine::set_shared_folders` (name +
   path). `list_folder(node, root, path, offset)` returns a request id; the
