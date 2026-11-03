@@ -24,10 +24,14 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use crate::platform::Platform;
 
 /// Where this device's key is kept (PKCS#8, base64).
-const KEY_KV: &str = "device_key";
+const KEY_KV: &str = "identity_key";
 /// kv key holding our public key: says a key was made before, so a secure
 /// store that can't be read (a locked keyring) doesn't get it replaced.
-const PUBLIC_KV: &str = "device_key_public";
+const PUBLIC_KV: &str = "identity_key_public";
+/// Where the first build (2026-11-03) kept it by mistake: the name the
+/// session uses for the passphrase key (`engine::session`), which it
+/// overwrote.
+const MISPLACED_KV: &str = "device_key";
 /// kv key holding the keys seen per device (JSON: node id -> base64 key).
 const PINS_KV: &str = "peer_keys";
 
@@ -45,6 +49,7 @@ pub struct DeviceKey {
 impl DeviceKey {
     /// This device's key: the stored one, or a new one (then stored).
     pub fn load_or_create(store: &dyn Store) -> DeviceKey {
+        Self::rescue_misplaced(store);
         if let Some(key) = store
             .secure_get(KEY_KV)
             .or_else(|| store.get(KEY_KV))
@@ -68,6 +73,26 @@ impl DeviceKey {
         }
         store.set(PUBLIC_KV, &key.public());
         key
+    }
+
+    /// A key the first build put in the passphrase key's place: move it to
+    /// its own name (peers may have remembered it) and clear that place, so
+    /// the app asks for the passphrase again instead of failing to read it.
+    fn rescue_misplaced(store: &dyn Store) {
+        let is_ours = |v: &String| B64.decode(v).ok().and_then(Self::from_pkcs8).is_some();
+        if store.secure_get(KEY_KV).is_none() {
+            if let Some(v) = store.secure_get(MISPLACED_KV).filter(is_ours) {
+                store.secure_set(KEY_KV, &v);
+                if store.secure_get(KEY_KV).as_deref() == Some(v.as_str()) {
+                    store.secure_clear(MISPLACED_KV);
+                }
+            }
+        }
+        if store.get(KEY_KV).is_none() {
+            if let Some(v) = store.get(MISPLACED_KV).filter(is_ours) {
+                store.set(KEY_KV, &v);
+            }
+        }
     }
 
     fn generate() -> DeviceKey {
@@ -149,6 +174,7 @@ pub trait Store {
         None
     }
     fn secure_set(&self, _key: &str, _value: &str) {}
+    fn secure_clear(&self, _key: &str) {}
 }
 
 impl<P: Platform> Store for P {
@@ -163,6 +189,9 @@ impl<P: Platform> Store for P {
     }
     fn secure_set(&self, key: &str, value: &str) {
         self.secret_set(key, Some(value))
+    }
+    fn secure_clear(&self, key: &str) {
+        self.secret_set(key, None)
     }
 }
 
@@ -198,6 +227,29 @@ mod tests {
         fn secure_set(&self, key: &str, value: &str) {
             self.1.set(key, value)
         }
+        fn secure_clear(&self, key: &str) {
+            self.1 .0.lock().remove(key);
+        }
+    }
+
+    #[test]
+    fn the_session_key_is_left_alone() {
+        let store = WithSecrets::default();
+        let session_key = "ab".repeat(32); // how the session stores it (hex)
+        store.secure_set(MISPLACED_KV, &session_key);
+        let key = DeviceKey::load_or_create(&store);
+        assert_eq!(store.secure_get(MISPLACED_KV), Some(session_key));
+        assert_eq!(DeviceKey::load_or_create(&store).public(), key.public());
+    }
+
+    #[test]
+    fn a_misplaced_key_is_moved_and_its_place_cleared() {
+        let store = WithSecrets::default();
+        let old = DeviceKey::generate();
+        store.secure_set(MISPLACED_KV, &B64.encode(&old.pkcs8));
+        let key = DeviceKey::load_or_create(&store);
+        assert_eq!(key.public(), old.public(), "peers remembered this one");
+        assert_eq!(store.secure_get(MISPLACED_KV), None);
     }
 
     #[test]
