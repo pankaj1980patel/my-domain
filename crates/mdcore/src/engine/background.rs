@@ -87,6 +87,7 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
             while tick(&ctx, Duration::from_secs(2)) {
                 transport::outbox::retry_due(&ctx);
                 crate::features::files::resume_paused(&ctx);
+                crate::features::backup::on_timer(&ctx);
             }
         });
     }

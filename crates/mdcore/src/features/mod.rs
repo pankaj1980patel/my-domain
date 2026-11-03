@@ -10,14 +10,18 @@
 //! (protocol v2) instead; that seam is documented in `crate::service`.
 
 pub mod addr_update;
+pub mod backup;
+pub mod battery;
 pub mod browse;
 pub mod call_history;
 pub mod call_notification;
 pub mod clipboard;
 pub mod code;
 pub mod device;
+pub mod extras;
 pub mod files;
 pub mod media;
+pub mod gallery;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
@@ -119,6 +123,8 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(p2p_ping::P2pPingHandler));
         r.register(Arc::new(addr_update::AddrUpdateHandler));
         r.register(Arc::new(signal_fwd::SignalFwdHandler));
+        r.register(Arc::new(gallery::GalleryHandler));
+        r.register(Arc::new(battery::BatteryHandler));
         r
     }
 

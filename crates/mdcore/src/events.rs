@@ -190,6 +190,43 @@ pub enum CoreEvent {
         text: String,
         mode: String,
     },
+    /// Another device wants a page of this device's gallery (`gallery_list`):
+    /// the host lists `limit` photos/videos from `offset` (newest first), with
+    /// thumbnails if `thumbs`, and answers with `Engine::gallery_reply`.
+    GalleryRequest {
+        from: String,
+        req: String,
+        offset: u64,
+        limit: u32,
+        thumbs: bool,
+    },
+    /// A device answered `list_gallery` (request `req`): one page of its
+    /// photos and videos, newest first. `next` is the offset of the next
+    /// page; `error` says why there's none (e.g. photo access not allowed).
+    GalleryListing {
+        from: String,
+        req: String,
+        items: Vec<crate::model::GalleryEntry>,
+        next: Option<u64>,
+        error: Option<String>,
+    },
+    /// The thumbnail of gallery item `id` (from request `req`): a small JPEG,
+    /// base64 (`data:image/jpeg;base64,` + `jpeg` shows it).
+    GalleryThumb {
+        from: String,
+        req: String,
+        id: String,
+        jpeg: String,
+    },
+    /// Where this device's photo backup stands (sent when it changes).
+    BackupState(crate::model::BackupStatus),
+    /// Another device's battery is low (`alert` "low") or finished charging
+    /// ("full"), at `level` percent.
+    BatteryAlert {
+        from: String,
+        alert: String,
+        level: u8,
+    },
 }
 
 impl CoreEvent {
@@ -229,6 +266,11 @@ impl CoreEvent {
             CoreEvent::FolderListing { .. } => "folder-listing",
             CoreEvent::TextShared { .. } => "text-shared",
             CoreEvent::NowPlaying { .. } => "now-playing",
+            CoreEvent::GalleryRequest { .. } => "gallery-request",
+            CoreEvent::GalleryListing { .. } => "gallery-listing",
+            CoreEvent::GalleryThumb { .. } => "gallery-thumb",
+            CoreEvent::BackupState(_) => "backup-state",
+            CoreEvent::BatteryAlert { .. } => "battery-alert",
         }
     }
 

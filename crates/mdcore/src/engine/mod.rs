@@ -32,6 +32,8 @@ mod background;
 mod ble;
 pub use ble::BleSender;
 mod ladder;
+mod media;
+pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
 pub(crate) use messaging::{reconnect, send_reliably};
@@ -129,6 +131,8 @@ pub struct NetCtx<P: Platform> {
     pub media: Arc<crate::features::media::Media>,
     /// File transfers in progress, both ways (see `features::files`).
     pub files: Arc<crate::features::files::Files>,
+    /// Gallery, photo backup and battery-alert state (see `features::extras`).
+    pub extras: Arc<crate::features::extras::Extras>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
     /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC
@@ -199,6 +203,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             device_status: self.device_status.clone(),
             media: self.media.clone(),
             files: self.files.clone(),
+            extras: self.extras.clone(),
             subs: self.subs.clone(),
             quic_failed: self.quic_failed.clone(),
             manual_aliases: self.manual_aliases.clone(),
@@ -354,6 +359,7 @@ impl<P: Platform> Engine<P> {
             device_status: Arc::new(Mutex::new(String::from("{}"))),
             media: Arc::default(),
             files: Arc::default(),
+            extras: Arc::default(),
             device_key,
             peer_keys: Arc::default(),
             ble_links: Arc::default(),

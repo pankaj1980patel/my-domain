@@ -66,6 +66,7 @@ impl<P: Platform> Engine<P> {
     /// changes. Sent to devices that call `request_status`.
     pub fn set_device_status(&self, status_json: &str) {
         *self.ctx.device_status.lock() = status_json.to_string();
+        crate::features::battery::on_status(&self.ctx, status_json);
     }
 
     /// What's playing on this device, as a JSON object `{title, artist,

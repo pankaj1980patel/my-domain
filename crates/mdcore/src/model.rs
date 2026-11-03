@@ -274,3 +274,95 @@ pub struct RemoteEntry {
     pub size: u64,
     pub modified: u64,
 }
+
+/// One photo or video in another device's gallery (`GalleryListing`),
+/// newest first. `id` names it for `Engine::download_gallery_item`;
+/// `taken` is unix seconds (0 if unknown), `duration` milliseconds (videos).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct GalleryEntry {
+    pub id: String,
+    pub name: String,
+    pub mime: String,
+    pub size: u64,
+    pub taken: u64,
+    #[serde(default)]
+    pub width: u32,
+    #[serde(default)]
+    pub height: u32,
+    #[serde(default)]
+    pub duration: u64,
+    #[serde(default)]
+    pub video: bool,
+}
+
+/// What the host app hands the core for one gallery item
+/// (`Engine::gallery_reply`): the entry other devices see, where the file
+/// is on this device (never sent), and a small JPEG thumbnail.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct GalleryItem {
+    pub entry: GalleryEntry,
+    pub path: String,
+    pub thumb: Option<Vec<u8>>,
+}
+
+/// A new photo or video for the backup (`Engine::backup_enqueue`). `key`
+/// names it for good (never sent twice); `taken` is unix seconds; `month`
+/// ("YYYY-MM", local time) picks the folder it lands in, else it's worked
+/// out from `taken` (UTC).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BackupItem {
+    pub key: String,
+    pub path: String,
+    pub taken: u64,
+    #[serde(default)]
+    pub month: Option<String>,
+}
+
+/// Where the photo backup stands (`Engine::backup_state`, and the
+/// `BackupState` event whenever it changes).
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct BackupStatus {
+    pub enabled: bool,
+    /// The computer that gets the photos ("" = none chosen).
+    pub target: String,
+    /// Only while the phone is charging (it always waits for unmetered
+    /// Wi-Fi).
+    pub charging_only: bool,
+    /// Photos added from this time on (unix seconds) are backed up.
+    pub since: u64,
+    /// Waiting to be sent.
+    pub queued: u32,
+    /// Sent so far, all time.
+    pub sent: u32,
+    /// What it waits for: "off", "target", "wifi", "charging", "retry"
+    /// (the last try failed; tries again soon), or "" (sending, or all
+    /// done).
+    pub waiting_for: String,
+    /// The file going now, with bytes confirmed of its size.
+    pub current: Option<String>,
+    pub done: u64,
+    pub total: u64,
+    /// The last failure, for the user.
+    pub last_error: Option<String>,
+    /// When the last file was sent (unix seconds, 0 = never).
+    pub last_sent_at: u64,
+}
+
+/// Battery alerts this device sends your other devices
+/// (`Engine::set_battery_alerts`): once when it drops to `low` percent
+/// while not charging, once when charging reaches 100%.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct BatteryAlertSettings {
+    pub enabled: bool,
+    pub low: u8,
+}
+
+impl Default for BatteryAlertSettings {
+    fn default() -> Self {
+        BatteryAlertSettings {
+            enabled: true,
+            low: 15,
+        }
+    }
+}

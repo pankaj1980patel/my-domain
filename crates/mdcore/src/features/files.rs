@@ -93,6 +93,8 @@ struct Outgoing {
     rewound_at: Option<Instant>,
     /// Since when the transfer is paused (no sender running, not done).
     paused_since: Option<Instant>,
+    /// More fields for the offer (e.g. `features::backup`'s folder).
+    extra: Option<serde_json::Value>,
 }
 
 struct Incoming {
@@ -101,6 +103,8 @@ struct Incoming {
     size: u64,
     sha: String,
     part: PathBuf,
+    /// The folder it's moved into when complete.
+    dest: PathBuf,
     file: File,
     len: u64,
     hasher: Sha256,
@@ -262,7 +266,7 @@ pub fn is_transfer_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
 }
 
-fn sha256_file(path: &Path) -> std::io::Result<String> {
+pub(crate) fn sha256_file(path: &Path) -> std::io::Result<String> {
     let mut f = File::open(path)?;
     let mut h = Sha256::new();
     let mut buf = vec![0u8; CHUNK];
@@ -298,6 +302,18 @@ pub fn start_with_id<P: Platform>(
     path: &Path,
     id: &str,
 ) -> crate::Result<String> {
+    start_with_extra(ctx, node, path, id, None)
+}
+
+/// The fields of `extra` (an object) go into every offer of this transfer,
+/// e.g. a photo backup's `"backup": {...}` (see `backup::offer_dest`).
+pub fn start_with_extra<P: Platform>(
+    ctx: &NetCtx<P>,
+    node: &str,
+    path: &Path,
+    id: &str,
+    extra: Option<serde_json::Value>,
+) -> crate::Result<String> {
     let meta = std::fs::metadata(path).map_err(|e| format!("can't read the file: {e}"))?;
     if !meta.is_file() {
         return Err("not a file".to_string().into());
@@ -329,10 +345,11 @@ pub fn start_with_id<P: Platform>(
                 return failed(&ctx, &id2, &node, &name, false, &format!("can't read: {e}"));
             }
         };
-        let msg = json!({
+        let mut msg = json!({
             "type": "file_offer", "from": me(&ctx), "id": id2,
             "name": name, "size": size, "sha256": sha,
         });
+        add_extra(&mut msg, extra.as_ref());
         ctx.files.out.lock().insert(
             id2.clone(),
             Outgoing {
@@ -351,11 +368,21 @@ pub fn start_with_id<P: Platform>(
                 rewind: false,
                 rewound_at: None,
                 paused_since: None,
+                extra,
             },
         );
         crate::engine::send_reliably(&ctx, &node, &msg.to_string());
     });
     Ok(id)
+}
+
+/// Copy the fields of `extra` (an object) into `msg`.
+fn add_extra(msg: &mut serde_json::Value, extra: Option<&serde_json::Value>) {
+    if let (Some(serde_json::Value::Object(fields)), serde_json::Value::Object(m)) = (extra, msg) {
+        for (k, v) in fields {
+            m.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+    }
 }
 
 fn failed<P: Platform>(
@@ -373,6 +400,22 @@ fn failed<P: Platform>(
         incoming,
         reason: why.to_string(),
     });
+    if !incoming {
+        super::backup::outgoing_ended(ctx, id, Some(why));
+    }
+}
+
+/// Drop an outgoing transfer without a word to anyone: its sender stops,
+/// and the receiver keeps the partial file, so starting it again under the
+/// same id resumes it (`features::backup` pausing off Wi-Fi).
+pub fn forget<P: Platform>(ctx: &NetCtx<P>, id: &str) {
+    ctx.files.out.lock().remove(id);
+    ctx.files.acked.notify_all();
+}
+
+/// (bytes confirmed, size) of outgoing transfer `id`, if it's going.
+pub fn outgoing_progress<P: Platform>(ctx: &NetCtx<P>, id: &str) -> Option<(u64, u64)> {
+    ctx.files.out.lock().get(id).map(|t| (t.acked, t.size))
 }
 
 /// Push chunks from `from` on, keeping the window full, until everything is
@@ -505,10 +548,11 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
             if !linked {
                 t.backoff = (t.backoff * 2).min(MAX_BACKOFF);
             }
-            let msg = json!({
+            let mut msg = json!({
                 "type": "file_offer", "from": me, "id": id,
                 "name": t.name, "size": t.size, "sha256": t.sha,
             });
+            add_extra(&mut msg, t.extra.as_ref());
             offers.push((t.node.clone(), msg));
         }
     }
@@ -612,6 +656,13 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     let Some(dir) = ctx.files.download_dir.lock().clone() else {
         return reject("this device can't receive files");
     };
+    let dest = super::backup::offer_dest(&dir, msg);
+    // A backup of a photo that's already here (the phone forgot it sent
+    // it): done, without sending it again.
+    if dest != dir && super::backup::already_there(&dest, &name, size, &sha) {
+        ctx.files.finished(ctx, &id, None);
+        return reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": true }));
+    }
 
     let known = ctx.files.inc.lock().get_mut(&id).map(|t| {
         t.last_seen = Instant::now();
@@ -666,6 +717,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                     size,
                     sha,
                     part,
+                    dest,
                     file,
                     len,
                     hasher,
@@ -768,14 +820,10 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     let _ = t.file.sync_all();
     drop(t.file);
     let ok = hex(&t.hasher.finalize()) == t.sha;
-    let dir = t
-        .part
-        .parent()
-        .and_then(Path::parent)
-        .map(Path::to_path_buf);
-    let dest = match (&dir, ok) {
-        (Some(dir), true) => move_into(&t.part, dir, &t.name),
-        _ => None,
+    let dest = if ok && std::fs::create_dir_all(&t.dest).is_ok() {
+        move_into(&t.part, &t.dest, &t.name)
+    } else {
+        None
     };
     let moved = dest.is_some();
     let me = me(ctx);
@@ -905,10 +953,11 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 files.acked.notify_all();
                 if msg.json("ok").as_bool() == Some(true) {
                     ctx.sink.emit(CoreEvent::FileSent {
-                        id,
+                        id: id.clone(),
                         node_id: from,
                         name: t.name,
                     });
+                    super::backup::outgoing_ended(ctx, &id, None);
                 } else {
                     failed(ctx, &id, &from, &t.name, false, &msg.str("error"));
                 }
