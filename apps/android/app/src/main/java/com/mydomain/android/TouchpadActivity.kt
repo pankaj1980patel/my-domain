@@ -29,6 +29,8 @@ class TouchpadActivity : ComponentActivity() {
         val node = intent.getStringExtra(EXTRA_NODE) ?: return finish()
         val secure = getSharedPreferences("md", Context.MODE_PRIVATE).getBoolean(PREF_TOUCHPAD_SECURE, true)
         if (secure) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // In use as a touchpad: don't let the screen time out under you.
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val toast: (String) -> Unit = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }
         setContent {
             MdTheme {
