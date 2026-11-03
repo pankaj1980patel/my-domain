@@ -108,7 +108,10 @@ fn same_address_keeps_links_and_only_refreshes() {
     let ip = a.engine.identity().ip;
     a.engine.network_changed(Some(&ip)); // e.g. Android's callback with the same Wi-Fi
     wait_for("a re-register", || registers() > before);
-    assert!(reg.requests().iter().any(|r| r.starts_with("GET /devices")));
+    // The device list is fetched after the register: wait for it too.
+    wait_for("a peer refresh", || {
+        reg.requests().iter().any(|r| r.starts_with("GET /devices"))
+    });
     std::thread::sleep(Duration::from_millis(800));
     assert_eq!(link_events(&a, &b).1, 0, "the live link was left alone");
 }
