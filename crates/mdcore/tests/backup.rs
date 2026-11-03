@@ -280,3 +280,125 @@ fn a_photo_the_computer_has_is_not_sent_again() {
         let _ = std::fs::remove_dir_all(d);
     }
 }
+
+/// What was sent is remembered per computer: a new computer gets the
+/// photos it doesn't have, and going back to the first one sends nothing
+/// it already has.
+#[test]
+fn switching_computers_sends_what_the_new_one_lacks() {
+    let (store, secrets) = (Arc::default(), Arc::default());
+    let phone_platform = || MockPlatform {
+        kv: Arc::clone(&store),
+        secrets: Arc::clone(&secrets),
+        ..MockPlatform::new("backup-switch-phone")
+    };
+    let pc1 = TestNode::start("backup-switch-pc1");
+    let pc2 = TestNode::start("backup-switch-pc2");
+    let phone = TestNode::start_with(phone_platform());
+    TestNode::pair(&pc1, &phone);
+    TestNode::pair(&pc2, &phone);
+    let (src, dst1, dst2) = (
+        temp_dir("switch-src"),
+        temp_dir("switch-dst1"),
+        temp_dir("switch-dst2"),
+    );
+    pc1.engine.set_download_dir(dst1.to_str().unwrap());
+    pc2.engine.set_download_dir(dst2.to_str().unwrap());
+    let (a, b) = (src.join("IMG_1.jpg"), src.join("IMG_2.jpg"));
+    std::fs::write(&a, b"one").unwrap();
+    std::fs::write(&b, b"two").unwrap();
+    let both = || vec![item("1:100", &a), item("2:100", &b)];
+
+    // Both photos go to the first computer.
+    phone
+        .engine
+        .backup_configure(true, &pc1.node_id(), false)
+        .unwrap();
+    phone.engine.backup_conditions(true, false);
+    assert_eq!(phone.engine.backup_enqueue(both()), 2);
+    state_until(&phone, "sent to pc1", |s| s.sent == 2 && s.queued == 0);
+
+    // The second computer has none of them: the same scan sends both.
+    phone
+        .engine
+        .backup_configure(true, &pc2.node_id(), false)
+        .unwrap();
+    let s = phone.engine.backup_state();
+    assert_eq!((s.target.as_str(), s.sent), (pc2.node_id().as_str(), 0));
+    assert_eq!(phone.engine.backup_enqueue(both()), 2);
+    state_until(&phone, "sent to pc2", |s| s.sent == 2 && s.queued == 0);
+    let folder2 = backup_folder(&dst2, &phone);
+    assert_eq!(std::fs::read(folder2.join("IMG_1.jpg")).unwrap(), b"one");
+    assert_eq!(std::fs::read(folder2.join("IMG_2.jpg")).unwrap(), b"two");
+
+    // A new photo goes to the second computer only.
+    let c = src.join("IMG_3.jpg");
+    std::fs::write(&c, b"three").unwrap();
+    assert_eq!(phone.engine.backup_enqueue(vec![item("3:100", &c)]), 1);
+    state_until(&phone, "third to pc2", |s| s.sent == 3 && s.queued == 0);
+
+    // Back to the first one, after a restart: it has the first two, so
+    // only the third goes.
+    drop(phone);
+    let phone = TestNode::start_with(phone_platform());
+    TestNode::pair(&pc1, &phone);
+    TestNode::pair(&pc2, &phone);
+    phone
+        .engine
+        .backup_configure(true, &pc1.node_id(), false)
+        .unwrap();
+    phone.engine.backup_conditions(true, false);
+    assert_eq!(phone.engine.backup_state().sent, 2);
+    let mut all = both();
+    all.push(item("3:100", &c));
+    assert_eq!(phone.engine.backup_enqueue(all), 1);
+    state_until(&phone, "third to pc1", |s| s.sent == 3 && s.queued == 0);
+    let folder1 = backup_folder(&dst1, &phone);
+    assert_eq!(std::fs::read_dir(&folder1).unwrap().count(), 3);
+    for d in [&src, &dst1, &dst2] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+/// A phone updated from the version with one shared list: that list is
+/// taken as what the chosen computer has, so nothing goes again.
+#[test]
+fn the_old_shared_list_counts_for_the_chosen_computer() {
+    let pc = TestNode::start("backup-old-pc");
+    let store: Arc<std::sync::Mutex<std::collections::HashMap<String, String>>> = Arc::default();
+    {
+        let mut kv = store.lock().unwrap();
+        let settings = format!(
+            r#"{{"enabled":true,"target":"{}","charging_only":false,"since":1}}"#,
+            pc.node_id()
+        );
+        kv.insert("backup_settings".into(), settings);
+        kv.insert("backup_sent_chunks".into(), "1".into());
+        kv.insert("backup_sent_0".into(), r#"["1:100","2:100"]"#.into());
+    }
+    let phone_platform = || MockPlatform {
+        kv: Arc::clone(&store),
+        ..MockPlatform::new("backup-old-phone")
+    };
+    let phone = TestNode::start_with(phone_platform());
+    TestNode::pair(&pc, &phone);
+    let src = temp_dir("old-src");
+    let a = src.join("IMG_1.jpg");
+    std::fs::write(&a, b"one").unwrap();
+    assert_eq!(phone.engine.backup_state().sent, 2);
+    assert_eq!(phone.engine.backup_enqueue(vec![item("1:100", &a)]), 0);
+    // Moved, not copied: the old list is empty now, and a restart still
+    // knows.
+    assert_eq!(
+        store
+            .lock()
+            .unwrap()
+            .get("backup_sent_chunks")
+            .map(String::as_str),
+        Some("0")
+    );
+    drop(phone);
+    let phone = TestNode::start_with(phone_platform());
+    assert_eq!(phone.engine.backup_state().sent, 2);
+    let _ = std::fs::remove_dir_all(&src);
+}

@@ -9,6 +9,10 @@
 //! Wi-Fi? charging?). The core decides when to send, and remembers every
 //! item it sent (`kv`, survives restarts), so nothing goes twice:
 //!
+//! - What was sent is remembered per computer. Choose another computer and
+//!   it gets the photos it doesn't have yet (the host scans again from
+//!   `since`, and the core keeps only what this computer lacks); choose the
+//!   old one again and nothing it already has goes twice.
 //! - Only while allowed: enabled, a computer chosen, unmetered Wi-Fi, and
 //!   charging if the user asked for that. When that stops mid-file, the
 //!   transfer is dropped quietly (`files::forget`); the computer keeps its
@@ -52,7 +56,10 @@ const CHUNK_KEYS: usize = 500;
 const MAX_QUEUE: usize = 20_000;
 
 const SETTINGS_KEY: &str = "backup_settings";
-const CHUNKS_KEY: &str = "backup_sent_chunks";
+/// Before sent items were kept per computer: one list for all of them.
+/// Moved to the first computer chosen after the update (most likely the
+/// same one).
+const OLD_CHUNKS_KEY: &str = "backup_sent_chunks";
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct Settings {
@@ -70,13 +77,64 @@ struct Current {
     name: String,
 }
 
+/// What one computer has received, as item keys. Stored in chunks of
+/// `CHUNK_KEYS` under keys named after the computer (`Sent::chunk_key`).
+#[derive(Default)]
+struct Sent {
+    /// The computer these are for ("" = none chosen).
+    target: String,
+    keys: HashSet<String>,
+    /// Stored chunks; the last one is `last_chunk`.
+    chunks: usize,
+    last_chunk: Vec<String>,
+}
+
+impl Sent {
+    /// A short, safe name for the computer in storage keys.
+    fn tag(&self) -> String {
+        let h = Sha256::digest(format!("backup-target\n{}", self.target).as_bytes());
+        h.iter().take(8).map(|b| format!("{b:02x}")).collect()
+    }
+
+    fn chunk_key(&self, n: usize) -> String {
+        format!("backup_sent_{}_{n}", self.tag())
+    }
+
+    fn chunks_key(&self) -> String {
+        format!("backup_sent_chunks_{}", self.tag())
+    }
+
+    /// Add `key` in memory; returns false if it was there already.
+    fn add(&mut self, key: String) -> bool {
+        if !self.keys.insert(key.clone()) {
+            return false;
+        }
+        if self.last_chunk.len() >= CHUNK_KEYS || self.chunks == 0 {
+            self.last_chunk.clear();
+            self.chunks += 1;
+        }
+        self.last_chunk.push(key);
+        true
+    }
+
+    /// Store the last chunk and the chunk count (all that `add` changes).
+    fn save_last<P: Platform>(&self, ctx: &NetCtx<P>) {
+        if self.chunks == 0 {
+            return;
+        }
+        if let Ok(json) = serde_json::to_string(&self.last_chunk) {
+            ctx.platform.kv_set(&self.chunk_key(self.chunks - 1), &json);
+        }
+        ctx.platform
+            .kv_set(&self.chunks_key(), &self.chunks.to_string());
+    }
+}
+
 #[derive(Default)]
 struct State {
     settings: Settings,
-    sent: HashSet<String>,
-    /// Stored chunks of `sent`; the last one is `last_chunk`.
-    chunks: usize,
-    last_chunk: Vec<String>,
+    /// What the chosen computer has received.
+    sent: Sent,
     queue: VecDeque<BackupItem>,
     unmetered: bool,
     charging: bool,
@@ -120,8 +178,68 @@ pub struct Backup {
     loaded: AtomicBool,
 }
 
-fn chunk_key(n: usize) -> String {
+/// The old, shared list's chunk `n`.
+fn old_chunk_key(n: usize) -> String {
     format!("backup_sent_{n}")
+}
+
+/// Stored chunks of keys (`count_key` says how many, `chunk(n)` names
+/// each), in order.
+fn read_chunks<P: Platform>(
+    ctx: &NetCtx<P>,
+    count_key: &str,
+    chunk: impl Fn(usize) -> String,
+) -> Vec<Vec<String>> {
+    let count: usize = ctx
+        .platform
+        .kv_get(count_key)
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    (0..count)
+        .map(|n| {
+            ctx.platform
+                .kv_get(&chunk(n))
+                .and_then(|s| serde_json::from_str(&s).ok())
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+/// What `target` has received, from storage. The old shared list, if one
+/// is still stored, is moved to it.
+fn load_sent<P: Platform>(ctx: &NetCtx<P>, target: &str) -> Sent {
+    let mut sent = Sent {
+        target: target.to_string(),
+        ..Sent::default()
+    };
+    if target.is_empty() {
+        return sent;
+    }
+    let stored = read_chunks(ctx, &sent.chunks_key(), |n| sent.chunk_key(n));
+    let old = read_chunks(ctx, OLD_CHUNKS_KEY, old_chunk_key);
+    // In order, each once: this computer's keys, then any old shared ones.
+    let order: Vec<String> = stored
+        .into_iter()
+        .chain(old.iter().cloned())
+        .flatten()
+        .filter(|k| sent.add(k.clone()))
+        .collect();
+    if !old.is_empty() {
+        // Store the whole list under this computer, then empty the old one
+        // so it's moved only once.
+        for (n, chunk) in order.chunks(CHUNK_KEYS).enumerate() {
+            if let Ok(json) = serde_json::to_string(chunk) {
+                ctx.platform.kv_set(&sent.chunk_key(n), &json);
+            }
+        }
+        ctx.platform
+            .kv_set(&sent.chunks_key(), &sent.chunks.to_string());
+        for n in 0..old.len() {
+            ctx.platform.kv_set(&old_chunk_key(n), "[]");
+        }
+        ctx.platform.kv_set(OLD_CHUNKS_KEY, "0");
+    }
+    sent
 }
 
 /// A usable item key: not empty, not huge, no control characters.
@@ -134,27 +252,15 @@ fn load<P: Platform>(ctx: &NetCtx<P>) {
     if b.loaded.swap(true, Ordering::SeqCst) {
         return;
     }
-    let kv = |k: &str| ctx.platform.kv_get(k);
-    let settings: Settings = kv(SETTINGS_KEY)
+    let settings: Settings = ctx
+        .platform
+        .kv_get(SETTINGS_KEY)
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default();
-    let chunks: usize = kv(CHUNKS_KEY).and_then(|s| s.parse().ok()).unwrap_or(0);
-    let mut sent = HashSet::new();
-    let mut last_chunk = Vec::new();
-    for n in 0..chunks {
-        let keys: Vec<String> = kv(&chunk_key(n))
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
-        if n + 1 == chunks {
-            last_chunk.clone_from(&keys);
-        }
-        sent.extend(keys);
-    }
+    let sent = load_sent(ctx, &settings.target);
     let mut st = b.state.lock();
     st.settings = settings;
     st.sent = sent;
-    st.chunks = chunks;
-    st.last_chunk = last_chunk;
 }
 
 fn save_settings<P: Platform>(ctx: &NetCtx<P>, s: &Settings) {
@@ -176,7 +282,7 @@ fn status_of<P: Platform>(ctx: &NetCtx<P>, st: &State) -> BackupStatus {
         charging_only: s.charging_only,
         since: s.since,
         queued: st.queue.len() as u32,
-        sent: st.sent.len() as u32,
+        sent: st.sent.keys.len() as u32,
         waiting_for: st.waiting_for().to_string(),
         current: st.current.as_ref().map(|c| c.name.clone()),
         done,
@@ -238,6 +344,17 @@ pub fn configure<P: Platform>(
         let saved = s.clone();
         save_settings(ctx, &saved);
         st.retry_at = None;
+        if moved {
+            // Another computer: what it has, and a fresh start on errors.
+            // Waiting items it already has are dropped; the host scans
+            // again for the ones it lacks.
+            st.sent = load_sent(ctx, target);
+            st.tries.clear();
+            st.unreachable = 0;
+            st.last_error = None;
+            let State { queue, sent, .. } = &mut *st;
+            queue.retain(|i| !sent.keys.contains(&i.key));
+        }
         // Off, or another computer: the file going now stops.
         if !enabled || moved {
             st.current.take()
@@ -279,7 +396,7 @@ pub fn enqueue<P: Platform>(ctx: &NetCtx<P>, items: Vec<BackupItem>) -> u32 {
         for item in items {
             if !is_item_key(&item.key)
                 || item.path.is_empty()
-                || st.sent.contains(&item.key)
+                || st.sent.keys.contains(&item.key)
                 || waiting.contains(&item.key)
                 || st.queue.len() >= MAX_QUEUE
             {
@@ -454,19 +571,11 @@ fn ended<P: Platform>(ctx: &NetCtx<P>, id: &str, why: Option<&str>) -> bool {
             st.tries.remove(&cur.key);
             st.last_error = None;
             st.unreachable = 0;
-            st.sent.insert(cur.key.clone());
-            // Remember it: append to the last stored chunk (a new one when
-            // that's full), then the chunk count.
-            if st.last_chunk.len() >= CHUNK_KEYS || st.chunks == 0 {
-                st.last_chunk.clear();
-                st.chunks += 1;
+            // Remember it for this computer: append to the last stored
+            // chunk (a new one when that's full), then the chunk count.
+            if st.sent.add(cur.key) {
+                st.sent.save_last(ctx);
             }
-            st.last_chunk.push(cur.key);
-            let n = st.chunks;
-            if let Ok(json) = serde_json::to_string(&st.last_chunk) {
-                ctx.platform.kv_set(&chunk_key(n - 1), &json);
-            }
-            ctx.platform.kv_set(CHUNKS_KEY, &n.to_string());
             st.settings.last_sent_at = crate::transport::now_secs();
             let s = st.settings.clone();
             save_settings(ctx, &s);

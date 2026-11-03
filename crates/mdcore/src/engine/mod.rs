@@ -31,12 +31,13 @@ use crate::transport::{self, P2pConns};
 mod background;
 mod ble;
 pub use ble::BleSender;
+mod control;
 mod ladder;
 mod media;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
-pub(crate) use messaging::{reconnect, send_reliably};
+pub(crate) use messaging::{reconnect, send_reliably, start_ladder};
 mod netchange;
 mod peers;
 pub(crate) use peers::{emit_peers, learn_unknown};
@@ -131,7 +132,8 @@ pub struct NetCtx<P: Platform> {
     pub media: Arc<crate::features::media::Media>,
     /// File transfers in progress, both ways (see `features::files`).
     pub files: Arc<crate::features::files::Files>,
-    /// Gallery, photo backup and battery-alert state (see `features::extras`).
+    /// Gallery, photo backup, battery-alert, input and DND state (see
+    /// `features::extras`).
     pub extras: Arc<crate::features::extras::Extras>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,

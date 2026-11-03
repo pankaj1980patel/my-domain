@@ -18,10 +18,12 @@ pub mod call_notification;
 pub mod clipboard;
 pub mod code;
 pub mod device;
+pub mod dnd;
 pub mod extras;
 pub mod files;
-pub mod media;
 pub mod gallery;
+pub mod input;
+pub mod media;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
@@ -125,6 +127,8 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(signal_fwd::SignalFwdHandler));
         r.register(Arc::new(gallery::GalleryHandler));
         r.register(Arc::new(battery::BatteryHandler));
+        r.register(Arc::new(input::InputHandler));
+        r.register(Arc::new(dnd::DndHandler));
         r
     }
 

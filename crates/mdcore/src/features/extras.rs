@@ -1,9 +1,12 @@
-//! State for the gallery, photo backup and battery alerts, in one place so
-//! the engine's context gains one field for all of them.
+//! State for the gallery, photo backup, battery alerts, remote input and
+//! Do Not Disturb, in one place so the engine's context gains one field for
+//! all of them.
 
 #[derive(Default)]
 pub struct Extras {
     pub gallery: super::gallery::Gallery,
     pub backup: super::backup::Backup,
     pub battery: super::battery::BatteryAlerts,
+    pub input: super::input::Input,
+    pub dnd: super::dnd::Dnd,
 }

@@ -366,3 +366,53 @@ impl Default for BatteryAlertSettings {
         }
     }
 }
+
+/// A mouse button the phone's touchpad can click.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum MouseButton {
+    Left,
+    Right,
+}
+
+/// A key the phone's keyboard can press (typed text goes as `Text`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum InputKey {
+    Enter,
+    Backspace,
+    Left,
+    Right,
+    Up,
+    Down,
+    Esc,
+}
+
+/// One thing the phone's touchpad or keyboard did, for a computer to play
+/// back (`features::input`). Moves and scrolls are relative, in pixels.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum InputEvent {
+    Move { dx: i32, dy: i32 },
+    Click { button: MouseButton },
+    Scroll { dx: i32, dy: i32 },
+    Text { text: String },
+    Key { key: InputKey },
+}
+
+impl MouseButton {
+    /// "left" or "right".
+    pub fn parse(s: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+}
+
+impl InputKey {
+    /// "enter", "backspace", "left", "right", "up", "down" or "esc".
+    pub fn parse(s: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+}

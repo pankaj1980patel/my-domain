@@ -20,7 +20,7 @@ pub(crate) fn send_reliably<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &
 }
 
 /// Run the connect ladder for `node_id` in the background.
-fn start_ladder<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+pub(crate) fn start_ladder<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let (ctx, node) = (ctx.clone(), node_id.to_string());
     let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
     std::thread::spawn(move || super::ladder::run_connect_ladder(ctx, url, token, node));

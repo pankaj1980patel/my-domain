@@ -227,6 +227,15 @@ pub enum CoreEvent {
         alert: String,
         level: u8,
     },
+    /// Another of your devices (a phone used as a touchpad and keyboard)
+    /// sent pointer, click, scroll, text or key events for this computer
+    /// to play back, in order. Only sent while remote input is allowed.
+    Input {
+        from: String,
+        events: Vec<crate::model::InputEvent>,
+    },
+    /// Another device went into (`on`) or out of Do Not Disturb.
+    Dnd { from: String, on: bool },
 }
 
 impl CoreEvent {
@@ -271,6 +280,8 @@ impl CoreEvent {
             CoreEvent::GalleryThumb { .. } => "gallery-thumb",
             CoreEvent::BackupState(_) => "backup-state",
             CoreEvent::BatteryAlert { .. } => "battery-alert",
+            CoreEvent::Input { .. } => "input-event",
+            CoreEvent::Dnd { .. } => "dnd-changed",
         }
     }
 
@@ -350,6 +361,39 @@ mod tests {
         assert_eq!((ev.name(), ev.ui_payload()), ("ws-connected", json!("n1")));
         let ev = CoreEvent::PeersUpdated { peers: vec![] };
         assert_eq!((ev.name(), ev.ui_payload()), ("peers-updated", json!([])));
+    }
+
+    #[test]
+    fn input_and_dnd_events_keep_their_shape() {
+        use crate::model::{InputEvent, MouseButton};
+        let ev = CoreEvent::Input {
+            from: "phone".into(),
+            events: vec![
+                InputEvent::Move { dx: 3, dy: -2 },
+                InputEvent::Click {
+                    button: MouseButton::Left,
+                },
+            ],
+        };
+        assert_eq!(ev.name(), "input-event");
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"from": "phone", "events": [
+                {"kind": "move", "dx": 3, "dy": -2},
+                {"kind": "click", "button": "left"},
+            ]})
+        );
+        let ev = CoreEvent::Dnd {
+            from: "phone".into(),
+            on: true,
+        };
+        assert_eq!(
+            (ev.name(), ev.to_json()),
+            (
+                "dnd-changed",
+                json!({"kind": "dnd", "from": "phone", "on": true})
+            )
+        );
     }
 
     #[test]
