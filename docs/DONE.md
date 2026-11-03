@@ -172,6 +172,8 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
 - Two-finger scroll works (tried by hand). The Mac app (`tauri dev`, with
   Accessibility allowed) lists `input` in its status with no
   `input_needs`, so it plays input back.
+- On the Mac, the full-screen pad's switch buttons all work (apps,
+  desktops, all windows, show desktop), tried by hand.
 - Not tried yet: real finger swipes (three and four fingers) and backup
   per computer on the phone.
 
