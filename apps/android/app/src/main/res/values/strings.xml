@@ -14,6 +14,8 @@
     <!-- Shared -->
     <string name="back">Back</string>
     <string name="connect">Connect</string>
+    <string name="wake_it">Wake it</string>
+    <string name="wake_sent">Sent the wake-up. It needs to be on this Wi-Fi, set to wake for network access.</string>
     <string name="send">Send</string>
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>

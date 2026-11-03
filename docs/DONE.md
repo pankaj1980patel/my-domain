@@ -249,6 +249,26 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## Wake a sleeping computer from the phone (2026-11-03)
+
+- Core (`features/wake.rs`): a computer's status may say its network card
+  (`"wake": {"mac": "…"}`); the core remembers it per device (a sleeping
+  computer sends no status). `Engine::can_wake`, `Engine::wake_device`
+  broadcast the magic packet (six 0xFF, then the address sixteen times) to
+  255.255.255.255 and this network's .255, UDP ports 9 and 7. Tests:
+  `wake::addresses_parse_and_bad_ones_dont`,
+  `the_magic_packet_is_six_ones_then_the_address_sixteen_times`,
+  `device_actions::a_computer_that_says_how_to_wake_it_can_be_woken_later`.
+- Desktop: the status carries the default route's card (macOS `route` +
+  `ifconfig`, Linux `ip route` + `/sys/class/net`).
+- Android: a "Wake it" button on a computer's page while it isn't
+  connected and has said its address once.
+- mdctl: `wake <node>`.
+
+Tried: the Mac app (rebuilt by `tauri dev`) reports its address; mdctl
+learned it and `wake` sent the packet. Actually waking a sleeping
+computer: not tried yet.
+
 ## See a computer's screen on the phone (2026-11-03)
 
 The full-screen touchpad shows the computer's screen behind the pad, so
@@ -279,7 +299,9 @@ you see what the pointer does.
 
 Checks: mdcore, mdctl and desktop clippy on the Mac, the new tests, the
 APK build. The Linux capture code hasn't been compiled (laptop offline).
-Not tried live yet (the phone locked itself).
+Tried: mdctl watching the real Mac app got about two snapshots a second
+(about 74 KB each) and they stopped when it stopped watching. On the
+phone: not yet (it locked itself).
 
 ## Phone buttons for a computer's slides, keep awake, search and lock (2026-11-03)
 

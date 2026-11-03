@@ -30,6 +30,7 @@ pub mod p2p_ping;
 pub mod screen;
 pub mod share;
 pub mod signal_fwd;
+pub mod wake;
 
 use std::collections::HashMap;
 use std::sync::Arc;

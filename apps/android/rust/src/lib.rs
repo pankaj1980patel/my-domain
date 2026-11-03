@@ -968,6 +968,18 @@ impl MdEngine {
         Ok(self.inner.input_key(&node_id, &key)?)
     }
 
+    /// Whether a device ever said how to wake it from sleep (Wake-on-LAN).
+    pub fn can_wake(&self, node_id: String) -> bool {
+        self.inner.can_wake(&node_id)
+    }
+
+    /// Wake a sleeping computer: its magic packet, broadcast on this
+    /// network (works from the same Wi-Fi, if it's set to wake for network
+    /// access).
+    pub fn wake_device(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.wake_device(&node_id)?)
+    }
+
     /// Start (`on`) or stop watching a computer's screen: snapshots arrive
     /// as `screen_frame` events while it allows it. Renew every 10 s while
     /// the screen shows (a watch ends by itself after 25 s). Fails when

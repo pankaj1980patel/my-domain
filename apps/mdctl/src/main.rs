@@ -44,6 +44,7 @@
 //! `screen-frame`; renew within 25 s), `screen-allow on|off` (let your
 //! devices watch here; "on" lists "screen" in the status),
 //! `screen-send <jpeg>` (send that picture to whoever watches here),
+//! `wake <node>` (Wake-on-LAN: a computer that said its address once),
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -631,6 +632,11 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let on = words.next() != Some("off");
             engine.screen_watch(&to, on)?;
             Ok(json!(on))
+        }
+        "wake" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            engine.wake_device(&to)?;
+            Ok(json!("sent"))
         }
         "screen-send" => {
             let path = arg(words.next())?;

@@ -739,6 +739,12 @@ object Core {
     /** Press "enter", "backspace", "left", "right", "up", "down" or "esc" on [node]. */
     suspend fun inputKey(node: String, key: String) = call { it.inputKey(node, key) }
 
+    /** Whether [node] ever said how to wake it from sleep (Wake-on-LAN). */
+    fun canWake(node: String): Boolean = runCatching { engine()?.canWake(node) }.getOrNull() == true
+
+    /** Wake [node] from sleep: its magic packet, broadcast on this network. */
+    suspend fun wake(node: String) = call { it.wakeDevice(node) }
+
     /** Start ([on]) or stop watching [node]'s screen; null when it went out. */
     fun screenWatch(node: String, on: Boolean): Throwable? =
         runCatching { engine()?.screenWatch(node, on) }.exceptionOrNull()

@@ -61,6 +61,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             return
         }
         val s = linkStateOf(node)
+        val wakeSent = stringResource(R.string.wake_sent)
         LazyColumn(
             Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
@@ -75,6 +76,17 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                         StatusPill(node)
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
                             progressLabel(Core.progress[node])?.let { Muted(it) }
+                        }
+                        // Asleep? Wake it (Wake-on-LAN), if it ever said how.
+                        if ((s == LinkState.Offline || s == LinkState.Failed) && Core.canWake(node)) {
+                            GhostButton(stringResource(R.string.wake_it), {
+                                scope.launch {
+                                    try {
+                                        Core.wake(node)
+                                        toast(wakeSent)
+                                    } catch (e: Exception) { toast(friendlyError(e)) }
+                                }
+                            }, small = true)
                         }
                     }
                     if (s == LinkState.Offline || s == LinkState.Failed) {

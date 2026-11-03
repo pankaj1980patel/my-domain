@@ -19,6 +19,10 @@ pub fn extend(status: &mut Value) {
     if let Some((free, total)) = ram() {
         status["ram"] = json!({ "free": free, "total": total });
     }
+    // How to wake this computer from the phone later (Wake-on-LAN).
+    if let Some(mac) = wake_mac() {
+        status["wake"] = json!({ "mac": mac });
+    }
 }
 
 #[cfg_attr(not(unix), allow(dead_code))]
@@ -104,6 +108,21 @@ fn bluetooth() -> Option<bool> {
     v
 }
 
+/// The network card of the default route (`ip route` → `/sys/class/net`).
+#[cfg(target_os = "linux")]
+fn wake_mac() -> Option<String> {
+    let dev = parse_default_dev(&run("ip", &["route", "show", "default"])?)?;
+    let mac = std::fs::read_to_string(format!("/sys/class/net/{dev}/address")).ok()?;
+    Some(mac.trim().to_string()).filter(|m| m.len() == 17)
+}
+
+/// The network card of the default route (`route` → `ifconfig`).
+#[cfg(target_os = "macos")]
+fn wake_mac() -> Option<String> {
+    let dev = parse_route_interface(&run("route", &["-n", "get", "default"])?)?;
+    parse_ether(&run("ifconfig", &[&dev])?)
+}
+
 #[cfg(target_os = "macos")]
 fn ram() -> Option<(u64, u64)> {
     let total = run("sysctl", &["-n", "hw.memsize"])?.trim().parse().ok()?;
@@ -125,6 +144,11 @@ fn bluetooth() -> Option<bool> {
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn ram() -> Option<(u64, u64)> {
+    None
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn wake_mac() -> Option<String> {
     None
 }
 
@@ -225,9 +249,55 @@ fn parse_vm_stat(out: &str) -> Option<u64> {
     Some(n * page)
 }
 
+/// `dev wlan0` in `ip route show default`.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_default_dev(out: &str) -> Option<String> {
+    let mut words = out.split_whitespace();
+    words.find(|w| *w == "dev")?;
+    words.next().map(String::from)
+}
+
+/// `interface: en0` in `route -n get default`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn parse_route_interface(out: &str) -> Option<String> {
+    out.lines()
+        .find_map(|l| l.trim().strip_prefix("interface:"))
+        .map(|d| d.trim().to_string())
+}
+
+/// `ether aa:bb:cc:dd:ee:ff` in `ifconfig en0`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn parse_ether(out: &str) -> Option<String> {
+    out.lines()
+        .find_map(|l| l.trim().strip_prefix("ether "))
+        .map(|m| m.trim().to_string())
+        .filter(|m| m.len() == 17)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_wake_address_is_found() {
+        assert_eq!(
+            parse_default_dev("default via 192.168.0.1 dev wlp2s0 proto dhcp metric 600")
+                .as_deref(),
+            Some("wlp2s0")
+        );
+        assert_eq!(parse_default_dev("default via 10.0.0.1"), None);
+        assert_eq!(
+            parse_route_interface("   route to: default\n  interface: en0\n      flags: <UP>")
+                .as_deref(),
+            Some("en0")
+        );
+        assert_eq!(
+            parse_ether("en0: flags=8863<UP>\n\tether 3c:22:fb:aa:bb:cc\n\tinet 10.0.0.2")
+                .as_deref(),
+            Some("3c:22:fb:aa:bb:cc")
+        );
+        assert_eq!(parse_ether("lo0: flags=8049<UP,LOOPBACK>"), None);
+    }
 
     #[test]
     fn reads_nmcli() {

@@ -258,3 +258,23 @@ fn a_notification_can_be_answered_from_another_device() {
         )
     );
 }
+
+#[test]
+fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
+    let (phone, pc) = pair("wake");
+    assert!(!phone.engine.can_wake(&pc.node_id()));
+    assert!(phone.engine.wake_device(&pc.node_id()).is_err());
+    pc.engine
+        .set_device_status(r#"{"wake":{"mac":"AA:BB:CC:00:11:22"}}"#);
+    phone.engine.request_status(&pc.node_id()).unwrap();
+    phone
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::DeviceStatus { from, .. } if *from == pc.node_id() => Some(()),
+            _ => None,
+        })
+        .expect("no status");
+    // Remembered, so it works while the computer sleeps and says nothing.
+    assert!(phone.engine.can_wake(&pc.node_id()));
+    phone.engine.wake_device(&pc.node_id()).unwrap();
+}

@@ -80,6 +80,21 @@ impl<P: Platform> Engine<P> {
         crate::features::input::set_allowed(&self.ctx, on);
     }
 
+    // --- waking a sleeping computer ---
+
+    /// Whether `node` ever said how to wake it (Wake-on-LAN; see
+    /// `features::wake`).
+    pub fn can_wake(&self, node_id: &str) -> bool {
+        crate::features::wake::known(&self.ctx, node_id).is_some()
+    }
+
+    /// Wake `node` from sleep: broadcasts its magic packet on this network.
+    /// Works from the same network, on a computer set to wake for network
+    /// access.
+    pub fn wake_device(&self, node_id: &str) -> crate::Result<()> {
+        crate::features::wake::wake(&self.ctx, node_id)
+    }
+
     // --- screen sharing ---
 
     /// Start (`on`) or stop watching `node`'s screen: it sends snapshots

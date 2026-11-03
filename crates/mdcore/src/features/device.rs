@@ -65,10 +65,12 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 // otherwise never come (the resent request is a repeat).
                 crate::engine::send_reliably(ctx, &from, &reply);
             }
-            "status" => ctx.sink.emit(CoreEvent::DeviceStatus {
-                from,
-                status: msg.json("status"),
-            }),
+            "status" => {
+                let status = msg.json("status");
+                // How to wake it later, while it's asleep and says nothing.
+                super::wake::remember(ctx, &from, &status);
+                ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
+            }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),
             "open_url" => {
                 let url = msg.str("url");
