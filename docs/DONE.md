@@ -153,8 +153,24 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 - Verified live 2026-11-03: the phone's status, asked from mdctl on the
   Mac, carried battery temperature and health, Wi-Fi (connected, signal
   4), Bluetooth, memory and storage. The lab scenarios pass on the new
-  build. Now playing, the slide remote and play-on-device are not tried
-  on the devices yet.
+  build.
+- Also verified live the same day, from mdctl on the Mac:
+  - Play on device: a YouTube link opened in the phone's YouTube app. A
+    Spotify search (no Spotify installed) opened Spotify's website in
+    Chrome; Spotify's site drops the search for visitors not logged in.
+    With the app off screen, both came as notifications to tap
+    ("lab box: search for ..."), as Android requires.
+  - Now playing: the phone's status showed the YouTube video playing.
+    Pausing and playing with the media key pushed "paused" and
+    "playing" to the Mac at once.
+  - Slide remote on the Linux laptop (xdotool): a terminal there received
+    Page Down, Page Up and "b".
+  - Not tried: the slide remote on macOS (needs Accessibility).
+- Fixed while testing: the Android app thought it was off screen while it
+  was in use. A second MainActivity (a share from another app, or `am
+  start`) started, then the first one stopped and set "not visible". It
+  now counts started activities. Off screen, links only come as
+  notifications and the engine closes idle links, so this mattered.
 
 - **Now playing** (`features/media.rs`): `Engine::set_now_playing(json)`
   from the host; status replies carry `now_playing`, and devices that

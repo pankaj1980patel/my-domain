@@ -183,10 +183,22 @@ object Core {
     @Volatile var visible = false
         private set
 
+    /** Activities between onStart and onStop. More than one can be: a
+     *  share or `am start` opens a second MainActivity, and the first one
+     *  stops after the new one starts. */
+    private var started = 0
+
+    /** An activity started (`true`) or stopped (`false`). */
     fun setVisible(on: Boolean) {
-        visible = on
-        labLog(if (on) "app visible" else "app in background")
-        Thread { engine()?.setBackground(!on) }.start()
+        val now = synchronized(this) {
+            started = (started + if (on) 1 else -1).coerceAtLeast(0)
+            val now = started > 0
+            if (now == visible) return
+            visible = now
+            now
+        }
+        labLog(if (now) "app visible" else "app in background")
+        Thread { engine()?.setBackground(!now) }.start()
     }
 
     fun peerName(node: String?): String =
