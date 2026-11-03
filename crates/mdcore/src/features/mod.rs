@@ -17,6 +17,7 @@ pub mod clipboard;
 pub mod code;
 pub mod device;
 pub mod files;
+pub mod media;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
@@ -114,6 +115,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(files::FilesHandler));
         r.register(Arc::new(browse::BrowseHandler));
         r.register(Arc::new(share::ShareHandler));
+        r.register(Arc::new(media::MediaHandler));
         r.register(Arc::new(p2p_ping::P2pPingHandler));
         r.register(Arc::new(addr_update::AddrUpdateHandler));
         r.register(Arc::new(signal_fwd::SignalFwdHandler));

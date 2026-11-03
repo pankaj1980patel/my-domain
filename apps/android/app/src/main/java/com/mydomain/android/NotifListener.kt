@@ -30,6 +30,8 @@ class NotifListener : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
+        // The access media sessions need is here now.
+        NowPlaying.start(this)
         live = this
     }
 

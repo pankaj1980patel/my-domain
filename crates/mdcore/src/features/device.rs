@@ -52,6 +52,12 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     status = serde_json::json!({});
                 }
                 status["platform"] = ctx.platform.platform_kind().into();
+                let playing = super::media::current(ctx);
+                if !playing.is_null() {
+                    status["now_playing"] = playing;
+                }
+                // It's looking at this device: tell it when the song changes.
+                super::media::watch(ctx, &from);
                 let reply = serde_json::json!({ "type": "status", "from": me, "status": status })
                     .to_string();
                 // Reliably: a reply lost on a link that just died would

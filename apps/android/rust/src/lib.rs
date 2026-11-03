@@ -674,6 +674,16 @@ impl MdEngine {
         self.inner.cancel_file(&id);
     }
 
+    // --- now playing ---
+
+    /// What's playing on this phone, as JSON `{title, artist, album, app,
+    /// state}` (`state` "playing" / "paused"), or "" for nothing. Call it on
+    /// every change; devices that looked at this phone lately get a
+    /// `now-playing` event, and status replies carry it.
+    pub fn set_now_playing(&self, media_json: String) {
+        self.inner.set_now_playing(&media_json);
+    }
+
     // --- browsing shared folders ---
 
     /// The folders your other devices may browse and download from

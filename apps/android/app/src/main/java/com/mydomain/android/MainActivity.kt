@@ -93,6 +93,8 @@ class MainActivity : ComponentActivity() {
             Core.reload()
             // Photo access may have been granted in Settings meanwhile.
             FileActions.shareFolders(applicationContext)
+            // Notification access may have been granted meanwhile.
+            NowPlaying.start(applicationContext)
         }.start()
     }
 

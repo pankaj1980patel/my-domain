@@ -125,6 +125,8 @@ pub struct NetCtx<P: Platform> {
     pub installed_apps: Arc<Mutex<String>>,
     /// This device's status as last pushed by the host (JSON object).
     pub device_status: Arc<Mutex<String>>,
+    /// What's playing here and who's watching (see `features::media`).
+    pub media: Arc<crate::features::media::Media>,
     /// File transfers in progress, both ways (see `features::files`).
     pub files: Arc<crate::features::files::Files>,
     /// App-notification subscriptions (subscriber node_id -> packages).
@@ -195,6 +197,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             control: self.control.clone(),
             installed_apps: self.installed_apps.clone(),
             device_status: self.device_status.clone(),
+            media: self.media.clone(),
             files: self.files.clone(),
             subs: self.subs.clone(),
             quic_failed: self.quic_failed.clone(),
@@ -349,6 +352,7 @@ impl<P: Platform> Engine<P> {
             control: control.clone(),
             installed_apps: installed_apps.clone(),
             device_status: Arc::new(Mutex::new(String::from("{}"))),
+            media: Arc::default(),
             files: Arc::default(),
             device_key,
             peer_keys: Arc::default(),

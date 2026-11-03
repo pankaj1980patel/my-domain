@@ -973,6 +973,7 @@ pub fn run() {
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
             device::spawn_status_reporter(handle.clone());
+            device::spawn_now_playing(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

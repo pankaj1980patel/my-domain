@@ -169,6 +169,13 @@ pub enum CoreEvent {
         next: Option<u64>,
         error: Option<String>,
     },
+    /// What's playing on device `from` changed (it pushes this to devices
+    /// that asked for its status lately): `media` is `{title, artist?,
+    /// album?, app?, state}` or `null` when nothing is playing.
+    NowPlaying {
+        from: String,
+        media: serde_json::Value,
+    },
     /// Another of your devices sent text to this one (`Engine::send_text`):
     /// `mode` "clipboard" (already on the clipboard if the core has one
     /// here) or "notify" (show it).
@@ -215,6 +222,7 @@ impl CoreEvent {
             CoreEvent::FileFailed { .. } => "file-failed",
             CoreEvent::FolderListing { .. } => "folder-listing",
             CoreEvent::TextShared { .. } => "text-shared",
+            CoreEvent::NowPlaying { .. } => "now-playing",
         }
     }
 

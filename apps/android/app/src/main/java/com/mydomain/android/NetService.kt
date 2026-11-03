@@ -84,6 +84,8 @@ class NetService : Service() {
         Core.engine()?.setDownloadDir(FileActions.downloadDir(this).absolutePath)
         // Folders your other devices may browse and download from.
         FileActions.shareFolders(this)
+        // What's playing here, for your other devices (needs notification access).
+        NowPlaying.start(this)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
         Core.reload()

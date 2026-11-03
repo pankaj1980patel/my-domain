@@ -77,6 +77,20 @@ data class FolderListing(
     val entries: List<RemoteFile>, val next: Long?, val error: String?,
 )
 
+/** What's playing on a device (`now_playing`, also in its status). */
+data class Playing(val title: String, val artist: String?, val app: String?, val playing: Boolean)
+
+private fun playingOf(o: JSONObject?): Playing? {
+    val title = o?.optString("title").orEmpty()
+    if (o == null || title.isEmpty()) return null
+    return Playing(
+        title,
+        o.optString("artist").ifEmpty { null },
+        o.optString("app").ifEmpty { null },
+        o.optString("state") == "playing",
+    )
+}
+
 /** One raw core event, for the Developer screen. */
 data class DevEvent(val ts: Long, val name: String, val payload: String)
 
@@ -108,6 +122,9 @@ object Core {
     val activity = mutableStateListOf<ActivityItem>()
     val apps = mutableStateMapOf<String, AppsState>()
     val devLog = mutableStateListOf<DevEvent>()
+
+    /** node id -> what's playing there (absent: nothing, or not asked). */
+    val nowPlaying = mutableStateMapOf<String, Playing>()
 
     /** node id -> its latest reported status (battery, charging). */
     val deviceStatus = mutableStateMapOf<String, DeviceStatus>()
@@ -309,8 +326,14 @@ object Core {
             }
             "call_notification" -> addActivity(str(R.string.act_call, o.optString("caller"), o.optString("state")))
             "call_history" -> addActivity(str(R.string.act_call_history))
+            "now_playing" -> {
+                val from = o.optString("from")
+                playingOf(o.optJSONObject("media"))?.let { nowPlaying[from] = it } ?: nowPlaying.remove(from)
+            }
             "device_status" -> {
                 val st = o.optJSONObject("status") ?: JSONObject()
+                val from = o.optString("from")
+                playingOf(st.optJSONObject("now_playing"))?.let { nowPlaying[from] = it } ?: nowPlaying.remove(from)
                 val acts = st.optJSONArray("actions")
                 deviceStatus[o.optString("from")] = DeviceStatus(
                     battery = if (st.has("battery")) st.optInt("battery") else null,
@@ -588,7 +611,7 @@ object Core {
     suspend fun signOut() {
         call { it.logout() }
         onMain {
-            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear(); listings.clear()
+            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear(); listings.clear(); nowPlaying.clear()
         }
         reload()
     }

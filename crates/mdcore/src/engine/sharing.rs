@@ -68,6 +68,22 @@ impl<P: Platform> Engine<P> {
         *self.ctx.device_status.lock() = status_json.to_string();
     }
 
+    /// What's playing on this device, as a JSON object `{title, artist,
+    /// album, app, state}` (`state`: "playing" / "paused" / "stopped"), or
+    /// "" / "null" for nothing. Call it whenever it changes; devices that
+    /// asked for this one's status lately hear the change
+    /// (`CoreEvent::NowPlaying`), and status replies carry it.
+    pub fn set_now_playing(&self, media_json: &str) {
+        let v: serde_json::Value = serde_json::from_str(media_json).unwrap_or_default();
+        crate::features::media::set(&self.ctx, &v);
+    }
+
+    /// Some device asked for this one's status in the last few minutes:
+    /// worth reading what's playing (a desktop polls only then).
+    pub fn now_playing_watched(&self) -> bool {
+        crate::features::media::watched(&self.ctx)
+    }
+
     // These go like chat messages (`send`): held until the device is
     // reachable (a sleeping phone is woken by push), resent until it
     // acknowledges, and acted on once. Each returns the transport used, or

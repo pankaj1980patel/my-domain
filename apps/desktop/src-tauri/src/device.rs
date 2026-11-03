@@ -55,6 +55,51 @@ fn push_status(app: &AppHandle) {
     }
 }
 
+/// Tell the core what's playing (Linux: any MPRIS player; macOS: Spotify
+/// or Music), every few seconds, but only while some device has looked at
+/// this computer lately: nobody would hear it otherwise, and each read
+/// runs a command.
+pub fn spawn_now_playing(app: AppHandle) {
+    std::thread::Builder::new()
+        .name("now-playing".into())
+        .spawn(move || loop {
+            std::thread::sleep(Duration::from_secs(3));
+            let Some(engine) = app.try_state::<Eng>() else {
+                continue;
+            };
+            if !engine.now_playing_watched() {
+                continue;
+            }
+            let media = sound::now_playing().map(|m| m.to_string());
+            engine.set_now_playing(media.as_deref().unwrap_or(""));
+        })
+        .ok();
+}
+
+/// One line of `state<TAB>title<TAB>artist<TAB>album` (playerctl's
+/// "Playing"/"Paused", or AppleScript's "playing"/"paused") into the
+/// core's now-playing object, from player `app`.
+#[cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
+fn parse_now_playing(line: &str, app: &str) -> Option<serde_json::Value> {
+    let mut cols = line.split('\t');
+    let state = match cols.next()?.trim().to_ascii_lowercase().as_str() {
+        "playing" => "playing",
+        "paused" => "paused",
+        _ => return None,
+    };
+    let title = cols.next()?.trim();
+    if title.is_empty() {
+        return None;
+    }
+    let mut m = serde_json::json!({ "title": title, "state": state, "app": app });
+    for (key, v) in ["artist", "album"].into_iter().zip(cols) {
+        if !v.trim().is_empty() {
+            m[key] = v.trim().into();
+        }
+    }
+    Some(m)
+}
+
 /// A sibling asked this computer to run an action (`volume {step}`,
 /// `mute {on}`, `media {key}` or `lock`); then the status is pushed again
 /// so it shows the new level.
@@ -163,20 +208,73 @@ mod sound {
             "previous" => "previous",
             _ => return,
         };
-        // The player you're listening to, else one you paused: plain
-        // `playerctl` takes the first one listed, maybe an idle browser.
+        match pick_player() {
+            Some(p) => run("playerctl", &["--player", &p, cmd]),
+            None => run("playerctl", &[cmd]),
+        };
+    }
+
+    /// The player you're listening to, else one you paused: plain
+    /// `playerctl` takes the first one listed, maybe an idle browser.
+    #[cfg(target_os = "linux")]
+    fn pick_player() -> Option<String> {
         let players = run("playerctl", &["--list-all"]).unwrap_or_default();
         let status = |p: &str| run("playerctl", &["--player", p, "status"]).unwrap_or_default();
-        let pick = ["Playing", "Paused"].iter().find_map(|want| {
+        ["Playing", "Paused"].iter().find_map(|want| {
             players
                 .lines()
                 .find(|p| status(p) == *want)
                 .map(str::to_string)
-        });
-        match pick {
-            Some(p) => run("playerctl", &["--player", &p, cmd]),
-            None => run("playerctl", &[cmd]),
-        };
+        })
+    }
+
+    /// What's playing, through MPRIS: `{title, artist, album, app, state}`.
+    #[cfg(target_os = "linux")]
+    pub fn now_playing() -> Option<serde_json::Value> {
+        let player = pick_player()?;
+        let fmt = "{{status}}\t{{xesam:title}}\t{{xesam:artist}}\t{{xesam:album}}";
+        let line = run(
+            "playerctl",
+            &["--player", &player, "metadata", "--format", fmt],
+        )?;
+        // "spotify", "vlc", "firefox.instance_1_23": the app is the first part.
+        let app = player.split('.').next().unwrap_or_default();
+        super::parse_now_playing(&line, app)
+    }
+
+    /// What's playing in Spotify or Music, through AppleScript (no private
+    /// frameworks: other players, and browsers, aren't seen). Only asks an
+    /// app that's already running, so it never starts one. The first time,
+    /// macOS asks whether my-domain may control that app.
+    #[cfg(target_os = "macos")]
+    pub fn now_playing() -> Option<serde_json::Value> {
+        let mut paused = None;
+        for app in ["Spotify", "Music"] {
+            let script = format!(
+                "if application \"{app}\" is running then\n\
+                 tell application \"{app}\"\n\
+                 try\n\
+                 return (player state as string) & tab & (name of current track) & tab & (artist of current track) & tab & (album of current track)\n\
+                 end try\n\
+                 end tell\n\
+                 end if\n\
+                 return \"\""
+            );
+            let Some(line) = run("osascript", &["-e", &script]) else {
+                continue;
+            };
+            match super::parse_now_playing(&line, app) {
+                Some(m) if m["state"] == "playing" => return Some(m),
+                Some(m) => paused = paused.or(Some(m)),
+                None => {}
+            }
+        }
+        paused
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn now_playing() -> Option<serde_json::Value> {
+        None
     }
 
     // macOS has no command for media keys; posting the key events needs
@@ -404,7 +502,25 @@ pub fn on_open_url(app: &AppHandle, url: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_df, parse_pmset};
+    use super::{parse_df, parse_now_playing, parse_pmset};
+
+    #[test]
+    fn reads_now_playing() {
+        let m = parse_now_playing("Playing\tSo What\tMiles Davis\tKind of Blue", "spotify");
+        assert_eq!(
+            m,
+            Some(serde_json::json!({
+                "title": "So What", "artist": "Miles Davis", "album": "Kind of Blue",
+                "app": "spotify", "state": "playing",
+            }))
+        );
+        let paused = parse_now_playing("paused\tTrack 1\t\t", "Music").unwrap();
+        assert_eq!(paused["state"], "paused");
+        assert!(paused.get("artist").is_none());
+        assert_eq!(parse_now_playing("Stopped\tx\ty\tz", "vlc"), None);
+        assert_eq!(parse_now_playing("Playing\t\t\t", "vlc"), None);
+        assert_eq!(parse_now_playing("", "vlc"), None);
+    }
 
     #[test]
     fn reads_df() {
