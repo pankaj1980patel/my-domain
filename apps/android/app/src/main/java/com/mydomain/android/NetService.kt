@@ -123,10 +123,60 @@ class NetService : Service() {
         val st = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val charging = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL
         battery = pct to charging
+        // Tenths of a degree; whole degrees are plenty (and change less).
+        val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
+        batteryTemp = if (temp == Int.MIN_VALUE) null else Math.round(temp / 10f)
+        batteryHealth = when (intent.getIntExtra(BatteryManager.EXTRA_HEALTH, -1)) {
+            BatteryManager.BATTERY_HEALTH_GOOD -> "good"
+            BatteryManager.BATTERY_HEALTH_OVERHEAT -> "overheat"
+            BatteryManager.BATTERY_HEALTH_DEAD -> "dead"
+            BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE -> "over_voltage"
+            BatteryManager.BATTERY_HEALTH_COLD -> "cold"
+            BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "failure"
+            else -> null
+        }
         pushStatus()
     }
 
     private var battery: Pair<Int, Boolean>? = null
+    private var batteryTemp: Int? = null
+    private var batteryHealth: String? = null
+
+    /** Wi-Fi on, connected, its name if Android tells it (it needs the
+     *  location permission, which this app doesn't ask for, so usually not)
+     *  and signal 0-4. */
+    @Suppress("DEPRECATION")
+    private fun wifiStatus(): JSONObject? = runCatching {
+        val wm = applicationContext.getSystemService(WifiManager::class.java) ?: return@runCatching null
+        val cm = getSystemService(ConnectivityManager::class.java)
+        val caps = cm?.activeNetwork?.let { cm.getNetworkCapabilities(it) }
+        val connected = caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true
+        val o = JSONObject().put("on", wm.isWifiEnabled).put("connected", connected)
+        if (connected) {
+            val info = wm.connectionInfo
+            val ssid = info?.ssid?.removeSurrounding("\"")
+            if (!ssid.isNullOrBlank() && ssid != "<unknown ssid>") o.put("ssid", ssid)
+            info?.rssi?.let { rssi ->
+                val level = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.calculateSignalLevel(rssi) * 4 / (wm.maxSignalLevel.coerceAtLeast(1))
+                else WifiManager.calculateSignalLevel(rssi, 5)
+                o.put("signal", level.coerceIn(0, 4))
+            }
+        }
+        o
+    }.getOrNull()
+
+    /** Bluetooth adapter on or off (no permission needed to ask). */
+    private fun bluetoothOn(): Boolean? = runCatching {
+        getSystemService(android.bluetooth.BluetoothManager::class.java)?.adapter?.isEnabled
+    }.getOrNull()
+
+    /** Free and total memory, rounded to 100 MB (it moves all the time). */
+    private fun ram(): JSONObject? = runCatching {
+        val am = getSystemService(ActivityManager::class.java) ?: return@runCatching null
+        val mi = ActivityManager.MemoryInfo().also { am.getMemoryInfo(it) }
+        val step = 100L * 1024L * 1024L
+        JSONObject().put("free", mi.availMem / step * step).put("total", mi.totalMem)
+    }.getOrNull()
 
     /** Free and total bytes of the phone's storage (whole MB, so it doesn't
      *  change on every write), for the status. */
@@ -142,6 +192,11 @@ class NetService : Service() {
         val o = Controls.state(this).put("actions", Controls.actions())
         battery?.let { (pct, charging) -> o.put("battery", pct).put("charging", charging) }
         storage()?.let { o.put("storage", it) }
+        batteryTemp?.let { o.put("battery_temp", it) }
+        batteryHealth?.let { o.put("battery_health", it) }
+        wifiStatus()?.let { o.put("wifi", it) }
+        bluetoothOn()?.let { o.put("bluetooth", it) }
+        ram()?.let { o.put("ram", it) }
         val json = o.toString()
         if (json == lastStatus) return
         val engine = Core.engine() ?: return
@@ -268,6 +323,8 @@ class NetService : Service() {
 
     private fun networkChanged() {
         Core.engine()?.networkChanged(wifiIpv4())
+        // Wi-Fi joined or left: the status shows it.
+        pushStatus()
     }
 
     private fun startNetworking() {

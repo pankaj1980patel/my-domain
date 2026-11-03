@@ -35,6 +35,7 @@ fn push_status(app: &AppHandle) {
     if let Some((free, total)) = downloads.as_deref().and_then(read_storage) {
         status["storage"] = serde_json::json!({ "free": free, "total": total });
     }
+    crate::sysinfo::extend(&mut status);
     let mut actions = Vec::new();
     if let Some((volume, muted)) = sound::read() {
         status["volume"] = volume.into();

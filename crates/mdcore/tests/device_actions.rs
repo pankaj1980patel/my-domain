@@ -21,7 +21,10 @@ fn pair(test: &str) -> (TestNode, TestNode) {
 fn a_device_reports_its_status() {
     let (a, b) = pair("status");
     b.engine.set_device_status(
-        r#"{"battery":42,"charging":true,"storage":{"free":1000,"total":4000}}"#,
+        r#"{"battery":42,"charging":true,"storage":{"free":1000,"total":4000},
+            "battery_temp":31,"battery_health":"good",
+            "wifi":{"on":true,"connected":true,"signal":3},"bluetooth":false,
+            "ram":{"free":2000,"total":8000}}"#,
     );
     a.engine.request_status(&b.node_id()).unwrap();
     let (from, status) = a
@@ -35,6 +38,10 @@ fn a_device_reports_its_status() {
     assert_eq!(status["battery"], 42);
     assert_eq!(status["charging"], true);
     assert_eq!(status["storage"]["free"], 1000);
+    assert_eq!(status["battery_temp"], 31);
+    assert_eq!(status["wifi"]["signal"], 3);
+    assert_eq!(status["bluetooth"], false);
+    assert_eq!(status["ram"]["total"], 8000);
     assert!(status["platform"].is_string());
 }
 

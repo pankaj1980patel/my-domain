@@ -63,6 +63,12 @@ data class DeviceStatus(
     val battery: Int?, val charging: Boolean?,
     val actions: Set<String> = emptySet(),
     val torch: Boolean? = null, val volume: Int? = null, val ringer: String? = null, val muted: Boolean? = null,
+    /** Degrees Celsius, and "good" / "overheat" / "cold" / ... (phones). */
+    val batteryTemp: Int? = null, val batteryHealth: String? = null,
+    val wifiOn: Boolean? = null, val wifiConnected: Boolean? = null, val ssid: String? = null, val wifiSignal: Int? = null,
+    val bluetooth: Boolean? = null,
+    val ramFree: Long? = null, val ramTotal: Long? = null,
+    val storageFree: Long? = null, val storageTotal: Long? = null,
 )
 
 /** One item in another device's shared folder: a file ([size] bytes) or a
@@ -343,6 +349,17 @@ object Core {
                     volume = if (st.has("volume")) st.optInt("volume") else null,
                     ringer = st.optString("ringer").ifEmpty { null },
                     muted = if (st.has("muted")) st.optBoolean("muted") else null,
+                    batteryTemp = if (st.has("battery_temp")) st.optInt("battery_temp") else null,
+                    batteryHealth = st.optString("battery_health").ifEmpty { null },
+                    wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
+                    wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
+                    ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },
+                    wifiSignal = st.optJSONObject("wifi")?.let { if (it.has("signal")) it.optInt("signal") else null },
+                    bluetooth = if (st.has("bluetooth")) st.optBoolean("bluetooth") else null,
+                    ramFree = st.optJSONObject("ram")?.optLong("free"),
+                    ramTotal = st.optJSONObject("ram")?.optLong("total"),
+                    storageFree = st.optJSONObject("storage")?.optLong("free"),
+                    storageTotal = st.optJSONObject("storage")?.optLong("total"),
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)

@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod device;
 mod fcm;
 mod notify;
+mod sysinfo;
 mod tray;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
