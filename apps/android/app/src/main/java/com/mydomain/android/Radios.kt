@@ -20,12 +20,12 @@ import org.json.JSONObject
  * mode, mobile data and hotspot in the status (Wi-Fi and Bluetooth are
  * there already), and the `radio {what, on}` action to switch one.
  *
- * Android doesn't let an ordinary app switch most radios (Wi-Fi since 10,
- * Bluetooth since 13, airplane mode, mobile data and hotspot always), so the
- * action does what it can: Wi-Fi and Bluetooth directly on the Android
- * versions that still allow it, Bluetooth on through Android's own "turn on
- * Bluetooth?" prompt, and otherwise opens the matching settings panel on the
- * phone (a notification to tap when the app isn't on screen). With
+ * Android doesn't let an ordinary app switch most radios: Wi-Fi only for
+ * apps targeting Android 9 or older, Bluetooth only for those targeting 12
+ * or older, airplane mode, mobile data and hotspot never. This app targets
+ * 9 on purpose, so it switches Wi-Fi and Bluetooth directly, even locked.
+ * The rest open the matching settings panel on the phone (a notification
+ * to tap when the app isn't on screen). With
  * my-domain's Accessibility service on ([PhoneHelper]) and the phone
  * unlocked, the service taps the switch in that panel itself; with Shizuku
  * running and allowed ([Privileged]), all but the hotspot switch with no
@@ -36,6 +36,9 @@ object Radios {
     val KINDS = listOf("wifi", "bluetooth", "airplane", "data", "hotspot")
 
     private var receiver: BroadcastReceiver? = null
+    /** False once this phone refused to switch Bluetooth directly. */
+    @Volatile
+    private var btDirect = true
 
     /** Tell [Controls.onChange] whenever a radio is switched, by anyone. */
     fun init(ctx: Context) {
@@ -70,6 +73,8 @@ object Radios {
         val direct = when {
             PhoneHelper.instance != null -> KINDS
             Privileged.ready() -> KINDS.filter { Privileged.radioCommand(it, true) != null }
+            // Targeting Android 9, Wi-Fi switches with nothing else.
+            !Sdk.rules(Build.VERSION_CODES.Q) -> listOf("wifi")
             else -> emptyList()
         }
         if (direct.isNotEmpty()) o.put("radio_direct", org.json.JSONArray(direct))
@@ -128,13 +133,19 @@ object Radios {
     @Suppress("DEPRECATION")
     private fun direct(app: Context, what: String, on: Boolean): Boolean = runCatching {
         when (what) {
-            "wifi" -> Build.VERSION.SDK_INT < Build.VERSION_CODES.Q &&
-                app.getSystemService(WifiManager::class.java)?.setWifiEnabled(on) == true
+            // Blocked only for apps targeting Android 10+ (this one targets 9).
+            "wifi" -> (!Sdk.rules(Build.VERSION_CODES.Q) &&
+                app.getSystemService(WifiManager::class.java)?.setWifiEnabled(on) == true)
+                .also { Log.i(TAG, "wifi directly: $it") }
             "bluetooth" -> {
                 val bt = app.getSystemService(BluetoothManager::class.java)?.adapter ?: return false
-                val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+                val allowed = !Sdk.rules(Build.VERSION_CODES.S) ||
                     app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-                allowed && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && if (on) bt.enable() else bt.disable()
+                // Blocked only for apps targeting Android 13+.
+                // Some phones refuse even old-target apps (vivo, Android 16),
+                // after a 3 s wait: once refused, go straight to the helper.
+                (btDirect && allowed && !Sdk.rules(Build.VERSION_CODES.TIRAMISU) && if (on) bt.enable() else bt.disable())
+                    .also { if (!it && allowed) btDirect = false; Log.i(TAG, "bluetooth directly: $it") }
             }
             else -> false
         }
@@ -144,7 +155,9 @@ object Radios {
      *  it needs the screen like any other screen. */
     private fun bluetoothPrompt(app: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
-        if (app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return false
+        if (Sdk.rules(Build.VERSION_CODES.S) &&
+            app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
+        ) return false
         val ask = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         DeviceActions.startOrNotify(app, ask, app.getString(R.string.radio_bt_prompt_title), app.getString(R.string.radio_body))
         return true

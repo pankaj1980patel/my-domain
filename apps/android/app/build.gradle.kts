@@ -15,7 +15,12 @@ android {
     defaultConfig {
         applicationId = "com.mydomain.android"
         minSdk = 24
-        targetSdk = 35
+        // Deliberately old (decided 2026-11-03): apps targeting 28 may still
+        // switch Wi-Fi (blocked from target 29) and Bluetooth (blocked from
+        // target 33) themselves, as Termux:API does. compileSdk stays new,
+        // so newer APIs are still called (behind version checks). The cost:
+        // no Play Store, which requires a recent target. See Sdk.kt.
+        targetSdk = 28
         versionCode = 1
         versionName = "0.1.0"
 
@@ -26,6 +31,7 @@ android {
         buildConfigField("String", "FCM_API_KEY", "\"${fcm["api_key"]}\"")
         buildConfigField("String", "FCM_PROJECT_ID", "\"${fcm["project_id"]}\"")
         buildConfigField("String", "FCM_SENDER_ID", "\"${fcm["sender_id"]}\"")
+        buildConfigField("int", "TARGET_SDK", "$targetSdk")
     }
 
     buildTypes {
@@ -45,6 +51,11 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    lint {
+        // targetSdk 28 is on purpose (see defaultConfig).
+        disable += setOf("ExpiredTargetSdkVersion", "OldTargetApi")
     }
 
     buildFeatures {

@@ -36,7 +36,7 @@ object Gallery {
      *  storage before). */
     fun canRead(ctx: Context): Boolean {
         val granted = { p: String -> ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED }
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        return if (Sdk.rules(Build.VERSION_CODES.TIRAMISU)) {
             granted(Manifest.permission.READ_MEDIA_IMAGES) || granted(Manifest.permission.READ_MEDIA_VIDEO)
         } else {
             granted(Manifest.permission.READ_EXTERNAL_STORAGE)
@@ -45,7 +45,7 @@ object Gallery {
 
     /** The permissions to ask for photo access. */
     fun permissions(): Array<String> =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        if (Sdk.rules(Build.VERSION_CODES.TIRAMISU)) {
             arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO)
         } else {
             arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)

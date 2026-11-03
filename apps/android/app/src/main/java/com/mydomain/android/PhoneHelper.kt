@@ -70,11 +70,14 @@ class PhoneHelper : AccessibilityService() {
                         done(false)
                         return
                     }
-                    if (!tapped) {
-                        val sw = rootInActiveWindow?.let { findSwitch(it, what) }
+                    // Only ever in Settings: never tap anything in another app
+                    // (before the panel opens, another window is in front).
+                    val root = rootInActiveWindow?.takeIf { isSettings(it.packageName) }
+                    if (!tapped && root != null) {
+                        val sw = findSwitch(root, what)
                         if (sw != null && sw.isChecked != on) {
                             tapped = clickable(sw)?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
-                            Log.i(TAG, "$what: tapped=$tapped")
+                            Log.i(TAG, "$what: tapped=$tapped (${sw.className}, \"${sw.text ?: sw.contentDescription ?: ""}\")")
                         }
                     }
                     main.postDelayed(this, STEP_MS)
@@ -143,9 +146,19 @@ class PhoneHelper : AccessibilityService() {
             val words = LABELS[what] ?: return null
             val switches = mutableListOf<AccessibilityNodeInfo>()
             collect(root, switches)
-            switches.firstOrNull { sw -> rowText(sw).let { t -> words.any { it in t } } }?.let { return it }
+            val says = { t: String -> words.any { it in t } }
+            // Its own label first (vivo: the row's Switch is described
+            // "Bluetooth"), then its row's, then the page's first switch.
+            switches.firstOrNull { says(ownText(it)) }?.let { return it }
+            switches.firstOrNull { says(rowText(it)) }?.let { return it }
             return if (what == "wifi" || what == "bluetooth") switches.firstOrNull() else null
         }
+
+        /** Settings, or a maker's own Settings app. */
+        fun isSettings(pkg: CharSequence?): Boolean = pkg?.toString()?.lowercase()?.contains("settings") == true
+
+        private fun ownText(n: AccessibilityNodeInfo): String =
+            "${n.text ?: ""} ${n.contentDescription ?: ""}".lowercase()
 
         private fun collect(n: AccessibilityNodeInfo, out: MutableList<AccessibilityNodeInfo>) {
             if (n.isCheckable && n.isEnabled) out += n

@@ -32,9 +32,9 @@ class MainActivity : ComponentActivity() {
         // resolves the id, starts immediately below and the id is set once).
         val wanted = buildList {
             add(Manifest.permission.READ_PHONE_STATE)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+            if (Sdk.rules(Build.VERSION_CODES.TIRAMISU)) add(Manifest.permission.POST_NOTIFICATIONS)
             // Bluetooth: reach a computer when there's no shared network.
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Sdk.rules(Build.VERSION_CODES.S)) {
                 add(Manifest.permission.BLUETOOTH_ADVERTISE)
                 add(Manifest.permission.BLUETOOTH_CONNECT)
             }

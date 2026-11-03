@@ -163,7 +163,7 @@ export const en = {
   "control.radio.airplane": "Airplane mode",
   "control.radioAsked": "{radio}: confirm the switch on {name}",
   "control.radioSwitching": "Switching {radio} on {name}",
-  "control.radioDirectHint": "Switches on the phone by itself while it's unlocked.",
+  "control.radioDirectHint": "Switches on the phone by itself (Wi-Fi even when it's locked). Airplane mode on, or mobile data off, can cut the phone off from your computers.",
   "control.radioPanelHint": "Opens the switch on the phone for you to tap. Turn on my-domain in the phone's Accessibility settings to switch directly.",
   "control.keyLabel": "Phone keys",
   "control.key.back": "Back",

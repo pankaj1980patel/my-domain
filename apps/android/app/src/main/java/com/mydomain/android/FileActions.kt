@@ -91,7 +91,7 @@ object FileActions {
 
     private fun canReadMedia(ctx: Context): Boolean {
         val granted = { p: String -> ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED }
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        return if (Sdk.rules(Build.VERSION_CODES.TIRAMISU)) {
             granted(Manifest.permission.READ_MEDIA_IMAGES) || granted(Manifest.permission.READ_MEDIA_VIDEO)
         } else {
             granted(Manifest.permission.READ_EXTERNAL_STORAGE)

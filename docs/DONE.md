@@ -271,6 +271,35 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## Targeting Android 9 on purpose; radios tried live (2026-11-03)
+
+The app now targets SDK 28 (compileSdk stays 35, so newer APIs are still
+called behind version checks). Apps targeting 28 may switch Wi-Fi
+themselves (the Termux:API trick); the cost is no Play Store.
+- `Sdk.rules(level)`: a newer Android's rules apply only when the phone
+  runs it and the app targets it. Used for the Bluetooth (12), notification
+  and photo (13) permissions. Legacy `BLUETOOTH`/`BLUETOOTH_ADMIN`,
+  `READ_EXTERNAL_STORAGE` lost their `maxSdkVersion`; `CHANGE_WIFI_STATE`
+  added. Lint's old-target checks are off for this.
+- Tried on the vivo (Android 16), from mdctl on the Mac:
+  - Wi-Fi on and off **directly**, no prompt, a few seconds each (even
+    locked, by design).
+  - Bluetooth: Android 16/vivo refuses `enable()` even for old targets,
+    so it goes through the Accessibility helper: off and on in 6–8 s,
+    tapping vivo's switch described "Bluetooth". The phone remembers the
+    refusal and skips the direct call next time.
+  - Phone key Home: the phone went from my-domain to the home screen.
+  - Status lists `key` and `radio_direct` for all five radios.
+  - Not tried remotely: airplane mode and mobile data (either can cut the
+    phone off from the computer); the desktop now warns about that.
+- Fixed in the helper: it searched whatever window was in front before
+  Settings opened, and its "first switch" fallback tapped a checkbox
+  outside Settings. It now acts only in Settings windows, and prefers a
+  switch whose own label matches, then its row's.
+- Photo access: the phone now asks for the older storage permission
+  (it showed as not granted after the change); grant it again for photo
+  backup and browsing.
+
 ## Radios switched on any phone: the Accessibility helper (2026-11-03)
 
 Shizuku needs Developer options, which most phones never turn on, so the

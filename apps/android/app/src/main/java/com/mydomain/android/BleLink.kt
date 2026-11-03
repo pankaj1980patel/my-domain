@@ -70,7 +70,7 @@ object BleLink {
 
     fun start(ctx: Context) {
         if (server != null) return
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S &&
+        if (Sdk.rules(Build.VERSION_CODES.S) &&
             listOf(Manifest.permission.BLUETOOTH_ADVERTISE, Manifest.permission.BLUETOOTH_CONNECT)
                 .any { ctx.checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         ) {
