@@ -101,7 +101,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Screenshot | Grab a single frame | `screen.view` | A D | P | ⬜ |
 | Screen record | Record the peer's screen to a file | `screen.record` | A D | P | ⬜ |
 | Remote keyboard | Type into the phone from the desktop keyboard | `input.control` | A | P (Accessibility / IME) | ⬜ |
-| Phone as touchpad / keyboard | Control the desktop cursor from the phone | `input.control` | D | S | ⬜ |
+| Phone as touchpad / keyboard | Control the desktop cursor from the phone | `input.control` | D | S | 🟡 (2026-11-03: move, left/right click, scroll, text, enter/backspace/arrows/esc; on/off switch on the computer; macOS needs Accessibility, Linux an X11/XWayland session; not tried live yet) |
 | Phone as webcam | Use the phone camera as a desktop webcam | `camera.view` | A→D | S | ⬜ |
 | Remote camera view | See the peer's front/back camera (indicator shown) | `camera.view` | A D | S | ⬜ |
 | Remote mic listen | Listen to the peer's mic (`ask` by default, indicator shown) | `mic.listen` | A D | S | ⬜ |
@@ -184,6 +184,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage and RAM free/total; no CPU) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | ⬜ |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
+| DND follows the phone | Computers hold my-domain's pop-ups while the phone is in Do Not Disturb (the OS state is only read, never changed) | `device.settings` | A→D | — | ✅ (2026-11-03; no permission needed; option on the computer, off by default; not tried live yet) |
 | Flashlight | On/off | `device.settings` | A | S | ✅ |
 | Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop only: macOS display sleep, Linux logind / screen locker) |
 | Wake / keep awake | Keep a device from sleeping for N minutes | `device.settings` | A D | S | 🟡 (2026-11-03: action `keep_awake`; macOS `caffeinate`, Linux `systemd-inhibit`, phone screen wake lock; no buttons yet) |
@@ -209,7 +210,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (folders each device shares; no screens yet) |
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
 | Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-03: newest first, paged, 160 px thumbnails, download; desktop commands only, no grid screen yet) |
-| Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ✅ (2026-11-03: unmetered Wi-Fi, optionally only while charging, resumable, never twice; switch in the phone's Settings) |
+| Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ✅ (2026-11-03: unmetered Wi-Fi, optionally only while charging, resumable, never twice; switch in the phone's Settings; remembered per computer, so a new computer gets the recent photos it lacks) |
 | Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | ⬜ |
 
 ### 3.12 Automation

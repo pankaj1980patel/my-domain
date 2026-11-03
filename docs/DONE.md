@@ -131,6 +131,86 @@ Every message rides a live link. The old one-off paths (a TCP connection or
 a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
 ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
+## Backups per computer, phone as touchpad, DND follows the phone (2026-11-03)
+
+**Not tried live yet.** The new core tests (backup, remote_input, dnd, unit
+tests) and the desktop crate's tests passed on the Linux laptop, and the UI
+and the Android APK build (not installed). Still to run when the laptop is
+back: workspace clippy with `-D warnings`, the full workspace tests, and
+desktop clippy on macOS (the Accessibility check is macOS-only code).
+
+- **Photo backup remembers each computer** (`features/backup.rs`). What was
+  sent is kept per target device (`backup_sent_<tag>_<n>` chunks, the tag
+  a short hash of the node id). Choosing another computer drops waiting
+  items it already has, and the phone's next scan (it runs on every
+  `backup_configure`) hands over everything since `since`; the core keeps
+  only what this computer lacks. Choosing the old one again sends only
+  what it's missing. The old shared list is moved to the first computer
+  chosen after the update (then emptied), so nothing goes twice.
+  `BackupStatus.sent` now counts the chosen computer's items.
+  - Tests: `switching_computers_sends_what_the_new_one_lacks`,
+    `the_old_shared_list_counts_for_the_chosen_computer`.
+- **Phone as touchpad and keyboard** (`features/input.rs`,
+  `engine/control.rs`). `input { from, events: [...] }`, each event
+  `move {dx, dy}`, `click {button: left|right}`, `scroll {dx, dy}`,
+  `text {text}` or `key {key: enter|backspace|left|right|up|down|esc}`
+  (`model::InputEvent`).
+  - API: `input_move`, `input_scroll` (batched: they add up and go out
+    every 20 ms as one message), `input_click`, `input_text`, `input_key`,
+    `send_input` (these flush pending moves first, so the order holds);
+    `remote_input_allowed` / `set_remote_input_allowed` on the computer (on
+    by default, kept in `kv`).
+  - Only over a live link, never queued: with no link the call fails with
+    `NoLink` and the connect ladder starts (at most every 5 s), so a click
+    can't land minutes later.
+  - The computer plays back only from devices in its list (and the message
+    decrypted with your key), only while allowed; events are cleaned (64
+    per message, moves within ±4000 px, text without control characters, up
+    to 500 characters). Arrives as `CoreEvent::Input` (`input-event`).
+  - Desktop (`remote_input.rs`): `enigo` 0.6 on one thread, in order;
+    scroll pixels become wheel steps (20 px each). Status lists the `input`
+    action while allowed, plus `input_needs` ("accessibility" on a Mac
+    without the permission, "display" on Linux without an X server). On a
+    Mac without Accessibility one notice per run says so instead of
+    failing silently. Settings switch "Let my phone control this computer";
+    commands `remote_input_allowed`, `set_remote_input_allowed`.
+  - Android (`ui/TouchpadUi.kt`): a "Touchpad & keyboard" tile on the
+    device screen when the computer lists `input`: a pad (drag to move,
+    tap = left click, two-finger drag = scroll, two-finger tap = right
+    click), Left/Right click buttons, a text field with Type, and arrow,
+    Enter, Backspace and Esc keys. Each touch move goes to the core, which
+    batches.
+  - mdctl: `move <node> <dx> <dy> [times]`, `click <node> left|right`,
+    `scroll <node> <dx> <dy>`, `type <node> <text...>`,
+    `key <node> <key>`, `input-allow on|off`.
+  - Tests: `touchpad_moves_are_batched_and_keep_their_order`,
+    `a_computer_with_remote_input_off_ignores_it`,
+    `input_is_never_queued_for_later`,
+    `unknown_buttons_keys_and_devices_are_refused`, unit tests in
+    `features/input.rs`, `events::input_and_dnd_events_keep_their_shape`,
+    desktop `scroll_pixels_become_wheel_steps`.
+- **Do Not Disturb follows the phone** (`features/dnd.rs`).
+  `dnd { from, on, at }`, sent the reliable way, only on a change
+  (`Engine::set_dnd`; the last state sent is kept, so a restart doesn't
+  repeat it). Receivers keep the newest `at` per sender, keep who is in DND
+  (`Engine::dnd_active`, forgotten after 12 h without news) and get
+  `CoreEvent::Dnd` (`dnd-changed`).
+  - Android (`DndWatch.kt`): reads `NotificationManager
+    .getCurrentInterruptionFilter()` and listens for
+    `ACTION_INTERRUPTION_FILTER_CHANGED` (plus the notification listener's
+    `onInterruptionFilterChanged`). Reading needs no permission; nothing
+    asks for notification-policy access, and the OS state is never changed.
+  - Desktop: Settings switch "Follow my phone's Do Not Disturb" (off by
+    default). While on and a device is in DND, my-domain's pop-ups are held;
+    when DND ends one pop-up says how many came ("3 notifications: Asha,
+    Files, Mom"). A ring and "can't use your phone as a touchpad" still
+    show. Commands `follow_phone_dnd`, `set_follow_phone_dnd`,
+    `dnd_devices`.
+  - mdctl: `dnd on|off`, `dnd-active`.
+  - Tests: `the_computer_hears_when_the_phone_goes_into_and_out_of_dnd`,
+    `a_restarted_phone_does_not_repeat_its_state`, desktop
+    `held_pop_ups_are_summed_up`.
+
 ## Gallery, photo backup, battery alerts, keep awake (2026-11-03)
 
 - Verified live 2026-11-03 from mdctl on the Mac (photo access granted
