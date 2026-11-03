@@ -74,8 +74,29 @@ export type DeviceStatus = {
   volume?: number;
   muted?: boolean;
   ringer?: string;
+  /** Radios it reported, on or off: wifi, bluetooth, airplane, data, hotspot. */
+  radios: Partial<Record<Radio, boolean>>;
   ts: number;
 };
+
+export const RADIOS = ["wifi", "bluetooth", "data", "hotspot", "airplane"] as const;
+export type Radio = (typeof RADIOS)[number];
+
+/** The radios in a device's status (Wi-Fi is an object, mobile data is
+ *  `mobile_data`). */
+function radiosOf(status: Record<string, unknown>): Partial<Record<Radio, boolean>> {
+  const wifi = status?.wifi as { on?: unknown } | undefined;
+  const raw: Record<Radio, unknown> = {
+    wifi: wifi?.on,
+    bluetooth: status?.bluetooth,
+    data: status?.mobile_data,
+    hotspot: status?.hotspot,
+    airplane: status?.airplane,
+  };
+  const out: Partial<Record<Radio, boolean>> = {};
+  for (const r of RADIOS) if (typeof raw[r] === "boolean") out[r] = raw[r] as boolean;
+  return out;
+}
 
 /** A file going to or coming from a device. `waiting`: offered, the device
  *  hasn't started taking it yet (or isn't reachable). */
@@ -304,6 +325,7 @@ export async function startEvents() {
         volume: typeof status?.volume === "number" ? Math.round(status.volume) : undefined,
         muted: typeof status?.muted === "boolean" ? status.muted : undefined,
         ringer: typeof status?.ringer === "string" ? status.ringer : undefined,
+        radios: radiosOf(status),
         ts: now(),
       }),
     ),

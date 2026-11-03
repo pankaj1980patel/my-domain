@@ -319,7 +319,7 @@ object DeviceActions {
 
     /** At once if this app is on screen; else a notification to tap
      *  (Android doesn't let a background app start an activity). */
-    private fun startOrNotify(app: Context, intent: Intent, title: String, text: String) {
+    fun startOrNotify(app: Context, intent: Intent, title: String, text: String) {
         if (Core.visible && runCatching { app.startActivity(intent) }.isSuccess) return
         val id = linkId.incrementAndGet()
         val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)

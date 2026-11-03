@@ -27,8 +27,10 @@ import {
   shareNotification,
   state,
   toggleApp,
+  RADIOS,
   type DeviceStatus,
   type PhoneNotification,
+  type Radio,
   type Transfer,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
@@ -775,6 +777,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
       <Show when={has("dial")}>
         <DialRow node={props.node} />
       </Show>
+      <Show when={has("radio")}>
+        <RadioRow node={props.node} st={props.st} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -791,6 +796,35 @@ function Controls(props: { node: string; st: DeviceStatus }) {
           </For>
         </div>
       </Show>
+    </div>
+  );
+}
+
+/** Wi-Fi, Bluetooth, mobile data, hotspot, airplane mode: what the phone
+ *  reported, and a tap to switch one. Android lets an app switch few of
+ *  them itself, so the phone usually opens the switch for you to tap. */
+function RadioRow(props: { node: string; st: DeviceStatus }) {
+  const label = (r: Radio) => t(`control.radio.${r}` as const);
+  const flip = (r: Radio) => () => {
+    const on = !props.st.radios[r];
+    runAction(props.node, "radio", { what: r, on })
+      .then(() => toast(t("control.radioAsked", { name: niceName(peerName(props.node)), radio: label(r) })))
+      .catch((e) => toast(friendlyError(e), "error"));
+  };
+  return (
+    <div class="row" role="group" aria-label={t("control.radioLabel")}>
+      <For each={RADIOS.filter((r) => props.st.radios[r] !== undefined)}>
+        {(r) => (
+          <button
+            class="btn btn-sm"
+            classList={{ "btn-soft": props.st.radios[r], "btn-ghost": !props.st.radios[r] }}
+            aria-pressed={props.st.radios[r]}
+            onClick={flip(r)}
+          >
+            {label(r)}
+          </button>
+        )}
+      </For>
     </div>
   );
 }

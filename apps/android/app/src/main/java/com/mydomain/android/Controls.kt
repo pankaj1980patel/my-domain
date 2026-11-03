@@ -24,6 +24,8 @@ import org.json.JSONObject
  *   dial       {number}                  open the dialer with it (no call)
  *   search     {app, query}              search YouTube / Spotify / the web
  *   keep_awake {minutes}                 keep the screen on (0 = stop)
+ *   radio      {what, on}                Wi-Fi, Bluetooth, airplane, data,
+ *                                        hotspot (see Radios)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -60,6 +62,7 @@ object Controls {
         put("volume"); put("media"); put("ringer"); put("launch"); put("search")
         if (hasPhone) put("dial")
         put("keep_awake")
+        put("radio")
         // Computers can see this screen (Android asks each time).
         put("screen")
     }
@@ -67,6 +70,7 @@ object Controls {
     fun state(ctx: Context): JSONObject {
         val am = ctx.getSystemService(AudioManager::class.java)
         val o = JSONObject()
+        Radios.state(ctx, o)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
         if (am != null) {
@@ -128,6 +132,7 @@ object Controls {
                 "dial" -> DeviceActions.dial(ctx, fromName, args.optString("number"))
                 "search" -> DeviceActions.search(ctx, fromName, args.optString("app"), args.optString("query"))
                 "keep_awake" -> DeviceActions.keepAwake(ctx, args.optInt("minutes", 0))
+                "radio" -> args.has("on") && Radios.set(ctx, fromName, args.optString("what"), args.optBoolean("on"))
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

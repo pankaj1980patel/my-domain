@@ -165,16 +165,16 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 |---|---|---|---|---|---|
 | Wi-Fi status | On/off, SSID, signal, IP | `wifi.read` | A D | S | 🟡 (on, connected, signal; SSID on Linux, rarely on Android/macOS; no IP) |
 | Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | ⬜ |
-| Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | ⬜ |
+| Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | 🟡 (2026-11-03: opens the Wi-Fi panel on the phone; directly before Android 10; Shizuku not yet) |
 | Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | ⬜ |
 | Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | ⬜ |
-| Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | ⬜ |
+| Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | 🟡 (2026-11-03: state in the status; opens the tethering settings) |
 | Bluetooth status | On/off, paired and connected devices | `bluetooth.read` | A D | S | 🟡 (on/off only) |
-| Bluetooth toggle | | `bluetooth.manage` | A D | R on Android 13+ | ⬜ |
+| Bluetooth toggle | | `bluetooth.manage` | A D | R on Android 13+ | 🟡 (2026-11-03: directly before Android 13; on through Android's prompt after; off opens settings) |
 | Connect / disconnect BT device | e.g. move earbuds to the desktop | `bluetooth.manage` | A D | R / Accessibility | ⬜ |
-| Airplane mode view | | `radio.read` | A | S | ⬜ |
-| Airplane mode toggle | | `radio.manage` | A | R | ⬜ |
-| Mobile data view / toggle | Including data usage | `radio.read` / `.manage` | A | S / R | ⬜ |
+| Airplane mode view | | `radio.read` | A | S | ✅ (2026-11-03, in the status; not tried live) |
+| Airplane mode toggle | | `radio.manage` | A | R | 🟡 (2026-11-03: opens the airplane mode settings) |
+| Mobile data view / toggle | Including data usage | `radio.read` / `.manage` | A | S / R | 🟡 (2026-11-03: on/off in the status, the toggle opens the internet panel; no data usage) |
 | NFC / location services / VPN | View, and toggle where possible | `radio.read` / `.manage` | A | S / R | ⬜ |
 
 ### 3.9 Device state & settings

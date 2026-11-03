@@ -271,6 +271,25 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## The phone's radios from a computer (2026-11-03)
+
+Wave E's first step ([ADR-0006](../learnings/decisions/ADR-0006-shizuku.md),
+the fallback half).
+
+- Android (`Radios.kt`): the status now also says airplane mode, mobile
+  data (the Settings switch) and hotspot, next to Wi-Fi and Bluetooth; a
+  change by anyone pushes a new status at once.
+- Action `radio {what: wifi|bluetooth|airplane|data|hotspot, on}`. Android
+  lets an ordinary app switch few radios, so: Wi-Fi directly before
+  Android 10, Bluetooth directly before 13 and on through Android's own
+  "turn on Bluetooth?" prompt after; anything else opens the switch's
+  settings panel on the phone (a notification to tap when the app isn't on
+  screen). Switching with no tap waits for Shizuku.
+- Desktop: a row of radio buttons in the device's controls, lit when on;
+  a tap asks the phone and says to confirm there.
+- Checks: APK builds, UI type check. Not tried live yet: the phone was
+  unreachable from the Mac after the reinstall (see Known issues).
+
 ## Control another computer from this one (2026-11-03)
 
 A computer's "Its screen" tile, for a device that also lists `input`:

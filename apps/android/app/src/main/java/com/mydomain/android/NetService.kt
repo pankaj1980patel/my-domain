@@ -98,6 +98,7 @@ class NetService : Service() {
         publishInstalledApps()
         Controls.onChange = { serviceScope.launch { pushStatus() } }
         Controls.init(this)
+        Radios.init(this)
         watchBattery()
         // Your computers hear when this phone goes into Do Not Disturb.
         DndWatch.start(this)

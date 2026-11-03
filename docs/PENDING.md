@@ -319,7 +319,7 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 | C: files | ~~File push (resumable)~~ (done 2026-11-02), ~~browse, download~~ (done 2026-11-03: shared folders; no screens yet), ~~gallery, photo backup~~ (done 2026-11-03: the desktop has no gallery grid yet, only commands; not yet tried on the phone), **Wi-Fi Direct fast path** for big transfers (below) |
 | Device extras | ~~Battery alerts~~ (done 2026-11-03), ~~keep awake~~ (done 2026-11-03: action and commands; no buttons yet), ~~DND follows the phone~~ (done 2026-11-03: not tried live yet; a computer that restarts during DND doesn't know until the next change), ~~backups per computer~~ (done 2026-11-03). Next: a desktop gallery grid and a backup status line; ~~a "keep awake" button on the device page~~ (done 2026-11-03) |
 | D: screen and control | ~~Screen share~~ (computer → phone, done 2026-11-03: snapshots behind the full-screen pad; phone → computer done too: Android asks each time; not tried live yet), remote input, ~~phone as touchpad/keyboard~~ (done 2026-11-03: not tried live yet; Wayland-native input and a mouse-wheel feel to tune after a live try), ~~presentation remote~~ (done 2026-11-03: next, previous, black; no screens yet) |
-| E: connectivity (Shizuku, see [ADR-0006](../learnings/decisions/ADR-0006-shizuku.md)) | Wi-Fi scan/toggle/connect, Bluetooth, airplane mode, mobile data, hotspot |
+| E: connectivity (Shizuku, see [ADR-0006](../learnings/decisions/ADR-0006-shizuku.md)) | ~~Radio state and the settings-panel fallback for Wi-Fi, Bluetooth, airplane mode, mobile data, hotspot~~ (done 2026-11-03, not tried live). Next: the Shizuku client for switching with no tap (needs the `dev.rikka.shizuku:api` Gradle download, not in the offline cache), a Shizuku setup guide and status on the phone, Wi-Fi scan/connect |
 | F: find, security, automation | Locate, lost mode, wipe, triggers, scenes, schedules, webhooks |
 
 ### Fast path for large transfers: Wi-Fi Direct
@@ -392,6 +392,12 @@ A feature counts as done when it has:
   sharing. The QUIC link should notice a dead peer sooner (keep-alive /
   idle timeout), and the `boot` id in `Hello` already lets the new link
   replace the old one once it comes.
+  - Again 2026-11-03 15:40, worse: after a reinstall, with the phone on
+    mobile data and asleep, nothing reached it for over 10 minutes, even
+    from a freshly started mdctl: no push arrived and the relay never
+    joined. Most likely the server still sent the signals down the old
+    process's relay socket, which the undeployed server fix (push once a
+    relay socket has been silent 30 s) addresses: **redeploy**.
 
 - **Linux FCM:** the first fresh registration failed with
   `PHONE_REGISTRATION_ERROR` and worked after a restart. Last seen

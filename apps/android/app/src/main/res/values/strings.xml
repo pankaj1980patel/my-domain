@@ -340,4 +340,13 @@
     <string name="touchpad_key_enter">Enter</string>
     <string name="touchpad_key_backspace">⌫</string>
     <string name="touchpad_key_esc">Esc</string>
+    <string name="radio_wifi">Wi-Fi</string>
+    <string name="radio_bluetooth">Bluetooth</string>
+    <string name="radio_airplane">airplane mode</string>
+    <string name="radio_data">mobile data</string>
+    <string name="radio_hotspot">the hotspot</string>
+    <string name="radio_turn_on_title">%1$s: turn on %2$s</string>
+    <string name="radio_turn_off_title">%1$s: turn off %2$s</string>
+    <string name="radio_bt_prompt_title">Turn on Bluetooth</string>
+    <string name="radio_body">Tap to open the switch.</string>
 </resources>
