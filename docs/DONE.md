@@ -133,11 +133,22 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 ## Backups per computer, phone as touchpad, DND follows the phone (2026-11-03)
 
-**Not tried live yet.** The new core tests (backup, remote_input, dnd, unit
-tests) and the desktop crate's tests passed on the Linux laptop, and the UI
-and the Android APK build (not installed). Still to run when the laptop is
-back: workspace clippy with `-D warnings`, the full workspace tests, and
-desktop clippy on macOS (the Accessibility check is macOS-only code).
+Checks: the new core tests (backup, remote_input, dnd, unit tests) and the
+desktop crate's tests passed on the Linux laptop; on the Mac, clippy with
+`-D warnings` for mdcore, mdctl and the desktop crate (so the macOS
+Accessibility and enigo code compiles) and the new tests again. Still to
+run when the laptop is back: workspace clippy and the full workspace tests.
+
+Tried live (phone with the new APK, mdctl on the Mac as the computer with
+`input-allow on`, on different networks: relay, then hole punched):
+- The phone showed the "Touchpad & keyboard" tile for mdctl. A drag
+  arrived as about one `move` per 20 ms (summed), then a tap as a left
+  click, Right click, and "hello phone" from the Type field.
+- Do Not Disturb on the phone (on, then off): mdctl got `dnd-changed`
+  on=true and on=false, and `dnd-active` listed the phone, then nobody.
+- Not tried yet: the arrow/Enter/Backspace/Esc buttons from the phone,
+  two-finger scroll, input played back on a real desktop (the running Mac
+  app wasn't restarted), and backup per computer on the phone.
 
 - **Photo backup remembers each computer** (`features/backup.rs`). What was
   sent is kept per target device (`backup_sent_<tag>_<n>` chunks, the tag
