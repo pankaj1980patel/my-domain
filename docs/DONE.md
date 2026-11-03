@@ -169,9 +169,11 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
   mdctl as the right `gesture` events.
 - The ←, ↑, ↓, →, Enter, ⌫ and Esc buttons: all seven arrived as `key`
   events.
-- Not tried yet: two-finger scroll and real finger swipes (adb fakes one
-  finger), input played back on a real desktop (the running Mac app wasn't
-  restarted), and backup per computer on the phone.
+- Two-finger scroll works (tried by hand). The Mac app (`tauri dev`, with
+  Accessibility allowed) lists `input` in its status with no
+  `input_needs`, so it plays input back.
+- Not tried yet: real finger swipes (three and four fingers) and backup
+  per computer on the phone.
 
 - **Photo backup remembers each computer** (`features/backup.rs`). What was
   sent is kept per target device (`backup_sent_<tag>_<n>` chunks, the tag
