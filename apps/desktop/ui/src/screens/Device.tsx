@@ -780,6 +780,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
       <Show when={has("radio")}>
         <RadioRow node={props.node} st={props.st} />
       </Show>
+      <Show when={has("key")}>
+        <KeyRow node={props.node} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -807,21 +810,54 @@ function RadioRow(props: { node: string; st: DeviceStatus }) {
   const label = (r: Radio) => t(`control.radio.${r}` as const);
   const flip = (r: Radio) => () => {
     const on = !props.st.radios[r];
+    const direct = props.st.radioDirect.includes(r);
+    const name = niceName(peerName(props.node));
     runAction(props.node, "radio", { what: r, on })
-      .then(() => toast(t("control.radioAsked", { name: niceName(peerName(props.node)), radio: label(r) })))
+      .then(() => toast(t(direct ? "control.radioSwitching" : "control.radioAsked", { name, radio: label(r) })))
       .catch((e) => toast(friendlyError(e), "error"));
   };
   return (
-    <div class="row" role="group" aria-label={t("control.radioLabel")}>
-      <For each={RADIOS.filter((r) => props.st.radios[r] !== undefined)}>
-        {(r) => (
-          <button
-            class="btn btn-sm"
-            classList={{ "btn-soft": props.st.radios[r], "btn-ghost": !props.st.radios[r] }}
-            aria-pressed={props.st.radios[r]}
-            onClick={flip(r)}
-          >
-            {label(r)}
+    <div class="stack">
+      <div class="row" role="group" aria-label={t("control.radioLabel")}>
+        <For each={RADIOS.filter((r) => props.st.radios[r] !== undefined)}>
+          {(r) => (
+            <button
+              class="btn btn-sm"
+              classList={{ "btn-soft": props.st.radios[r], "btn-ghost": !props.st.radios[r] }}
+              aria-pressed={props.st.radios[r]}
+              onClick={flip(r)}
+            >
+              {label(r)}
+            </button>
+          )}
+        </For>
+      </div>
+      <p class="muted small">
+        {props.st.radioDirect.length > 0 ? t("control.radioDirectHint") : t("control.radioPanelHint")}
+      </p>
+    </div>
+  );
+}
+
+/** Back, Home, recent apps, notifications, Quick Settings, Lock on the
+ *  phone (its Accessibility service presses them). */
+function KeyRow(props: { node: string }) {
+  const keys = [
+    ["back", "control.key.back"],
+    ["home", "control.key.home"],
+    ["recents", "control.key.recents"],
+    ["notifications", "control.key.notifications"],
+    ["quick_settings", "control.key.quickSettings"],
+    ["lock", "control.key.lock"],
+  ] as const;
+  const press = (key: string) => () =>
+    runAction(props.node, "key", { key }).catch((e) => toast(friendlyError(e), "error"));
+  return (
+    <div class="row" role="group" aria-label={t("control.keyLabel")}>
+      <For each={keys}>
+        {([key, label]) => (
+          <button class="btn btn-ghost btn-sm" onClick={press(key)}>
+            {t(label)}
           </button>
         )}
       </For>

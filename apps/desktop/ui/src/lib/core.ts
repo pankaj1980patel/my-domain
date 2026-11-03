@@ -76,6 +76,8 @@ export type DeviceStatus = {
   ringer?: string;
   /** Radios it reported, on or off: wifi, bluetooth, airplane, data, hotspot. */
   radios: Partial<Record<Radio, boolean>>;
+  /** Radios it switches with no tap on it (Accessibility or Shizuku). */
+  radioDirect: Radio[];
   ts: number;
 };
 
@@ -326,6 +328,9 @@ export async function startEvents() {
         muted: typeof status?.muted === "boolean" ? status.muted : undefined,
         ringer: typeof status?.ringer === "string" ? status.ringer : undefined,
         radios: radiosOf(status),
+        radioDirect: Array.isArray(status?.radio_direct)
+          ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
+          : [],
         ts: now(),
       }),
     ),

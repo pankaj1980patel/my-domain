@@ -165,7 +165,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 |---|---|---|---|---|---|
 | Wi-Fi status | On/off, SSID, signal, IP | `wifi.read` | A D | S | 🟡 (on, connected, signal; SSID on Linux, rarely on Android/macOS; no IP) |
 | Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | ⬜ |
-| Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | 🟡 (2026-11-03: opens the Wi-Fi panel on the phone; directly before Android 10 or with Shizuku) |
+| Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | 🟡 (2026-11-03: opens the Wi-Fi panel on the phone; directly before Android 10, with the Accessibility helper, or with Shizuku) |
 | Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | ⬜ |
 | Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | ⬜ |
 | Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | 🟡 (2026-11-03: state in the status; opens the tethering settings) |

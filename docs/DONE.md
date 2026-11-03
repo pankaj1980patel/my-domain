@@ -271,6 +271,31 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## Radios switched on any phone: the Accessibility helper (2026-11-03)
+
+Shizuku needs Developer options, which most phones never turn on, so the
+no-tap path for everyone is an Accessibility service (`PhoneHelper.kt`),
+turned on once in Settings → Accessibility. (Device Administrator was
+considered: it can lock and wipe, but can't switch any radio.)
+
+- Radios: the service opens the switch's settings panel, finds the switch
+  (a checkable node whose row says Wi-Fi / Bluetooth / Airplane / Mobile
+  data / Hotspot; for Wi-Fi and Bluetooth the panel's first switch), taps
+  it, checks the radio really changed, and closes the panel. Not found in
+  6 s (another maker's Settings): the panel stays open for you. Only while
+  the phone is unlocked; locked, it falls back to the notification.
+- Order in `Radios.set`: Shizuku, then the old direct APIs (Wi-Fi before
+  Android 10, Bluetooth before 13), then the helper, then Android's
+  Bluetooth prompt, then the panel. The status lists `radio_direct`.
+- Phone keys: action `key {back|home|recents|notifications|quick_settings|lock}`
+  while the helper is on.
+- Desktop: the radio row says whether a tap switches directly or opens on
+  the phone; a row of phone keys for phones that list `key`.
+- Phone Settings: a "Control from your computers" tile (on/off, opens
+  Accessibility settings).
+- Checks: APK builds, installs, the service is listed; UI type check. Not
+  tried yet: the service isn't turned on (your consent, on the phone).
+
 ## First CI run on main (2026-11-03)
 
 `monorepo` fast-forwarded into `main` (307 commits) and CI run. Fixed what

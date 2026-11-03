@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- my-domain's Accessibility service (PhoneHelper.kt): taps radio switches
+     in Settings and presses phone keys for your computers. It reads the
+     screen only while doing that, so it asks for no events. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="false"
+    android:notificationTimeout="100"
+    android:description="@string/helper_description"
+    android:summary="@string/helper_summary" />

@@ -358,4 +358,12 @@
     <string name="shizuku_get">Get Shizuku</string>
     <string name="shizuku_open">Open Shizuku</string>
     <string name="shizuku_allow">Allow</string>
+    <string name="helper_label">my-domain: control from your computers</string>
+    <string name="helper_summary">Lets your computers switch Wi-Fi, Bluetooth, mobile data, airplane mode and the hotspot, and press Back, Home and Lock.</string>
+    <string name="helper_description">With this on, when one of your own computers asks to switch a radio, my-domain opens that switch in Settings and taps it for you, then closes it. Your computers can also press Back, Home, recent apps, notifications and Quick Settings, and lock the screen. It reads the screen only while doing one of these. Nothing works while the phone is locked.</string>
+    <string name="helper_title">Control from your computers</string>
+    <string name="helper_hint">Turn on my-domain in Accessibility, and your computers can switch this phone\'s radios without you tapping (while it\'s unlocked) and press its keys. No Developer options needed.</string>
+    <string name="helper_on">On: your computers can switch the radios and press keys.</string>
+    <string name="helper_off">Off: radio switches open on this phone for you to tap.</string>
+    <string name="helper_open">Open Accessibility settings</string>
 </resources>

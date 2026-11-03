@@ -26,6 +26,8 @@ import org.json.JSONObject
  *   keep_awake {minutes}                 keep the screen on (0 = stop)
  *   radio      {what, on}                Wi-Fi, Bluetooth, airplane, data,
  *                                        hotspot (see Radios)
+ *   key        {key}                     back, home, recents, notifications,
+ *                                        quick_settings, lock (needs PhoneHelper)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -63,6 +65,8 @@ object Controls {
         if (hasPhone) put("dial")
         put("keep_awake")
         put("radio")
+        // Phone keys, with the Accessibility service on.
+        if (PhoneHelper.instance != null) put("key")
         // Computers can see this screen (Android asks each time).
         put("screen")
     }
@@ -133,6 +137,7 @@ object Controls {
                 "search" -> DeviceActions.search(ctx, fromName, args.optString("app"), args.optString("query"))
                 "keep_awake" -> DeviceActions.keepAwake(ctx, args.optInt("minutes", 0))
                 "radio" -> args.has("on") && Radios.set(ctx, fromName, args.optString("what"), args.optBoolean("on"))
+                "key" -> PhoneHelper.instance?.press(args.optString("key")) == true
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

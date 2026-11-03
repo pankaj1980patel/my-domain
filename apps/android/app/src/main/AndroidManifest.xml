@@ -125,7 +125,20 @@
             android:name=".TouchpadActivity"
             android:exported="false"
             android:theme="@style/Theme.App" />
-            <!-- Shizuku hands this app its binder here (ADR-0006, Privileged.kt). -->
+            <!-- Taps radio switches and presses keys for your computers (PhoneHelper.kt). -->
+        <service
+            android:name=".PhoneHelper"
+            android:exported="true"
+            android:label="@string/helper_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/phone_helper" />
+        </service>
+        <!-- Shizuku hands this app its binder here (ADR-0006, Privileged.kt). -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"
             android:authorities="${applicationId}.shizuku"

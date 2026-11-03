@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.BuildConfig
 import com.mydomain.android.NotifListener
+import com.mydomain.android.PhoneHelper
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
@@ -133,6 +134,28 @@ fun TouchpadSettingsTile() {
     }
 }
 
+/** The Accessibility service (PhoneHelper): radios switched and keys
+ *  pressed for your computers, on any phone. */
+@Composable
+fun HelperSettingsTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(PhoneHelper.enabled(ctx)) }
+    // Turned on in Android's Settings: look again every few seconds.
+    LaunchedEffect(Unit) {
+        while (true) {
+            on = PhoneHelper.enabled(ctx)
+            delay(2_000)
+        }
+    }
+    Tile(title = stringResource(R.string.helper_title)) {
+        Muted(stringResource(R.string.helper_hint))
+        Text(stringResource(if (on) R.string.helper_on else R.string.helper_off), style = MaterialTheme.typography.bodyMedium)
+        SoftButton(stringResource(R.string.helper_open), onClick = {
+            runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+        })
+    }
+}
+
 /** Shizuku (ADR-0006): lets your computers switch this phone's Wi-Fi,
  *  Bluetooth, airplane mode and mobile data with no tap here. Says what's
  *  missing, with the one button that fixes it. */
@@ -228,6 +251,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
 
         PhotosTile()
         TouchpadSettingsTile()
+        HelperSettingsTile()
         ShizukuSettingsTile()
 
         Tile(title = stringResource(R.string.settings_device_key)) {

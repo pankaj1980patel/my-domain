@@ -26,8 +26,10 @@ import org.json.JSONObject
  * versions that still allow it, Bluetooth on through Android's own "turn on
  * Bluetooth?" prompt, and otherwise opens the matching settings panel on the
  * phone (a notification to tap when the app isn't on screen). With
- * Shizuku running and allowed ([Privileged]), all but the hotspot switch
- * with no tap.
+ * my-domain's Accessibility service on ([PhoneHelper]) and the phone
+ * unlocked, the service taps the switch in that panel itself; with Shizuku
+ * running and allowed ([Privileged]), all but the hotspot switch with no
+ * screen at all.
  */
 object Radios {
     private const val TAG = "mydomain_radios"
@@ -65,10 +67,26 @@ object Radios {
         }
         hotspotOn(ctx)?.let { o.put("hotspot", it) }
         // The ones that switch with no tap on the phone.
-        if (Privileged.ready()) {
-            o.put("radio_direct", org.json.JSONArray(KINDS.filter { Privileged.radioCommand(it, true) != null }))
+        val direct = when {
+            PhoneHelper.instance != null -> KINDS
+            Privileged.ready() -> KINDS.filter { Privileged.radioCommand(it, true) != null }
+            else -> emptyList()
         }
+        if (direct.isNotEmpty()) o.put("radio_direct", org.json.JSONArray(direct))
     }
+
+    /** Whether radio [what] is on now; null if it can't be read. */
+    fun isOn(ctx: Context, what: String): Boolean? = runCatching {
+        val app = ctx.applicationContext
+        when (what) {
+            "wifi" -> app.getSystemService(WifiManager::class.java)?.isWifiEnabled
+            "bluetooth" -> app.getSystemService(BluetoothManager::class.java)?.adapter?.isEnabled
+            "airplane" -> Settings.Global.getInt(app.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
+            "data" -> Settings.Global.getInt(app.contentResolver, "mobile_data", -1).takeIf { it >= 0 }?.let { it == 1 }
+            "hotspot" -> hotspotOn(app)
+            else -> null
+        }
+    }.getOrNull()
 
     /** Hotspot on or off: a hidden but long-standing WifiManager call. */
     private fun hotspotOn(ctx: Context): Boolean? = runCatching {
@@ -85,6 +103,13 @@ object Radios {
         Privileged.radioCommand(what, on)?.let { cmd -> if (Privileged.run(*cmd)) return true }
         if (direct(app, what, on)) return true
         val intent = panel(app, what) ?: return false
+        PhoneHelper.instance?.takeIf { PhoneHelper.ready(app) }?.let { helper ->
+            // Taps the switch in the panel; if it can't, the panel stays
+            // open on the phone, as below.
+            helper.switchRadio(what, on, intent) { ok -> Log.i(TAG, "$what by Accessibility: $ok") }
+            return true
+        }
+        if (what == "bluetooth" && on && bluetoothPrompt(app)) return true
         val label = app.getString(
             when (what) {
                 "wifi" -> R.string.radio_wifi
@@ -99,8 +124,7 @@ object Radios {
         return true
     }
 
-    /** Wi-Fi and Bluetooth the old way, on the Android versions that allow
-     *  it; Bluetooth on through Android's own prompt. */
+    /** Wi-Fi and Bluetooth the old way, on the Android versions that allow it. */
     @Suppress("DEPRECATION")
     private fun direct(app: Context, what: String, on: Boolean): Boolean = runCatching {
         when (what) {
@@ -110,22 +134,21 @@ object Radios {
                 val bt = app.getSystemService(BluetoothManager::class.java)?.adapter ?: return false
                 val allowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
                     app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
-                when {
-                    !allowed -> false
-                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU -> if (on) bt.enable() else bt.disable()
-                    on -> {
-                        // "Allow my-domain to turn on Bluetooth?": one tap,
-                        // and it needs the screen like any other screen.
-                        val ask = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        DeviceActions.startOrNotify(app, ask, app.getString(R.string.radio_bt_prompt_title), app.getString(R.string.radio_body))
-                        true
-                    }
-                    else -> false
-                }
+                allowed && Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU && if (on) bt.enable() else bt.disable()
             }
             else -> false
         }
     }.onFailure { Log.w(TAG, "can't switch $what: $it") }.getOrDefault(false)
+
+    /** "Allow my-domain to turn on Bluetooth?" (Android 13+): one tap, and
+     *  it needs the screen like any other screen. */
+    private fun bluetoothPrompt(app: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return false
+        if (app.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) return false
+        val ask = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        DeviceActions.startOrNotify(app, ask, app.getString(R.string.radio_bt_prompt_title), app.getString(R.string.radio_body))
+        return true
+    }
 
     /** The settings screen where you switch [what]; null if the phone has none. */
     private fun panel(app: Context, what: String): Intent? {
