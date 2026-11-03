@@ -32,6 +32,13 @@
 //! `gallery <node> [offset] [limit] [thumbs]` (a phone's newest photos;
 //! `thumbs` also sends their thumbnails), `gallery-get <node> <id> [name]`, `awake <node> <minutes>`,
 //! `battery-alerts on|off [low]`,
+//! touchpad and keyboard for a computer: `move <node> <dx> <dy> [times]`
+//! (`times` small moves in a row, batched like a finger drag),
+//! `click <node> left|right`, `scroll <node> <dx> <dy>`,
+//! `type <node> <text...>`, `key <node> enter|backspace|left|right|up|down|esc`;
+//! `input-allow on|off` (play back input from your devices here; "on" also
+//! lists "input" in this device's status, so a phone offers its touchpad),
+//! `dnd on|off` (report this device's Do Not Disturb), `dnd-active`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -537,6 +544,64 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             engine.set_battery_alerts(s.clone())?;
             Ok(json!(s))
         }
+        "move" | "scroll" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let mut num = || -> Result<i32, String> {
+                let n = arg(words.next())?;
+                n.parse::<i32>().map_err(|_| format!("not a number: {n}"))
+            };
+            let (dx, dy) = (num()?, num()?);
+            let times = match words.next() {
+                Some(n) => n.parse::<u32>().map_err(|_| format!("not a number: {n}"))?,
+                None => 1,
+            };
+            for i in 0..times.clamp(1, 1000) {
+                if cmd == "move" {
+                    engine.input_move(&to, dx, dy)?;
+                } else {
+                    engine.input_scroll(&to, dx, dy)?;
+                }
+                if i + 1 < times {
+                    std::thread::sleep(Duration::from_millis(8));
+                }
+            }
+            Ok(json!({ "dx": dx, "dy": dy, "times": times.clamp(1, 1000) }))
+        }
+        "click" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let button = words.next().unwrap_or("left").to_string();
+            engine.input_click(&to, &button)?;
+            Ok(json!(button))
+        }
+        "type" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let text = words.collect::<Vec<_>>().join(" ");
+            engine.input_text(&to, &text)?;
+            Ok(json!(text))
+        }
+        "key" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let key = arg(words.next())?;
+            engine.input_key(&to, &key)?;
+            Ok(json!(key))
+        }
+        "input-allow" => {
+            let on = arg(words.next())? == "on";
+            engine.set_remote_input_allowed(on);
+            let status = if on {
+                json!({ "actions": ["input"] })
+            } else {
+                json!({})
+            };
+            engine.set_device_status(&status.to_string());
+            Ok(json!(on))
+        }
+        "dnd" => {
+            let on = arg(words.next())? == "on";
+            engine.set_dnd(on);
+            Ok(json!(on))
+        }
+        "dnd-active" => Ok(json!(engine.dnd_active())),
         "downloads" => {
             let dir = arg(words.next())?;
             engine.set_download_dir(&dir);

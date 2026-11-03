@@ -56,3 +56,8 @@ native-tls = "0.2"
 # stays signed in (Linux builds need libdbus-1-dev).
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
 
+# The phone as touchpad and keyboard: plays its pointer, click, scroll, text
+# and key events back here (see `remote_input.rs`). On Linux the default
+# backend talks to the X server (x11rb, pure Rust); macOS needs the
+# Accessibility permission.
+enigo = "0.6"

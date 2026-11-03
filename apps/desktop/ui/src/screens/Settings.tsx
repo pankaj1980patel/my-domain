@@ -15,10 +15,24 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [pass, setPass] = createSignal("");
   const [showKey, setShowKey] = createSignal(false);
   const [notifs, setNotifs] = createSignal(true);
-  onMount(async () => setNotifs(await commands.notificationsEnabled()));
+  const [followDnd, setFollowDnd] = createSignal(false);
+  const [remoteInput, setRemoteInput] = createSignal(true);
+  onMount(async () => {
+    setNotifs(await commands.notificationsEnabled());
+    setFollowDnd(await commands.followPhoneDnd());
+    setRemoteInput(await commands.remoteInputAllowed());
+  });
   const toggleNotifs = async (on: boolean) => {
     await commands.setNotificationsEnabled(on);
     setNotifs(on);
+  };
+  const toggleFollowDnd = async (on: boolean) => {
+    await commands.setFollowPhoneDnd(on);
+    setFollowDnd(on);
+  };
+  const toggleRemoteInput = async (on: boolean) => {
+    await commands.setRemoteInputAllowed(on);
+    setRemoteInput(on);
   };
 
   const tapVersion = () => {
@@ -57,6 +71,16 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={notifs()} onChange={(e) => toggleNotifs(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.notificationsHint")}</p>
+        <label class="switch-row">
+          <span>{t("settings.followDnd")}</span>
+          <input type="checkbox" role="switch" checked={followDnd()} onChange={(e) => toggleFollowDnd(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.followDndHint")}</p>
+        <label class="switch-row">
+          <span>{t("settings.remoteInput")}</span>
+          <input type="checkbox" role="switch" checked={remoteInput()} onChange={(e) => toggleRemoteInput(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.remoteInputHint")}</p>
       </article>
 
       <article class="tile">

@@ -148,6 +148,14 @@ export const commands = {
 	 *  lists "keep_awake".
 	 */
 	keepAwake: (nodeId: string, minutes: number) => typedError<string, string>(__TAURI_INVOKE("keep_awake", { nodeId, minutes })),
+	/**  Whether pop-ups are held while your phone is in Do Not Disturb. */
+	followPhoneDnd: () => __TAURI_INVOKE<boolean>("follow_phone_dnd"),
+	setFollowPhoneDnd: (on: boolean) => __TAURI_INVOKE<void>("set_follow_phone_dnd", { on }),
+	/**  Your devices in Do Not Disturb right now (node ids). */
+	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
+	/**  Whether your phone may move the pointer and type here. */
+	remoteInputAllowed: () => __TAURI_INVOKE<boolean>("remote_input_allowed"),
+	setRemoteInputAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_remote_input_allowed", { on }),
 };
 
 /* Types */

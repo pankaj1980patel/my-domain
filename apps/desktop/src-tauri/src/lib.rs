@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod device;
 mod fcm;
 mod notify;
+mod remote_input;
 mod sysinfo;
 mod tray;
 
@@ -257,6 +258,12 @@ impl EventSink for TauriSink {
             CoreEvent::Action { name, args, .. } => {
                 let (app, name, args) = (self.app.clone(), name.clone(), args.clone());
                 std::thread::spawn(move || device::on_action(&app, &name, &args));
+            }
+            // The phone's touchpad: queued to one thread, so the order holds.
+            CoreEvent::Input { events, .. } => remote_input::play(&self.app, events.clone()),
+            CoreEvent::Dnd { .. } => {
+                let app = self.app.clone();
+                std::thread::spawn(move || notify::dnd_changed(&app));
             }
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
@@ -739,6 +746,45 @@ fn set_notifications_enabled(on: bool, prefs: State<notify::Prefs>) {
     prefs.set_enabled(on)
 }
 
+/// Whether pop-ups are held while your phone is in Do Not Disturb.
+#[tauri::command]
+#[specta::specta]
+fn follow_phone_dnd(prefs: State<notify::Prefs>) -> bool {
+    prefs.follow_dnd()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_follow_phone_dnd(on: bool, app: AppHandle, prefs: State<notify::Prefs>) {
+    prefs.set_follow_dnd(on);
+    // Turned off mid-DND: say what was held.
+    notify::dnd_changed(&app);
+}
+
+/// Your devices in Do Not Disturb right now (node ids).
+#[tauri::command]
+#[specta::specta]
+fn dnd_devices(engine: State<Eng>) -> Vec<String> {
+    engine.dnd_active()
+}
+
+// --- the phone as touchpad and keyboard ---
+
+/// Whether your phone may move the pointer and type here.
+#[tauri::command]
+#[specta::specta]
+fn remote_input_allowed(engine: State<Eng>) -> bool {
+    engine.remote_input_allowed()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_remote_input_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
+    engine.set_remote_input_allowed(on);
+    // The phone offers its touchpad only while "input" is listed.
+    std::thread::spawn(move || device::refresh_status(&app));
+}
+
 // --- files ---
 
 /// Where received files are saved (set once at startup).
@@ -1015,7 +1061,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         download_gallery_item,
         battery_alerts,
         set_battery_alerts,
-        keep_awake
+        keep_awake,
+        follow_phone_dnd,
+        set_follow_phone_dnd,
+        dnd_devices,
+        remote_input_allowed,
+        set_remote_input_allowed
     ])
 }
 

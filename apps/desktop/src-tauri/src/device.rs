@@ -24,6 +24,17 @@ pub fn spawn_status_reporter(app: AppHandle) {
         .ok();
 }
 
+/// Push the status now (after a setting that changes it).
+pub fn refresh_status(app: &AppHandle) {
+    push_status(app);
+}
+
+/// my-domain may post input events (Privacy & Security > Accessibility).
+#[cfg(target_os = "macos")]
+pub fn accessibility_trusted() -> bool {
+    slides::mac::trusted()
+}
+
 /// Battery, volume, mute and the actions this computer takes, to the core.
 fn push_status(app: &AppHandle) {
     let mut status = serde_json::json!({});
@@ -55,6 +66,18 @@ fn push_status(app: &AppHandle) {
         Ok(()) => actions.push("slides"),
         // Tell the phone why there's no slide remote, so it can say so.
         Err(why) => status["slides_needs"] = why.into(),
+    }
+    // The phone's touchpad: listed while allowed, with what's missing if
+    // it can't work yet (the phone says so; the first try here tells the
+    // user too).
+    if app
+        .try_state::<Eng>()
+        .is_some_and(|e| e.remote_input_allowed())
+    {
+        actions.push("input");
+        if let Err(why) = crate::remote_input::ready() {
+            status["input_needs"] = why.into();
+        }
     }
     if awake::available() {
         actions.push("keep_awake");
@@ -397,7 +420,7 @@ mod slides {
     /// until then this says so instead of offering the remote.
     #[cfg(target_os = "macos")]
     #[allow(unsafe_code)]
-    mod mac {
+    pub(super) mod mac {
         use std::ffi::c_void;
 
         #[link(name = "ApplicationServices", kind = "framework")]
@@ -779,7 +802,9 @@ pub fn on_ring(app: &AppHandle, from: &str) {
         let _ = w.set_focus();
     }
     let name = crate::notify::device_name(app, from);
-    crate::notify::post(
+    // Asked for on purpose: shown even while pop-ups are held for Do Not
+    // Disturb.
+    crate::notify::post_urgent(
         app,
         "my-domain",
         &format!("{name} is looking for this computer"),
