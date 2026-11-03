@@ -77,11 +77,15 @@ fun SignInScreen(prefs: SharedPreferences) {
     ) {
         Column(Modifier.widthIn(max = 420.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Spacer(Modifier.height(16.dp))
-            // Soft-edged mark: the logo's own sky fades into the background.
+            // Dark themes: the soft-edged mark, whose own sky fades into the
+            // background (nudged left so the galaxy lines up with the text).
+            // Cosmic Light: the frameless light galaxy.
             Image(
-                painterResource(R.drawable.logo_mark), contentDescription = null,
-                modifier = Modifier.size(112.dp).offset(x = (-14).dp),
+                painterResource(logoRes()), contentDescription = null,
+                modifier = Modifier.size(112.dp).offset(x = if (T.isLight) 0.dp else (-14).dp),
             )
+            Wordmark()
+            Tagline()
             Text(stringResource(if (create) R.string.signin_title_create else R.string.signin_title_welcome), style = MaterialTheme.typography.headlineSmall, color = T.text)
             Muted(stringResource(R.string.signin_tagline))
             Spacer(Modifier.height(4.dp))

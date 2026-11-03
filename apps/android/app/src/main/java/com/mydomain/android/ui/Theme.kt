@@ -33,6 +33,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -98,6 +100,8 @@ data class Tokens(
     val accentSoft: Color,
     /** Reserved for rare, important moments. */
     val highlight: Color,
+    /** The highlight used as text (the brand tagline). */
+    val highlightFg: Color,
     val success: Color,
     val successSoft: Color,
     val warning: Color,
@@ -134,7 +138,7 @@ private val CosmicBlueTokens = Tokens(
     gradient = listOf(0f to Color(0xFF1455D9), 0.55f to Color(0xFF22C7F2), 1f to Color(0xFF713BDB)),
     secondaryButton = Color(0xFF152744), secondaryButtonBorder = Color(0xFF2A456A),
     accent = Color(0xFF22C7F2), onAccent = Color(0xFF041321), accentFg = Color(0xFF22C7F2),
-    accentBg = Color(0x1F22C7F2), accentSoft = Color(0xFF64BFFF), highlight = Gold,
+    accentBg = Color(0x1F22C7F2), accentSoft = Color(0xFF64BFFF), highlight = Gold, highlightFg = Gold,
     success = Success, successSoft = Color(0x2434D399), warning = Gold,
     danger = Danger, dangerSoft = Color(0x21FB7185),
     toastBg = Color(0xFFEAF7FF), toastFg = Color(0xFF071525),
@@ -150,7 +154,7 @@ private val AuroraTokens = Tokens(
     gradient = listOf(0f to Color(0xFF312E81), 0.5f to Color(0xFF713BDB), 1f to Color(0xFFE879F9)),
     secondaryButton = Color(0xFF221F42), secondaryButtonBorder = Color(0xFF433C74),
     accent = Color(0xFF42D9F5), onAccent = Color(0xFF041321), accentFg = Color(0xFF42D9F5),
-    accentBg = Color(0x1F42D9F5), accentSoft = Color(0xFF9B75FF), highlight = Color(0xFFE879F9),
+    accentBg = Color(0x1F42D9F5), accentSoft = Color(0xFF9B75FF), highlight = Color(0xFFE879F9), highlightFg = Color(0xFFE879F9),
     success = Success, successSoft = Color(0x2434D399), warning = Gold,
     danger = Danger, dangerSoft = Color(0x21FB7185),
     toastBg = Color(0xFFF7F4FF), toastFg = Color(0xFF120F26),
@@ -166,7 +170,7 @@ private val OceanTokens = Tokens(
     gradient = listOf(0f to Color(0xFF0759A6), 0.6f to Color(0xFF0A8FC4), 1f to Color(0xFF00B8D9)),
     secondaryButton = Color(0xFF11304B), secondaryButtonBorder = Color(0xFF2A5578),
     accent = Color(0xFF00B8D9), onAccent = Color(0xFF03121F), accentFg = Color(0xFF00B8D9),
-    accentBg = Color(0x1F00B8D9), accentSoft = Color(0xFFA5E8FF), highlight = Gold,
+    accentBg = Color(0x1F00B8D9), accentSoft = Color(0xFFA5E8FF), highlight = Gold, highlightFg = Gold,
     success = Color(0xFF55E6C1), successSoft = Color(0x2455E6C1), warning = Gold,
     danger = Danger, dangerSoft = Color(0x21FB7185),
     toastBg = Color(0xFFF2FAFF), toastFg = Color(0xFF061321),
@@ -183,7 +187,7 @@ private val MidnightTokens = Tokens(
     gradient = listOf(0f to Color(0xFF2563EB), 1f to Color(0xFF2563EB)),
     secondaryButton = Color(0xFF1C2738), secondaryButtonBorder = Color(0xFF36465F),
     accent = Color(0xFF38BDF8), onAccent = Color(0xFF04131F), accentFg = Color(0xFF38BDF8),
-    accentBg = Color(0x1A38BDF8), accentSoft = Color(0xFF38BDF8), highlight = Gold,
+    accentBg = Color(0x1A38BDF8), accentSoft = Color(0xFF38BDF8), highlight = Gold, highlightFg = Gold,
     success = Success, successSoft = Color(0x1F34D399), warning = Gold,
     danger = Danger, dangerSoft = Color(0x1FFB7185),
     toastBg = Color(0xFFF8FAFC), toastFg = Color(0xFF080B12),
@@ -200,7 +204,7 @@ private val LightTokens = Tokens(
     gradient = listOf(0f to Color(0xFF1769E8), 0.55f to Color(0xFF38BDF8), 1f to Color(0xFF713BDB)),
     secondaryButton = Color.White, secondaryButtonBorder = Color(0xFFC3D5EC),
     accent = Color(0xFF38BDF8), onAccent = Color(0xFF041321), accentFg = Color(0xFF0369A1),
-    accentBg = Color(0x171769E8), accentSoft = Color(0xFF38BDF8), highlight = Color(0xFFF5B942),
+    accentBg = Color(0x171769E8), accentSoft = Color(0xFF38BDF8), highlight = Color(0xFFF5B942), highlightFg = Color(0xFF9A6400),
     success = Color(0xFF059669), successSoft = Color(0x1F059669), warning = Color(0xFFB45309),
     danger = Color(0xFFE11D48), dangerSoft = Color(0x1AE11D48),
     toastBg = Color(0xFF10213D), toastFg = Color(0xFFF4F8FF),
@@ -234,20 +238,37 @@ val LocalTokens = staticCompositionLocalOf { CosmicBlueTokens }
 val T: Tokens
     @Composable get() = LocalTokens.current
 
-/** Kit type: Inter/system sans, 15 sp body at 1.55 line height, titles in
- *  extra-bold. (No font file is bundled: the system sans is used.) */
-private val type = Typography(
-    headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em),
-    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold),
-    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
-    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 23.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
-    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
-    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-    // The kit's "eyebrow": small caps-style label in the accent colour.
-    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em),
+/** Inter, bundled in res/font (OFL; licence in assets/licenses/Inter-OFL.txt,
+ *  from the npm package inter-font 3.19.0). Works offline. */
+val Inter = FontFamily(
+    Font(R.font.inter_regular, FontWeight.Normal),
+    Font(R.font.inter_medium, FontWeight.Medium),
+    Font(R.font.inter_semibold, FontWeight.SemiBold),
+    Font(R.font.inter_bold, FontWeight.Bold),
+    Font(R.font.inter_extrabold, FontWeight.ExtraBold),
 )
+
+/** Kit type: Inter, 15 sp body at 1.55 line height, titles in extra-bold. */
+private val type = Typography().let { base ->
+    Typography(
+        displayLarge = base.displayLarge.copy(fontFamily = Inter),
+        displayMedium = base.displayMedium.copy(fontFamily = Inter),
+        displaySmall = base.displaySmall.copy(fontFamily = Inter),
+        headlineLarge = base.headlineLarge.copy(fontFamily = Inter),
+        headlineMedium = base.headlineMedium.copy(fontFamily = Inter),
+        headlineSmall = TextStyle(fontFamily = Inter, fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em),
+        titleLarge = TextStyle(fontFamily = Inter, fontSize = 18.sp, fontWeight = FontWeight.Bold),
+        titleMedium = TextStyle(fontFamily = Inter, fontSize = 15.sp, fontWeight = FontWeight.Bold),
+        titleSmall = base.titleSmall.copy(fontFamily = Inter),
+        bodyLarge = TextStyle(fontFamily = Inter, fontSize = 15.sp, lineHeight = 23.sp),
+        bodyMedium = TextStyle(fontFamily = Inter, fontSize = 14.sp, lineHeight = 21.sp),
+        bodySmall = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 19.sp),
+        labelLarge = TextStyle(fontFamily = Inter, fontSize = 14.sp, fontWeight = FontWeight.Bold),
+        labelMedium = TextStyle(fontFamily = Inter, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+        // The kit's "eyebrow": small spaced capitals.
+        labelSmall = TextStyle(fontFamily = Inter, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em),
+    )
+}
 
 /** Kit radii: buttons and inputs 12, cards 18, hero surfaces 28. */
 private val shapes = Shapes(

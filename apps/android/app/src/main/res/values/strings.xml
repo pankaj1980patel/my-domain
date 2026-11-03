@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">my-domain</string>
+    <!-- Brand wordmark "My-Domain" ("Domain" in the accent colour) and tagline -->
+    <string name="brand_wordmark_lead" translatable="false">My-</string>
+    <string name="brand_wordmark_accent" translatable="false">Domain</string>
+    <string name="brand_tagline">Your devices. Your domain.</string>
 
     <!-- Tabs -->
     <string name="tab_devices">Devices</string>
