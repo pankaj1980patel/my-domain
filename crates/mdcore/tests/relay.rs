@@ -185,6 +185,9 @@ fn relay_comes_up_first_then_a_direct_path_takes_over() {
             .filter(|v| v["data"].as_str().is_some_and(|d| d.contains("\"msg\"")))
             .count()
     };
+    // What was in flight as the links changed (address updates, resends of
+    // what wasn't acknowledged yet) may still be relayed: let it settle.
+    std::thread::sleep(std::time::Duration::from_millis(500));
     let before = to_b();
     a.engine.send(&b.node_id(), "direct now").unwrap();
     b.sink.wait_for_message("direct now");
