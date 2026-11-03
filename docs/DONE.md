@@ -145,11 +145,15 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
   - Keep awake on the Linux laptop: refused by polkit, because the lab
     starts the app over ssh, outside the desktop session. It used to fail
     silently; now the computer shows a notice saying so.
-  - Not tried: photo backup (the phone was locked, and it's turned on in
-    its Settings, Photos tile).
+  - Photo backup: turned on in the phone's Settings, Photos tile, with the
+    Linux laptop as the target. With Wi-Fi off it said "Waiting for
+    Wi-Fi"; once on Wi-Fi, a new image in DCIM/Camera reached
+    `~/Downloads/Phone backup/I2405/2026-11/` within seconds, byte for byte
+    (same MD5), and the tile said "Backed up: 1. Nothing waiting."
+    Switching backup off and on again didn't send it a second time.
 
 Core and both apps' backends are built and tested; the desktop has commands
-but no screens for these yet, and nothing here has been tried on the phone.
+but no screens for these yet.
 
 - **Gallery** (`features/gallery.rs`): a computer asks a phone for its
   photos and videos, newest first, a page at a time
