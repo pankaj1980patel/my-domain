@@ -27,6 +27,7 @@ pub mod media;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
+pub mod screen;
 pub mod share;
 pub mod signal_fwd;
 
@@ -129,6 +130,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(battery::BatteryHandler));
         r.register(Arc::new(input::InputHandler));
         r.register(Arc::new(dnd::DndHandler));
+        r.register(Arc::new(screen::ScreenHandler));
         r
     }
 

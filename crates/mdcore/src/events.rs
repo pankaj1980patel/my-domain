@@ -236,6 +236,17 @@ pub enum CoreEvent {
     },
     /// Another device went into (`on`) or out of Do Not Disturb.
     Dnd { from: String, on: bool },
+    /// Another of your devices started (`on`) or stopped watching this
+    /// screen: while any does (`Engine::screen_watchers`), send snapshots
+    /// with `Engine::screen_frame`.
+    ScreenWatch { from: String, on: bool },
+    /// A snapshot of another device's screen you're watching: a JPEG,
+    /// base64 (`data:image/jpeg;base64,` + `jpeg` shows it). `seq` counts up.
+    ScreenFrame {
+        from: String,
+        seq: u64,
+        jpeg: String,
+    },
 }
 
 impl CoreEvent {
@@ -282,6 +293,8 @@ impl CoreEvent {
             CoreEvent::BatteryAlert { .. } => "battery-alert",
             CoreEvent::Input { .. } => "input-event",
             CoreEvent::Dnd { .. } => "dnd-changed",
+            CoreEvent::ScreenWatch { .. } => "screen-watch",
+            CoreEvent::ScreenFrame { .. } => "screen-frame",
         }
     }
 

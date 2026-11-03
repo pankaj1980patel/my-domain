@@ -968,6 +968,14 @@ impl MdEngine {
         Ok(self.inner.input_key(&node_id, &key)?)
     }
 
+    /// Start (`on`) or stop watching a computer's screen: snapshots arrive
+    /// as `screen_frame` events while it allows it. Renew every 10 s while
+    /// the screen shows (a watch ends by itself after 25 s). Fails when
+    /// there's no link (and starts connecting).
+    pub fn screen_watch(&self, node_id: String, on: bool) -> MdResult<()> {
+        Ok(self.inner.screen_watch(&node_id, on)?)
+    }
+
     /// A three- or four-finger swipe: `dir` is "left", "right", "up" or
     /// "down", the way the fingers moved.
     pub fn input_gesture(&self, node_id: String, fingers: u8, dir: String) -> MdResult<()> {

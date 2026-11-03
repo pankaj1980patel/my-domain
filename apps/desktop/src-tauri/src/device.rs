@@ -79,6 +79,14 @@ fn push_status(app: &AppHandle) {
             status["input_needs"] = why.into();
         }
     }
+    // Your phone sees this screen: listed while allowed, with what's
+    // missing if snapshots can't be taken yet.
+    if app.try_state::<Eng>().is_some_and(|e| e.screen_allowed()) {
+        actions.push("screen");
+        if let Err(why) = crate::screen_share::ready() {
+            status["screen_needs"] = why.into();
+        }
+    }
     if awake::available() {
         actions.push("keep_awake");
         if let Some(until) = awake::until() {

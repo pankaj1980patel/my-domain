@@ -249,6 +249,38 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## See a computer's screen on the phone (2026-11-03)
+
+The full-screen touchpad shows the computer's screen behind the pad, so
+you see what the pointer does.
+
+- Core (`features/screen.rs`): `screen_watch {on}` phone → computer and
+  `screen_frame {seq, data}` (base64 JPEG) back. A watch lasts 25 s; the
+  phone renews it every 10 s while the screen shows, so a phone that went
+  away stops the snapshots by itself. Only your own devices, only while
+  allowed (`set_screen_allowed`, on by default, kept across restarts;
+  turning it off ends every watch). Frames go only over a live link, at
+  most 600 KB. `CoreEvent::ScreenWatch` (computer) and `ScreenFrame`
+  (phone). Tests: `screen::a_watched_screen_sends_its_snapshots_to_the_phone`,
+  `a_computer_that_doesnt_share_its_screen_ignores_watchers`,
+  `snapshots_too_big_or_without_a_link_are_refused`.
+- Desktop (`screen_share.rs`): about two snapshots a second while watched,
+  1280 px wide, from the OS's tools: macOS `screencapture` + `sips` (about
+  80 KB and 0.4 s a frame; needs Screen Recording, else the status says
+  `screen_needs: screen_recording`), Linux `grim` (Wayland) or ImageMagick
+  `import` (X11). A notice says when a device starts watching. Status lists
+  `screen` while allowed. Commands `screen_allowed`, `set_screen_allowed`
+  (bindings updated by hand, same shape as the generated ones).
+- Android: the full-screen pad watches while open and draws the latest
+  snapshot behind the pad (snapshots are decoded off the main thread and
+  kept out of the developer log); a hint when the computer needs a
+  permission or a tool.
+- mdctl: `screen <node> [off]`, `screen-allow on|off`, `screen-send <jpeg>`.
+
+Checks: mdcore, mdctl and desktop clippy on the Mac, the new tests, the
+APK build. The Linux capture code hasn't been compiled (laptop offline).
+Not tried live yet (the phone locked itself).
+
 ## Phone buttons for a computer's slides, keep awake, search and lock (2026-11-03)
 
 The computer already offered these actions; the phone's device page had no

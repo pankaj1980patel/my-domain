@@ -40,6 +40,10 @@
 //! `input-allow on|off` (play back input from your devices here; "on" also
 //! lists "input" in this device's status, so a phone offers its touchpad),
 //! `dnd on|off` (report this device's Do Not Disturb), `dnd-active`,
+//! `screen <node> [off]` (watch a computer's screen: snapshots arrive as
+//! `screen-frame`; renew within 25 s), `screen-allow on|off` (let your
+//! devices watch here; "on" lists "screen" in the status),
+//! `screen-send <jpeg>` (send that picture to whoever watches here),
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -176,7 +180,11 @@ struct PrintSink {
 
 impl EventSink for PrintSink {
     fn emit(&self, ev: CoreEvent) {
-        let (name, data) = (ev.name(), ev.ui_payload());
+        let (name, mut data) = (ev.name(), ev.ui_payload());
+        // A screen snapshot: its size, not a line of base64.
+        if let CoreEvent::ScreenFrame { jpeg, .. } = &ev {
+            data["jpeg"] = json!(format!("{} base64 chars", jpeg.len()));
+        }
         self.out.line(json!({ "event": name, "data": data }));
         if let CoreEvent::MessageReceived(m) = &ev {
             if let (true, true, Some(node)) = (self.echo.load(Ordering::Relaxed), m.ok, &m.node_id)
@@ -246,6 +254,19 @@ fn expand_env(line: &str) -> String {
 
 /// `@name` -> that device's node id (exact name, any case); anything else
 /// is already a node id.
+/// This device's status for others: the touchpad and the screen while
+/// they're allowed here (so a phone offers them).
+fn list_actions(engine: &Engine<CliPlatform>) {
+    let mut actions = Vec::new();
+    if engine.remote_input_allowed() {
+        actions.push("input");
+    }
+    if engine.screen_allowed() {
+        actions.push("screen");
+    }
+    engine.set_device_status(&json!({ "actions": actions }).to_string());
+}
+
 fn resolve(engine: &Engine<CliPlatform>, who: &str) -> Result<String, String> {
     let Some(name) = who.strip_prefix('@') else {
         return Ok(who.to_string());
@@ -596,13 +617,27 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         "input-allow" => {
             let on = arg(words.next())? == "on";
             engine.set_remote_input_allowed(on);
-            let status = if on {
-                json!({ "actions": ["input"] })
-            } else {
-                json!({})
-            };
-            engine.set_device_status(&status.to_string());
+            list_actions(engine);
             Ok(json!(on))
+        }
+        "screen-allow" => {
+            let on = arg(words.next())? == "on";
+            engine.set_screen_allowed(on);
+            list_actions(engine);
+            Ok(json!(on))
+        }
+        "screen" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let on = words.next() != Some("off");
+            engine.screen_watch(&to, on)?;
+            Ok(json!(on))
+        }
+        "screen-send" => {
+            let path = arg(words.next())?;
+            let jpeg = std::fs::read(&path).map_err(|e| format!("{path}: {e}"))?;
+            Ok(
+                json!({ "sent_to": engine.screen_frame(&jpeg)?, "watchers": engine.screen_watchers() }),
+            )
         }
         "dnd" => {
             let on = arg(words.next())? == "on";

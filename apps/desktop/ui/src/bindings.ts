@@ -156,6 +156,9 @@ export const commands = {
 	/**  Whether your phone may move the pointer and type here. */
 	remoteInputAllowed: () => __TAURI_INVOKE<boolean>("remote_input_allowed"),
 	setRemoteInputAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_remote_input_allowed", { on }),
+	/**  Whether your other devices may watch this screen. */
+	screenAllowed: () => __TAURI_INVOKE<boolean>("screen_allowed"),
+	setScreenAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_screen_allowed", { on }),
 };
 
 /* Types */

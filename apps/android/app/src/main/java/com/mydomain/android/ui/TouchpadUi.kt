@@ -1,6 +1,12 @@
 package com.mydomain.android.ui
 
 import androidx.compose.foundation.background
+import kotlinx.coroutines.delay
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -45,6 +51,8 @@ private const val TAP_SLOP_PX = 24f
  *  default), which on many phones also stops the three-finger screenshot
  *  swipe there. */
 const val PREF_TOUCHPAD_SECURE = "touchpad_secure"
+/** How often a watched screen is renewed (the watch lasts 25 s). */
+private const val RENEW_MS = 10_000L
 /** How far three or four fingers must travel (on average) to be a swipe. */
 private const val SWIPE_PX = 120f
 
@@ -124,11 +132,38 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
         scope.launch { try { Core.inputClick(node, button) } catch (e: Exception) { toast(friendlyError(e)) } }
         Unit
     }
+    // The computer's screen behind the pad, while it shares it: watch while
+    // this is open, renewing before the watch runs out.
+    val status = Core.deviceStatus[node]
+    val shares = status?.actions?.contains("screen") == true
+    if (shares) {
+        LaunchedEffect(node) {
+            while (true) {
+                Core.screenWatch(node, true)
+                delay(RENEW_MS)
+            }
+        }
+        DisposableEffect(node) {
+            onDispose {
+                Thread { Core.screenWatch(node, false) }.start()
+                Core.screens.remove(node)
+            }
+        }
+    }
     Column(
         Modifier.fillMaxSize().background(T.bg).safeDrawingPadding().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Pad(node, click, Modifier.fillMaxWidth().weight(1f))
+        if (shares) status?.screenNeeds?.let { needs ->
+            Muted(
+                when (needs) {
+                    "screen_recording" -> stringResource(R.string.screen_needs_recording)
+                    "grim", "imagemagick" -> stringResource(R.string.screen_needs_tool)
+                    else -> stringResource(R.string.screen_needs_other)
+                }
+            )
+        }
+        Pad(node, click, Modifier.fillMaxWidth().weight(1f), Core.screens[node])
         // The swipes as buttons too: some phones keep three-finger
         // swipes for themselves (a screenshot) and never pass them on.
         val swipe = { fingers: Int, dir: String ->
@@ -163,7 +198,7 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
  * when they lift.
  */
 @Composable
-private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier) {
+private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier, screen: ImageBitmap? = null) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     Box(
@@ -228,7 +263,13 @@ private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier) {
                 }
             },
         contentAlignment = Alignment.Center,
-    ) { Muted(stringResource(R.string.touchpad_pad_hint), center = true) }
+    ) {
+        if (screen != null) {
+            Image(screen, stringResource(R.string.screen_desc), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+        } else {
+            Muted(stringResource(R.string.touchpad_pad_hint), center = true)
+        }
+    }
 }
 
 /** "left", "right", "up" or "down" for a swipe that went far enough. */

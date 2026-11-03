@@ -303,6 +303,10 @@
     <string name="touchpad_needs_display">This computer needs an X11 session (or XWayland) for the touchpad.</string>
     <string name="touchpad_pad_hint">Drag to move · tap to click\nTwo fingers: scroll, or tap to right-click\nThree fingers: tap to middle-click; swipe sideways to switch apps\nFour fingers sideways: switch desktops\nThree or four up: all windows · down: the desktop</string>
     <string name="touchpad_enlarge">Enlarge</string>
+    <string name="screen_desc">The computer\'s screen</string>
+    <string name="screen_needs_recording">To see its screen here, allow my-domain on the Mac under System Settings &gt; Privacy &amp; Security &gt; Screen Recording.</string>
+    <string name="screen_needs_tool">To see its screen here, the computer needs grim (Wayland) or ImageMagick (X11) installed.</string>
+    <string name="screen_needs_other">This computer can\'t share its screen yet.</string>
     <string name="settings_touchpad_secure">Block screenshots on the full-screen touchpad</string>
     <string name="settings_touchpad_secure_hint">Stops many phones\' three-finger screenshot swipe from firing while you use three-finger gestures. If your phone still takes the swipe, turn off its three-finger screenshot in the phone\'s settings.</string>
     <string name="touchpad_shrink">Done</string>

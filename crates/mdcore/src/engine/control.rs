@@ -80,6 +80,40 @@ impl<P: Platform> Engine<P> {
         crate::features::input::set_allowed(&self.ctx, on);
     }
 
+    // --- screen sharing ---
+
+    /// Start (`on`) or stop watching `node`'s screen: it sends snapshots
+    /// (`CoreEvent::ScreenFrame`) while it allows it. A watch ends by itself
+    /// after `features::screen::WATCH_FOR`, so renew it every
+    /// `features::screen::RENEW_EVERY` while the screen shows. Over a live
+    /// link only (fails with `NoLink` and starts connecting otherwise).
+    pub fn screen_watch(&self, node_id: &str, on: bool) -> crate::Result<()> {
+        crate::features::screen::watch(&self.ctx, node_id, on)
+    }
+
+    /// Whether your other devices may watch this screen. On until turned
+    /// off; kept across restarts. Turning it off ends every watch.
+    pub fn screen_allowed(&self) -> bool {
+        crate::features::screen::allowed(&self.ctx)
+    }
+
+    pub fn set_screen_allowed(&self, on: bool) {
+        crate::features::screen::set_allowed(&self.ctx, on);
+    }
+
+    /// The devices watching this screen now: while there are any, take
+    /// snapshots and send them with `screen_frame`.
+    pub fn screen_watchers(&self) -> Vec<String> {
+        crate::features::screen::watchers(&self.ctx)
+    }
+
+    /// Send a snapshot of this screen (a JPEG, at most
+    /// `features::screen::MAX_FRAME_BYTES`) to everyone watching; returns
+    /// how many it went to.
+    pub fn screen_frame(&self, jpeg: &[u8]) -> crate::Result<usize> {
+        crate::features::screen::send_frame(&self.ctx, jpeg)
+    }
+
     // --- Do Not Disturb ---
 
     /// This device's Do Not Disturb state, as the host reads it from the

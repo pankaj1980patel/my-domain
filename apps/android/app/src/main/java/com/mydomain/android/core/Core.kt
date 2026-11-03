@@ -10,6 +10,8 @@ import androidx.annotation.StringRes
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mydomain.android.BuildConfig
@@ -74,6 +76,9 @@ data class DeviceStatus(
     /** Why a computer's touchpad can't work yet: "accessibility" (macOS
      *  permission) or "display" (no X11 session). */
     val inputNeeds: String? = null,
+    /** Why a computer's screen can't be seen yet: "screen_recording" (macOS
+     *  permission), "grim" or "imagemagick" (tool to install). */
+    val screenNeeds: String? = null,
     val storageFree: Long? = null, val storageTotal: Long? = null,
 )
 
@@ -133,6 +138,9 @@ object Core {
     val messages = mutableStateListOf<ChatMessage>()
     val activity = mutableStateListOf<ActivityItem>()
     val apps = mutableStateMapOf<String, AppsState>()
+
+    /** The latest snapshot of each computer screen being watched. */
+    val screens = mutableStateMapOf<String, ImageBitmap>()
     val devLog = mutableStateListOf<DevEvent>()
 
     /** node id -> what's playing there (absent: nothing, or not asked). */
@@ -301,6 +309,16 @@ object Core {
 
     /** Every core event, from NetService's listener (core threads). */
     fun onEvent(name: String, payloadJson: String) {
+        // A screen snapshot: decoded here, off the main thread, and kept out
+        // of the logs (it's a big picture, twice a second).
+        if (name == "screen-frame") {
+            val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val bytes = runCatching { android.util.Base64.decode(o.optString("jpeg"), android.util.Base64.DEFAULT) }.getOrNull() ?: return
+            val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() ?: return
+            val from = o.optString("from")
+            onMain { screens[from] = bmp }
+            return
+        }
         // A code event's payload holds the code itself: never log it.
         labLog(if (name.startsWith("code")) name else "$name ${payloadJson.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
@@ -380,6 +398,7 @@ object Core {
                     bluetooth = if (st.has("bluetooth")) st.optBoolean("bluetooth") else null,
                     slidesNeeds = st.optString("slides_needs").ifEmpty { null },
                     inputNeeds = st.optString("input_needs").ifEmpty { null },
+                    screenNeeds = st.optString("screen_needs").ifEmpty { null },
                     ramFree = st.optJSONObject("ram")?.optLong("free"),
                     ramTotal = st.optJSONObject("ram")?.optLong("total"),
                     storageFree = st.optJSONObject("storage")?.optLong("free"),
@@ -719,6 +738,10 @@ object Core {
 
     /** Press "enter", "backspace", "left", "right", "up", "down" or "esc" on [node]. */
     suspend fun inputKey(node: String, key: String) = call { it.inputKey(node, key) }
+
+    /** Start ([on]) or stop watching [node]'s screen; null when it went out. */
+    fun screenWatch(node: String, on: Boolean): Throwable? =
+        runCatching { engine()?.screenWatch(node, on) }.exceptionOrNull()
 
     /** A [fingers]-finger swipe (3 or 4) on [node]; [dir] is "left", "right", "up" or "down". */
     suspend fun inputGesture(node: String, fingers: Int, dir: String) =

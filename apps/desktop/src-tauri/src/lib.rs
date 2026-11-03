@@ -20,6 +20,7 @@ mod device;
 mod fcm;
 mod notify;
 mod remote_input;
+mod screen_share;
 mod sysinfo;
 mod tray;
 
@@ -261,6 +262,10 @@ impl EventSink for TauriSink {
             }
             // The phone's touchpad: queued to one thread, so the order holds.
             CoreEvent::Input { events, .. } => remote_input::play(&self.app, events.clone()),
+            CoreEvent::ScreenWatch { from, on } => {
+                let (app, from, on) = (self.app.clone(), from.clone(), *on);
+                std::thread::spawn(move || screen_share::on_watch(&app, &from, on));
+            }
             CoreEvent::Dnd { .. } => {
                 let app = self.app.clone();
                 std::thread::spawn(move || notify::dnd_changed(&app));
@@ -785,6 +790,23 @@ fn set_remote_input_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
     std::thread::spawn(move || device::refresh_status(&app));
 }
 
+// --- your phone sees this screen ---
+
+/// Whether your other devices may watch this screen.
+#[tauri::command]
+#[specta::specta]
+fn screen_allowed(engine: State<Eng>) -> bool {
+    engine.screen_allowed()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_screen_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
+    engine.set_screen_allowed(on);
+    // The phone offers the screen only while "screen" is listed.
+    std::thread::spawn(move || device::refresh_status(&app));
+}
+
 // --- files ---
 
 /// Where received files are saved (set once at startup).
@@ -1066,7 +1088,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_follow_phone_dnd,
         dnd_devices,
         remote_input_allowed,
-        set_remote_input_allowed
+        set_remote_input_allowed,
+        screen_allowed,
+        set_screen_allowed
     ])
 }
 
