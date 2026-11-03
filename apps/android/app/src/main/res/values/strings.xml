@@ -291,6 +291,12 @@
     <string name="settings_touchpad_secure">Block screenshots on the full-screen touchpad</string>
     <string name="settings_touchpad_secure_hint">Stops many phones\' three-finger screenshot swipe from firing while you use three-finger gestures. If your phone still takes the swipe, turn off its three-finger screenshot in the phone\'s settings.</string>
     <string name="touchpad_shrink">Done</string>
+    <string name="touchpad_prev_app">◀ App</string>
+    <string name="touchpad_next_app">App ▶</string>
+    <string name="touchpad_all_windows">All windows</string>
+    <string name="touchpad_prev_desktop">◀ Desktop</string>
+    <string name="touchpad_next_desktop">Desktop ▶</string>
+    <string name="touchpad_show_desktop">Show desktop</string>
     <string name="touchpad_left_click">Left click</string>
     <string name="touchpad_right_click">Right click</string>
     <string name="touchpad_type_hint">Type on the computer</string>

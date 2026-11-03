@@ -115,6 +115,15 @@ fun TouchpadTile(node: String, status: DeviceStatus) {
             ).forEach { (k, label) -> GhostButton(stringResource(label), { key(k) }, Modifier.weight(1f), small = true) }
         }
     }
+    // The dialog sits below the status bar but reaches under the navigation
+    // bar, and its window isn't told so: read the bar from the screen's
+    // own window (the app's layout has used up the Compose insets by here).
+    val view = LocalView.current
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val navBar = with(density) {
+        (androidx.core.view.ViewCompat.getRootWindowInsets(view)
+            ?.getInsets(androidx.core.view.WindowInsetsCompat.Type.navigationBars())?.bottom ?: 0).toDp()
+    }
     if (enlarged) {
         Dialog(
             onDismissRequest = { enlarged = false },
@@ -129,10 +138,29 @@ fun TouchpadTile(node: String, status: DeviceStatus) {
                 onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
             }
             Column(
-                Modifier.fillMaxSize().background(T.bg).padding(12.dp),
+                Modifier.fillMaxSize().background(T.bg).padding(bottom = navBar).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Pad(node, click, Modifier.fillMaxWidth().weight(1f))
+                // The swipes as buttons too: some phones keep three-finger
+                // swipes for themselves (a screenshot) and never pass them on.
+                val swipe = { fingers: Int, dir: String ->
+                    scope.launch {
+                        try { Core.inputGesture(node, fingers, dir) } catch (e: Exception) { toast(friendlyError(e)) }
+                    }
+                    Unit
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    GhostButton(stringResource(R.string.touchpad_prev_app), { swipe(3, "left") }, Modifier.weight(1f), small = true)
+                    GhostButton(stringResource(R.string.touchpad_next_app), { swipe(3, "right") }, Modifier.weight(1f), small = true)
+                    GhostButton(stringResource(R.string.touchpad_all_windows), { swipe(3, "up") }, Modifier.weight(1f), small = true)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Fingers moving right show the desktop on the left.
+                    GhostButton(stringResource(R.string.touchpad_prev_desktop), { swipe(4, "right") }, Modifier.weight(1f), small = true)
+                    GhostButton(stringResource(R.string.touchpad_next_desktop), { swipe(4, "left") }, Modifier.weight(1f), small = true)
+                    GhostButton(stringResource(R.string.touchpad_show_desktop), { swipe(3, "down") }, Modifier.weight(1f), small = true)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GhostButton(stringResource(R.string.touchpad_left_click), { click("left") }, Modifier.weight(1f))
                     GhostButton(stringResource(R.string.touchpad_right_click), { click("right") }, Modifier.weight(1f))
