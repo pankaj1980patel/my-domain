@@ -1,0 +1,175 @@
+# Themes and design tokens
+
+The reference is the owner's brand kit,
+[`my-domain-brand-theme-kit.html`](my-domain-brand-theme-kit.html). It is one
+self-contained page; open it in a browser. Where this doc and the kit
+disagree, the kit wins.
+
+Both apps use the same tokens and the same five themes:
+
+- Desktop: `apps/desktop/ui/src/styles/tokens.css`
+- Android: `apps/android/app/src/main/java/com/mydomain/android/ui/Theme.kt`
+
+A theme's id is the same in both apps: `cosmic-blue`, `aurora`, `ocean`,
+`midnight` or `light`.
+
+## The five themes
+
+The kit has five coordinated palettes. Cosmic Blue is the default. The kit
+recommends offering Minimal Midnight to people who want less glow, Aurora as
+the expressive option, and Cosmic Light as the light mode. Ocean Blue is in the
+kit as well, so both apps offer it too.
+
+| Theme | id | Character | Canvas |
+|---|---|---|---|
+| Cosmic Blue (default) | `cosmic-blue` | Dark-first, vivid and trustworthy | Star field, navy veil, blue glow |
+| Aurora Purple | `aurora` | Creative, premium and atmospheric | Star field, violet glow |
+| Ocean Blue | `ocean` | Calm and connected | Star field, aqua glow |
+| Minimal Midnight | `midnight` | Quiet and professional, with less glow | Flat near-black: no star field, no glow, no blur |
+| Cosmic Light | `light` | Soft, airy and accessible | Flat cloud white with a faint cyan glow |
+
+## Tokens
+
+Each token is one role. Components use roles, never raw colours, so changing
+the theme changes every screen. **Bold** values are copied from the kit as it
+is. The other values are derived from it: a translucent version of a kit
+colour for glass, a darker shade for text on light backgrounds, or a value
+filled in where the kit's palette has no colour for that role.
+
+| Role | CSS var | Compose `T.` | Cosmic Blue | Aurora | Ocean | Midnight | Light |
+|---|---|---|---|---|---|---|---|
+| Background | `--bg` | `bg` | **#050B18** | **#090817** | **#061321** | **#080B12** | **#F4F8FF** |
+| Surface (panels) | `--surface` | `surface` | **#0B1630** at 72% | **#17152E** at 72% | **#0D2439** at 72% | **#111827** | **#FFFFFF** at 86% |
+| Raised surface | `--surface-2` | `surface2` | **#101D35** at 86% | #201D3D | #12304A | **#1C2738** | #E7F0FF |
+| Border | `--border` | `border` | **#203454** | #2E2A52 | #1D3D5A | **#29364A** | **#DCE8F7** |
+| Text | `--text` | `text` | **#F4F8FF** | **#F7F4FF** | **#F2FAFF** | **#F8FAFC** | **#10213D** |
+| Secondary text | `--text-2` | `text2` | **#C6D5EA** | #D6D0EA | #C4DBE8 | #CBD5E1 | #33476A |
+| Muted text | `--text-3` | `text3` | **#94A3B8** | **#A8A2C2** | **#8AA8BC** | **#94A3B8** | **#61738D** |
+| Primary | `--primary` | `primary` | **#1455D9** | **#713BDB** | **#0759A6** | **#2563EB** | **#1769E8** |
+| Primary gradient | `--gradient` | `brush` | **Cosmic Flow** | **Aurora** | #0759A6, #0A8FC4, #00B8D9 | flat #2563EB | #1769E8, #38BDF8, #713BDB |
+| Accent (interaction) | `--accent` | `accent` | **#22C7F2** | **#42D9F5** | **#00B8D9** | **#38BDF8** | **#38BDF8** |
+| Accent as text | `--accent-fg` | `accentFg` | #22C7F2 | #42D9F5 | #00B8D9 | #38BDF8 | #0369A1 |
+| Secondary accent | `--accent-soft` | `accentSoft` | **#64BFFF** | **#9B75FF** | **#A5E8FF** | #38BDF8 | #38BDF8 |
+| Highlight | `--highlight` | `highlight` | **#FFC857** | **#E879F9** | #FFC857 | #FFC857 | **#F5B942** |
+| Success | `--success` | `success` | **#34D399** | #34D399 | **#55E6C1** | #34D399 | #059669 |
+| Warning | `--warning` | `warning` | **#FFC857** | #FFC857 | #FFC857 | #FFC857 | #B45309 |
+| Danger | `--danger` | `danger` | **#FB7185** | #FB7185 | #FB7185 | #FB7185 | #E11D48 |
+
+Supporting tokens:
+
+- `--on-primary`, `onPrimary`: white, on primary and gradient fills.
+- `--on-accent`, `onAccent`: dark navy (#041321), on cyan fills such as
+  badges. The kit's chips use this pairing.
+- `--accent-bg`, `accentBg`: a faint wash of the accent, behind selected items.
+- `--border-strong`: a stronger hairline for switches and secondary buttons.
+- `--btn-secondary-bg` / `--btn-secondary-border`: the kit's secondary button
+  (#152744 / #2A456A in Cosmic Blue).
+- `--surface-solid`, `bar`: an opaque panel for bars, dialogs and banners.
+- `*-soft` status colours: tinted backgrounds for status and error boxes.
+- `--toast-bg` / `--toast-fg`: the kit's toast (#EAF7FF on #071525).
+
+### Gradients (kit)
+
+| Name | Value | Use |
+|---|---|---|
+| Cosmic Flow | `linear-gradient(120deg, #1455D9, #22C7F2 55%, #713BDB)` | Primary buttons, progress (Cosmic Blue) |
+| Stellar Gold | `linear-gradient(110deg, #FF9F43, #FFC857, #FFF0A6)` | Rare celebratory moments (not used yet) |
+| Deep Space | `linear-gradient(130deg, #050B18, #0B1630, #183B69)` | Hero surfaces (not used yet) |
+| Aurora | `linear-gradient(115deg, #312E81, #713BDB, #E879F9)` | Primary buttons (Aurora theme) |
+
+### Type
+
+- Font: the kit's stack, `Inter, ui-sans-serif, system-ui, -apple-system,
+  Segoe UI, Roboto, Arial, sans-serif`. No font file is bundled: Inter is used
+  when the computer has it installed, otherwise the system sans. Android
+  uses the system sans.
+- Body: 15 px with 1.55 line height.
+- Titles: extra-bold (800). Page titles are 26 px on desktop and 24 sp on
+  Android, with slightly tight letter spacing.
+- Eyebrow labels: 12 px, weight 800, uppercase, 0.16 em letter spacing, in
+  the accent colour. The kit uses these above hero titles.
+- Code and IDs: `ui-monospace, SFMono-Regular, Menlo, monospace`.
+
+### Shape and elevation
+
+| Token | Value | Use |
+|---|---|---|
+| `--r-md` / `shapes.small` | 12 | Buttons, inputs, nav items, inner panels |
+| `--r-lg` / `shapes.medium` | 18 | Cards and tiles (the kit's `--radius`) |
+| `--r-xl` / `shapes.extraLarge` | 28 | Hero surfaces: the sign-in card |
+| `--r-full` | 999 | Chips, pills, switches, badges |
+| `--r-logo` | 22% | The logo's rounded-square mask |
+| `--shadow-3` | `0 18px 50px #0008` | Floating surfaces: sign-in card, toasts, banners |
+| `--shadow-logo` | `0 8px 35px #0008` | The logo |
+
+## Components
+
+- **Primary button**: filled with the theme gradient, white label, extra-bold,
+  12 px corners. Use one per view, for the main action.
+- **Secondary button**: a deep panel fill with a hairline border.
+- **Ghost button**: transparent with a border. The border turns to the
+  accent on hover.
+- **Card / tile**: glass surface, 1 px border, 18 px corners, no shadow.
+  A clickable card's border turns to the accent on hover.
+- **Input**: raised surface and 12 px corners. On focus, the border turns to
+  the accent and a faint accent ring appears.
+- **Switch**: accent track when on.
+- **Chip / badge**: fully round. An accent fill takes dark navy text.
+- **Navigation**: the active item shows a faint accent wash and accent text.
+- **Status dot**: green when connected, with a soft glow. The glow is off in
+  Minimal Midnight.
+- **Focus ring**: 2 px solid accent, offset 3 px.
+
+## Rules from the kit, in plain words
+
+- Use deep navy for the main background, never pure black.
+- Use cyan (the accent) for focus, selection and active navigation.
+- Save gold (the highlight) for important moments and small accents. Never use
+  it as a large fill.
+- Status colours: green means connected or healthy, amber means warning, red
+  means error.
+- Use gradients sparingly: primary actions, hero surfaces and emphasis only.
+- Text on dark surfaces is near-white. Text on light surfaces is dark navy.
+- Never put small text directly on bright cyan or gold. Badges on cyan use
+  dark navy text.
+- Check contrast on every real component before shipping.
+- Logo: the galaxy image, used as it is. Do not recolour, crop or redraw it.
+  Show it as a rounded square (22% corner radius) with a soft drop shadow. The
+  same image is used in every theme, the light one included.
+- Wordmark: in the kit it reads "My-Domain", with "Domain" in cyan. The
+  tagline "YOUR DEVICES. YOUR DOMAIN." is set in gold, small and bold.
+- Icons: simple monochrome glyphs (line or solid), tinted by role: cyan for
+  interaction, gold for highlights, green for status. No emoji in the UI.
+
+## Using the tokens
+
+### Desktop (SolidJS)
+
+- Styles use only `var(--token)`. `src/styles/app.css` contains no raw
+  colours. A new colour means a new token in every theme block of
+  `tokens.css`.
+- The theme lives in `src/lib/theme.ts`:
+
+  ```ts
+  import { theme, setTheme, THEMES } from "./lib/theme";
+  setTheme("light");   // applies now and is remembered (localStorage "md.theme")
+  theme();             // current id; a Solid signal
+  ```
+
+- `initTheme()` runs in `index.tsx` before the first render, so the screen
+  never flashes the wrong theme.
+- `<ThemePicker />` (`src/components/ThemePicker.tsx`) is a self-contained
+  picker. Settings shows it under "Appearance".
+
+### Android (Compose)
+
+- `MdTheme { ... }` wraps the app (`MainActivity`). It builds the Material 3
+  `ColorScheme`, `Typography` and `Shapes` from the current theme and draws the
+  canvas: star field, veil and glow.
+- In composables, read tokens through `T`: `T.text`, `T.accent`,
+  `T.brush`, and so on. Read shapes through `MaterialTheme.shapes`. Don't use
+  `Color(0x...)` outside `Theme.kt`.
+- Switch theme with `ThemeStore.set(prefs, ThemeId.Light)`. It is stored in
+  the `md` SharedPreferences under `theme`, and the whole app re-themes at
+  once. `ThemePicker(prefs)` is the ready-made picker, shown in Settings under
+  "Appearance".
