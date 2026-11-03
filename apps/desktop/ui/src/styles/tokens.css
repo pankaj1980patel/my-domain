@@ -1,47 +1,31 @@
 /*
  * Design tokens: the one place colours, type, spacing, shape and motion are
- * defined. Components use only these variables, so the Android app (Compose)
- * can mirror the same values and both feel like one product.
+ * defined. Components (app.css) use only these variables, so the Android app
+ * (ui/Theme.kt) mirrors the same values and both feel like one product.
  *
- * Deep space: every screen sits on a quiet star field (public/space.webp,
- * cropped from docs/brand/space-source.png). Panels are frosted glass over it, text is
- * near-white, and primary actions are solid white. Every text/background
- * pair meets WCAG AA against the darkest glass.
+ * Source: the owner's brand kit, docs/design/my-domain-brand-theme-kit.html.
+ * Its five palettes are the five themes below; docs/design/theme.md says which
+ * values come straight from the kit and which are derived from it.
+ *
+ * A theme is picked by <html data-theme="...">  (src/lib/theme.ts sets it and
+ * remembers the choice). No attribute means Cosmic Blue, the brand default.
  */
 
+/* --- shared: type, spacing, shape, motion (same in every theme) ------------- */
+
 :root {
-  /* Status */
-  --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.14);
-  --warning: #facc15;
-  --warning-soft: rgba(250, 204, 21, 0.12);
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.13);
-
-  /* Deep-space theme: dark sky, frosted-glass panels, white accent */
-  --bg: #02080f;
-  --bg-image: url("/space.webp");
-  --surface: rgba(255, 255, 255, 0.055);
-  --surface-2: rgba(255, 255, 255, 0.09);
-  --surface-solid: #0d1120;
-  --glass-blur: 18px;
-  --border: rgba(255, 255, 255, 0.11);
-  --text: #f4f4f6;
-  --text-2: #b6b8c6;
-  --text-3: #8d90a3;
-  --accent: #ffffff;
-  --accent-text: #0a0d1a;
-  --accent-soft: rgba(255, 255, 255, 0.09);
-  --focus: #c7d2fe;
-
-  /* Type scale */
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", "Helvetica Neue", sans-serif;
+  /* Type: the kit's stack (Inter when installed, else the system UI font). */
+  --font: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   --text-xs: 12px;
   --text-sm: 13px;
   --text-md: 15px;
   --text-lg: 18px;
   --text-xl: 22px;
-  --text-2xl: 28px;
+  --text-2xl: 26px;
+  --leading: 1.55;
+  --weight-strong: 800; /* titles, primary buttons, badges */
+  --tracking-eyebrow: 0.16em;
 
   /* Spacing (4 px grid) */
   --s-1: 4px;
@@ -53,15 +37,14 @@
   --s-8: 32px;
   --s-10: 40px;
 
-  /* Shape and elevation */
-  --r-sm: 6px;
-  --r-md: 8px;
-  --r-lg: 10px;
-  --r-xl: 14px;
-  --r-full: 999px;
-  --shadow-1: none;
-  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.5);
+  /* Shape. Kit: cards 18 px, buttons 12 px, chips fully round. */
+  --r-xs: 4px; /* bubble tails, signal bars */
+  --r-sm: 10px; /* small boxes: errors, swatches */
+  --r-md: 12px; /* buttons, inputs, nav items, inner panels */
+  --r-lg: 18px; /* cards and tiles (the kit's --radius) */
+  --r-xl: 28px; /* hero surfaces: the sign-in card */
+  --r-full: 999px; /* chips, pills, switches */
+  --r-logo: 22%; /* the kit's logo mask: 28 px on a 124 px mark */
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
@@ -74,4 +57,272 @@
     --fast: 0ms;
     --normal: 0ms;
   }
+}
+
+/* --- Cosmic Blue: the brand default. Dark-first, vivid and trustworthy. ------- */
+
+:root,
+[data-theme="cosmic-blue"] {
+  color-scheme: dark;
+
+  /* Canvas: deep navy (never pure black), the star field, one soft glow. */
+  --bg: #050b18;
+  --bg-image: url("/space.webp");
+  --bg-veil: rgba(5, 11, 24, 0.35); /* tints the star field towards --bg */
+  --bg-glow: radial-gradient(ellipse at 75% -15%, rgba(18, 62, 121, 0.33), transparent 38%);
+
+  /* Surfaces: the kit's navy, as frosted glass over the sky. */
+  --surface: rgba(11, 22, 48, 0.72); /* #0B1630  panels, sidebar */
+  --surface-2: rgba(16, 29, 53, 0.86); /* #101D35  raised: inputs, threads, hovers */
+  --surface-solid: #0b1630; /* opaque, over moving content */
+  --card-bg: linear-gradient(160deg, rgba(16, 29, 53, 0.82), rgba(9, 19, 38, 0.74));
+  --glass-blur: 18px;
+  --border: #203454;
+  --border-strong: #2a456a;
+
+  /* Text */
+  --text: #f4f8ff;
+  --text-2: #c6d5ea;
+  --text-3: #94a3b8;
+
+  /* Actions. Primary = Royal Blue, drawn as the Cosmic Flow gradient. */
+  --primary: #1455d9;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(120deg, #1455d9, #22c7f2 55%, #713bdb);
+  --btn-secondary-bg: #152744;
+  --btn-secondary-border: #2a456a;
+
+  /* Interaction: Electric Cyan for focus, selection and active navigation. */
+  --accent: #22c7f2;
+  --on-accent: #041321;
+  --accent-fg: #22c7f2; /* accent used as text or an icon on --surface */
+  --accent-bg: rgba(34, 199, 242, 0.12);
+  --accent-ring: rgba(34, 199, 242, 0.55);
+  --accent-soft: #64bfff;
+  --focus: #22c7f2;
+
+  /* Highlight: Cosmic Gold, for rare important moments only. */
+  --highlight: #ffc857;
+
+  /* Status */
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #ffc857;
+  --warning-soft: rgba(255, 200, 87, 0.12);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.13);
+
+  /* Elevation and glow */
+  --shadow-1: none;
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.53); /* the kit's --shadow */
+  --shadow-logo: 0 8px 35px rgba(0, 0, 0, 0.53);
+  --glow: 12px; /* status-dot glow radius */
+
+  --toast-bg: #eaf7ff;
+  --toast-fg: #071525;
+  --switch-thumb-off: var(--text-2); /* resolves per theme */
+}
+
+/* --- Aurora Purple: expressive. Creative, premium and atmospheric. ------------ */
+
+[data-theme="aurora"] {
+  color-scheme: dark;
+  --bg: #090817;
+  --bg-image: url("/space.webp");
+  --bg-veil: rgba(9, 8, 23, 0.4);
+  --bg-glow: radial-gradient(ellipse at 75% -15%, rgba(113, 59, 219, 0.3), transparent 40%);
+
+  --surface: rgba(23, 21, 46, 0.72); /* #17152E */
+  --surface-2: rgba(32, 29, 61, 0.86);
+  --surface-solid: #17152e;
+  --card-bg: linear-gradient(160deg, rgba(32, 29, 61, 0.82), rgba(16, 14, 34, 0.74));
+  --border: #2e2a52;
+  --border-strong: #433c74;
+
+  --text: #f7f4ff;
+  --text-2: #d6d0ea;
+  --text-3: #a8a2c2;
+
+  --primary: #713bdb;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(115deg, #312e81, #713bdb, #e879f9);
+  --btn-secondary-bg: #221f42;
+  --btn-secondary-border: #433c74;
+
+  --accent: #42d9f5; /* Aurora Cyan: interactive */
+  --on-accent: #041321;
+  --accent-fg: #42d9f5;
+  --accent-bg: rgba(66, 217, 245, 0.12);
+  --accent-ring: rgba(66, 217, 245, 0.55);
+  --accent-soft: #9b75ff;
+  --focus: #42d9f5;
+
+  --highlight: #e879f9; /* Cosmic Pink */
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.14);
+  --warning: #ffc857;
+  --warning-soft: rgba(255, 200, 87, 0.12);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.13);
+
+  --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.53);
+  --shadow-logo: 0 8px 35px rgba(0, 0, 0, 0.53);
+  --glow: 12px;
+  --toast-bg: #f7f4ff;
+  --toast-fg: #120f26;
+}
+
+/* --- Ocean Blue: calm and connected. A clean networking theme. ---------------- */
+
+[data-theme="ocean"] {
+  color-scheme: dark;
+  --bg: #061321;
+  --bg-image: url("/space.webp");
+  --bg-veil: rgba(6, 19, 33, 0.4);
+  --bg-glow: radial-gradient(ellipse at 75% -15%, rgba(0, 184, 217, 0.2), transparent 40%);
+
+  --surface: rgba(13, 36, 57, 0.72); /* #0D2439 */
+  --surface-2: rgba(18, 48, 74, 0.86);
+  --surface-solid: #0d2439;
+  --card-bg: linear-gradient(160deg, rgba(18, 48, 74, 0.82), rgba(8, 26, 43, 0.74));
+  --border: #1d3d5a;
+  --border-strong: #2a5578;
+
+  --text: #f2faff;
+  --text-2: #c4dbe8;
+  --text-3: #8aa8bc;
+
+  --primary: #0759a6;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(120deg, #0759a6, #0a8fc4 60%, #00b8d9); /* derived; ends on Aqua so white text stays readable */
+  --btn-secondary-bg: #11304b;
+  --btn-secondary-border: #2a5578;
+
+  --accent: #00b8d9; /* Aqua */
+  --on-accent: #03121f;
+  --accent-fg: #00b8d9;
+  --accent-bg: rgba(0, 184, 217, 0.12);
+  --accent-ring: rgba(0, 184, 217, 0.55);
+  --accent-soft: #a5e8ff; /* Ice Blue */
+  --focus: #00b8d9;
+
+  --highlight: #ffc857;
+
+  --success: #55e6c1; /* Mint */
+  --success-soft: rgba(85, 230, 193, 0.14);
+  --warning: #ffc857;
+  --warning-soft: rgba(255, 200, 87, 0.12);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.13);
+
+  --shadow-3: 0 18px 50px rgba(0, 0, 0, 0.5);
+  --shadow-logo: 0 8px 35px rgba(0, 0, 0, 0.5);
+  --glow: 12px;
+  --toast-bg: #f2faff;
+  --toast-fg: #061321;
+}
+
+/* --- Minimal Midnight: quiet and professional. Reduced glow. ----------------- */
+
+[data-theme="midnight"] {
+  color-scheme: dark;
+  --bg: #080b12;
+  --bg-image: none; /* no star field, no glow: the quiet option */
+  --bg-veil: transparent;
+  --bg-glow: none;
+
+  --surface: #111827; /* Charcoal */
+  --surface-2: #1c2738; /* Elevated */
+  --surface-solid: #111827;
+  --card-bg: #111827;
+  --glass-blur: 0px;
+  --border: #29364a; /* Divider */
+  --border-strong: #36465f;
+
+  --text: #f8fafc;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
+
+  --primary: #2563eb;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(#2563eb, #2563eb); /* flat: no gradient glow */
+  --btn-secondary-bg: #1c2738;
+  --btn-secondary-border: #36465f;
+
+  --accent: #38bdf8; /* Sky */
+  --on-accent: #04131f;
+  --accent-fg: #38bdf8;
+  --accent-bg: rgba(56, 189, 248, 0.1);
+  --accent-ring: rgba(56, 189, 248, 0.45);
+  --accent-soft: #38bdf8;
+  --focus: #38bdf8;
+
+  --highlight: #ffc857;
+
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.12);
+  --warning: #ffc857;
+  --warning-soft: rgba(255, 200, 87, 0.1);
+  --danger: #fb7185;
+  --danger-soft: rgba(251, 113, 133, 0.12);
+
+  --shadow-3: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-logo: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --glow: 0px;
+  --toast-bg: #f8fafc;
+  --toast-fg: #080b12;
+}
+
+/* --- Cosmic Light: the light-mode companion. Soft, airy and accessible. ------ */
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f8ff; /* Cloud */
+  --bg-image: none;
+  --bg-veil: transparent;
+  --bg-glow: radial-gradient(ellipse at 75% -15%, rgba(56, 189, 248, 0.22), transparent 42%);
+
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-2: #e7f0ff;
+  --surface-solid: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --border: #dce8f7; /* Pale Border */
+  --border-strong: #c3d5ec;
+
+  --text: #10213d; /* Ink */
+  --text-2: #33476a;
+  --text-3: #61738d; /* Muted Blue */
+
+  --primary: #1769e8;
+  --on-primary: #ffffff;
+  --gradient: linear-gradient(120deg, #1769e8, #38bdf8 55%, #713bdb);
+  --btn-secondary-bg: #ffffff;
+  --btn-secondary-border: #c3d5ec;
+
+  --accent: #38bdf8;
+  --on-accent: #041321;
+  --accent-fg: #0369a1; /* cyan is too pale for text on white */
+  --accent-bg: rgba(23, 105, 232, 0.09);
+  --accent-ring: rgba(56, 189, 248, 0.55);
+  --accent-soft: #38bdf8;
+  --focus: #1769e8;
+
+  --highlight: #f5b942; /* Warm Gold */
+
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.12);
+  --warning: #b45309;
+  --warning-soft: rgba(245, 185, 66, 0.18);
+  --danger: #e11d48;
+  --danger-soft: rgba(225, 29, 72, 0.1);
+
+  --shadow-2: 0 1px 2px rgba(16, 33, 61, 0.08);
+  --shadow-3: 0 18px 50px rgba(16, 33, 61, 0.14);
+  --shadow-logo: 0 8px 24px rgba(16, 33, 61, 0.2);
+  --glow: 8px;
+  --toast-bg: #10213d;
+  --toast-fg: #f4f8ff;
+  --switch-thumb-off: #ffffff;
 }

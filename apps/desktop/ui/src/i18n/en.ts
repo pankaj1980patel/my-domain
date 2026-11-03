@@ -230,6 +230,20 @@ export const en = {
   "settings.save": "Save",
   "settings.cancel": "Cancel",
   "settings.version": "my-domain {version}",
+  "settings.appearance": "Appearance",
+  "settings.appearanceHint": "How my-domain looks on this computer.",
+
+  // Themes (the brand kit's five palettes)
+  "theme.cosmic-blue": "Cosmic Blue",
+  "theme.cosmic-blue.desc": "The brand look: deep navy, vivid blue",
+  "theme.aurora": "Aurora",
+  "theme.aurora.desc": "Expressive violet and pink",
+  "theme.ocean": "Ocean Blue",
+  "theme.ocean.desc": "Calm blues and aqua",
+  "theme.midnight": "Minimal Midnight",
+  "theme.midnight.desc": "Quiet, with less glow",
+  "theme.light": "Cosmic Light",
+  "theme.light.desc": "Bright and airy",
 
   // Errors (friendlyError)
   "error.notConnectedYet": "Not connected yet. Connecting now: try again in a moment.",

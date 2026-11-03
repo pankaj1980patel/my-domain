@@ -6,6 +6,7 @@ import { commands } from "../bindings";
 import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
+import { ThemePicker } from "../components/ThemePicker";
 import { t, tRich } from "../i18n";
 
 export default function Settings(props: { onDeveloper: () => void }) {
@@ -96,6 +97,12 @@ export default function Settings(props: { onDeveloper: () => void }) {
             </div>
           </form>
         </Show>
+      </article>
+
+      <article class="tile">
+        <h2>{t("settings.appearance")}</h2>
+        <p class="muted small">{t("settings.appearanceHint")}</p>
+        <ThemePicker />
       </article>
 
       <p class="version muted small" onClick={tapVersion}>
