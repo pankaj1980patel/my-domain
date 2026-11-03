@@ -314,9 +314,9 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 
 | Wave | Features |
 |---|---|
-| A: quick wins | ~~Battery and device info, ring device, open link~~ (done 2026-11-02), ~~flashlight, ringer, volume~~ (done 2026-11-02, verified on the phone), ~~launch app~~ (done 2026-11-02), ~~clipboard history~~ (done 2026-11-02), ~~notification actions~~ (done 2026-11-02) |
+| A: quick wins | ~~Battery and device info, ring device, open link~~ (done 2026-11-02), ~~send text to a device's clipboard / as a notice, share sheet for text and links, storage in the status~~ (done 2026-11-03), ~~flashlight, ringer, volume~~ (done 2026-11-02, verified on the phone), ~~launch app~~ (done 2026-11-02), ~~clipboard history~~ (done 2026-11-02), ~~notification actions~~ (done 2026-11-02) |
 | B: media and phone | ~~Media control for any app~~ (play/pause, next, previous: done 2026-11-02), call log, live call alert, ~~dial~~ (done 2026-11-02: opens the dialer with the number), speaker, answer/end, contacts, SMS, ~~OTP → desktop clipboard~~ (done 2026-11-02) |
-| C: files | ~~File push (resumable)~~ (done 2026-11-02), browse, download, gallery, photo backup, **Wi-Fi Direct fast path** for big transfers (below) |
+| C: files | ~~File push (resumable)~~ (done 2026-11-02), ~~browse, download~~ (done 2026-11-03: shared folders; no screens yet, Android doesn't ask for photo access yet), gallery, photo backup, **Wi-Fi Direct fast path** for big transfers (below) |
 | D: screen and control | Screen share, remote input, phone as touchpad/keyboard, presentation remote |
 | E: connectivity (Shizuku, see [ADR-0006](../learnings/decisions/ADR-0006-shizuku.md)) | Wi-Fi scan/toggle/connect, Bluetooth, airplane mode, mobile data, hotspot |
 | F: find, security, automation | Locate, lost mode, wipe, triggers, scenes, schedules, webhooks |

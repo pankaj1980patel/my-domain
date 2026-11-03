@@ -148,6 +148,46 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
   the Mac found it over Bluetooth, sent a message, and got the delivery
   receipt back the same way.
 
+## Browse and download; send text; storage (2026-11-03)
+
+- **Browse another device's folders and pull a file** (`features/browse.rs`).
+  Each device chooses what it shares: `Engine::set_shared_folders` (name +
+  path). `list_folder(node, root, path, offset)` returns a request id; the
+  answer is `FolderListing` (pages of 200, folders first; `root` "" lists
+  the shared folders). `download_file(node, root, path)` returns a transfer
+  id at once; the device then pushes the file under that id with the normal
+  resumable transfer (`files::start_with_id`), so the asker sees the usual
+  `FileProgress` / `FileReceived` / `FileFailed`. Refused on the sharing
+  device: anything outside a shared folder (`..`, links that lead out),
+  hidden names (including `.mydomain-partial`).
+  - Desktop shares its Downloads folder as "Downloads". Commands
+    `list_folder`, `download_file`, `shared_folders`; event
+    `folder-listing`. No UI yet (bindings only).
+  - Android shares "my-domain" (public Downloads/my-domain on Android 11+,
+    the app folder on 9 and older, nothing on 10) and, once photo access is
+    allowed, "Pictures" and "Camera". The app doesn't ask for photo access
+    yet (Settings > Apps > my-domain > Photos). `Core.listFolder`,
+    `Core.downloadFile`, `Core.listings`; no screen yet.
+  - `mdctl`: `share <name> <dir>`, `ls <node> [root] [path] [offset]`,
+    `get <node> <root> <path>`.
+- **Send text to a device** (`features/share.rs`): `Engine::send_text(node,
+  text, "clipboard" | "notify")` → `TextShared` there. A desktop puts
+  clipboard text on its clipboard and in the history (core side) and shows
+  a notice; the phone writes its clipboard in the app and posts a
+  notification (tap opens it if it's a link). Desktop command `send_text`;
+  `mdctl`: `text <node> <mode> <text...>`.
+- **Android share sheet takes text and links too**: a lone web link opens
+  on the chosen device (`open_url`), other text goes onto its clipboard.
+  The existing "Send to" dialog (`ShareChooser`) got the text case.
+- **Storage in the status**: desktop (`df`) and Android (`StatFs`) report
+  `"storage": {"free", "total"}` bytes.
+- Tests: `tests/browse.rs` (11: listing, pages, escapes and links refused,
+  nothing shared, download, a download interrupted by a restart resumes,
+  failures with reasons, folder names, text to clipboard / as notice / to a
+  device without a clipboard), browse unit tests, the mdctl scenario
+  `a_script_browses_a_shared_folder_and_downloads_from_it`, desktop
+  `reads_df`. Android compiled only; not tried on the phone.
+
 ## Device keys, first step (2026-11-03)
 
 - Each install makes an Ed25519 key once (`device_key.rs`), kept in the OS

@@ -89,7 +89,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Notification mirror | Show a peer's notifications | `notifications.mirror` | A→D | P | 🟡 (desktop shows them in-app only) |
 | App notification subscribe | Choose which apps' notifications to receive | `notifications.mirror` | A | P | ✅ |
 | Notification actions | Reply, dismiss, or tap an action on a mirrored notification | `notifications.control` | A | P | ⬜ |
-| Send-to-device | Share sheet / context-menu target "Send to <device>" | `files.push` | A D | — | ⬜ |
+| Send-to-device | Share sheet / context-menu target "Send to <device>" | `files.push` | A D | — | 🟡 (Android share sheet: files, text, links; no desktop context menu) |
+| Send text | Put text on a device's clipboard or show it there | `clipboard.push` | A D | — | ✅ |
 | Open link on device | Open a URL in the peer's browser | `apps.launch` | A D | — | ⬜ |
 
 ### 3.2 Screen, camera & remote control
@@ -180,7 +181,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Battery | %, charging, temperature, health | `device.battery` | A D | — | ⬜ |
-| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | ⬜ |
+| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage free/total in the status) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | ⬜ |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
 | Flashlight | On/off | `device.settings` | A | S | ⬜ |
@@ -204,8 +205,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | ⬜ |
-| Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | ⬜ |
-| Download / delete remote file | | `files.read` / `.write` | A D | P | ⬜ |
+| Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (folders each device shares; no screens yet) |
+| Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
 | Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | ⬜ |
 | Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ⬜ |
 | Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | ⬜ |
