@@ -23,6 +23,13 @@
     <!-- Enumerate installed apps for the notification-sharing picker (API 30+).
          Note: Play Store requires a declared justification for this permission. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- Let your other devices browse and download your photos (Pictures, DCIM/Camera).
+         Not asked for at launch: shared only once the user allows photo access. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 
     <application
         android:allowBackup="true"

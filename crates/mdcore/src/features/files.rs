@@ -123,6 +123,9 @@ pub struct Files {
     finished: Mutex<std::collections::VecDeque<(String, Option<String>)>>,
     /// `finished` was read back from the platform's store (once per run).
     finished_loaded: std::sync::atomic::AtomicBool,
+    /// Folders other devices may browse and download from (see
+    /// `features::browse`): (name, path). Empty = nothing is shared.
+    pub shared: Mutex<Vec<(String, PathBuf)>>,
 }
 
 /// How many finished transfers are remembered.
@@ -254,6 +257,11 @@ fn move_into(part: &Path, dir: &Path, name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Transfer ids are letters and digits (they name the partial file).
+pub fn is_transfer_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric())
+}
+
 fn sha256_file(path: &Path) -> std::io::Result<String> {
     let mut f = File::open(path)?;
     let mut h = Sha256::new();
@@ -278,11 +286,26 @@ fn hex(b: &[u8]) -> String {
 /// offers it reliably (`send` queues it while the peer is unreachable).
 /// Returns the transfer id at once.
 pub fn start<P: Platform>(ctx: &NetCtx<P>, node: &str, path: &Path) -> crate::Result<String> {
+    start_with_id(ctx, node, path, &crate::transport::outbox::new_id())
+}
+
+/// `start`, under a transfer id the caller chose: a device that asked for
+/// the file (`features::browse`) picked it, so it already knows the
+/// transfer when the offer arrives.
+pub fn start_with_id<P: Platform>(
+    ctx: &NetCtx<P>,
+    node: &str,
+    path: &Path,
+    id: &str,
+) -> crate::Result<String> {
     let meta = std::fs::metadata(path).map_err(|e| format!("can't read the file: {e}"))?;
     if !meta.is_file() {
         return Err("not a file".to_string().into());
     }
-    let id = crate::transport::outbox::new_id();
+    if !is_transfer_id(id) || ctx.files.out.lock().contains_key(id) {
+        return Err("bad transfer id".to_string().into());
+    }
+    let id = id.to_string();
     let name = safe_name(&path.file_name().unwrap_or_default().to_string_lossy());
     let size = meta.len();
     ctx.sink.emit(CoreEvent::FileProgress {
@@ -568,7 +591,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         }
     };
     // Ids are ours (hex); anything else could escape the partial folder.
-    if id.is_empty() || id.len() > 64 || !id.chars().all(|c| c.is_ascii_alphanumeric()) {
+    if !is_transfer_id(&id) {
         return;
     }
     let size = msg.json("size").as_u64().unwrap_or(0);

@@ -15,7 +15,11 @@ import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.core.app.NotificationCompat
 import androidx.core.content.FileProvider
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
+import com.mydomain.android.ffi.SharedDir
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -59,6 +63,48 @@ object FileActions {
     /** Where the core writes received files (app-private, no permission). */
     fun downloadDir(ctx: Context): File =
         (ctx.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: File(ctx.filesDir, "downloads")).apply { mkdirs() }
+
+    // --- shared folders -----------------------------------------------------
+
+    /**
+     * The folders your other devices may browse and download from:
+     *  - "my-domain": the files received from them (public Downloads/my-domain
+     *    on Android 11+, where this app may read the files it saved; the app
+     *    folder they stay in on Android 9 and older). Android 10 has neither
+     *    (no path access to the public folder), so it shares nothing there.
+     *  - "Pictures" and "Camera": only once the user has allowed photo access
+     *    (READ_MEDIA_IMAGES / READ_MEDIA_VIDEO, or storage before Android 13).
+     */
+    fun sharedFolders(ctx: Context): List<SharedDir> = buildList {
+        val sdk = Build.VERSION.SDK_INT
+        if (sdk >= Build.VERSION_CODES.R) {
+            val dl = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), SUBFOLDER)
+            add(SharedDir(SUBFOLDER, dl.absolutePath))
+        } else if (sdk < Build.VERSION_CODES.Q) {
+            add(SharedDir(SUBFOLDER, downloadDir(ctx).absolutePath))
+        }
+        if (canReadMedia(ctx)) {
+            add(SharedDir("Pictures", Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES).absolutePath))
+            add(SharedDir("Camera", File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM), "Camera").absolutePath))
+        }
+    }
+
+    private fun canReadMedia(ctx: Context): Boolean {
+        val granted = { p: String -> ContextCompat.checkSelfPermission(ctx, p) == PackageManager.PERMISSION_GRANTED }
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            granted(Manifest.permission.READ_MEDIA_IMAGES) || granted(Manifest.permission.READ_MEDIA_VIDEO)
+        } else {
+            granted(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    /** Hand [sharedFolders] to the core (at start, and when the app comes
+     *  back to the front: a permission may have been granted meanwhile). */
+    fun shareFolders(ctx: Context) {
+        val engine = Core.engine() ?: return
+        runCatching { engine.setSharedFolders(sharedFolders(ctx)) }
+            .onFailure { Log.w(TAG, "can't set shared folders: $it") }
+    }
 
     private fun notifId(id: String) = 0x4000_0000 or (id.hashCode() and 0x0FFF_FFFF)
 

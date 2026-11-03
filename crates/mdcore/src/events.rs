@@ -156,6 +156,27 @@ pub enum CoreEvent {
         incoming: bool,
         reason: String,
     },
+    /// A device answered `list_folder` (request `req`): one page of folder
+    /// `path` in its shared folder `root` (`root` "" = the shared folders
+    /// themselves). `next` is the offset of the next page, if there is
+    /// one; `error` says why there's no listing.
+    FolderListing {
+        from: String,
+        req: String,
+        root: String,
+        path: String,
+        entries: Vec<crate::model::RemoteEntry>,
+        next: Option<u64>,
+        error: Option<String>,
+    },
+    /// Another of your devices sent text to this one (`Engine::send_text`):
+    /// `mode` "clipboard" (already on the clipboard if the core has one
+    /// here) or "notify" (show it).
+    TextShared {
+        from: String,
+        text: String,
+        mode: String,
+    },
 }
 
 impl CoreEvent {
@@ -192,6 +213,8 @@ impl CoreEvent {
             CoreEvent::FileReceived { .. } => "file-received",
             CoreEvent::FileSent { .. } => "file-sent",
             CoreEvent::FileFailed { .. } => "file-failed",
+            CoreEvent::FolderListing { .. } => "folder-listing",
+            CoreEvent::TextShared { .. } => "text-shared",
         }
     }
 

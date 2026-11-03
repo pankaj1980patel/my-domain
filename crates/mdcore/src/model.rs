@@ -254,3 +254,23 @@ pub struct ClipEntry {
     pub from: Option<String>,
     pub ts: u64,
 }
+
+/// A folder this device lets your other devices browse and download from
+/// (`Engine::set_shared_folders`): shown to them as `name`, read from `path`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct SharedFolder {
+    pub name: String,
+    pub path: String,
+}
+
+/// One item in a folder listing from another device (`FolderListing`):
+/// a file (`size` in bytes) or a folder (`dir`), last changed at
+/// `modified` (unix seconds, 0 if unknown).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct RemoteEntry {
+    pub name: String,
+    pub dir: bool,
+    pub size: u64,
+    pub modified: u64,
+}

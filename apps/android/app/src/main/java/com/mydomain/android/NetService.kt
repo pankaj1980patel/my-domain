@@ -82,6 +82,8 @@ class NetService : Service() {
             .onFailure { Log.e("NetService", "engine failed to start", it) }
         // Received files land in an app-private folder, then move to Downloads.
         Core.engine()?.setDownloadDir(FileActions.downloadDir(this).absolutePath)
+        // Folders your other devices may browse and download from.
+        FileActions.shareFolders(this)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
         Core.reload()
@@ -124,11 +126,20 @@ class NetService : Service() {
 
     private var battery: Pair<Int, Boolean>? = null
 
+    /** Free and total bytes of the phone's storage (whole MB, so it doesn't
+     *  change on every write), for the status. */
+    private fun storage(): JSONObject? = runCatching {
+        val fs = StatFs(Environment.getDataDirectory().path)
+        val mb = 1024L * 1024L
+        JSONObject().put("free", fs.availableBytes / mb * mb).put("total", fs.totalBytes / mb * mb)
+    }.getOrNull()
+
     /** Battery, the controls' state and the actions we take, for devices
      *  that ask (`request_status`). Pushed only when it changed. */
     private fun pushStatus() {
         val o = Controls.state(this).put("actions", Controls.actions())
         battery?.let { (pct, charging) -> o.put("battery", pct).put("charging", charging) }
+        storage()?.let { o.put("storage", it) }
         val json = o.toString()
         if (json == lastStatus) return
         val engine = Core.engine() ?: return
@@ -244,6 +255,7 @@ class NetService : Service() {
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
                         "file_failed" -> FileActions.onFailed(this@NetService, o)
+                        "text_shared" -> onTextShared(o)
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)
@@ -281,6 +293,22 @@ class NetService : Service() {
                 }
             }
         }
+    }
+
+    /** Text another device sent (`send_text`): onto the clipboard for
+     *  "clipboard" (the core leaves that to us here), and a notice. */
+    private fun onTextShared(o: JSONObject) {
+        val text = o.optString("text")
+        val from = o.optString("from")
+        if (text.isBlank()) return
+        val toClipboard = o.optString("mode") == "clipboard"
+        if (toClipboard) {
+            // Not sent back out by the sync: it came from that device.
+            lastReceivedClipboard = text
+            updateLocalClipboard(text)
+            Core.recordClip(text, from.ifEmpty { null })
+        }
+        DeviceActions.sharedText(this, Core.peerName(from), text, toClipboard)
     }
 
     private var lastReceivedClipboard: String? = null

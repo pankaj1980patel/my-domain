@@ -31,6 +31,10 @@ fn push_status(app: &AppHandle) {
         status["battery"] = battery.into();
         status["charging"] = charging.into();
     }
+    let downloads = app.try_state::<crate::DownloadDir>().map(|d| d.0.clone());
+    if let Some((free, total)) = downloads.as_deref().and_then(read_storage) {
+        status["storage"] = serde_json::json!({ "free": free, "total": total });
+    }
     let mut actions = Vec::new();
     if let Some((volume, muted)) = sound::read() {
         status["volume"] = volume.into();
@@ -328,6 +332,37 @@ fn read_battery() -> Option<(u8, bool)> {
     None
 }
 
+/// (free, total) bytes of the disk holding `dir`, from `df` (macOS and
+/// Linux); `None` elsewhere or if it can't be read.
+#[cfg(unix)]
+fn read_storage(dir: &std::path::Path) -> Option<(u64, u64)> {
+    let out = std::process::Command::new("df")
+        .arg("-kP")
+        .arg(dir)
+        .output()
+        .ok()?;
+    parse_df(&String::from_utf8_lossy(&out.stdout))
+}
+
+#[cfg(not(unix))]
+fn read_storage(_dir: &std::path::Path) -> Option<(u64, u64)> {
+    None
+}
+
+/// `df -kP <dir>`:
+///   Filesystem   1024-blocks      Used Available Capacity Mounted on
+///   /dev/disk3s5   482797652 400000000  70000000      86% /System/Volumes/Data
+/// The numbers are the three before the `NN%` column (the mount point may
+/// hold spaces). Returns (available, total) in bytes.
+#[cfg_attr(not(unix), allow(dead_code))]
+fn parse_df(out: &str) -> Option<(u64, u64)> {
+    let cols: Vec<&str> = out.lines().nth(1)?.split_whitespace().collect();
+    let pct = cols.iter().position(|c| c.ends_with('%'))?;
+    let num = |i: usize| cols.get(i)?.parse::<u64>().ok();
+    let (total, free) = (num(pct.checked_sub(3)?)?, num(pct - 1)?);
+    Some((free * 1024, total * 1024))
+}
+
 /// `pmset -g batt`:
 ///   Now drawing from 'AC Power'
 ///    -InternalBattery-0 (id=22610019) <TAB> 82%; charging; 0:54 remaining present: true
@@ -369,7 +404,20 @@ pub fn on_open_url(app: &AppHandle, url: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_pmset;
+    use super::{parse_df, parse_pmset};
+
+    #[test]
+    fn reads_df() {
+        let linux = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/nvme0n1p4 209715200 140509184 69206016 68% /home/my disk\n";
+        assert_eq!(
+            parse_df(linux),
+            Some((69_206_016 * 1024, 209_715_200 * 1024))
+        );
+        // Inode columns after the capacity (macOS without -P) are ignored.
+        let mac = "Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on\n/dev/disk3s5 482797652 400000000 70000000 86% 1 2 0% /System/Volumes/Data\n";
+        assert_eq!(parse_df(mac), Some((70_000_000 * 1024, 482_797_652 * 1024)));
+        assert_eq!(parse_df("Filesystem\n"), None);
+    }
 
     #[test]
     fn reads_pmset() {

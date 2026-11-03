@@ -48,15 +48,20 @@ class MainActivity : ComponentActivity() {
         setContent { MdTheme { App(prefs) } }
     }
 
-    /** Files shared from another app (share sheet): the UI asks which
-     *  device gets them. */
+    /** Files, text or a link shared from another app (share sheet): the UI
+     *  asks which device gets them. */
     private fun takeShare(intent: Intent?) {
         val uris: List<Uri> = when (intent?.action) {
             Intent.ACTION_SEND -> listOfNotNull(streamExtra(intent))
             Intent.ACTION_SEND_MULTIPLE -> streamListExtra(intent)
             else -> return
         }
-        if (uris.isNotEmpty()) Core.shareFiles(uris)
+        if (uris.isNotEmpty()) {
+            Core.shareFiles(uris)
+            return
+        }
+        val text = intent?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString()
+        if (intent?.action == Intent.ACTION_SEND && !text.isNullOrBlank()) Core.shareText(text)
     }
 
     @Suppress("DEPRECATION")
@@ -84,7 +89,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Thread { Core.reload() }.start()
+        Thread {
+            Core.reload()
+            // Photo access may have been granted in Settings meanwhile.
+            FileActions.shareFolders(applicationContext)
+        }.start()
     }
 
     override fun onStop() {

@@ -272,6 +272,21 @@ impl EventSink for TauriSink {
                     notify::post(&app, "Code copied", &body);
                 });
             }
+            // Text another device sent: the core already put a clipboard
+            // one on the clipboard; say so, or show a "notify" one.
+            CoreEvent::TextShared { from, text, mode } => {
+                let app = self.app.clone();
+                let (from, text, mode) = (from.clone(), text.clone(), mode.clone());
+                std::thread::spawn(move || {
+                    let device = notify::device_name(&app, &from);
+                    let short: String = text.chars().take(200).collect();
+                    if mode == "clipboard" {
+                        notify::post(&app, &format!("Copied from {device}"), &short);
+                    } else {
+                        notify::post(&app, &format!("From {device}"), &short);
+                    }
+                });
+            }
             CoreEvent::FileReceived { from, name, .. } => {
                 let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
                 std::thread::spawn(move || {
@@ -709,6 +724,57 @@ fn cancel_file(id: String, engine: State<Eng>) {
     engine.cancel_file(&id)
 }
 
+/// Send text to a device: onto its clipboard (`mode` "clipboard") or shown
+/// as a notification ("notify"). It gets a `text-shared` event.
+#[tauri::command]
+#[specta::specta]
+fn send_text(
+    node_id: String,
+    text: String,
+    mode: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.send_text(&node_id, &text, &mode)
+}
+
+// --- browsing another device's shared folders ---
+
+/// Ask a device what's in `path` of its shared folder `root` (`root` ""
+/// lists its shared folders), from entry `offset` on. Returns the request
+/// id; the answer is a `folder-listing` event with the same `req`.
+#[tauri::command]
+#[specta::specta]
+fn list_folder(
+    node_id: String,
+    root: String,
+    path: String,
+    offset: u32,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.list_folder(&node_id, &root, &path, u64::from(offset))
+}
+
+/// Fetch a file from a device's shared folder into Downloads. Returns the
+/// transfer id; it then shows up like a file the device sent
+/// (`file-progress`, `file-received` / `file-failed`).
+#[tauri::command]
+#[specta::specta]
+fn download_file(
+    node_id: String,
+    root: String,
+    path: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.download_file(&node_id, &root, &path)
+}
+
+/// The folders this computer lets your other devices browse.
+#[tauri::command]
+#[specta::specta]
+fn shared_folders(engine: State<Eng>) -> Vec<mdcore::model::SharedFolder> {
+    engine.shared_folders()
+}
+
 /// The native "choose a file" dialog; `None` if the user closed it. Async so
 /// it doesn't run on (and block) the main thread the dialog needs.
 #[tauri::command]
@@ -808,6 +874,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         open_url_on,
         send_file,
         cancel_file,
+        send_text,
+        list_folder,
+        download_file,
+        shared_folders,
         pick_file,
         run_action,
         clipboard_history,
@@ -871,6 +941,14 @@ pub fn run() {
                     let dir = download_dir(&handle);
                     if let Some(dir) = &dir {
                         engine.set_download_dir(&dir.to_string_lossy());
+                        // Your other devices may browse and fetch from it.
+                        let downloads = mdcore::model::SharedFolder {
+                            name: "Downloads".into(),
+                            path: dir.to_string_lossy().into_owned(),
+                        };
+                        if let Err(e) = engine.set_shared_folders(&[downloads]) {
+                            eprintln!("[files] can't share Downloads: {e}");
+                        }
                     }
                     app.manage(DownloadDir(dir.unwrap_or_default()));
                     app.manage(engine);

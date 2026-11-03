@@ -74,6 +74,25 @@ export const commands = {
 	/**  Stop a transfer, either way. */
 	cancelFile: (id: string) => __TAURI_INVOKE<void>("cancel_file", { id }),
 	/**
+	 *  Send text to a device: onto its clipboard (`mode` "clipboard") or shown
+	 *  as a notification ("notify"). It gets a `text-shared` event.
+	 */
+	sendText: (nodeId: string, text: string, mode: string) => typedError<string, string>(__TAURI_INVOKE("send_text", { nodeId, text, mode })),
+	/**
+	 *  Ask a device what's in `path` of its shared folder `root` (`root` ""
+	 *  lists its shared folders), from entry `offset` on. Returns the request
+	 *  id; the answer is a `folder-listing` event with the same `req`.
+	 */
+	listFolder: (nodeId: string, root: string, path: string, offset: number) => typedError<string, string>(__TAURI_INVOKE("list_folder", { nodeId, root, path, offset })),
+	/**
+	 *  Fetch a file from a device's shared folder into Downloads. Returns the
+	 *  transfer id; it then shows up like a file the device sent
+	 *  (`file-progress`, `file-received` / `file-failed`).
+	 */
+	downloadFile: (nodeId: string, root: string, path: string) => typedError<string, string>(__TAURI_INVOKE("download_file", { nodeId, root, path })),
+	/**  The folders this computer lets your other devices browse. */
+	sharedFolders: () => __TAURI_INVOKE<SharedFolder[]>("shared_folders"),
+	/**
 	 *  The native "choose a file" dialog; `None` if the user closed it. Async so
 	 *  it doesn't run on (and block) the main thread the dialog needs.
 	 */
@@ -296,6 +315,15 @@ export type SessionInfo_Serialize = {
 	username: string | null,
 	server_url: string | null,
 	has_key: boolean,
+};
+
+/**
+ *  A folder this device lets your other devices browse and download from
+ *  (`Engine::set_shared_folders`): shown to them as `name`, read from `path`.
+ */
+export type SharedFolder = {
+	name: string,
+	path: string,
 };
 
 /**

@@ -217,6 +217,11 @@
     </plurals>
     <string name="share_no_devices">No devices yet. Sign in on another device first.</string>
     <string name="share_sending">Sending to %1$s</string>
+    <string name="share_text_body">A link opens on the device; other text goes onto its clipboard.</string>
+    <string name="text_copied_title">Copied from %1$s</string>
+    <string name="text_from_title">From %1$s</string>
+    <string name="act_text_copied">Copied from %1$s: %2$s</string>
+    <string name="act_text_from">%1$s sent: %2$s</string>
     <!-- Controls on another device -->
     <string name="ctl_torch_on">Turn on the flashlight</string>
     <string name="ctl_torch_off">Turn off the flashlight</string>

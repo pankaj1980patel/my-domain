@@ -167,6 +167,40 @@ fn a_file_sent_by_script_arrives_whole() {
 }
 
 #[test]
+fn a_script_browses_a_shared_folder_and_downloads_from_it() {
+    let mut sharer = Device::start("share-box");
+    let shared = temp("share-box-shared");
+    let content = "a file to pull\n".repeat(500);
+    std::fs::write(shared.join("photo.jpg"), &content).unwrap();
+    sharer.cmd(&format!("share Pictures {}", shared.display()));
+    let downloads = temp("share-getter-downloads");
+    let out = run_script(
+        "share-getter",
+        &format!(
+            "add share-box 127.0.0.1 {port}\n\
+             downloads {downloads}\n\
+             send manual:127.0.0.1 hello\n\
+             wait message-delivered timeout=20\n\
+             ls @share-box\n\
+             wait folder-listing root=\"\" timeout=20\n\
+             ls @share-box Pictures\n\
+             wait folder-listing root=Pictures timeout=20\n\
+             get @share-box Pictures photo.jpg\n\
+             wait file-received name=photo.jpg timeout=30\n",
+            port = sharer.port,
+            downloads = downloads.display()
+        ),
+    );
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "scenario failed:\n{stdout}");
+    assert!(stdout.contains("\"Pictures\""), "{stdout}");
+    assert_eq!(
+        std::fs::read_to_string(downloads.join("photo.jpg")).unwrap(),
+        content
+    );
+}
+
+#[test]
 fn an_action_reaches_the_other_device_with_its_args() {
     let inbox = Device::start("action-box");
     let out = run_script(

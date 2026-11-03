@@ -65,6 +65,18 @@ data class DeviceStatus(
     val torch: Boolean? = null, val volume: Int? = null, val ringer: String? = null, val muted: Boolean? = null,
 )
 
+/** One item in another device's shared folder: a file ([size] bytes) or a
+ *  folder ([dir]), last changed at [modified] (unix seconds). */
+data class RemoteFile(val name: String, val dir: Boolean, val size: Long, val modified: Long)
+
+/** One page of a folder on another device (`folder_listing`, the answer to
+ *  [Core.listFolder]). [root] "" is the list of its shared folders; [next]
+ *  is the offset of the following page; [error] says why there's nothing. */
+data class FolderListing(
+    val node: String, val root: String, val path: String,
+    val entries: List<RemoteFile>, val next: Long?, val error: String?,
+)
+
 /** One raw core event, for the Developer screen. */
 data class DevEvent(val ts: Long, val name: String, val payload: String)
 
@@ -106,6 +118,13 @@ object Core {
     /** Files shared to the app from another app (share sheet), waiting for
      *  the user to pick a device. */
     var pendingShare by mutableStateOf<List<Uri>>(emptyList()); private set
+
+    /** Text or a link shared to the app from another app, waiting for the
+     *  user to pick a device (files win if both came). */
+    var pendingText by mutableStateOf<String?>(null); private set
+
+    /** Answers to [listFolder], by request id (this process only). */
+    val listings = mutableStateMapOf<String, FolderListing>()
 
     /** Clipboard auto-sync with the other devices (NetService acts on it). */
     var clipSync by mutableStateOf(false); private set
@@ -306,6 +325,24 @@ object Core {
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
+            "text_shared" -> addActivity(
+                str(if (o.optString("mode") == "clipboard") R.string.act_text_copied else R.string.act_text_from, peerName(o.optString("from")), o.optString("text").take(200)),
+            )
+            "folder_listing" -> {
+                val arr = o.optJSONArray("entries") ?: JSONArray()
+                val entries = (0 until arr.length()).mapNotNull { i ->
+                    val e = arr.optJSONObject(i) ?: return@mapNotNull null
+                    RemoteFile(e.optString("name"), e.optBoolean("dir"), e.optLong("size"), e.optLong("modified"))
+                }
+                val req = o.optString("req")
+                listings[req] = FolderListing(
+                    node = o.optString("from"), root = o.optString("root"), path = o.optString("path"),
+                    entries = entries,
+                    next = if (o.isNull("next")) null else o.optLong("next"),
+                    error = if (o.isNull("error")) null else o.optString("error"),
+                )
+                if (listings.size > 50) listings.keys.firstOrNull { it != req }?.let { listings.remove(it) }
+            }
             "file_progress" -> updateTransfer(o.optString("id"), { Transfer(it, node, o.optString("name"), o.optBoolean("incoming")) }) {
                 if (it.state != TransferState.Active) it
                 else it.copy(done = o.optLong("done"), total = o.optLong("total"))
@@ -371,7 +408,10 @@ object Core {
     /** Files shared from another app; the UI asks which device gets them. */
     fun shareFiles(uris: List<Uri>) = onMain { pendingShare = uris }
 
-    fun clearShare() = onMain { pendingShare = emptyList() }
+    /** Text shared from another app; the UI asks which device gets it. */
+    fun shareText(text: String) = onMain { pendingText = text }
+
+    fun clearShare() = onMain { pendingShare = emptyList(); pendingText = null }
 
     // --- actions -------------------------------------------------------------
 
@@ -498,6 +538,38 @@ object Core {
         }
     }
 
+    /** Send [text] to a device: onto its clipboard ([mode] "clipboard") or
+     *  shown there as a notification ("notify"). */
+    suspend fun sendText(node: String, text: String, mode: String = "clipboard"): String =
+        call { it.sendText(node, text, mode) }
+
+    /** Text from the share sheet: a lone web link opens on the device, any
+     *  other text goes onto its clipboard. */
+    suspend fun sendSharedText(node: String, text: String): String {
+        val t = text.trim()
+        val scheme = runCatching { Uri.parse(t).scheme?.lowercase() }.getOrNull()
+        val link = (scheme == "http" || scheme == "https") && t.none(Char::isWhitespace)
+        return if (link) openUrl(node, t) else sendText(node, text, "clipboard")
+    }
+
+    /** [sendSharedText] from a click handler, off the screen's lifetime. */
+    fun sendSharedTextAsync(node: String, text: String, onError: (Throwable) -> Unit = {}) {
+        appScope.launch {
+            try { sendSharedText(node, text) } catch (e: Exception) { onError(e) }
+        }
+    }
+
+    /** Ask [node] what's in [path] of its shared folder [root] ("" lists its
+     *  shared folders). Returns the request id; the answer lands in
+     *  [listings] under it. */
+    suspend fun listFolder(node: String, root: String = "", path: String = "", offset: Long = 0): String =
+        call { it.listFolder(node, root, path, offset.toULong()) }
+
+    /** Fetch a file from [node]'s shared folder; it shows up in [transfers]
+     *  and is saved to Downloads/my-domain like any received file. */
+    suspend fun downloadFile(node: String, root: String, path: String): String =
+        call { it.downloadFile(node, root, path) }
+
     /** Stop a transfer either way (a `file_failed` "cancelled" follows). */
     suspend fun cancelFile(id: String) = call { it.cancelFile(id) }
 
@@ -516,7 +588,7 @@ object Core {
     suspend fun signOut() {
         call { it.logout() }
         onMain {
-            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear()
+            messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear(); listings.clear()
         }
         reload()
     }

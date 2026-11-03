@@ -107,11 +107,12 @@ private fun TransferRow(t: Transfer) {
     }
 }
 
-/** Files shared from another app: pick the device that gets them. */
+/** Files or text shared from another app: pick the device that gets them. */
 @Composable
 fun ShareChooser() {
     val uris = Core.pendingShare
-    if (uris.isEmpty()) return
+    val text = Core.pendingText.takeIf { uris.isEmpty() }
+    if (uris.isEmpty() && text == null) return
     val toast = LocalToast.current
     val peers = Core.peers
     val sendingTo = stringResource(R.string.share_sending)
@@ -121,14 +122,15 @@ fun ShareChooser() {
         title = { Text(stringResource(R.string.share_title), color = T.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Muted(pluralStringResource(R.plurals.share_body, uris.size, uris.size))
+                Muted(if (text != null) stringResource(R.string.share_text_body) else pluralStringResource(R.plurals.share_body, uris.size, uris.size))
                 if (peers.isEmpty()) Muted(stringResource(R.string.share_no_devices))
                 peers.forEach { p ->
                     val name = niceName(p.name)
                     SoftButton(name, {
                         Core.clearShare()
                         toast(String.format(sendingTo, name))
-                        Core.sendFiles(p.nodeId, uris, onError = { toast(friendlyError(it)) })
+                        if (text != null) Core.sendSharedTextAsync(p.nodeId, text, onError = { toast(friendlyError(it)) })
+                        else Core.sendFiles(p.nodeId, uris, onError = { toast(friendlyError(it)) })
                     }, Modifier.fillMaxWidth())
                 }
             }

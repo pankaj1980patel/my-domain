@@ -206,6 +206,31 @@ object DeviceActions {
         return true
     }
 
+    /** Text from another device: "Copied from X" ([copied]) or "From X",
+     *  with the text. Tapping opens it if it's a web link, else the app. */
+    fun sharedText(ctx: Context, fromName: String, text: String, copied: Boolean) {
+        val app = ctx.applicationContext
+        val id = linkId.incrementAndGet()
+        val link = text.trim().takeIf { isWebLink(it) && it.none(Char::isWhitespace) }
+        val tap = if (link != null) {
+            Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        } else {
+            Intent(app, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val pi = PendingIntent.getActivity(app, id, tap, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val short = text.take(1000)
+        val n = NotificationCompat.Builder(app, CH_LINKS)
+            .setSmallIcon(android.R.drawable.ic_menu_edit)
+            .setContentTitle(app.getString(if (copied) R.string.text_copied_title else R.string.text_from_title, fromName))
+            .setContentText(short)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(short))
+            .setPriority(if (copied) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
+    }
+
     fun openUrl(ctx: Context, fromName: String, url: String) {
         if (!isWebLink(url)) return
         val app = ctx.applicationContext

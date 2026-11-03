@@ -20,8 +20,9 @@ fn pair(test: &str) -> (TestNode, TestNode) {
 #[test]
 fn a_device_reports_its_status() {
     let (a, b) = pair("status");
-    b.engine
-        .set_device_status(r#"{"battery":42,"charging":true}"#);
+    b.engine.set_device_status(
+        r#"{"battery":42,"charging":true,"storage":{"free":1000,"total":4000}}"#,
+    );
     a.engine.request_status(&b.node_id()).unwrap();
     let (from, status) = a
         .sink
@@ -33,6 +34,7 @@ fn a_device_reports_its_status() {
     assert_eq!(from, b.node_id());
     assert_eq!(status["battery"], 42);
     assert_eq!(status["charging"], true);
+    assert_eq!(status["storage"]["free"], 1000);
     assert!(status["platform"].is_string());
 }
 

@@ -25,6 +25,9 @@
 //! `open <node> <url>`, `action <node> <name> [json]`,
 //! `subscribe <node> <json pkgs>`, `notifact <node> <key> <index> [text]`,
 //! `sendfile <node> <path>`, `downloads <dir>`,
+//! `share <name> <dir>` (let other devices browse `dir` as `name`),
+//! `ls <node> [root] [path] [offset]`, `get <node> <root> <path>`,
+//! `text <node> clipboard|notify <text...>`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -454,6 +457,36 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         "sendfile" => {
             let to = resolve(engine, &arg(words.next())?)?;
             Ok(json!({ "id": engine.send_file(&to, &arg(words.next())?)? }))
+        }
+        "share" => {
+            let name = arg(words.next())?;
+            let path = arg(words.next())?;
+            let mut folders = engine.shared_folders();
+            folders.retain(|f| f.name != name);
+            folders.push(mdcore::model::SharedFolder { name, path });
+            engine.set_shared_folders(&folders)?;
+            Ok(json!(folders))
+        }
+        "ls" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let root = words.next().unwrap_or_default();
+            let path = words.next().unwrap_or_default();
+            let offset = match words.next() {
+                Some(o) => o.parse::<u64>().map_err(|_| "bad offset".to_string())?,
+                None => 0,
+            };
+            Ok(json!({ "req": engine.list_folder(&to, root, path, offset)? }))
+        }
+        "get" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let root = arg(words.next())?;
+            Ok(json!({ "id": engine.download_file(&to, &root, &arg(words.next())?)? }))
+        }
+        "text" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let mode = arg(words.next())?;
+            let text = words.collect::<Vec<_>>().join(" ");
+            Ok(json!({ "via": engine.send_text(&to, &text, &mode)? }))
         }
         "downloads" => {
             let dir = arg(words.next())?;

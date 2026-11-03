@@ -140,6 +140,120 @@ impl<P: Platform> Engine<P> {
         crate::features::files::cancel(&self.ctx, id);
     }
 
+    // --- browsing another device's shared folders (see features::browse) ---
+
+    /// The folders other devices may browse and download from, each shown
+    /// under its `name`. Replaces the previous set; empty shares nothing.
+    /// Folders that don't exist (yet) are kept but not listed.
+    pub fn set_shared_folders(&self, folders: &[crate::model::SharedFolder]) -> crate::Result<()> {
+        let mut list: Vec<(String, std::path::PathBuf)> = Vec::new();
+        for f in folders {
+            if !crate::features::browse::is_folder_name(&f.name) {
+                return Err(format!("not a folder name: {}", f.name).into());
+            }
+            if list.iter().any(|(n, _)| *n == f.name) {
+                return Err(format!("two folders named {}", f.name).into());
+            }
+            list.push((f.name.clone(), f.path.clone().into()));
+        }
+        *self.ctx.files.shared.lock() = list;
+        Ok(())
+    }
+
+    /// What `set_shared_folders` last set.
+    pub fn shared_folders(&self) -> Vec<crate::model::SharedFolder> {
+        self.ctx
+            .files
+            .shared
+            .lock()
+            .iter()
+            .map(|(name, path)| crate::model::SharedFolder {
+                name: name.clone(),
+                path: path.to_string_lossy().into_owned(),
+            })
+            .collect()
+    }
+
+    /// Ask a device what's in `path` of its shared folder `root` (`root` ""
+    /// lists the shared folders), from entry `offset` on. Returns the
+    /// request id; the answer comes as `FolderListing` with it. Like a
+    /// message, the request waits for the device to be reachable.
+    pub fn list_folder(
+        &self,
+        node_id: &str,
+        root: &str,
+        path: &str,
+        offset: u64,
+    ) -> crate::Result<String> {
+        if crate::features::browse::path_parts(path).is_none() {
+            return Err("not a path in a shared folder".to_string().into());
+        }
+        let req = transport::outbox::new_id();
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({
+            "type": "fs_list", "from": me, "req": req,
+            "root": root, "path": path, "offset": offset,
+        })
+        .to_string();
+        self.send(node_id, &m)?;
+        Ok(req)
+    }
+
+    /// Fetch file `path` from a device's shared folder `root` into this
+    /// device's downloads folder. Returns the transfer id at once; the file
+    /// then arrives like one the device sent (`FileProgress`, then
+    /// `FileReceived` or `FileFailed`, all with this id), resuming if the
+    /// link drops.
+    pub fn download_file(&self, node_id: &str, root: &str, path: &str) -> crate::Result<String> {
+        let parts = crate::features::browse::path_parts(path)
+            .filter(|p| !p.is_empty() && !root.is_empty())
+            .ok_or_else(|| CoreError::from("not a file in a shared folder".to_string()))?;
+        if self.ctx.files.download_dir.lock().is_none() {
+            return Err("this device has no downloads folder".to_string().into());
+        }
+        let id = transport::outbox::new_id();
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({
+            "type": "fs_get", "from": me, "id": id, "root": root, "path": path,
+        })
+        .to_string();
+        self.send(node_id, &m)?;
+        // Shown as waiting until the device starts sending.
+        self.ctx.sink.emit(CoreEvent::FileProgress {
+            id: id.clone(),
+            node_id: node_id.to_string(),
+            name: crate::features::files::safe_name(parts.last().copied().unwrap_or_default()),
+            done: 0,
+            total: 0,
+            incoming: true,
+        });
+        Ok(id)
+    }
+
+    // --- sending text (see features::share) ---
+
+    /// Send `text` to a device: onto its clipboard (`mode` "clipboard") or
+    /// shown as a notification ("notify"). Arrives there as `TextShared`.
+    /// Like a message, it waits for the device to be reachable; returns the
+    /// transport used, or "queued".
+    pub fn send_text(&self, node_id: &str, text: &str, mode: &str) -> crate::Result<String> {
+        if !crate::features::share::is_mode(mode) {
+            return Err(format!("unknown mode {mode}").into());
+        }
+        if text.trim().is_empty() {
+            return Err("nothing to send".to_string().into());
+        }
+        if text.len() > crate::features::share::MAX_TEXT {
+            return Err("that text is too long; send it as a file"
+                .to_string()
+                .into());
+        }
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m = serde_json::json!({ "type": "share_text", "from": me, "text": text, "mode": mode })
+            .to_string();
+        self.send(node_id, &m)
+    }
+
     /// Press button `index` of notification `key` on `node_id` (with `text`
     /// for a reply button), or dismiss it with `index` -1. Arrives there as
     /// `CoreEvent::NotificationAction`.

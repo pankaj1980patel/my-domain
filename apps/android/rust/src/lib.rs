@@ -184,6 +184,15 @@ pub struct DeviceIdentity {
     pub quic_port: u16,
 }
 
+/// A folder this phone lets your other devices browse and download from.
+#[derive(uniffi::Record)]
+pub struct SharedDir {
+    /// What the other devices see it as, e.g. "Pictures".
+    pub name: String,
+    /// Where it is on this phone.
+    pub path: String,
+}
+
 /// A known device of ours.
 #[derive(uniffi::Record)]
 pub struct PeerInfo {
@@ -663,5 +672,49 @@ impl MdEngine {
     /// "cancelled" follows; the other device is told).
     pub fn cancel_file(&self, id: String) {
         self.inner.cancel_file(&id);
+    }
+
+    // --- browsing shared folders ---
+
+    /// The folders your other devices may browse and download from
+    /// (replaces the previous set; empty shares nothing).
+    pub fn set_shared_folders(&self, folders: Vec<SharedDir>) -> MdResult<()> {
+        let folders: Vec<mdcore::model::SharedFolder> = folders
+            .into_iter()
+            .map(|f| mdcore::model::SharedFolder {
+                name: f.name,
+                path: f.path,
+            })
+            .collect();
+        Ok(self.inner.set_shared_folders(&folders)?)
+    }
+
+    /// Ask a device what's in `path` of its shared folder `root` (`root` ""
+    /// lists its shared folders), from entry `offset` on. Returns the
+    /// request id; the answer is a `folder-listing` event with that `req`.
+    pub fn list_folder(
+        &self,
+        node_id: String,
+        root: String,
+        path: String,
+        offset: u64,
+    ) -> MdResult<String> {
+        Ok(self.inner.list_folder(&node_id, &root, &path, offset)?)
+    }
+
+    /// Fetch a file from a device's shared folder. Returns the transfer id;
+    /// it then arrives like a file the device sent (`file-progress`, then
+    /// `file-received` or `file-failed`).
+    pub fn download_file(&self, node_id: String, root: String, path: String) -> MdResult<String> {
+        Ok(self.inner.download_file(&node_id, &root, &path)?)
+    }
+
+    // --- sending text ---
+
+    /// Send text to a device: onto its clipboard (`mode` "clipboard") or
+    /// shown as a notification ("notify"); it gets a `text-shared` event.
+    /// Returns the transport used, or "queued".
+    pub fn send_text(&self, node_id: String, text: String, mode: String) -> MdResult<String> {
+        Ok(self.inner.send_text(&node_id, &text, &mode)?)
     }
 }
