@@ -17,10 +17,12 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [notifs, setNotifs] = createSignal(true);
   const [followDnd, setFollowDnd] = createSignal(false);
   const [remoteInput, setRemoteInput] = createSignal(true);
+  const [screenShare, setScreenShare] = createSignal(true);
   onMount(async () => {
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
     setRemoteInput(await commands.remoteInputAllowed());
+    setScreenShare(await commands.screenAllowed());
   });
   const toggleNotifs = async (on: boolean) => {
     await commands.setNotificationsEnabled(on);
@@ -33,6 +35,10 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const toggleRemoteInput = async (on: boolean) => {
     await commands.setRemoteInputAllowed(on);
     setRemoteInput(on);
+  };
+  const toggleScreenShare = async (on: boolean) => {
+    await commands.setScreenAllowed(on);
+    setScreenShare(on);
   };
 
   const tapVersion = () => {
@@ -81,6 +87,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={remoteInput()} onChange={(e) => toggleRemoteInput(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.remoteInputHint")}</p>
+        <label class="switch-row">
+          <span>{t("settings.screenShare")}</span>
+          <input type="checkbox" role="switch" checked={screenShare()} onChange={(e) => toggleScreenShare(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.screenShareHint")}</p>
       </article>
 
       <article class="tile">
