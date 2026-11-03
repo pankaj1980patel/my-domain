@@ -85,13 +85,13 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Chat | Encrypted text between devices | `chat` | A D | — | ✅ |
 | Clipboard push | Auto-sync the clipboard to a peer | `clipboard.push` | A D | — | ✅ |
 | Clipboard pull | Fetch a peer's clipboard on demand | `clipboard.read` | A D | — | ✅ |
-| Clipboard history | Browse recent clipboard items across devices | `clipboard.read` | A D | — | ⬜ |
-| Notification mirror | Show a peer's notifications | `notifications.mirror` | A→D | P | 🟡 (desktop shows them in-app only) |
+| Clipboard history | Browse recent clipboard items across devices | `clipboard.read` | A D | — | ✅ (last 20, memory only) |
+| Notification mirror | Show a peer's notifications | `notifications.mirror` | A→D | P | ✅ (desktop OS notifications) |
 | App notification subscribe | Choose which apps' notifications to receive | `notifications.mirror` | A | P | ✅ |
-| Notification actions | Reply, dismiss, or tap an action on a mirrored notification | `notifications.control` | A | P | ⬜ |
+| Notification actions | Reply, dismiss, or tap an action on a mirrored notification | `notifications.control` | A | P | ✅ |
 | Send-to-device | Share sheet / context-menu target "Send to <device>" | `files.push` | A D | — | 🟡 (Android share sheet: files, text, links; no desktop context menu) |
 | Send text | Put text on a device's clipboard or show it there | `clipboard.push` | A D | — | ✅ |
-| Open link on device | Open a URL in the peer's browser | `apps.launch` | A D | — | ⬜ |
+| Open link on device | Open a URL in the peer's browser | `apps.launch` | A D | — | ✅ (http/https only) |
 
 ### 3.2 Screen, camera & remote control
 | Feature | What it does | Flag | Target | Tier | Status |
@@ -112,9 +112,9 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Now playing | Title, artist, artwork, position of any playing app | `media.read` | A D | P (Notification access) | ⬜ |
-| Media control | Play/pause/next/prev/seek **any app** (Spotify, YouTube, …) via MediaSession | `media.control` | A D | P | ⬜ |
-| Volume control | Media/ring/alarm/call volume | `media.control` | A D | S | ⬜ |
-| Ringer mode | Normal / vibrate / silent | `device.settings` | A | P (DND access) | ⬜ |
+| Media control | Play/pause/next/prev/seek **any app** (Spotify, YouTube, …) via MediaSession | `media.control` | A D | P | 🟡 (play/pause, next, previous on Android and Linux; no seek; not macOS) |
+| Volume control | Media/ring/alarm/call volume | `media.control` | A D | S | 🟡 (media volume up/down; desktop output volume) |
+| Ringer mode | Normal / vibrate / silent | `device.settings` | A | P (DND access) | ✅ (silent falls back to vibrate without DND access) |
 | Play on device | Send a URL or file to play on the peer | `media.control` | A D | S | ⬜ |
 | Deep-link play | Open Spotify/YouTube on the peer with a search or track | `apps.launch` | A D | S | ⬜ |
 | Audio streaming | Route desktop audio to phone speakers or vice versa | `media.stream` | A D | S | ⬜ |
@@ -124,7 +124,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | List apps | Installed apps with icons | `apps.read` | A D | S | 🟡 (Android list exists) |
-| Launch app | Open an app on the peer | `apps.launch` | A D | S / P (background start) | ⬜ |
+| Launch app | Open an app on the peer | `apps.launch` | A D | S / P (background start) | 🟡 (Android only; tap-to-open notification in the background) |
 | Foreground app | What's open right now | `apps.read` | A D | P (Usage access) | ⬜ |
 | Usage stats | Screen time per app | `apps.read` | A | P | ⬜ |
 | Install APK | Push an APK from the desktop and install it (user confirms) | `apps.manage` | A | P | ⬜ |
@@ -137,7 +137,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 |---|---|---|---|---|---|
 | View call log | Recent calls: number, name, type, duration | `calls.read` | A | S | 🟡 (handler exists, nothing sends it) |
 | Incoming call alert | Live ringing / missed / ended | `calls.read` | A | S | 🟡 |
-| Dial a number | Place a call on the phone from the desktop | `phone.dial` | A | S (`CALL_PHONE`, `TelecomManager.placeCall`) | ⬜ |
+| Dial a number | Place a call on the phone from the desktop | `phone.dial` | A | S (`CALL_PHONE`, `TelecomManager.placeCall`) | 🟡 (opens the dialer with the number; you press Call) |
 | Answer / reject / end | Control the active call | `phone.control` | A | S (`ANSWER_PHONE_CALLS`) | ⬜ |
 | Speakerphone | Turn speaker on/off during a call | `phone.control` | A | P (Dialer role / Accessibility) | ⬜ |
 | Mute in call | Mute the mic during a call | `phone.control` | A | P | ⬜ |
@@ -150,7 +150,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 |---|---|---|---|---|---|
 | Read SMS | View threads | `sms.read` | A | S (Play policy limits) | ⬜ |
 | Send SMS | Compose from the desktop | `sms.send` | A | S | ⬜ |
-| OTP forward | Detect an OTP and put it on the desktop clipboard | `sms.read` | A→D | S | ⬜ |
+| OTP forward | Detect an OTP and put it on the desktop clipboard | `sms.read` | A→D | S | ✅ (from notifications, no SMS permission; off by default) |
 
 ### 3.7 Contacts & calendar
 | Feature | What it does | Flag | Target | Tier | Status |
@@ -180,20 +180,20 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.9 Device state & settings
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Battery | %, charging, temperature, health | `device.battery` | A D | — | ⬜ |
+| Battery | %, charging, temperature, health | `device.battery` | A D | — | 🟡 (% and charging) |
 | Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage free/total in the status) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | ⬜ |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
-| Flashlight | On/off | `device.settings` | A | S | ⬜ |
-| Lock screen | Lock now | `device.lock` | A D | P (Device admin) | ⬜ |
+| Flashlight | On/off | `device.settings` | A | S | ✅ |
+| Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop only: macOS display sleep, Linux logind / screen locker) |
 | Wake / keep awake | | `device.settings` | A D | S | ⬜ |
 | Sleep / restart / shutdown | | `device.power` | A D | R on Android / S on desktop | ⬜ |
-| Desktop volume / mute | | `media.control` | D | — | ⬜ |
+| Desktop volume / mute | | `media.control` | D | — | ✅ (macOS, Linux) |
 
 ### 3.10 Find & security
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Ring device | Full volume even when silent | `find.ring` | A D | P (DND access) | ⬜ |
+| Ring device | Full volume even when silent | `find.ring` | A D | P (DND access) | ✅ (phone: alarm stream at full volume; desktop: window + sound) |
 | Locate | Current GPS location on a map | `find.locate` | A | S (background location) | ⬜ |
 | Location history | Last known locations | `find.locate` | A | S | ⬜ |
 | Lost mode | Lock with a message and contact number | `find.lost` | A | P (Device admin) | ⬜ |
@@ -204,7 +204,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.11 Files
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | ⬜ |
+| File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | 🟡 (files, resumable; no folders) |
 | Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (folders each device shares; no screens yet) |
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
 | Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | ⬜ |
