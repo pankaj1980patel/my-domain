@@ -150,6 +150,12 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 ## Now playing, richer status, slide remote, play on device (2026-11-03)
 
+- Verified live 2026-11-03: the phone's status, asked from mdctl on the
+  Mac, carried battery temperature and health, Wi-Fi (connected, signal
+  4), Bluetooth, memory and storage. The lab scenarios pass on the new
+  build. Now playing, the slide remote and play-on-device are not tried
+  on the devices yet.
+
 - **Now playing** (`features/media.rs`): `Engine::set_now_playing(json)`
   from the host; status replies carry `now_playing`, and devices that
   asked for the status in the last 10 minutes get a `now_playing` push on
