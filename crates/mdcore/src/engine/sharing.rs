@@ -115,6 +115,41 @@ impl<P: Platform> Engine<P> {
         self.send(node_id, &m)
     }
 
+    /// `open_url`, in a chosen app on the device (an Android package such
+    /// as `com.google.android.youtube` or `com.spotify.music`); a device
+    /// without that app (or a computer) opens it in the browser.
+    pub fn open_url_in(&self, node_id: &str, url: &str, app: &str) -> crate::Result<String> {
+        if !crate::features::device::is_openable(url) {
+            return Err("only http and https links can be opened".to_string().into());
+        }
+        if !crate::features::device::is_package(app) {
+            return Err(format!("not an app id: {app}").into());
+        }
+        let me = self.ctx.identity.lock().node_id.clone();
+        let m =
+            serde_json::json!({ "type": "open_url", "from": me, "url": url.trim(), "app": app })
+                .to_string();
+        self.send(node_id, &m)
+    }
+
+    /// Search for `query` in `app` ("youtube", "spotify" or "web") on a
+    /// device: the `search` action, which a device lists in its `actions`
+    /// (with the apps it has in `search_apps`). The phone opens the app's
+    /// search (the browser if the app is missing); a computer opens the
+    /// search page in the browser.
+    pub fn search_in_app(&self, node_id: &str, app: &str, query: &str) -> crate::Result<String> {
+        use crate::features::device::{MAX_QUERY, SEARCH_APPS};
+        if !SEARCH_APPS.contains(&app) {
+            return Err(format!("can't search in {app}").into());
+        }
+        let query = query.trim();
+        if query.is_empty() || query.len() > MAX_QUERY {
+            return Err("search for something shorter".to_string().into());
+        }
+        let args = serde_json::json!({ "app": app, "query": query }).to_string();
+        self.run_action(node_id, "search", &args)
+    }
+
     /// Ask a device to run an action it listed in its status (`actions`),
     /// e.g. `run_action(phone, "flashlight", r#"{"on":true}"#)`. Arrives as
     /// `CoreEvent::Action` there.

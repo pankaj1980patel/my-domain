@@ -48,6 +48,9 @@ fn push_status(app: &AppHandle) {
     if screen::can_lock() {
         actions.push("lock");
     }
+    // Searches open in the browser here (YouTube, Spotify's web player, the web).
+    actions.push("search");
+    status["search_apps"] = serde_json::json!(["youtube", "spotify", "web"]);
     match slides::ready() {
         Ok(()) => actions.push("slides"),
         // Tell the phone why there's no slide remote, so it can say so.
@@ -120,6 +123,13 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
         "mute" => sound::mute(args["on"].as_bool()),
         "media" => sound::media(args["key"].as_str().unwrap_or_default()),
         "lock" => screen::lock(),
+        "search" => {
+            let q = args["query"].as_str().unwrap_or_default();
+            if let Some(url) = search_url(args["app"].as_str().unwrap_or_default(), q) {
+                on_open_url(app, &url);
+            }
+            return;
+        }
         "slides" => {
             if let Err(why) = slides::press(args["key"].as_str().unwrap_or_default()) {
                 crate::notify::post(app, "my-domain can't change slides", why);
@@ -653,6 +663,33 @@ pub fn on_ring(app: &AppHandle, from: &str) {
     );
 }
 
+/// The web page that searches `app` for `query` (a computer has no apps for
+/// these: the browser does it).
+fn search_url(app: &str, query: &str) -> Option<String> {
+    let q = urlencode(query.trim());
+    if q.is_empty() {
+        return None;
+    }
+    Some(match app {
+        "youtube" => format!("https://www.youtube.com/results?search_query={q}"),
+        "spotify" => format!("https://open.spotify.com/search/{q}"),
+        "web" => format!("https://duckduckgo.com/?q={q}"),
+        _ => return None,
+    })
+}
+
+/// Percent-encode everything but unreserved characters.
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 /// Open a link a sibling sent, in the default browser. The core only emits
 /// http(s) links; checked again here since this hands it to the OS.
 pub fn on_open_url(app: &AppHandle, url: &str) {
@@ -666,7 +703,24 @@ pub fn on_open_url(app: &AppHandle, url: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_df, parse_now_playing, parse_pmset};
+    use super::{parse_df, parse_now_playing, parse_pmset, search_url};
+
+    #[test]
+    fn search_pages() {
+        assert_eq!(
+            search_url("youtube", " miles davis & co "),
+            Some("https://www.youtube.com/results?search_query=miles%20davis%20%26%20co".into())
+        );
+        assert_eq!(
+            search_url("spotify", "Kind of Blue").as_deref(),
+            Some("https://open.spotify.com/search/Kind%20of%20Blue")
+        );
+        assert!(search_url("web", "\u{e9}t\u{e9}")
+            .unwrap()
+            .ends_with("%C3%A9t%C3%A9"));
+        assert_eq!(search_url("tiktok", "x"), None);
+        assert_eq!(search_url("youtube", "  "), None);
+    }
 
     #[test]
     fn reads_now_playing() {

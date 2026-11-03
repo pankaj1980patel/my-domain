@@ -115,8 +115,14 @@ pub enum CoreEvent {
     },
     /// Another of your devices asks this one to ring (find my device).
     Ring { from: String },
-    /// Another of your devices asks this one to open a web link.
-    OpenUrl { from: String, url: String },
+    /// Another of your devices asks this one to open a web link, in app
+    /// `app` (an Android package) if it's given and installed.
+    OpenUrl {
+        from: String,
+        url: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        app: Option<String>,
+    },
     /// Another of your devices asks this one to run action `name` (e.g.
     /// "flashlight" with `{"on": true}`); the host app carries it out.
     Action {

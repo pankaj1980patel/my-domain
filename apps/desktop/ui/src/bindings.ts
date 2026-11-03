@@ -67,6 +67,16 @@ export const commands = {
 	/**  Open a web link (http/https only) on a device. */
 	openUrlOn: (nodeId: string, url: string) => typedError<string, string>(__TAURI_INVOKE("open_url_on", { nodeId, url })),
 	/**
+	 *  Open a link on a device in a chosen app (an Android package such as
+	 *  "com.google.android.youtube"); without it, the device's browser.
+	 */
+	openUrlInApp: (nodeId: string, url: string, app: string) => typedError<string, string>(__TAURI_INVOKE("open_url_in_app", { nodeId, url, app })),
+	/**
+	 *  Search for `query` in `app` ("youtube", "spotify" or "web") on a device
+	 *  that lists the `search` action (its `search_apps` say which it has).
+	 */
+	searchOn: (nodeId: string, app: string, query: string) => typedError<string, string>(__TAURI_INVOKE("search_on", { nodeId, app, query })),
+	/**
 	 *  Send a file to a device. Returns the transfer id; progress arrives as
 	 *  `file-progress`, then `file-sent` or `file-failed`.
 	 */

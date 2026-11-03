@@ -231,10 +231,74 @@ object DeviceActions {
         runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
     }
 
-    fun openUrl(ctx: Context, fromName: String, url: String) {
+    // --- play on this phone ---------------------------------------------------
+
+    private const val YOUTUBE = "com.google.android.youtube"
+    private const val SPOTIFY = "com.spotify.music"
+
+    private fun installed(ctx: Context, pkg: String): Boolean =
+        runCatching { ctx.packageManager.getPackageInfo(pkg, 0) }.isSuccess
+
+    /** The `search` apps this phone has (the web always works). */
+    fun searchApps(ctx: Context): org.json.JSONArray = org.json.JSONArray().apply {
+        if (installed(ctx, YOUTUBE)) put("youtube")
+        if (installed(ctx, SPOTIFY)) put("spotify")
+        put("web")
+    }
+
+    /** Another device's `search {app, query}`: the app's own search when
+     *  it's installed, else the same search in the browser. */
+    fun search(ctx: Context, fromName: String, appName: String, query: String): Boolean {
+        val q = query.trim().take(500)
+        if (q.isEmpty()) return false
+        val app = ctx.applicationContext
+        val enc = Uri.encode(q)
+        val intent = when (appName) {
+            "youtube" -> if (installed(app, YOUTUBE)) {
+                Intent(Intent.ACTION_SEARCH).setPackage(YOUTUBE).putExtra("query", q)
+            } else Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$enc"))
+            "spotify" -> if (installed(app, SPOTIFY)) {
+                Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$enc")).setPackage(SPOTIFY)
+            } else Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/search/$enc"))
+            "web" -> Intent(Intent.ACTION_WEB_SEARCH).putExtra(android.app.SearchManager.QUERY, q)
+            else -> return false
+        }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // A web search nobody handles: a search page in the browser.
+        val target = if (intent.resolveActivity(app.packageManager) != null) intent
+        else Intent(Intent.ACTION_VIEW, Uri.parse("https://duckduckgo.com/?q=$enc")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        startOrNotify(app, target, app.getString(R.string.search_title, fromName, q), app.getString(R.string.launch_body))
+        return true
+    }
+
+    /** At once if this app is on screen; else a notification to tap
+     *  (Android doesn't let a background app start an activity). */
+    private fun startOrNotify(app: Context, intent: Intent, title: String, text: String) {
+        if (Core.visible && runCatching { app.startActivity(intent) }.isSuccess) return
+        val id = linkId.incrementAndGet()
+        val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val n = NotificationCompat.Builder(app, CH_LINKS)
+            .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
+    }
+
+    /**
+     * Open [url] from another device, in app [pkg] when it's given, installed
+     * and takes the link (else the browser). On screen, open it straight
+     * away; otherwise Android forbids starting an activity from the
+     * background, so post a notification that opens it when tapped.
+     */
+    fun openUrl(ctx: Context, fromName: String, url: String, pkg: String? = null) {
         if (!isWebLink(url)) return
         val app = ctx.applicationContext
-        val view = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val plain = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val inApp = pkg?.takeIf { installed(app, it) }?.let { Intent(plain).setPackage(it) }
+        val view = inApp?.takeIf { it.resolveActivity(app.packageManager) != null } ?: plain
         if (Core.visible) {
             val opened = runCatching { app.startActivity(view) }
                 .onFailure { Log.w(TAG, "can't open link: $it") }.isSuccess

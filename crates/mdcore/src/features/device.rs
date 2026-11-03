@@ -7,7 +7,8 @@
 //!   status_request { from }            asker → device
 //!   status         { from, status{} }  device → asker
 //!   ring           { from }            asker → device
-//!   open_url       { from, url }       asker → device (http/https only)
+//!   open_url       { from, url, app? } asker → device (http/https only;
+//!                                      `app`: open it in that app if installed)
 //!   action         { from, name, args } asker → device
 //!
 //! `action` is the open-ended one: flashlight, volume, ringer mode, media
@@ -75,6 +76,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     ctx.sink.emit(CoreEvent::OpenUrl {
                         from,
                         url: url.trim().to_string(),
+                        app: msg.opt("app").filter(|a| is_package(a)),
                     });
                 }
             }
@@ -92,6 +94,25 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
         }
     }
 }
+
+/// An Android package name (`com.google.android.youtube`): what `open_url`
+/// may name as the app to open a link in.
+pub fn is_package(name: &str) -> bool {
+    let parts: Vec<&str> = name.split('.').collect();
+    name.len() <= 100
+        && parts.len() >= 2
+        && parts.iter().all(|p| {
+            p.chars().next().is_some_and(|c| c.is_ascii_alphabetic())
+                && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+}
+
+/// Apps a `search` action can search in (the device lists the ones it has
+/// in its status as `search_apps`).
+pub const SEARCH_APPS: &[&str] = &["youtube", "spotify", "web"];
+
+/// Longest search text.
+pub const MAX_QUERY: usize = 500;
 
 /// A valid action name: short, lowercase, `[a-z0-9_.]`.
 pub fn is_action_name(name: &str) -> bool {
@@ -119,6 +140,23 @@ mod tests {
             "",
         ] {
             assert!(!is_openable(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn package_names_look_like_packages() {
+        assert!(is_package("com.google.android.youtube"));
+        assert!(is_package("com.spotify.music"));
+        for bad in [
+            "",
+            "youtube",
+            "com..x",
+            "com.1x",
+            "com.x/y",
+            "com.x;rm",
+            &"a.b".repeat(50),
+        ] {
+            assert!(!is_package(bad), "{bad}");
         }
     }
 

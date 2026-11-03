@@ -652,6 +652,18 @@ impl MdEngine {
         Ok(self.inner.open_url(&node_id, &url)?)
     }
 
+    /// `open_url`, in app `app` (a package, e.g. "com.google.android.youtube")
+    /// if the device has it, else its browser.
+    pub fn open_url_in(&self, node_id: String, url: String, app: String) -> MdResult<String> {
+        Ok(self.inner.open_url_in(&node_id, &url, &app)?)
+    }
+
+    /// Search for `query` in `app` ("youtube", "spotify" or "web") on a
+    /// device that lists the `search` action.
+    pub fn search_in_app(&self, node_id: String, app: String, query: String) -> MdResult<String> {
+        Ok(self.inner.search_in_app(&node_id, &app, &query)?)
+    }
+
     // --- files ---
 
     /// Where files from your other devices are saved (an app-private dir;

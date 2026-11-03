@@ -548,6 +548,14 @@ object Core {
     /** Open a web link on a device. */
     suspend fun openUrl(node: String, url: String): String = call { it.openUrl(node, url) }
 
+    /** Open a web link on a device in app [pkg] (e.g. "com.google.android.youtube");
+     *  a device without it uses its browser. */
+    suspend fun openUrlIn(node: String, url: String, pkg: String): String = call { it.openUrlIn(node, url, pkg) }
+
+    /** Search for [query] in [app] ("youtube", "spotify" or "web") on a
+     *  device that lists `search` (its status' `search_apps` say which). */
+    suspend fun search(node: String, app: String, query: String): String = call { it.searchInApp(node, app, query) }
+
     /**
      * Send a picked or shared file ([uri]) to a device: copied to the cache
      * first (the core sends from a path), then handed to the core. Returns

@@ -22,7 +22,8 @@
 //!
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
 //! `send <node> <text...>`, `status <node>`, `ring <node>`,
-//! `open <node> <url>`, `action <node> <name> [json]`,
+//! `open <node> <url> [app package]`, `search <node> youtube|spotify|web <text...>`,
+//! `action <node> <name> [json]`,
 //! `subscribe <node> <json pkgs>`, `notifact <node> <key> <index> [text]`,
 //! `sendfile <node> <path>`, `downloads <dir>`,
 //! `share <name> <dir>` (let other devices browse `dir` as `name`),
@@ -431,7 +432,18 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         }
         "open" => {
             let to = resolve(engine, &arg(words.next())?)?;
-            Ok(json!({ "via": engine.open_url(&to, &arg(words.next())?)? }))
+            let url = arg(words.next())?;
+            let via = match words.next() {
+                Some(app) => engine.open_url_in(&to, &url, app)?,
+                None => engine.open_url(&to, &url)?,
+            };
+            Ok(json!({ "via": via }))
+        }
+        "search" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let app = arg(words.next())?;
+            let query = words.collect::<Vec<_>>().join(" ");
+            Ok(json!({ "via": engine.search_in_app(&to, &app, &query)? }))
         }
         "action" => {
             let to = resolve(engine, &arg(words.next())?)?;

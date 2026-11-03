@@ -670,6 +670,32 @@ fn open_url_on(node_id: String, url: String, engine: State<Eng>) -> Result<Strin
     engine.open_url(&node_id, &url)
 }
 
+/// Open a link on a device in a chosen app (an Android package such as
+/// "com.google.android.youtube"); without it, the device's browser.
+#[tauri::command]
+#[specta::specta]
+fn open_url_in_app(
+    node_id: String,
+    url: String,
+    app: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.open_url_in(&node_id, &url, &app)
+}
+
+/// Search for `query` in `app` ("youtube", "spotify" or "web") on a device
+/// that lists the `search` action (its `search_apps` say which it has).
+#[tauri::command]
+#[specta::specta]
+fn search_on(
+    node_id: String,
+    app: String,
+    query: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.search_in_app(&node_id, &app, &query)
+}
+
 // --- notifications ---
 
 /// Whether OS notifications are shown (Settings, "Show notifications").
@@ -884,6 +910,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         request_status,
         ring_device,
         open_url_on,
+        open_url_in_app,
+        search_on,
         send_file,
         cancel_file,
         send_text,

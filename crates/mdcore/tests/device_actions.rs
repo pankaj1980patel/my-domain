@@ -91,6 +91,58 @@ fn only_web_links_are_sent_and_opened() {
 }
 
 #[test]
+fn a_link_can_name_the_app_to_open_it_in() {
+    let (a, b) = pair("open-in");
+    assert!(a
+        .engine
+        .open_url_in(&b.node_id(), "https://youtu.be/x", "not a package")
+        .is_err());
+    a.engine
+        .open_url_in(
+            &b.node_id(),
+            "https://youtu.be/x",
+            "com.google.android.youtube",
+        )
+        .unwrap();
+    let got = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::OpenUrl { url, app, .. } => Some((url.clone(), app.clone())),
+            _ => None,
+        })
+        .expect("no open-url");
+    assert_eq!(
+        got,
+        (
+            "https://youtu.be/x".to_string(),
+            Some("com.google.android.youtube".to_string())
+        )
+    );
+}
+
+#[test]
+fn a_search_reaches_the_device_as_an_action() {
+    let (a, b) = pair("search");
+    assert!(a.engine.search_in_app(&b.node_id(), "tiktok", "x").is_err());
+    assert!(a
+        .engine
+        .search_in_app(&b.node_id(), "youtube", "  ")
+        .is_err());
+    a.engine
+        .search_in_app(&b.node_id(), "spotify", " Kind of Blue ")
+        .unwrap();
+    let args = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Action { name, args, .. } if name == "search" => Some(args.clone()),
+            _ => None,
+        })
+        .expect("no search");
+    assert_eq!(args["app"], "spotify");
+    assert_eq!(args["query"], "Kind of Blue");
+}
+
+#[test]
 fn an_action_reaches_the_device_with_its_arguments() {
     let (a, b) = pair("action");
     assert!(a.engine.run_action(&b.node_id(), "Bad Name", "").is_err());

@@ -22,6 +22,7 @@ import org.json.JSONObject
  *   ringer     {mode: "normal" | "vibrate" | "silent"}
  *   launch     {pkg}                     open an app (from the apps list)
  *   dial       {number}                  open the dialer with it (no call)
+ *   search     {app, query}              search YouTube / Spotify / the web
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -55,7 +56,7 @@ object Controls {
 
     fun actions(): JSONArray = JSONArray().apply {
         if (torchId != null) put("flashlight")
-        put("volume"); put("media"); put("ringer"); put("launch")
+        put("volume"); put("media"); put("ringer"); put("launch"); put("search")
         if (hasPhone) put("dial")
     }
 
@@ -120,6 +121,7 @@ object Controls {
                 }
                 "launch" -> DeviceActions.launchApp(ctx, fromName, args.optString("pkg"))
                 "dial" -> DeviceActions.dial(ctx, fromName, args.optString("number"))
+                "search" -> DeviceActions.search(ctx, fromName, args.optString("app"), args.optString("query"))
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

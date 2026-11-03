@@ -190,6 +190,7 @@ class NetService : Service() {
      *  that ask (`request_status`). Pushed only when it changed. */
     private fun pushStatus() {
         val o = Controls.state(this).put("actions", Controls.actions())
+            .put("search_apps", DeviceActions.searchApps(this))
         battery?.let { (pct, charging) -> o.put("battery", pct).put("charging", charging) }
         storage()?.let { o.put("storage", it) }
         batteryTemp?.let { o.put("battery_temp", it) }
@@ -307,7 +308,7 @@ class NetService : Service() {
                         "notification_action" -> NotifListener.onAction(o)
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
-                        "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"))
+                        "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"), o.optString("app").ifEmpty { null })
                         "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject(), Core.peerName(o.optString("from")))
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
