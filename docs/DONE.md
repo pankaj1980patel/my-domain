@@ -362,6 +362,10 @@ problems; all are fixed.
   The remaining pushes were three bursts from the Linux desktop (one
   connection attempt each, the first at its startup), held by Doze until
   its maintenance windows.
+- An overnight run (01:21 to 07:01) gave no result: the phone left USB
+  before the end, so there was no second snapshot.
+- Linux desktop memory overnight, same process, 01:48 to 07:01: 211,116 kB
+  → 211,312 kB resident, 55 threads both times. No leak.
 
 ## Relay socket closes when idle in the background (2026-11-02)
 
