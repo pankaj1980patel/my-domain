@@ -23,6 +23,17 @@ mod tray;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
 
+/// The managed engine, reachable from other threads (md-ble's scanner).
+#[derive(Clone)]
+struct EngineHandle(AppHandle);
+
+impl std::ops::Deref for EngineHandle {
+    type Target = Eng;
+    fn deref(&self) -> &Eng {
+        self.0.state::<Eng>().inner()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Platform implementation
 // ---------------------------------------------------------------------------
@@ -962,6 +973,9 @@ pub fn run() {
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
             device::spawn_status_reporter(handle.clone());
+            // Reach phones over Bluetooth LE when there's no network path
+            // (does nothing without Bluetooth).
+            md_ble::central::start(EngineHandle(handle.clone()));
             // A missing tray isn't fatal: the window still works.
             if let Err(e) = tray::init(&handle) {
                 eprintln!("[tray] couldn't create the tray icon: {e}");

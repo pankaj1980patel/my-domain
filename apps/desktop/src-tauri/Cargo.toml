@@ -19,6 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 mdcore = { workspace = true, features = ["specta"] }
+md-ble = { workspace = true }
 # Typed commands: generates TypeScript bindings for the UI from the Rust
 # commands (ADR-0003). The three crates move in lockstep (release candidates).
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }

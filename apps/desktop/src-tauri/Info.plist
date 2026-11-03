@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- md-ble: reach your phone over Bluetooth LE when there's no network. -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>my-domain uses Bluetooth to reach your phone when there is no network between them.</string>
+</dict>
+</plist>

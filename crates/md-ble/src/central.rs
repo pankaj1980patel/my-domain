@@ -39,9 +39,21 @@ struct State {
     seen: HashSet<PeripheralId>,
 }
 
+/// A handle to the engine: an `Arc<Engine>`, or anything else that leads to
+/// it (the desktop app keeps its engine in Tauri's state).
+pub trait EngineRef<P: Platform>:
+    std::ops::Deref<Target = Engine<P>> + Clone + Send + Sync + 'static
+{
+}
+
+impl<P: Platform, T> EngineRef<P> for T where
+    T: std::ops::Deref<Target = Engine<P>> + Clone + Send + Sync + 'static
+{
+}
+
 /// Start looking for phones in the background. Returns at once; does
 /// nothing if this computer has no Bluetooth (or it's off).
-pub fn start<P: Platform + 'static>(engine: Arc<Engine<P>>) {
+pub fn start<P: Platform + 'static, E: EngineRef<P>>(engine: E) {
     std::thread::spawn(move || {
         let Ok(rt) = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(1)
@@ -57,7 +69,7 @@ pub fn start<P: Platform + 'static>(engine: Arc<Engine<P>>) {
     });
 }
 
-async fn run<P: Platform + 'static>(engine: Arc<Engine<P>>) -> Result<(), btleplug::Error> {
+async fn run<P: Platform + 'static, E: EngineRef<P>>(engine: E) -> Result<(), btleplug::Error> {
     let manager = Manager::new().await?;
     let Some(adapter) = manager.adapters().await?.into_iter().next() else {
         return Ok(());
@@ -112,8 +124,8 @@ fn is_direct<P: Platform>(engine: &Engine<P>, node: &str) -> bool {
 }
 
 /// Drop connections to devices that are direct now; retry the others.
-async fn check<P: Platform + 'static>(
-    engine: &Arc<Engine<P>>,
+async fn check<P: Platform + 'static, E: EngineRef<P>>(
+    engine: &E,
     adapter: &Adapter,
     state: &Arc<Mutex<State>>,
 ) {
@@ -143,8 +155,8 @@ async fn check<P: Platform + 'static>(
     }
 }
 
-fn maybe_connect<P: Platform + 'static>(
-    engine: &Arc<Engine<P>>,
+fn maybe_connect<P: Platform + 'static, E: EngineRef<P>>(
+    engine: &E,
     adapter: &Adapter,
     state: &Arc<Mutex<State>>,
     id: PeripheralId,
@@ -178,8 +190,8 @@ fn maybe_connect<P: Platform + 'static>(
 }
 
 /// Connect, subscribe, and hand the connection to the core.
-async fn open<P: Platform + 'static>(
-    engine: &Arc<Engine<P>>,
+async fn open<P: Platform + 'static, E: EngineRef<P>>(
+    engine: &E,
     state: &Arc<Mutex<State>>,
     id: &PeripheralId,
     p: Peripheral,
