@@ -1023,3 +1023,13 @@ input[type="checkbox"][role="switch"]:checked::after {
   font-size: var(--text-sm);
   letter-spacing: 0.04em;
 }
+
+/* A device's screen (Its screen tile): fitted to the tile, sharp corners kept soft. */
+.screen-view {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm, 8px);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  margin: 8px 0;
+}

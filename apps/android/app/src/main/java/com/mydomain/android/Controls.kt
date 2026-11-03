@@ -60,6 +60,8 @@ object Controls {
         put("volume"); put("media"); put("ringer"); put("launch"); put("search")
         if (hasPhone) put("dial")
         put("keep_awake")
+        // Computers can see this screen (Android asks each time).
+        put("screen")
     }
 
     fun state(ctx: Context): JSONObject {

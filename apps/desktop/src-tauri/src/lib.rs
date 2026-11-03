@@ -790,7 +790,16 @@ fn set_remote_input_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
     std::thread::spawn(move || device::refresh_status(&app));
 }
 
-// --- your phone sees this screen ---
+// --- your phone sees this screen, and you see its ---
+
+/// Start (`on`) or stop watching a device's screen: snapshots arrive as
+/// `screen-frame` events. Renew every 10 s while it shows (a watch ends by
+/// itself after 25 s).
+#[tauri::command]
+#[specta::specta]
+fn screen_watch(node_id: String, on: bool, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.screen_watch(&node_id, on)
+}
 
 /// Whether your other devices may watch this screen.
 #[tauri::command]
@@ -1090,7 +1099,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         remote_input_allowed,
         set_remote_input_allowed,
         screen_allowed,
-        set_screen_allowed
+        set_screen_allowed,
+        screen_watch
     ])
 }
 

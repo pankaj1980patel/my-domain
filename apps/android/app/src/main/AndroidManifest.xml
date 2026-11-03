@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Your computers see this screen, after Android's own prompt each time. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Find my phone: keep the CPU up while the ring plays (MediaPlayer wake mode),
          and vibrate with the ring notification. -->
@@ -108,6 +110,16 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- Your computers see this screen: Android's prompt, then the sharing. -->
+        <activity
+            android:name=".ScreenConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
         <!-- The touchpad full screen (the touchpad tile's Enlarge). -->
         <activity
             android:name=".TouchpadActivity"

@@ -968,6 +968,19 @@ impl MdEngine {
         Ok(self.inner.input_key(&node_id, &key)?)
     }
 
+    /// The devices watching this phone's screen now: while there are any,
+    /// send snapshots with `screen_frame`.
+    pub fn screen_watchers(&self) -> Vec<String> {
+        self.inner.screen_watchers()
+    }
+
+    /// Send a snapshot of this screen (a JPEG) to everyone watching;
+    /// returns how many it went to.
+    pub fn screen_frame(&self, jpeg: Vec<u8>) -> MdResult<u32> {
+        let sent = self.inner.screen_frame(&jpeg)?;
+        Ok(u32::try_from(sent).unwrap_or(u32::MAX))
+    }
+
     /// Whether a device ever said how to wake it from sleep (Wake-on-LAN).
     pub fn can_wake(&self, node_id: String) -> bool {
         self.inner.can_wake(&node_id)

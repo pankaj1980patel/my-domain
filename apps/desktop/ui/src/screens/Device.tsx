@@ -2,6 +2,8 @@
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { listen } from "@tauri-apps/api/event";
+import { commands } from "../bindings";
 import {
   cancelFile,
   clearClipHistory,
@@ -90,6 +92,9 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <ClipboardTile node={props.node} />
             <FilesTile node={props.node} />
             <ControlTile node={props.node} />
+            <Show when={state.status[props.node]?.actions.includes("screen")}>
+              <ScreenTile node={props.node} />
+            </Show>
             <NotifyTile />
             <AppsTile node={props.node} />
           </div>
@@ -320,6 +325,57 @@ function ClipboardTile(props: { node: string }) {
         </ul>
         <p class="muted small">{t("clipboard.recentHint")}</p>
       </Show>
+    </article>
+  );
+}
+
+/** See the device's screen: watched while "Show" is on (renewed before the
+ *  25 s watch runs out); snapshots arrive as `screen-frame` events. A phone
+ *  asks its owner first, every time. */
+function ScreenTile(props: { node: string }) {
+  const [watching, setWatching] = createSignal(false);
+  const [frame, setFrame] = createSignal<string>();
+  let renew: ReturnType<typeof setInterval> | undefined;
+  let unlisten: (() => void) | undefined;
+
+  const watch = async (on: boolean) => {
+    const r = await commands.screenWatch(props.node, on);
+    if (r.status === "error") throw new Error(r.error);
+  };
+  const stop = () => {
+    if (renew) clearInterval(renew);
+    renew = undefined;
+    unlisten?.();
+    unlisten = undefined;
+    if (watching()) watch(false).catch(() => {});
+    setWatching(false);
+    setFrame(undefined);
+  };
+  const start = async () => {
+    try {
+      unlisten = await listen<{ from: string; jpeg: string }>("screen-frame", (e) => {
+        if (e.payload.from === props.node) setFrame(`data:image/jpeg;base64,${e.payload.jpeg}`);
+      });
+      await watch(true);
+      setWatching(true);
+      renew = setInterval(() => watch(true).catch(() => {}), 10_000);
+    } catch (err) {
+      stop();
+      toast(friendlyError(err), "error");
+    }
+  };
+  onCleanup(stop);
+
+  return (
+    <article class="tile">
+      <h2>{t("screen.title")}</h2>
+      <p class="muted small">{t("screen.hint")}</p>
+      <Show when={watching() && frame()} fallback={<Show when={watching()}><p class="muted small">{t("screen.waiting")}</p></Show>}>
+        <img class="screen-view" src={frame()} alt={t("screen.alt")} />
+      </Show>
+      <button class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"} onClick={() => (watching() ? stop() : start())}>
+        {watching() ? t("screen.stop") : t("screen.show")}
+      </button>
     </article>
   );
 }

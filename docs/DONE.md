@@ -249,6 +249,27 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## See the phone's screen on the computer (2026-11-03)
+
+The same `features::screen` the other way round: a computer watches the
+phone.
+
+- Android (`ScreenShare.kt`): the phone lists `screen` in its status.
+  When a computer starts watching, Android's own screen-recording prompt
+  shows (straight away on screen, else from a notification: Android won't
+  start screens from the background); nothing is shared without a yes,
+  every time. Then a foreground service (type `mediaProjection`) takes a
+  720 px wide JPEG about twice a second while anyone watches, and stops
+  30 s after the last watcher (or from its notification's Stop). FFI
+  `screen_watchers`, `screen_frame`. Snapshots aren't parsed twice or
+  logged.
+- Desktop: command `screen_watch` (binding by hand), an "Its screen" tile
+  on a device's page for devices that list `screen`: Show its screen /
+  Stop, renewing every 10 s.
+
+Checks: desktop clippy, UI type check, APK build. Not tried live yet (the
+phone was locked).
+
 ## Point & click on the computer's screen (2026-11-03)
 
 With the computer's screen showing behind the full-screen pad, "Point &

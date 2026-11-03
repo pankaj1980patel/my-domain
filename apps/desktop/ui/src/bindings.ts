@@ -159,6 +159,12 @@ export const commands = {
 	/**  Whether your other devices may watch this screen. */
 	screenAllowed: () => __TAURI_INVOKE<boolean>("screen_allowed"),
 	setScreenAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_screen_allowed", { on }),
+	/**
+	 *  Start (`on`) or stop watching a device's screen: snapshots arrive as
+	 *  `screen-frame` events. Renew every 10 s while it shows (a watch ends by
+	 *  itself after 25 s).
+	 */
+	screenWatch: (nodeId: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("screen_watch", { nodeId, on })),
 };
 
 /* Types */

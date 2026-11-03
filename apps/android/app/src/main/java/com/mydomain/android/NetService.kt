@@ -306,6 +306,8 @@ class NetService : Service() {
     private val coreEvents = object : EventListener {
         override fun onEvent(name: String, payloadJson: String) {
             Core.onEvent(name, payloadJson)
+            // A screen snapshot is for the UI alone (and big): don't parse it again.
+            if (name == "screen-frame") return
             serviceScope.launch {
                 try {
                     val o = JSONObject(payloadJson)
@@ -322,6 +324,7 @@ class NetService : Service() {
                         "file_failed" -> FileActions.onFailed(this@NetService, o)
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)
+                        "screen_watch" -> ScreenShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {
