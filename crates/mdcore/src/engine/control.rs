@@ -15,8 +15,9 @@ impl<P: Platform> Engine<P> {
         crate::features::input::add(&self.ctx, node_id, dx, dy, false)
     }
 
-    /// Scroll on a computer by `dx`, `dy` pixels (positive `dy` scrolls the
-    /// content down, like dragging two fingers up). Batched like moves.
+    /// Scroll on a computer by `dx`, `dy` pixels: positive `dy` scrolls
+    /// down (towards the end of the page, as dragging two fingers up does on
+    /// a touchpad), positive `dx` to the right. Batched like moves.
     pub fn input_scroll(&self, node_id: &str, dx: i32, dy: i32) -> crate::Result<()> {
         crate::features::input::add(&self.ctx, node_id, dx, dy, true)
     }
