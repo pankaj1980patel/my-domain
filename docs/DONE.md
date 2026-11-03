@@ -156,6 +156,13 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
   Done. mdctl: `gesture <node> 3|4 left|right|up|down`, `click <node>
   middle`. Enlarge tried on the phone (it first drew under the system
   bars; fixed); the gestures need real fingers (adb fakes only one).
+- On the vivo phone a three-finger swipe still takes a screenshot: the
+  phone handles it before any app, and apps can't turn it off. A setting
+  ("Block screenshots on the full-screen touchpad", on by default) marks
+  the full-screen pad's window secure, which helps on some phones but not
+  this one. So the full-screen pad also has buttons for the swipes (◀ App,
+  App ▶, All windows, ◀ Desktop, Desktop ▶, Show desktop); all six reached
+  mdctl as the right `gesture` events.
 - Not tried yet: the arrow/Enter/Backspace/Esc buttons from the phone,
   two-finger scroll, input played back on a real desktop (the running Mac
   app wasn't restarted), and backup per computer on the phone.
