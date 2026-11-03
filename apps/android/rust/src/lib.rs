@@ -193,6 +193,65 @@ pub struct SharedDir {
     pub path: String,
 }
 
+/// One photo or video for a gallery page (`gallery_reply`). `path` stays
+/// on the phone; `thumb` is a small JPEG (up to 48 KB, else left out).
+#[derive(uniffi::Record)]
+pub struct GalleryMedia {
+    /// MediaStore row id.
+    pub id: String,
+    pub name: String,
+    pub mime: String,
+    pub size: u64,
+    /// Unix seconds (0 if unknown).
+    pub taken: u64,
+    pub width: u32,
+    pub height: u32,
+    /// Milliseconds (videos).
+    pub duration: u64,
+    pub video: bool,
+    pub path: String,
+    pub thumb: Option<Vec<u8>>,
+}
+
+/// A new photo or video for the backup (`backup_enqueue`).
+#[derive(uniffi::Record)]
+pub struct BackupMedia {
+    /// Names it for good (e.g. "<MediaStore id>:<date added>").
+    pub key: String,
+    pub path: String,
+    /// Unix seconds.
+    pub taken: u64,
+    /// "YYYY-MM" in local time: the folder it goes into on the computer.
+    pub month: Option<String>,
+}
+
+/// Where the photo backup stands (`backup_state`, and `backup-state`
+/// events with the same fields).
+#[derive(uniffi::Record)]
+pub struct BackupInfo {
+    pub enabled: bool,
+    pub target: String,
+    pub charging_only: bool,
+    pub since: u64,
+    pub queued: u32,
+    pub sent: u32,
+    /// "off", "target", "wifi", "charging", "retry", or "" (sending / done).
+    pub waiting_for: String,
+    pub current: Option<String>,
+    pub done: u64,
+    pub total: u64,
+    pub last_error: Option<String>,
+    pub last_sent_at: u64,
+}
+
+/// Battery alerts this phone sends your other devices.
+#[derive(uniffi::Record)]
+pub struct BatteryAlertConfig {
+    pub enabled: bool,
+    /// Percent, 1-99.
+    pub low: u8,
+}
+
 /// A known device of ours.
 #[derive(uniffi::Record)]
 pub struct PeerInfo {
@@ -738,5 +797,143 @@ impl MdEngine {
     /// Returns the transport used, or "queued".
     pub fn send_text(&self, node_id: String, text: String, mode: String) -> MdResult<String> {
         Ok(self.inner.send_text(&node_id, &text, &mode)?)
+    }
+
+    // --- gallery ---
+
+    /// This phone lists its gallery (`gallery-request` events). Until set,
+    /// other devices are told "no photo gallery".
+    pub fn set_gallery_enabled(&self, on: bool) {
+        self.inner.set_gallery_enabled(on);
+    }
+
+    /// Answer `gallery-request` `req` from `node_id`: the page (newest
+    /// first), the offset of the next page, or why there's none.
+    pub fn gallery_reply(
+        &self,
+        node_id: String,
+        req: String,
+        items: Vec<GalleryMedia>,
+        next: Option<u64>,
+        error: Option<String>,
+    ) {
+        let items = items
+            .into_iter()
+            .map(|m| mdcore::model::GalleryItem {
+                entry: mdcore::model::GalleryEntry {
+                    id: m.id,
+                    name: m.name,
+                    mime: m.mime,
+                    size: m.size,
+                    taken: m.taken,
+                    width: m.width,
+                    height: m.height,
+                    duration: m.duration,
+                    video: m.video,
+                },
+                path: m.path,
+                thumb: m.thumb,
+            })
+            .collect();
+        self.inner
+            .gallery_reply(&node_id, &req, items, next, error.as_deref());
+    }
+
+    /// Ask a device for a page of its photos and videos; the answer is a
+    /// `gallery-listing` event with the returned `req`, then `gallery-thumb`s.
+    pub fn list_gallery(
+        &self,
+        node_id: String,
+        offset: u64,
+        limit: u32,
+        thumbs: bool,
+    ) -> MdResult<String> {
+        Ok(self.inner.list_gallery(&node_id, offset, limit, thumbs)?)
+    }
+
+    /// Fetch a listed photo or video. Returns the transfer id.
+    pub fn download_gallery_item(
+        &self,
+        node_id: String,
+        id: String,
+        name: String,
+    ) -> MdResult<String> {
+        Ok(self.inner.download_gallery_item(&node_id, &id, &name)?)
+    }
+
+    // --- photo backup ---
+
+    /// Turn the backup on or off, choose the computer, and whether to wait
+    /// for charging (it always waits for unmetered Wi-Fi).
+    pub fn backup_configure(
+        &self,
+        enabled: bool,
+        target: String,
+        charging_only: bool,
+    ) -> MdResult<()> {
+        Ok(self
+            .inner
+            .backup_configure(enabled, &target, charging_only)?)
+    }
+
+    /// On unmetered Wi-Fi? Charging? (Pushed whenever either changes.)
+    pub fn backup_conditions(&self, unmetered: bool, charging: bool) {
+        self.inner.backup_conditions(unmetered, charging);
+    }
+
+    /// New photos/videos; ones already sent or waiting are skipped.
+    /// Returns how many were added.
+    pub fn backup_enqueue(&self, items: Vec<BackupMedia>) -> u32 {
+        let items = items
+            .into_iter()
+            .map(|m| mdcore::model::BackupItem {
+                key: m.key,
+                path: m.path,
+                taken: m.taken,
+                month: m.month,
+            })
+            .collect();
+        self.inner.backup_enqueue(items)
+    }
+
+    pub fn backup_state(&self) -> BackupInfo {
+        let s = self.inner.backup_state();
+        BackupInfo {
+            enabled: s.enabled,
+            target: s.target,
+            charging_only: s.charging_only,
+            since: s.since,
+            queued: s.queued,
+            sent: s.sent,
+            waiting_for: s.waiting_for,
+            current: s.current,
+            done: s.done,
+            total: s.total,
+            last_error: s.last_error,
+            last_sent_at: s.last_sent_at,
+        }
+    }
+
+    // --- battery alerts, keep awake ---
+
+    pub fn battery_alerts(&self) -> BatteryAlertConfig {
+        let s = self.inner.battery_alerts();
+        BatteryAlertConfig {
+            enabled: s.enabled,
+            low: s.low,
+        }
+    }
+
+    /// Turn the alerts off or on, and set the low level (1-99%).
+    pub fn set_battery_alerts(&self, enabled: bool, low: u8) -> MdResult<()> {
+        Ok(self
+            .inner
+            .set_battery_alerts(mdcore::model::BatteryAlertSettings { enabled, low })?)
+    }
+
+    /// Keep a device awake for `minutes` (0 = stop), if its status lists
+    /// "keep_awake". Returns the transport used, or "queued".
+    pub fn keep_awake(&self, node_id: String, minutes: u32) -> MdResult<String> {
+        Ok(self.inner.keep_awake(&node_id, minutes)?)
     }
 }

@@ -259,4 +259,27 @@
     <string name="launch_body">Tap to open it.</string>
     <string name="dial_title">%1$s wants you to call %2$s</string>
     <string name="dial_body">Tap to open the dialer.</string>
+    <!-- Gallery, photo backup, battery alerts -->
+    <string name="gallery_no_access">Photo access isn\'t allowed on the phone. Open my-domain there and allow it in Settings.</string>
+    <string name="gallery_failed">The phone couldn\'t read its photos.</string>
+    <string name="battery_low_title">%1$s: battery low</string>
+    <string name="battery_low_body">%1$d%% left. Time to charge it.</string>
+    <string name="battery_full_title">%1$s is charged</string>
+    <string name="battery_full_body">The battery is full.</string>
+    <string name="act_battery_low">%1$s battery low (%2$d%%)</string>
+    <string name="act_battery_full">%1$s is fully charged</string>
+    <string name="settings_photos">Photos</string>
+    <string name="settings_photos_hint">Your computers can see your recent photos and videos, and back up new ones.</string>
+    <string name="settings_allow_photos">Allow photo access</string>
+    <string name="settings_backup">Back up new photos to a computer</string>
+    <string name="settings_backup_to">Back up to %1$s</string>
+    <string name="settings_backup_pick">Choose the computer:</string>
+    <string name="settings_backup_charging">Only while charging</string>
+    <string name="settings_backup_hint">Only on Wi-Fi that isn\'t metered. Photos are saved on the computer in Downloads/Phone backup.</string>
+    <string name="backup_status_sending">Sending %1$s (%2$d%%). %3$d waiting.</string>
+    <string name="backup_status_done">Backed up: %1$d. Nothing waiting.</string>
+    <string name="backup_status_wifi">Waiting for Wi-Fi. %1$d waiting.</string>
+    <string name="backup_status_charging">Waiting for the charger. %1$d waiting.</string>
+    <string name="backup_status_retry">Trying again soon: %1$s</string>
+    <string name="settings_battery_alerts">Tell my devices when the battery is low or full</string>
 </resources>

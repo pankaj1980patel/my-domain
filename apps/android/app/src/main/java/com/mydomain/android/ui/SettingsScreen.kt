@@ -56,6 +56,78 @@ fun ShareCodesSwitch() {
     Muted(stringResource(R.string.settings_share_codes_hint))
 }
 
+/** Photo access, the photo backup (on/off, which computer, charging only)
+ *  and battery alerts: the phone has no other place to turn these on. */
+@Composable
+fun PhotosTile() {
+    val ctx = LocalContext.current
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    var allowed by remember { mutableStateOf(com.mydomain.android.Gallery.canRead(ctx)) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions(),
+    ) {
+        allowed = com.mydomain.android.Gallery.canRead(ctx)
+        com.mydomain.android.FileActions.shareFolders(ctx)
+        com.mydomain.android.PhotoBackup.scanSoon()
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) { Core.refreshBackup() }
+    val b = Core.backup
+    var picking by remember { mutableStateOf(false) }
+    Tile(title = stringResource(R.string.settings_photos)) {
+        Muted(stringResource(R.string.settings_photos_hint))
+        if (!allowed) GhostButton(stringResource(R.string.settings_allow_photos), { ask.launch(com.mydomain.android.Gallery.permissions()) })
+        val set = { enabled: Boolean, target: String, charging: Boolean ->
+            scope.launch {
+                try { Core.setBackup(enabled, target, charging) } catch (e: Exception) { toast(friendlyError(e)) }
+            }
+        }
+        SwitchRow(stringResource(R.string.settings_backup), b?.enabled == true) { on ->
+            val target = b?.target.orEmpty()
+            if (on && target.isEmpty()) picking = true else set(on, target, b?.chargingOnly == true)
+        }
+        if (b?.enabled == true || picking) {
+            val current = Core.peers.firstOrNull { it.nodeId == b?.target }
+            if (current != null && !picking) {
+                GhostButton(String.format(stringResource(R.string.settings_backup_to), niceName(current.name)), { picking = true }, small = true)
+            } else {
+                Muted(stringResource(R.string.settings_backup_pick))
+                Core.peers.forEach { p ->
+                    SoftButton(niceName(p.name), {
+                        picking = false
+                        set(true, p.nodeId, b?.chargingOnly == true)
+                    }, Modifier.fillMaxWidth())
+                }
+            }
+            SwitchRow(stringResource(R.string.settings_backup_charging), b?.chargingOnly == true) { on ->
+                set(b?.enabled == true, b?.target.orEmpty(), on)
+            }
+            b?.takeIf { it.enabled }?.let { Muted(backupLine(it)) }
+            Muted(stringResource(R.string.settings_backup_hint))
+        }
+        var alerts by remember { mutableStateOf(Core.batteryAlerts()?.enabled ?: true) }
+        SwitchRow(stringResource(R.string.settings_battery_alerts), alerts) { on ->
+            alerts = on
+            scope.launch { runCatching { Core.setBatteryAlerts(on, Core.batteryAlerts()?.low?.toInt() ?: 15) } }
+        }
+    }
+}
+
+/** One line on what the backup is doing. */
+@Composable
+private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
+    val waiting = b.queued.toInt()
+    return when (b.waitingFor) {
+        "wifi" -> stringResource(R.string.backup_status_wifi, waiting)
+        "charging" -> stringResource(R.string.backup_status_charging, waiting)
+        "retry" -> stringResource(R.string.backup_status_retry, b.lastError.orEmpty())
+        else -> b.current?.let { name ->
+            val pct = if (b.total > 0u) (b.done.toLong() * 100 / b.total.toLong()).toInt() else 0
+            stringResource(R.string.backup_status_sending, name, pct, waiting)
+        } ?: stringResource(R.string.backup_status_done, b.sent.toInt())
+    }
+}
+
 /** Account, this device, and preferences. Tap the version 7 times for the
  *  Developer screen. */
 @Composable
@@ -91,6 +163,8 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
             ShareCodesSwitch()
         }
+
+        PhotosTile()
 
         Tile(title = stringResource(R.string.settings_device_key)) {
             Muted(stringResource(R.string.settings_key_hint))

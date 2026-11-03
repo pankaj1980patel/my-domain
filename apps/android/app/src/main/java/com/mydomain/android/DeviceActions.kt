@@ -231,6 +231,53 @@ object DeviceActions {
         runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
     }
 
+    /** Another device's battery is low ([alert] "low") or full ("full"). */
+    fun batteryAlert(ctx: Context, fromName: String, alert: String, level: Int) {
+        val app = ctx.applicationContext
+        val low = alert == "low"
+        val n = NotificationCompat.Builder(app, CH_LINKS)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_low_battery)
+            .setContentTitle(app.getString(if (low) R.string.battery_low_title else R.string.battery_full_title, fromName))
+            .setContentText(if (low) app.getString(R.string.battery_low_body, level) else app.getString(R.string.battery_full_body))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .build()
+        // One notification per device and kind: a new one replaces the old.
+        val id = 0x5000_0000 or ((fromName + alert).hashCode() and 0x0FFF_FFFF)
+        runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
+    }
+
+    // --- keep awake ---------------------------------------------------------
+
+    private var awakeLock: PowerManager.WakeLock? = null
+    /** When the screen may go off again (ms since epoch), 0 = not held. */
+    @Volatile var awakeUntil = 0L
+        private set
+
+    /** Keep the screen on for [minutes] (0 = stop), e.g. while a computer
+     *  shows the gallery or a backup runs. A full wake lock with a timeout:
+     *  it lets go by itself. */
+    @Suppress("DEPRECATION", "WakelockTimeout")
+    fun keepAwake(ctx: Context, minutes: Int): Boolean {
+        synchronized(this) {
+            awakeLock?.let { if (it.isHeld) runCatching { it.release() } }
+            awakeLock = null
+            awakeUntil = 0L
+            if (minutes <= 0) return true
+            val pm = ctx.applicationContext.getSystemService(PowerManager::class.java) ?: return false
+            val ms = minutes.coerceAtMost(24 * 60) * 60_000L
+            val lock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP,
+                "mydomain:keep_awake",
+            )
+            lock.setReferenceCounted(false)
+            lock.acquire(ms)
+            awakeLock = lock
+            awakeUntil = System.currentTimeMillis() + ms
+            return true
+        }
+    }
+
     // --- play on this phone ---------------------------------------------------
 
     private const val YOUTUBE = "com.google.android.youtube"

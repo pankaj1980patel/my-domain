@@ -86,6 +86,10 @@ class NetService : Service() {
         FileActions.shareFolders(this)
         // What's playing here, for your other devices (needs notification access).
         NowPlaying.start(this)
+        // Your computers may look at the photos (we answer "no access" until
+        // it's allowed), and the photo backup watches for new ones.
+        Core.engine()?.setGalleryEnabled(true)
+        PhotoBackup.start(this)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
         Core.reload()
@@ -135,6 +139,7 @@ class NetService : Service() {
             BatteryManager.BATTERY_HEALTH_UNSPECIFIED_FAILURE -> "failure"
             else -> null
         }
+        PhotoBackup.setCharging(charging)
         pushStatus()
     }
 
@@ -314,6 +319,8 @@ class NetService : Service() {
                         "file_received" -> FileActions.onReceived(this@NetService, o)
                         "file_failed" -> FileActions.onFailed(this@NetService, o)
                         "text_shared" -> onTextShared(o)
+                        "gallery_request" -> Gallery.onRequest(this@NetService, o)
+                        "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {
                     Log.e("NetService", "Error handling core event $name", e)
@@ -456,6 +463,7 @@ class NetService : Service() {
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
         BleLink.stop()
+        PhotoBackup.stop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

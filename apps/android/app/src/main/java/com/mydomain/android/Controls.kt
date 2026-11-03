@@ -23,6 +23,7 @@ import org.json.JSONObject
  *   launch     {pkg}                     open an app (from the apps list)
  *   dial       {number}                  open the dialer with it (no call)
  *   search     {app, query}              search YouTube / Spotify / the web
+ *   keep_awake {minutes}                 keep the screen on (0 = stop)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -58,12 +59,14 @@ object Controls {
         if (torchId != null) put("flashlight")
         put("volume"); put("media"); put("ringer"); put("launch"); put("search")
         if (hasPhone) put("dial")
+        put("keep_awake")
     }
 
     fun state(ctx: Context): JSONObject {
         val am = ctx.getSystemService(AudioManager::class.java)
         val o = JSONObject()
         if (torchId != null) o.put("torch", torchOn)
+        DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
         if (am != null) {
             val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
             o.put("volume", am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max)
@@ -122,6 +125,7 @@ object Controls {
                 "launch" -> DeviceActions.launchApp(ctx, fromName, args.optString("pkg"))
                 "dial" -> DeviceActions.dial(ctx, fromName, args.optString("number"))
                 "search" -> DeviceActions.search(ctx, fromName, args.optString("app"), args.optString("query"))
+                "keep_awake" -> DeviceActions.keepAwake(ctx, args.optInt("minutes", 0))
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

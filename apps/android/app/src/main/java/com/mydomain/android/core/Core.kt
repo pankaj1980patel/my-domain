@@ -155,6 +155,9 @@ object Core {
     /** Clipboard auto-sync with the other devices (NetService acts on it). */
     var clipSync by mutableStateOf(false); private set
 
+    /** Where this phone's photo backup stands (`backup_state` events). */
+    var backup by mutableStateOf<com.mydomain.android.ffi.BackupInfo?>(null); private set
+
     /** Recent clipboard values, newest first (memory only, never saved). */
     val clipHistory = mutableStateListOf<ClipEntry>()
 
@@ -300,6 +303,7 @@ object Core {
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
         val kind = o.optString("kind")
         val peersNow = if (kind == "peers_updated") engine()?.peers() else null
+        if (kind == "backup_state") engine()?.let { e -> runCatching { e.backupState() }.getOrNull()?.let { s -> onMain { backup = s } } }
         // An outgoing transfer ended: its cache copy can go.
         if (kind == "file_sent" || (kind == "file_failed" && !o.optBoolean("incoming"))) OutgoingFiles.end(o.optString("id"))
         onMain {
@@ -379,6 +383,11 @@ object Core {
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
+            "battery_alert" -> {
+                val who = peerName(o.optString("from"))
+                if (o.optString("alert") == "low") addActivity(str(R.string.act_battery_low, who, o.optInt("level")), Tone.Warn)
+                else addActivity(str(R.string.act_battery_full, who), Tone.Ok)
+            }
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
             "text_shared" -> addActivity(
@@ -647,6 +656,43 @@ object Core {
     fun cancelFileAsync(id: String) {
         appScope.launch { runCatching { cancelFile(id) } }
     }
+
+    // --- gallery, photo backup, battery alerts, keep awake ----------------------
+
+    /** Ask [node] for a page of its photos and videos (newest first); the
+     *  answer is a `gallery_listing` event with the returned request id,
+     *  then `gallery_thumb`s. (No screen here yet: the computer shows the
+     *  phone's gallery.) */
+    suspend fun listGallery(node: String, offset: Long = 0, limit: Int = 60, thumbs: Boolean = true): String =
+        call { it.listGallery(node, offset.toULong(), limit.toUInt(), thumbs) }
+
+    /** Fetch a listed photo or video from [node]; it arrives like any file. */
+    suspend fun downloadGalleryItem(node: String, id: String, name: String): String =
+        call { it.downloadGalleryItem(node, id, name) }
+
+    /** Read the backup state now (also kept current from events). */
+    fun refreshBackup() {
+        val s = runCatching { engine()?.backupState() }.getOrNull() ?: return
+        onMain { backup = s }
+    }
+
+    /** Turn the photo backup on or off, choose the computer ([target], a
+     *  node id) and whether to wait for the charger. */
+    suspend fun setBackup(enabled: Boolean, target: String, chargingOnly: Boolean) {
+        withContext(Dispatchers.IO) { com.mydomain.android.PhotoBackup.configure(enabled, target, chargingOnly) }
+        refreshBackup()
+    }
+
+    /** Whether this phone tells your other devices when its battery is low
+     *  ([low] percent) or full. */
+    fun batteryAlerts(): com.mydomain.android.ffi.BatteryAlertConfig? = runCatching { engine()?.batteryAlerts() }.getOrNull()
+
+    suspend fun setBatteryAlerts(enabled: Boolean, low: Int = 15) =
+        call { it.setBatteryAlerts(enabled, low.coerceIn(1, 99).toUByte()) }
+
+    /** Keep [node] awake for [minutes] (0 = stop), if it lists "keep_awake". */
+    suspend fun keepAwake(node: String, minutes: Int): String =
+        call { it.keepAwake(node, minutes.coerceAtLeast(0).toUInt()) }
 
     suspend fun toggleApp(node: String, pkg: String) {
         val cur = apps[node] ?: return
