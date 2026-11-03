@@ -132,6 +132,7 @@ pub fn mark_live<P: Platform>(
             transport: kind,
         });
         outbox::flush(ctx, node_id);
+        crate::engine::learn_unknown(ctx, node_id);
         // Give the peer our current addresses (it may only know stale ones
         // from the server), off this thread: sending may block.
         let (ctx, peer) = (ctx.clone(), node_id.to_string());

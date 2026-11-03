@@ -27,8 +27,14 @@ pub struct FakeRelay {
 
 impl FakeRelay {
     pub fn start() -> Self {
-        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-        let port = listener.local_addr().unwrap().port();
+        Self::start_on("127.0.0.1:0")
+    }
+
+    /// Serve on `bind` (`ip:port`; port 0 picks one), e.g. a simulated
+    /// network's server address.
+    pub fn start_on(bind: &str) -> Self {
+        let listener = TcpListener::bind(bind).unwrap();
+        let local = listener.local_addr().unwrap();
         let conns: RelayConns = Arc::default();
         let forwarded: Arc<Mutex<Vec<Value>>> = Arc::default();
         {
@@ -42,7 +48,7 @@ impl FakeRelay {
             });
         }
         FakeRelay {
-            url: format!("ws://127.0.0.1:{port}/relay"),
+            url: format!("ws://{local}/relay"),
             forwarded,
             conns,
         }

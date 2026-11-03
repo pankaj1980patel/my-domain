@@ -35,7 +35,7 @@ pub use messaging::QUEUED;
 pub(crate) use messaging::{reconnect, send_reliably};
 mod netchange;
 mod peers;
-pub(crate) use peers::emit_peers;
+pub(crate) use peers::{emit_peers, learn_unknown};
 mod session;
 mod sharing;
 mod signaling;

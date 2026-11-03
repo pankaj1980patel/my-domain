@@ -28,6 +28,7 @@ environment variables in [common.sh](common.sh).
 | `scripts/lab/android.sh test` | Run instrumentation tests on the phone |
 | `scripts/lab/android.sh logcat` | Stream the app's logs |
 | `scripts/lab/scenarios.sh` | Run the mdctl scenarios against every lab device; pass/fail table |
+| `scripts/lab/nat-sim.sh [kindA kindB]` | Linux: two mdctl devices behind simulated home routers (easy or symmetric NAT); checks they talk and which path they use |
 | `scripts/lab/battery.sh [secs]` | Phone on this Mac's USB: screen off, "unplugged", measure the app's pushes, wake locks, CPU and network for `secs` (default 3600) |
 
 Cross-device scenario tests (`scenarios/*.mdctl`, driven by `mdctl`) are
@@ -76,6 +77,11 @@ MD_PEER=I2405 MD_FILE=/tmp/lab-file.bin cargo run -q -p mdctl -- \
 against each device in `MD_PEERS` (default: the Linux laptop and the phone)
 and prints a pass/fail table; `MD_SCENARIOS` picks others. The devices must
 be running the app, logged in to the test account.
+
+`scripts/lab/nat-sim.sh` (on the laptop) builds two simulated home routers
+in an unprivileged network namespace and runs one mdctl behind each, with
+the test servers on a simulated internet. Build `mdctl` and
+`md-testkit --bin md-fake-server` first.
 
 `cargo test -p mdctl` runs the same kinds of scenario offline between two
 local mdctl processes (`apps/mdctl/tests/scenario.rs`).

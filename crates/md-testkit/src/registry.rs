@@ -67,8 +67,13 @@ pub struct FakeRegistry {
 impl FakeRegistry {
     /// Start serving on 127.0.0.1:<random port> in a background thread.
     pub fn start() -> Self {
-        let server = Arc::new(tiny_http::Server::http("127.0.0.1:0").unwrap());
-        let port = server.server_addr().to_ip().unwrap().port();
+        Self::start_on("127.0.0.1:0")
+    }
+
+    /// Serve on `bind` (`ip:port`; port 0 picks one).
+    pub fn start_on(bind: &str) -> Self {
+        let server = Arc::new(tiny_http::Server::http(bind).unwrap());
+        let local = server.server_addr().to_ip().unwrap();
         let state: Arc<Mutex<State>> = Arc::default();
         {
             let server = server.clone();
@@ -80,7 +85,7 @@ impl FakeRegistry {
             });
         }
         FakeRegistry {
-            url: format!("http://127.0.0.1:{port}"),
+            url: format!("http://{local}"),
             state,
             server,
         }
@@ -89,7 +94,12 @@ impl FakeRegistry {
     /// Like `start`, but /signal goes over `relay`'s WebSocket when the
     /// target device is connected to it (the real server's behaviour).
     pub fn start_with_relay(relay: &crate::FakeRelay) -> Self {
-        let reg = Self::start();
+        Self::start_on_with_relay("127.0.0.1:0", relay)
+    }
+
+    /// `start_on` with signals going over `relay` (see `start_with_relay`).
+    pub fn start_on_with_relay(bind: &str, relay: &crate::FakeRelay) -> Self {
+        let reg = Self::start_on(bind);
         reg.state.lock().unwrap().relay = Some(relay.conns.clone());
         reg
     }

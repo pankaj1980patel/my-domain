@@ -145,9 +145,8 @@ or with less battery.
   lines, takes commands on stdin (`peers`, `send`, `connect`, `add`,
   `links`, `forget`, ...). Scripted scenarios: **done** (`--script`,
   `wait`, `echo`; `scripts/lab/scenarios/`).
-- **Simulated-NAT test.** Two engines, each behind its own simulated router
-  (Linux network namespaces), must connect by hole punching. Each simulated
-  device has to be its own process, which is why this needs `mdctl`.
+- ~~Simulated-NAT test~~: **done** (2026-11-03). `scripts/lab/nat-sim.sh`
+  on the Linux laptop; see DONE.md.
 - ~~Lab scenario tests across the Mac, the laptop and the phone~~: **done**
   (2026-11-02). `scripts/lab/scenarios.sh` runs receipts, controls and
   file transfer from the Mac against every lab device and prints a

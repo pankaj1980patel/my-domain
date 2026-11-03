@@ -1,6 +1,8 @@
 //! A fake STUN server on loopback: answers every Binding Request with a fixed
 //! "public" address. Two of them with different answers make an engine
 //! classify its NAT as symmetric; the same answer makes it easy.
+//! [`FakeStun::reflect_on`] is a real STUN server instead: it answers with
+//! the address the request came from (for simulated networks).
 
 use std::net::{SocketAddr, UdpSocket};
 
@@ -14,14 +16,24 @@ impl FakeStun {
     /// Start a server that reports `mapped` (IPv4) as the caller's address.
     pub fn start(mapped: &str) -> Self {
         let mapped: SocketAddr = mapped.parse().unwrap();
-        let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+        Self::serve("127.0.0.1:0", Some(mapped))
+    }
+
+    /// Serve on `bind` (`ip:port`) and report each caller's own address.
+    pub fn reflect_on(bind: &str) -> Self {
+        Self::serve(bind, None)
+    }
+
+    fn serve(bind: &str, mapped: Option<SocketAddr>) -> Self {
+        let sock = UdpSocket::bind(bind).unwrap();
         let addr = sock.local_addr().unwrap();
         std::thread::spawn(move || {
             let mut buf = [0u8; 512];
             while let Ok((n, from)) = sock.recv_from(&mut buf) {
                 // Binding Request: type 0x0001, then length, magic, txid.
                 if n >= 20 && buf[0..2] == [0, 1] {
-                    let _ = sock.send_to(&response(&buf[8..20], mapped), from);
+                    let to = mapped.unwrap_or(from);
+                    let _ = sock.send_to(&response(&buf[8..20], to), from);
                 }
             }
         });

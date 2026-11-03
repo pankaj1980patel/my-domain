@@ -379,3 +379,35 @@ fn a_message_to_a_device_thats_off_doesnt_keep_pushing_it() {
         .count();
     assert_eq!(offers, 1, "{:?}", hub.kinds());
 }
+
+/// A device that signed in after us reaches us; we can answer it without
+/// waiting for our next refresh. (Found by scripts/lab/nat-sim.sh: the
+/// reply failed with "peer not found", because `send` only goes to listed
+/// peers and the newcomer wasn't listed yet.)
+#[test]
+fn a_device_that_signed_in_later_can_be_answered() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let b = node("later-b", "alice", &reg, &hub, &relay);
+    b.engine.refresh_from_server().unwrap();
+    let a = node("later-a", "alice", &reg, &hub, &relay);
+    a.engine.refresh_from_server().unwrap();
+    assert!(b.engine.get_peers().is_empty(), "b signed in first");
+
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, WAIT).as_deref(), Some("relay"));
+    a.engine
+        .send(&b.node_id(), "hi from the new device")
+        .unwrap();
+    b.sink.wait_for_message("hi from the new device");
+
+    let deadline = std::time::Instant::now() + WAIT;
+    while b.engine.send(&a.node_id(), "welcome").is_err() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "b never learned about a"
+        );
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    a.sink.wait_for_message("welcome");
+}

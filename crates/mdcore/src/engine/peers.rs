@@ -32,6 +32,39 @@ pub(crate) fn refresh<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> R
     Ok(())
 }
 
+/// A device we don't list reached us: it signed in after our last refresh.
+/// Fetch the list again in the background, so we can answer it (`send` only
+/// goes to listed peers). At most once every 10 s per device.
+pub(crate) fn learn_unknown<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    if ctx.peers.lock().contains_key(node_id) {
+        return;
+    }
+    let Some((url, token)) = ctx.server_url.lock().clone().zip(ctx.token.lock().clone()) else {
+        return;
+    };
+    static ASKED: Mutex<Option<HashMap<(String, String), std::time::Instant>>> = Mutex::new(None);
+    let me = ctx.identity.lock().node_id.clone();
+    {
+        let mut asked = ASKED.lock();
+        let asked = asked.get_or_insert_with(HashMap::new);
+        let key = (me.clone(), node_id.to_string());
+        if asked
+            .get(&key)
+            .is_some_and(|t| t.elapsed() < Duration::from_secs(10))
+        {
+            return;
+        }
+        asked.retain(|_, t| t.elapsed() < Duration::from_secs(10));
+        asked.insert(key, std::time::Instant::now());
+    }
+    let ctx = ctx.clone();
+    std::thread::spawn(move || {
+        if let Ok(devices) = registry_fetch(&url, &token, &me) {
+            apply_registry_peers(&ctx, devices);
+        }
+    });
+}
+
 pub(crate) fn emit_peers<P: Platform>(ctx: &NetCtx<P>) {
     let list: Vec<Peer> = ctx.peers.lock().values().cloned().collect();
     ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });

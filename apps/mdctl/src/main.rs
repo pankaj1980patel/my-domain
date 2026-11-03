@@ -11,6 +11,11 @@
 //!       --server https://... --user U --pass P --key K
 //! mdctl --name lab-box --offline U --key K   # LAN only, no server
 //! ```
+//! For simulated networks (scripts/lab/nat-sim.sh): `--stun a:3478,b:3478`
+//! replaces the public STUN servers, `--relay URL` sets the relay WebSocket,
+//! `--signal-channel` keeps it open so signals arrive without FCM, and
+//! `--no-lan` turns off mDNS and router port mapping.
+//!
 //! `--server/--user/--pass/--key` default to `MD_DEV_SERVER`, `MD_DEV_USER`,
 //! `MD_DEV_PASS`, `MD_DEV_KEY` (scripts/lab/test-creds.env).
 //!
@@ -252,6 +257,7 @@ fn field_is(data: &Value, field: &str, want: &str) -> bool {
     got.as_deref() == Some(want)
 }
 
+#[derive(Default)]
 struct Args {
     name: String,
     data: PathBuf,
@@ -261,6 +267,26 @@ struct Args {
     pass: Option<String>,
     key: Option<String>,
     offline: Option<String>,
+    stun: Option<Vec<String>>,
+    relay: Option<String>,
+    signal_channel: bool,
+    no_lan: bool,
+}
+
+impl Args {
+    fn config(&self) -> mdcore::config::CoreConfig {
+        let mut c = mdcore::config::CoreConfig::default();
+        if let Some(stun) = &self.stun {
+            c.stun_servers = stun.clone();
+        }
+        c.relay_url = self.relay.clone();
+        c.signal_channel = self.signal_channel;
+        if self.no_lan {
+            c.mdns = false;
+            c.port_mapper = None;
+        }
+        c
+    }
 }
 
 fn parse_args() -> Result<Args, String> {
@@ -274,6 +300,7 @@ fn parse_args() -> Result<Args, String> {
         pass: env("MD_DEV_PASS"),
         key: env("MD_DEV_KEY"),
         offline: None,
+        ..Args::default()
     };
     let mut it = std::env::args().skip(1);
     while let Some(flag) = it.next() {
@@ -287,9 +314,14 @@ fn parse_args() -> Result<Args, String> {
             "--key" => a.key = Some(val()?),
             "--offline" => a.offline = Some(val()?),
             "--script" => a.script = Some(PathBuf::from(val()?)),
+            "--stun" => a.stun = Some(val()?.split(',').map(String::from).collect()),
+            "--relay" => a.relay = Some(val()?),
+            "--signal-channel" => a.signal_channel = true,
+            "--no-lan" => a.no_lan = true,
             "-h" | "--help" => {
                 return Err("usage: mdctl [--name N] [--data DIR] [--script FILE] \
-                    [--server URL --user U --pass P | --offline USER] --key KEY"
+                    [--server URL --user U --pass P | --offline USER] --key KEY \
+                    [--stun LIST] [--relay URL] [--signal-channel] [--no-lan]"
                     .into())
             }
             other => return Err(format!("unknown argument {other}")),
@@ -471,7 +503,7 @@ fn main() {
         replies: reply_tx,
     };
     let platform = CliPlatform::new(args.name.clone(), args.data.clone());
-    let engine = match Engine::start(platform, Arc::new(sink)) {
+    let engine = match Engine::start_with_config(platform, Arc::new(sink), args.config()) {
         Ok(e) => e,
         Err(e) => {
             eprintln!("mdctl: failed to start: {e}");
@@ -491,7 +523,14 @@ fn main() {
         let engine = engine.clone();
         std::thread::spawn(move || {
             for (node, text) in replies {
-                let _ = engine.send(&node, &text);
+                // A device that just signed in isn't listed yet; the core
+                // fetches the list when it reaches us.
+                for _ in 0..50 {
+                    if engine.send(&node, &text).is_ok() {
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(100));
+                }
             }
         });
     }

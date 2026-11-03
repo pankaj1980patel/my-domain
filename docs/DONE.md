@@ -131,6 +131,37 @@ Every message rides a live link. The old one-off paths (a TCP connection or
 a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
 ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
+## Simulated routers: hole punching tested (2026-11-03)
+
+- `scripts/lab/nat-sim.sh` (Linux, no root): two mdctl devices, each behind
+  its own simulated home router (NAT plus a firewall that drops unasked-for
+  WAN traffic), with the test servers (`md-fake-server`: registry, relay,
+  two STUN addresses) on a simulated internet. Everything runs in an
+  unprivileged user + network namespace and disappears afterwards.
+  Each case sends a message and waits for the answer, then checks the path:
+
+  | Router A | Router B | Path |
+  |---|---|---|
+  | easy | easy | hole punch |
+  | easy | symmetric | relay |
+  | symmetric | symmetric | relay (punching skipped up front) |
+
+  Easy + symmetric can't punch through Linux routers: they only let in
+  replies from the exact address and port they sent to, and a symmetric
+  router answers from a new port.
+- Found and fixed: a device that signed in after us could message us, but
+  our answer failed with "peer not found" until our next refresh (`send`
+  only goes to listed peers). A link from a device we don't list now
+  fetches the list again (at most every 10 s per device). Test:
+  `a_device_that_signed_in_later_can_be_answered`.
+- mdctl gained `--stun`, `--relay`, `--signal-channel` and `--no-lan`; the
+  testkit's fake servers can listen on any address.
+- Lesson for the simulation: a router that accepts unasked-for packets
+  breaks punching. The kernel keeps a connection entry for each one, and
+  that entry takes the port the router's own outgoing mapping needs, so
+  each side gets a new port. Real routers drop such packets, and a dropped
+  packet leaves no entry.
+
 ## Connectivity improvements (started 2026-11-02)
 
 - **HTTPS, live:** `https://152-67-7-50.sslip.io`, with Caddy and a Let's
