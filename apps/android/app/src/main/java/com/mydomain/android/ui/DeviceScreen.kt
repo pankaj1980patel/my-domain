@@ -339,6 +339,46 @@ private fun Controls(node: String, st: DeviceStatus) {
                 Btn(R.string.ctl_next, "media", JSONObject().put("key", "next"), Modifier.weight(1f))
             }
         }
+        if ("slides" in st.actions) {
+            Muted(
+                when (st.slidesNeeds) {
+                    "accessibility" -> stringResource(R.string.ctl_slides_needs_accessibility)
+                    "xdotool", "wtype" -> stringResource(R.string.ctl_slides_needs_tool)
+                    else -> stringResource(R.string.ctl_slides)
+                }
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Btn(R.string.ctl_slide_previous, "slides", JSONObject().put("key", "previous"), Modifier.weight(1f))
+                Btn(R.string.ctl_slide_black, "slides", JSONObject().put("key", "black"), Modifier.weight(1f))
+                Btn(R.string.ctl_slide_next, "slides", JSONObject().put("key", "next"), Modifier.weight(1f))
+            }
+        }
+        if ("keep_awake" in st.actions) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    stringResource(R.string.ctl_awake), color = T.text2,
+                    style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
+                )
+                Btn(R.string.ctl_awake_30, "keep_awake", JSONObject().put("minutes", 30))
+                Btn(R.string.ctl_awake_60, "keep_awake", JSONObject().put("minutes", 60))
+                Btn(R.string.ctl_awake_off, "keep_awake", JSONObject().put("minutes", 0))
+            }
+        }
+        if ("search" in st.actions) {
+            var query by remember { mutableStateOf("") }
+            Field(query, { query = it }, stringResource(R.string.ctl_search_hint), Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("youtube" to R.string.ctl_search_youtube, "spotify" to R.string.ctl_search_spotify, "web" to R.string.ctl_search_web)
+                    .forEach { (app, label) ->
+                        GhostButton(stringResource(label), {
+                            if (query.isNotBlank()) run("search", JSONObject().put("app", app).put("query", query.trim()))
+                        }, Modifier.weight(1f), small = true)
+                    }
+            }
+        }
+        if ("lock" in st.actions) {
+            Btn(R.string.ctl_lock, "lock", JSONObject(), Modifier.fillMaxWidth())
+        }
         if ("ringer" in st.actions) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("normal" to R.string.ctl_ring_normal, "vibrate" to R.string.ctl_ring_vibrate, "silent" to R.string.ctl_ring_silent)

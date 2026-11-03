@@ -249,6 +249,20 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## Phone buttons for a computer's slides, keep awake, search and lock (2026-11-03)
+
+The computer already offered these actions; the phone's device page had no
+buttons for them. "Find & control" now shows, for each action the computer
+lists: slides (◀ Slide, Black screen, Slide ▶, with a hint when the
+computer needs Accessibility or xdotool/wtype), keep it awake (30 min,
+1 hour, Let it sleep), a search box with YouTube, Spotify and Web, and
+Lock it.
+
+Tried on the phone against the Mac app: 30 min started `caffeinate -d -i
+-t 1800` and Let it sleep stopped it; a web search opened in Chrome on the
+Mac. Not pressed: Lock it and the slide buttons (they'd act on whatever
+was in front on the Mac in use).
+
 ## Gallery, photo backup, battery alerts, keep awake (2026-11-03)
 
 - Verified live 2026-11-03 from mdctl on the Mac (photo access granted
