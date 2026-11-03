@@ -29,6 +29,9 @@
 //! `share <name> <dir>` (let other devices browse `dir` as `name`),
 //! `ls <node> [root] [path] [offset]`, `get <node> <root> <path>`,
 //! `text <node> clipboard|notify <text...>`,
+//! `gallery <node> [offset] [limit]` (a phone's newest photos, no
+//! thumbnails), `gallery-get <node> <id> [name]`, `awake <node> <minutes>`,
+//! `battery-alerts on|off [low]`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
 //!
@@ -499,6 +502,39 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let mode = arg(words.next())?;
             let text = words.collect::<Vec<_>>().join(" ");
             Ok(json!({ "via": engine.send_text(&to, &text, &mode)? }))
+        }
+        "gallery" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let mut num = |default: u64| match words.next() {
+                Some(n) => n.parse::<u64>().map_err(|_| format!("not a number: {n}")),
+                None => Ok(default),
+            };
+            let offset = num(0)?;
+            let limit = num(30)?.min(100) as u32;
+            Ok(json!({ "req": engine.list_gallery(&to, offset, limit, false)? }))
+        }
+        "gallery-get" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let id = arg(words.next())?;
+            let name = words.next().unwrap_or("photo").to_string();
+            Ok(json!({ "id": engine.download_gallery_item(&to, &id, &name)? }))
+        }
+        "awake" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let minutes = arg(words.next())?
+                .parse::<u32>()
+                .map_err(|_| "minutes: a number".to_string())?;
+            Ok(json!({ "via": engine.keep_awake(&to, minutes)? }))
+        }
+        "battery-alerts" => {
+            let enabled = arg(words.next())? == "on";
+            let low = match words.next() {
+                Some(l) => l.parse::<u8>().map_err(|_| "low: 1-99".to_string())?,
+                None => engine.battery_alerts().low,
+            };
+            let s = mdcore::model::BatteryAlertSettings { enabled, low };
+            engine.set_battery_alerts(s.clone())?;
+            Ok(json!(s))
         }
         "downloads" => {
             let dir = arg(words.next())?;

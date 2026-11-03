@@ -56,6 +56,12 @@ fn push_status(app: &AppHandle) {
         // Tell the phone why there's no slide remote, so it can say so.
         Err(why) => status["slides_needs"] = why.into(),
     }
+    if awake::available() {
+        actions.push("keep_awake");
+        if let Some(until) = awake::until() {
+            status["awake_until"] = until.into();
+        }
+    }
     if !actions.is_empty() {
         status["actions"] = actions.into();
     }
@@ -134,6 +140,10 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
             if let Err(why) = slides::press(args["key"].as_str().unwrap_or_default()) {
                 crate::notify::post(app, "my-domain can't change slides", why);
             }
+        }
+        "keep_awake" => {
+            let minutes = args["minutes"].as_u64().unwrap_or(0);
+            awake::keep(minutes.min(u64::from(mdcore::engine::MAX_AWAKE_MINUTES)) * 60);
         }
         _ => return,
     }
@@ -473,6 +483,101 @@ mod slides {
     }
 }
 
+/// Keeping the computer awake for a while ("don't sleep while I copy this"):
+/// macOS `caffeinate -d -i -t <secs>`, Linux `systemd-inhibit` around a
+/// `sleep <secs>`. One at a time: a new request replaces the old one, 0
+/// minutes stops it; the child ends by itself when the time is up.
+mod awake {
+    use std::process::{Child, Command, Stdio};
+    use std::sync::Mutex;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// The running inhibitor and when it ends (unix seconds).
+    static CURRENT: Mutex<Option<(Child, u64)>> = Mutex::new(None);
+
+    fn now() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
+    }
+
+    /// The command that keeps the machine awake for `secs`.
+    pub(super) fn command(secs: u64) -> Option<(String, Vec<String>)> {
+        let secs = secs.to_string();
+        if cfg!(target_os = "macos") {
+            Some((
+                "caffeinate".into(),
+                vec!["-d".into(), "-i".into(), "-t".into(), secs],
+            ))
+        } else if cfg!(target_os = "linux") {
+            Some((
+                "systemd-inhibit".into(),
+                vec![
+                    "--what=idle:sleep".into(),
+                    "--who=my-domain".into(),
+                    "--why=Kept awake from another of your devices".into(),
+                    "--mode=block".into(),
+                    "sleep".into(),
+                    secs,
+                ],
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// The tool is there (macOS always has `caffeinate`).
+    pub fn available() -> bool {
+        match command(1) {
+            Some((cmd, _)) if cmd == "caffeinate" => true,
+            Some((cmd, _)) => Command::new(cmd)
+                .arg("--version")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success()),
+            None => false,
+        }
+    }
+
+    /// When the current keep-awake ends, if one is running.
+    pub fn until() -> Option<u64> {
+        let mut cur = CURRENT.lock().ok()?;
+        let running = match cur.as_mut() {
+            Some((child, until)) => matches!(child.try_wait(), Ok(None)) && *until > now(),
+            None => false,
+        };
+        if !running {
+            *cur = None;
+        }
+        cur.as_ref().map(|(_, until)| *until)
+    }
+
+    /// Stay awake for `secs` from now (0 = stop).
+    pub fn keep(secs: u64) {
+        let Ok(mut cur) = CURRENT.lock() else { return };
+        if let Some((mut child, _)) = cur.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+        if secs == 0 {
+            return;
+        }
+        let Some((cmd, args)) = command(secs) else {
+            return;
+        };
+        match Command::new(&cmd)
+            .args(&args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => *cur = Some((child, now() + secs)),
+            Err(e) => eprintln!("[device] couldn't run {cmd}: {e}"),
+        }
+    }
+}
+
 /// Locking the screen ("I walked away and left it open").
 mod screen {
     use std::process::Command;
@@ -738,6 +843,21 @@ mod tests {
         assert_eq!(parse_now_playing("Stopped\tx\ty\tz", "vlc"), None);
         assert_eq!(parse_now_playing("Playing\t\t\t", "vlc"), None);
         assert_eq!(parse_now_playing("", "vlc"), None);
+    }
+
+    #[test]
+    fn keep_awake_runs_the_os_tool_for_the_time_asked() {
+        let cmd = super::awake::command(1800);
+        if cfg!(target_os = "macos") {
+            let (c, args) = cmd.expect("macOS has caffeinate");
+            assert_eq!(c, "caffeinate");
+            assert_eq!(args, ["-d", "-i", "-t", "1800"]);
+        } else if cfg!(target_os = "linux") {
+            let (c, args) = cmd.expect("Linux uses systemd-inhibit");
+            assert_eq!(c, "systemd-inhibit");
+            assert!(args.iter().any(|a| a == "--what=idle:sleep"));
+            assert_eq!(args[args.len() - 2..], ["sleep", "1800"]);
+        }
     }
 
     #[test]

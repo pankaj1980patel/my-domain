@@ -125,9 +125,42 @@ export const commands = {
 	/**  Whether OS notifications are shown (Settings, "Show notifications"). */
 	notificationsEnabled: () => __TAURI_INVOKE<boolean>("notifications_enabled"),
 	setNotificationsEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_notifications_enabled", { on }),
+	/**
+	 *  Ask a phone for `limit` of its photos and videos (newest first) from
+	 *  `offset`, with thumbnails if `thumbs`. Returns the request id; the
+	 *  answer is a `gallery-listing` event with the same `req`, then a
+	 *  `gallery-thumb` per item (`jpeg`: base64).
+	 */
+	listGallery: (nodeId: string, offset: number, limit: number, thumbs: boolean) => typedError<string, string>(__TAURI_INVOKE("list_gallery", { nodeId, offset, limit, thumbs })),
+	/**
+	 *  Fetch a photo or video from a phone's gallery (`id` from the listing,
+	 *  `name` for the progress) into Downloads. Returns the transfer id.
+	 */
+	downloadGalleryItem: (nodeId: string, id: string, name: string) => typedError<string, string>(__TAURI_INVOKE("download_gallery_item", { nodeId, id, name })),
+	/**
+	 *  Whether this computer tells your other devices when its battery is low
+	 *  or full, and the low level.
+	 */
+	batteryAlerts: () => __TAURI_INVOKE<BatteryAlertSettings>("battery_alerts"),
+	setBatteryAlerts: (settings: BatteryAlertSettings) => typedError<null, string>(__TAURI_INVOKE("set_battery_alerts", { settings })),
+	/**
+	 *  Keep a device from sleeping for `minutes` (0 = stop), if its status
+	 *  lists "keep_awake".
+	 */
+	keepAwake: (nodeId: string, minutes: number) => typedError<string, string>(__TAURI_INVOKE("keep_awake", { nodeId, minutes })),
 };
 
 /* Types */
+/**
+ *  Battery alerts this device sends your other devices
+ *  (`Engine::set_battery_alerts`): once when it drops to `low` percent
+ *  while not charging, once when charging reaches 100%.
+ */
+export type BatteryAlertSettings = {
+	enabled: boolean,
+	low: number,
+};
+
 /**
  *  Device-lab test account, from `MD_DEV_SERVER` / `MD_DEV_USER` /
  *  `MD_DEV_PASS` / `MD_DEV_KEY` (see scripts/lab/test-creds.env). The login

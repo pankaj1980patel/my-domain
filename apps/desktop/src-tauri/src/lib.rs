@@ -299,11 +299,32 @@ impl EventSink for TauriSink {
                     }
                 });
             }
+            // Photo backups arrive by themselves, often many: no notice each.
+            CoreEvent::FileReceived { path, .. } if is_backup(path) => {}
             CoreEvent::FileReceived { from, name, .. } => {
                 let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
                     notify::post_if_away(&app, "my-domain", &format!("Saved {name} from {device}"));
+                });
+            }
+            CoreEvent::BatteryAlert { from, alert, level } => {
+                let (app, from, alert, level) =
+                    (self.app.clone(), from.clone(), alert.clone(), *level);
+                std::thread::spawn(move || {
+                    let device = notify::device_name(&app, &from);
+                    let (title, body) = if alert == "low" {
+                        (
+                            format!("{device}: battery low"),
+                            format!("{level}% left. Time to charge it."),
+                        )
+                    } else {
+                        (
+                            format!("{device} is charged"),
+                            "The battery is full.".to_string(),
+                        )
+                    };
+                    notify::post(&app, &title, &body);
                 });
             }
             CoreEvent::Notification {
@@ -329,6 +350,13 @@ impl EventSink for TauriSink {
         }
         let _ = self.app.emit(ev.name(), ev.ui_payload());
     }
+}
+
+/// A file saved by the photo backup (`<downloads>/Phone backup/...`).
+fn is_backup(path: &str) -> bool {
+    std::path::Path::new(path)
+        .components()
+        .any(|c| c.as_os_str() == mdcore::features::backup::FOLDER)
 }
 
 // ---------------------------------------------------------------------------
@@ -813,6 +841,62 @@ fn shared_folders(engine: State<Eng>) -> Vec<mdcore::model::SharedFolder> {
     engine.shared_folders()
 }
 
+// --- a phone's gallery, battery alerts, keep awake ---
+
+/// Ask a phone for `limit` of its photos and videos (newest first) from
+/// `offset`, with thumbnails if `thumbs`. Returns the request id; the
+/// answer is a `gallery-listing` event with the same `req`, then a
+/// `gallery-thumb` per item (`jpeg`: base64).
+#[tauri::command]
+#[specta::specta]
+fn list_gallery(
+    node_id: String,
+    offset: u32,
+    limit: u32,
+    thumbs: bool,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.list_gallery(&node_id, u64::from(offset), limit, thumbs)
+}
+
+/// Fetch a photo or video from a phone's gallery (`id` from the listing,
+/// `name` for the progress) into Downloads. Returns the transfer id.
+#[tauri::command]
+#[specta::specta]
+fn download_gallery_item(
+    node_id: String,
+    id: String,
+    name: String,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    engine.download_gallery_item(&node_id, &id, &name)
+}
+
+/// Whether this computer tells your other devices when its battery is low
+/// or full, and the low level.
+#[tauri::command]
+#[specta::specta]
+fn battery_alerts(engine: State<Eng>) -> mdcore::model::BatteryAlertSettings {
+    engine.battery_alerts()
+}
+
+#[tauri::command]
+#[specta::specta]
+fn set_battery_alerts(
+    settings: mdcore::model::BatteryAlertSettings,
+    engine: State<Eng>,
+) -> Result<(), CoreError> {
+    engine.set_battery_alerts(settings)
+}
+
+/// Keep a device from sleeping for `minutes` (0 = stop), if its status
+/// lists "keep_awake".
+#[tauri::command]
+#[specta::specta]
+fn keep_awake(node_id: String, minutes: u32, engine: State<Eng>) -> Result<String, CoreError> {
+    engine.keep_awake(&node_id, minutes)
+}
+
 /// The native "choose a file" dialog; `None` if the user closed it. Async so
 /// it doesn't run on (and block) the main thread the dialog needs.
 #[tauri::command]
@@ -926,7 +1010,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         reveal_file,
         open_file,
         notifications_enabled,
-        set_notifications_enabled
+        set_notifications_enabled,
+        list_gallery,
+        download_gallery_item,
+        battery_alerts,
+        set_battery_alerts,
+        keep_awake
     ])
 }
 
