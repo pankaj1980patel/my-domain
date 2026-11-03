@@ -53,7 +53,7 @@ class MainActivity : ComponentActivity() {
         setContent { MdTheme { App(prefs) } }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         // The service started before the answer; start Bluetooth now that
         // it's allowed (does nothing if it's already running or still denied).
