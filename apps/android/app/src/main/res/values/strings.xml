@@ -110,6 +110,19 @@
     <string name="settings_key_changed">Device key changed</string>
     <string name="settings_version">my-domain %1$s</string>
     <string name="settings_developer_unlocked">Developer screen unlocked</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_appearance_hint">How my-domain looks on this phone.</string>
+    <!-- Themes: the brand kit's five palettes (docs/design/theme.md) -->
+    <string name="theme_cosmic_blue">Cosmic Blue</string>
+    <string name="theme_cosmic_blue_desc">The brand look: deep navy, vivid blue</string>
+    <string name="theme_aurora">Aurora</string>
+    <string name="theme_aurora_desc">Expressive violet and pink</string>
+    <string name="theme_ocean">Ocean Blue</string>
+    <string name="theme_ocean_desc">Calm blues and aqua</string>
+    <string name="theme_midnight">Minimal Midnight</string>
+    <string name="theme_midnight_desc">Quiet, with less glow</string>
+    <string name="theme_light">Cosmic Light</string>
+    <string name="theme_light_desc">Bright and airy</string>
 
     <!-- Connection status (core/Words.kt) -->
     <string name="link_direct">Connected directly</string>

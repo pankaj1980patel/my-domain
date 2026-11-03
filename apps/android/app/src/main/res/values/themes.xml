@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Compose draws the UI over the space background; the window starts on
-         the same deep navy so launch doesn't flash white. -->
+         the same deep navy (the kit's Deep Space, #050B18) so launch doesn't flash white. -->
     <style name="Theme.App" parent="Theme.Material3.Dark.NoActionBar">
         <item name="android:windowBackground">@color/space_bg</item>
     </style>
-    <color name="space_bg">#02080F</color>
+    <color name="space_bg">#050B18</color>
 </resources>

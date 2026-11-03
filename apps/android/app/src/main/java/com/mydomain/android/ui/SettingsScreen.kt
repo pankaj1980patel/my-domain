@@ -116,6 +116,11 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
             }
         }
 
+        Tile(title = stringResource(R.string.settings_appearance)) {
+            Muted(stringResource(R.string.settings_appearance_hint))
+            ThemePicker(prefs)
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Muted(
                 stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),

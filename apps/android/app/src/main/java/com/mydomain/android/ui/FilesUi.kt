@@ -118,7 +118,7 @@ fun ShareChooser() {
     val sendingTo = stringResource(R.string.share_sending)
     AlertDialog(
         onDismissRequest = { Core.clearShare() },
-        containerColor = T.surface,
+        containerColor = T.bar,
         title = { Text(stringResource(R.string.share_title), color = T.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

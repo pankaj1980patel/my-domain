@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -113,12 +112,12 @@ private fun ChatTile(node: String) {
                 Column(
                     Modifier.widthIn(max = 280.dp)
                         .alpha(if (waiting) 0.7f else 1f)
-                        .background(if (m.incoming) T.surface2 else T.accent, RoundedCornerShape(14.dp))
+                        .background(if (m.incoming) T.surface2 else T.primary, MaterialTheme.shapes.medium)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
                 ) {
-                    Text(m.text, color = if (m.incoming) T.text else T.accentText, style = MaterialTheme.typography.bodyMedium)
+                    Text(m.text, color = if (m.incoming) T.text else T.onPrimary, style = MaterialTheme.typography.bodyMedium)
                     if (waiting) {
-                        Text(stringResource(R.string.chat_sends_when_connected), color = T.accentText, style = MaterialTheme.typography.labelMedium)
+                        Text(stringResource(R.string.chat_sends_when_connected), color = T.onPrimary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }

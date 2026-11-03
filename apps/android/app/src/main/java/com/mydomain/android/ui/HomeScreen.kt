@@ -56,7 +56,7 @@ fun HomeScreen(onOpen: (String) -> Unit) {
                 state = pull,
                 isRefreshing = refreshing,
                 modifier = Modifier.align(Alignment.TopCenter),
-                containerColor = SpaceBar,
+                containerColor = T.bar,
                 color = T.accent,
             )
         },

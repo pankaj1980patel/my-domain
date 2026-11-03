@@ -1,96 +1,321 @@
 package com.mydomain.android.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import com.mydomain.android.R
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import com.mydomain.android.R
 
-// The same design tokens as the desktop (apps/desktop/ui/src/styles/tokens.css):
-// a deep-space theme, always dark.
+// The same design tokens as the desktop (apps/desktop/ui/src/styles/tokens.css),
+// from the owner's brand kit (docs/design/my-domain-brand-theme-kit.html; the
+// rules are in docs/design/theme.md). Five themes; Cosmic Blue is the default.
+
+/** The kit's five themes. `key` is what's stored in SharedPreferences and
+ *  matches the desktop's data-theme value. */
+enum class ThemeId(val key: String, @StringRes val label: Int, @StringRes val desc: Int) {
+    CosmicBlue("cosmic-blue", R.string.theme_cosmic_blue, R.string.theme_cosmic_blue_desc),
+    Aurora("aurora", R.string.theme_aurora, R.string.theme_aurora_desc),
+    Ocean("ocean", R.string.theme_ocean, R.string.theme_ocean_desc),
+    Midnight("midnight", R.string.theme_midnight, R.string.theme_midnight_desc),
+    Light("light", R.string.theme_light, R.string.theme_light_desc);
+
+    val tokens: Tokens
+        get() = when (this) {
+            CosmicBlue -> CosmicBlueTokens
+            Aurora -> AuroraTokens
+            Ocean -> OceanTokens
+            Midnight -> MidnightTokens
+            Light -> LightTokens
+        }
+
+    companion object {
+        fun fromKey(key: String?): ThemeId = entries.firstOrNull { it.key == key } ?: CosmicBlue
+    }
+}
 
 @Immutable
 data class Tokens(
     val bg: Color,
+    /** Glass panel (translucent over the sky). */
     val surface: Color,
+    /** Raised: inputs, incoming bubbles, selected backgrounds. */
     val surface2: Color,
+    /** Opaque panel for bars, dialogs and sheets over moving content. */
+    val bar: Color,
     val border: Color,
+    val borderStrong: Color,
     val text: Color,
     val text2: Color,
     val text3: Color,
+    /** Primary action colour; buttons draw [gradient] over it. */
+    val primary: Color,
+    val onPrimary: Color,
+    /** Brand gradient stops (fraction to colour), drawn at about 120 degrees. */
+    val gradient: List<Pair<Float, Color>>,
+    val secondaryButton: Color,
+    val secondaryButtonBorder: Color,
+    /** Interaction: focus, selection, active navigation. */
     val accent: Color,
-    val accentText: Color,
+    val onAccent: Color,
+    /** The accent when used as text or an icon on [surface]. */
+    val accentFg: Color,
+    /** A faint accent wash behind selected items. */
+    val accentBg: Color,
+    val accentSoft: Color,
+    /** Reserved for rare, important moments. */
+    val highlight: Color,
     val success: Color,
     val successSoft: Color,
     val warning: Color,
     val danger: Color,
     val dangerSoft: Color,
+    val toastBg: Color,
+    val toastFg: Color,
+    /** Draw the star field behind everything. */
+    val starField: Boolean,
+    /** Tints the star field towards [bg]. */
+    val veil: Color,
+    /** The soft radial glow at the top right; Transparent for none. */
+    val glow: Color,
+    /** Status dots glow (off in the quiet theme). */
+    val dotGlow: Boolean,
+    val isLight: Boolean,
+) {
+    /** The brand gradient as a brush (diagonal, like the kit's 120deg). */
+    val brush: Brush
+        get() = Brush.linearGradient(*gradient.toTypedArray(), start = Offset.Zero, end = Offset.Infinite)
+}
+
+private val Gold = Color(0xFFFFC857)
+private val Success = Color(0xFF34D399)
+private val Danger = Color(0xFFFB7185)
+
+/** Cosmic Blue: the brand default. Deep navy, Royal Blue actions, Electric
+ *  Cyan for interaction, Cosmic Gold for highlights. */
+private val CosmicBlueTokens = Tokens(
+    bg = Color(0xFF050B18), surface = Color(0xB80B1630), surface2 = Color(0xDB101D35), bar = Color(0xF00B1630),
+    border = Color(0xFF203454), borderStrong = Color(0xFF2A456A),
+    text = Color(0xFFF4F8FF), text2 = Color(0xFFC6D5EA), text3 = Color(0xFF94A3B8),
+    primary = Color(0xFF1455D9), onPrimary = Color.White,
+    gradient = listOf(0f to Color(0xFF1455D9), 0.55f to Color(0xFF22C7F2), 1f to Color(0xFF713BDB)),
+    secondaryButton = Color(0xFF152744), secondaryButtonBorder = Color(0xFF2A456A),
+    accent = Color(0xFF22C7F2), onAccent = Color(0xFF041321), accentFg = Color(0xFF22C7F2),
+    accentBg = Color(0x1F22C7F2), accentSoft = Color(0xFF64BFFF), highlight = Gold,
+    success = Success, successSoft = Color(0x2434D399), warning = Gold,
+    danger = Danger, dangerSoft = Color(0x21FB7185),
+    toastBg = Color(0xFFEAF7FF), toastFg = Color(0xFF071525),
+    starField = true, veil = Color(0x59050B18), glow = Color(0x55123E79), dotGlow = true, isLight = false,
 )
 
-/** Deep space: a star field behind everything (drawable/space_bg, cropped from
- *  docs/brand/space-source.png), translucent glass panels, white primary actions. */
-private val Space = Tokens(
-    bg = Color(0xFF02080F), surface = Color(0x14FFFFFF), surface2 = Color(0x1FFFFFFF),
-    border = Color(0x1FFFFFFF), text = Color(0xFFF4F4F6), text2 = Color(0xFFB6B8C6), text3 = Color(0xFF8D90A3),
-    accent = Color.White, accentText = Color(0xFF0A0D1A),
-    success = Color(0xFF4ADE80), successSoft = Color(0x244ADE80), warning = Color(0xFFFACC15),
-    danger = Color(0xFFF87171), dangerSoft = Color(0x21F87171),
+/** Aurora Purple: expressive violet, Aurora Cyan interaction, pink highlights. */
+private val AuroraTokens = Tokens(
+    bg = Color(0xFF090817), surface = Color(0xB817152E), surface2 = Color(0xDB201D3D), bar = Color(0xF017152E),
+    border = Color(0xFF2E2A52), borderStrong = Color(0xFF433C74),
+    text = Color(0xFFF7F4FF), text2 = Color(0xFFD6D0EA), text3 = Color(0xFFA8A2C2),
+    primary = Color(0xFF713BDB), onPrimary = Color.White,
+    gradient = listOf(0f to Color(0xFF312E81), 0.5f to Color(0xFF713BDB), 1f to Color(0xFFE879F9)),
+    secondaryButton = Color(0xFF221F42), secondaryButtonBorder = Color(0xFF433C74),
+    accent = Color(0xFF42D9F5), onAccent = Color(0xFF041321), accentFg = Color(0xFF42D9F5),
+    accentBg = Color(0x1F42D9F5), accentSoft = Color(0xFF9B75FF), highlight = Color(0xFFE879F9),
+    success = Success, successSoft = Color(0x2434D399), warning = Gold,
+    danger = Danger, dangerSoft = Color(0x21FB7185),
+    toastBg = Color(0xFFF7F4FF), toastFg = Color(0xFF120F26),
+    starField = true, veil = Color(0x66090817), glow = Color(0x4D713BDB), dotGlow = true, isLight = false,
 )
 
-/** Solid panel colour for bars and sheets that sit over moving content. */
-val SpaceBar = Color(0xE60D1120)
+/** Ocean Blue: calm blues, Aqua interaction, Mint for "connected". */
+private val OceanTokens = Tokens(
+    bg = Color(0xFF061321), surface = Color(0xB80D2439), surface2 = Color(0xDB12304A), bar = Color(0xF00D2439),
+    border = Color(0xFF1D3D5A), borderStrong = Color(0xFF2A5578),
+    text = Color(0xFFF2FAFF), text2 = Color(0xFFC4DBE8), text3 = Color(0xFF8AA8BC),
+    primary = Color(0xFF0759A6), onPrimary = Color.White,
+    gradient = listOf(0f to Color(0xFF0759A6), 0.6f to Color(0xFF0A8FC4), 1f to Color(0xFF00B8D9)),
+    secondaryButton = Color(0xFF11304B), secondaryButtonBorder = Color(0xFF2A5578),
+    accent = Color(0xFF00B8D9), onAccent = Color(0xFF03121F), accentFg = Color(0xFF00B8D9),
+    accentBg = Color(0x1F00B8D9), accentSoft = Color(0xFFA5E8FF), highlight = Gold,
+    success = Color(0xFF55E6C1), successSoft = Color(0x2455E6C1), warning = Gold,
+    danger = Danger, dangerSoft = Color(0x21FB7185),
+    toastBg = Color(0xFFF2FAFF), toastFg = Color(0xFF061321),
+    starField = true, veil = Color(0x66061321), glow = Color(0x3300B8D9), dotGlow = true, isLight = false,
+)
 
-val LocalTokens = staticCompositionLocalOf { Space }
+/** Minimal Midnight: quiet and professional. Solid panels, no star field,
+ *  no glow, flat primary buttons. */
+private val MidnightTokens = Tokens(
+    bg = Color(0xFF080B12), surface = Color(0xFF111827), surface2 = Color(0xFF1C2738), bar = Color(0xFF111827),
+    border = Color(0xFF29364A), borderStrong = Color(0xFF36465F),
+    text = Color(0xFFF8FAFC), text2 = Color(0xFFCBD5E1), text3 = Color(0xFF94A3B8),
+    primary = Color(0xFF2563EB), onPrimary = Color.White,
+    gradient = listOf(0f to Color(0xFF2563EB), 1f to Color(0xFF2563EB)),
+    secondaryButton = Color(0xFF1C2738), secondaryButtonBorder = Color(0xFF36465F),
+    accent = Color(0xFF38BDF8), onAccent = Color(0xFF04131F), accentFg = Color(0xFF38BDF8),
+    accentBg = Color(0x1A38BDF8), accentSoft = Color(0xFF38BDF8), highlight = Gold,
+    success = Success, successSoft = Color(0x1F34D399), warning = Gold,
+    danger = Danger, dangerSoft = Color(0x1FFB7185),
+    toastBg = Color(0xFFF8FAFC), toastFg = Color(0xFF080B12),
+    starField = false, veil = Color.Transparent, glow = Color.Transparent, dotGlow = false, isLight = false,
+)
+
+/** Cosmic Light: the light-mode companion. Cloud background, white cards,
+ *  Ink text. */
+private val LightTokens = Tokens(
+    bg = Color(0xFFF4F8FF), surface = Color(0xDBFFFFFF), surface2 = Color(0xFFE7F0FF), bar = Color(0xF5FFFFFF),
+    border = Color(0xFFDCE8F7), borderStrong = Color(0xFFC3D5EC),
+    text = Color(0xFF10213D), text2 = Color(0xFF33476A), text3 = Color(0xFF61738D),
+    primary = Color(0xFF1769E8), onPrimary = Color.White,
+    gradient = listOf(0f to Color(0xFF1769E8), 0.55f to Color(0xFF38BDF8), 1f to Color(0xFF713BDB)),
+    secondaryButton = Color.White, secondaryButtonBorder = Color(0xFFC3D5EC),
+    accent = Color(0xFF38BDF8), onAccent = Color(0xFF041321), accentFg = Color(0xFF0369A1),
+    accentBg = Color(0x171769E8), accentSoft = Color(0xFF38BDF8), highlight = Color(0xFFF5B942),
+    success = Color(0xFF059669), successSoft = Color(0x1F059669), warning = Color(0xFFB45309),
+    danger = Color(0xFFE11D48), dangerSoft = Color(0x1AE11D48),
+    toastBg = Color(0xFF10213D), toastFg = Color(0xFFF4F8FF),
+    starField = false, veil = Color.Transparent, glow = Color(0x3838BDF8), dotGlow = true, isLight = true,
+)
+
+/** The chosen theme, persisted in the app's "md" SharedPreferences under
+ *  "theme". Compose re-themes the whole app when [current] changes. */
+object ThemeStore {
+    const val PREF_KEY = "theme"
+    var current by mutableStateOf(ThemeId.CosmicBlue)
+        private set
+    private var loaded = false
+
+    fun load(prefs: SharedPreferences) {
+        if (loaded) return
+        loaded = true
+        current = ThemeId.fromKey(prefs.getString(PREF_KEY, null))
+    }
+
+    /** Switch now and remember it for the next launch. */
+    fun set(prefs: SharedPreferences, id: ThemeId) {
+        current = id
+        prefs.edit().putString(PREF_KEY, id.key).apply()
+    }
+}
+
+val LocalTokens = staticCompositionLocalOf { CosmicBlueTokens }
 
 /** The current design tokens: `T.text`, `T.border`, ... */
 val T: Tokens
     @Composable get() = LocalTokens.current
 
+/** Kit type: Inter/system sans, 15 sp body at 1.55 line height, titles in
+ *  extra-bold. (No font file is bundled: the system sans is used.) */
 private val type = Typography(
-    headlineSmall = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.SemiBold),
-    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
-    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
-    bodyLarge = TextStyle(fontSize = 15.sp),
-    bodyMedium = TextStyle(fontSize = 14.sp),
-    bodySmall = TextStyle(fontSize = 13.sp),
-    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Medium),
-    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Medium),
+    headlineSmall = TextStyle(fontSize = 24.sp, lineHeight = 28.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em),
+    titleLarge = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold),
+    titleMedium = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold),
+    bodyLarge = TextStyle(fontSize = 15.sp, lineHeight = 23.sp),
+    bodyMedium = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
+    bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 19.sp),
+    labelLarge = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold),
+    labelMedium = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+    // The kit's "eyebrow": small caps-style label in the accent colour.
+    labelSmall = TextStyle(fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em),
+)
+
+/** Kit radii: buttons and inputs 12, cards 18, hero surfaces 28. */
+private val shapes = Shapes(
+    extraSmall = RoundedCornerShape(8.dp),
+    small = RoundedCornerShape(12.dp),
+    medium = RoundedCornerShape(18.dp),
+    large = RoundedCornerShape(22.dp),
+    extraLarge = RoundedCornerShape(28.dp),
 )
 
 @Composable
 fun MdTheme(content: @Composable () -> Unit) {
-    val t = Space
-    val scheme = darkColorScheme().copy(
-        primary = t.accent, onPrimary = t.accentText,
-        secondaryContainer = t.surface2, onSecondaryContainer = t.text,
+    val ctx = LocalContext.current
+    remember { ThemeStore.load(ctx.getSharedPreferences("md", Context.MODE_PRIVATE)) }
+    val t = ThemeStore.current.tokens
+    val base = if (t.isLight) lightColorScheme() else darkColorScheme()
+    val scheme = base.copy(
+        primary = t.primary, onPrimary = t.onPrimary,
+        primaryContainer = t.accentBg, onPrimaryContainer = t.accentFg,
+        secondary = t.accent, onSecondary = t.onAccent,
+        secondaryContainer = t.accentBg, onSecondaryContainer = t.text,
+        tertiary = t.highlight,
         background = Color.Transparent, onBackground = t.text,
         surface = t.surface, onSurface = t.text,
         surfaceVariant = t.surface2, onSurfaceVariant = t.text2,
-        surfaceContainer = SpaceBar, surfaceContainerLow = SpaceBar, surfaceContainerHigh = SpaceBar,
-        surfaceContainerHighest = t.surface2, inverseSurface = t.text, inverseOnSurface = t.accentText,
-        outline = t.border, outlineVariant = t.border,
-        error = t.danger, onError = Color.White,
+        surfaceContainerLowest = t.bar, surfaceContainerLow = t.bar, surfaceContainer = t.bar,
+        surfaceContainerHigh = t.bar, surfaceContainerHighest = t.surface2,
+        inverseSurface = t.toastBg, inverseOnSurface = t.toastFg, inversePrimary = t.accent,
+        outline = t.borderStrong, outlineVariant = t.border,
+        error = t.danger, onError = Color.White, errorContainer = t.dangerSoft, onErrorContainer = t.danger,
+        scrim = Color(0x99000000),
     )
-    androidx.compose.runtime.CompositionLocalProvider(LocalTokens provides t) {
-        MaterialTheme(colorScheme = scheme, typography = type) {
+
+    // Status and navigation bar icons: dark on the light theme, light otherwise.
+    val view = LocalView.current
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? Activity)?.window ?: return@SideEffect
+            WindowCompat.getInsetsController(window, view).apply {
+                isAppearanceLightStatusBars = t.isLight
+                isAppearanceLightNavigationBars = t.isLight
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalTokens provides t) {
+        MaterialTheme(colorScheme = scheme, typography = type, shapes = shapes) {
             Box(Modifier.fillMaxSize().background(t.bg)) {
-                Image(
-                    painterResource(R.drawable.space_bg), contentDescription = null,
-                    modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
-                )
+                if (t.starField) {
+                    Image(
+                        painterResource(R.drawable.space_bg), contentDescription = null,
+                        modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop,
+                    )
+                    Box(Modifier.fillMaxSize().background(t.veil))
+                }
+                if (t.glow != Color.Transparent) {
+                    Box(
+                        Modifier.fillMaxSize().drawBehind {
+                            drawRect(
+                                Brush.radialGradient(
+                                    listOf(t.glow, Color.Transparent),
+                                    center = Offset(size.width * 0.75f, -size.height * 0.15f),
+                                    radius = size.maxDimension * 0.6f,
+                                ),
+                            )
+                        },
+                    )
+                }
                 content()
             }
         }

@@ -37,6 +37,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -62,7 +65,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import com.mydomain.android.ffi.PeerInfo
 
-/** A flat card with a hairline border: the one container style. */
+/** A glass card with a hairline border: the one container style (kit card:
+ *  18 dp corners). */
 @Composable
 fun Tile(
     modifier: Modifier = Modifier,
@@ -72,7 +76,7 @@ fun Tile(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(14.dp),
+        shape = MaterialTheme.shapes.medium,
         color = T.surface,
         border = BorderStroke(1.dp, T.border),
         onClick = onClick ?: {},
@@ -93,21 +97,29 @@ fun Muted(text: String, modifier: Modifier = Modifier, center: Boolean = false) 
     )
 }
 
+/** Primary action: the brand gradient with a white label (kit .btn). */
 @Composable
 fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val shape = MaterialTheme.shapes.small
     Button(
-        onClick, modifier = modifier.height(44.dp), enabled = enabled, shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = T.accent, contentColor = T.accentText),
-        contentPadding = PaddingValues(horizontal = 18.dp),
-    ) { Text(text, style = MaterialTheme.typography.labelLarge) }
+        onClick,
+        modifier = modifier.height(44.dp).alpha(if (enabled) 1f else 0.5f).clip(shape).background(T.brush, shape),
+        enabled = enabled, shape = shape,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color.Transparent, contentColor = T.onPrimary,
+            disabledContainerColor = Color.Transparent, disabledContentColor = T.onPrimary,
+        ),
+        elevation = null, contentPadding = PaddingValues(horizontal = 18.dp),
+    ) { Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold) }
 }
 
-/** Secondary action: soft grey fill, no border. */
+/** Secondary action: deep fill with a hairline (kit .btn.secondary). */
 @Composable
 fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     Button(
-        onClick, modifier = modifier.height(44.dp), enabled = enabled, shape = RoundedCornerShape(10.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = T.surface2, contentColor = T.text),
+        onClick, modifier = modifier.height(44.dp), enabled = enabled, shape = MaterialTheme.shapes.small,
+        colors = ButtonDefaults.buttonColors(containerColor = T.secondaryButton, contentColor = T.text),
+        border = BorderStroke(1.dp, T.secondaryButtonBorder),
         elevation = null, contentPadding = PaddingValues(horizontal = 16.dp),
     ) { Text(text, style = MaterialTheme.typography.labelLarge) }
 }
@@ -115,8 +127,8 @@ fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
 @Composable
 fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, small: Boolean = false) {
     OutlinedButton(
-        onClick, modifier = modifier.height(if (small) 36.dp else 44.dp), shape = RoundedCornerShape(10.dp),
-        border = BorderStroke(1.dp, T.border),
+        onClick, modifier = modifier.height(if (small) 36.dp else 44.dp), shape = MaterialTheme.shapes.small,
+        border = BorderStroke(1.dp, T.borderStrong),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = T.text),
         contentPadding = PaddingValues(horizontal = if (small) 12.dp else 16.dp),
     ) { Text(text, style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) }
@@ -133,12 +145,13 @@ fun Field(
 ) {
     OutlinedTextField(
         value, onChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine,
-        shape = RoundedCornerShape(10.dp),
+        shape = MaterialTheme.shapes.small,
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = T.text2, unfocusedBorderColor = T.border,
-            focusedLabelColor = T.text2, unfocusedLabelColor = T.text3, cursorColor = T.text,
-            focusedContainerColor = T.surface, unfocusedContainerColor = T.surface,
+            focusedBorderColor = T.accent, unfocusedBorderColor = T.border,
+            focusedLabelColor = T.accentFg, unfocusedLabelColor = T.text3, cursorColor = T.accent,
+            focusedContainerColor = T.surface2, unfocusedContainerColor = T.surface2,
+            focusedTextColor = T.text, unfocusedTextColor = T.text,
         ),
     )
 }
@@ -153,8 +166,8 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
         Switch(
             checked, onChange,
             colors = SwitchDefaults.colors(
-                checkedTrackColor = T.accent, checkedThumbColor = T.accentText,
-                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.border, uncheckedThumbColor = T.text2,
+                checkedTrackColor = T.accent, checkedThumbColor = T.onPrimary, checkedBorderColor = T.accent,
+                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.borderStrong, uncheckedThumbColor = T.text2,
             ),
         )
     }
@@ -163,7 +176,7 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun Avatar(name: String, size: Dp = 44.dp) {
     Box(
-        Modifier.size(size).background(T.surface2, RoundedCornerShape(12.dp)),
+        Modifier.size(size).background(T.surface2, MaterialTheme.shapes.small),
         contentAlignment = Alignment.Center,
     ) {
         Text(initial(name), color = T.text, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
@@ -188,7 +201,13 @@ fun StatusPill(node: String) {
     } else 1f
     val q = if (s == LinkState.Direct || s == LinkState.Relay) Core.quality[node] else null
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).alpha(pulse).background(color, CircleShape))
+        // Connected dots glow softly (kit .dot), except in the quiet theme.
+        val glow = s == LinkState.Direct && T.dotGlow
+        Box(
+            Modifier.size(8.dp).alpha(pulse)
+                .drawBehind { if (glow) drawCircle(color.copy(alpha = 0.3f), radius = size.minDimension) }
+                .background(color, CircleShape),
+        )
         Spacer(Modifier.width(6.dp))
         Text(
             linkLabel(s), style = MaterialTheme.typography.labelMedium,
@@ -214,7 +233,7 @@ fun SignalBars(quality: String, color: androidx.compose.ui.graphics.Color) {
         listOf(5, 8, 12).forEachIndexed { i, h ->
             Box(
                 Modifier.width(3.dp).height(h.dp)
-                    .background(if (i < filled) on else T.border, RoundedCornerShape(1.dp)),
+                    .background(if (i < filled) on else T.borderStrong, RoundedCornerShape(1.dp)),
             )
         }
     }
@@ -235,7 +254,7 @@ fun DeviceCard(peer: PeerInfo, onOpen: () -> Unit, onConnect: () -> Unit) {
             if (unread > 0) {
                 Box(
                     Modifier.padding(start = 8.dp).background(T.accent, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
-                ) { Text("$unread", color = T.accentText, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+                ) { Text("$unread", color = T.onAccent, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold) }
             }
             if (s == LinkState.Offline || s == LinkState.Failed) {
                 Spacer(Modifier.width(8.dp))
@@ -260,7 +279,7 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
 @Composable
 fun ErrorText(text: String) {
     Text(
-        text, Modifier.fillMaxWidth().background(T.dangerSoft, RoundedCornerShape(8.dp)).padding(10.dp),
+        text, Modifier.fillMaxWidth().background(T.dangerSoft, MaterialTheme.shapes.extraSmall).padding(10.dp),
         color = T.danger, style = MaterialTheme.typography.bodySmall,
     )
 }

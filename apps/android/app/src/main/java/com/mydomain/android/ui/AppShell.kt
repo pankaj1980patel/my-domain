@@ -101,7 +101,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
             if (device == null && !developer) {
-                NavigationBar(containerColor = SpaceBar, tonalElevation = 0.dp) {
+                NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
@@ -109,8 +109,9 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                             icon = { Icon(t.icon, contentDescription = null) },
                             label = { Text(stringResource(t.label)) },
                             colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = T.text, selectedTextColor = T.text,
-                                indicatorColor = T.surface2,
+                                // Active navigation is the accent (kit rule).
+                                selectedIconColor = T.accentFg, selectedTextColor = T.accentFg,
+                                indicatorColor = T.accentBg,
                                 unselectedIconColor = T.text3, unselectedTextColor = T.text3,
                             ),
                         )
