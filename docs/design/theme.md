@@ -51,6 +51,7 @@ filled in where the kit's palette has no colour for that role.
 | Accent as text | `--accent-fg` | `accentFg` | #22C7F2 | #42D9F5 | #00B8D9 | #38BDF8 | #0369A1 |
 | Secondary accent | `--accent-soft` | `accentSoft` | **#64BFFF** | **#9B75FF** | **#A5E8FF** | #38BDF8 | #38BDF8 |
 | Highlight | `--highlight` | `highlight` | **#FFC857** | **#E879F9** | #FFC857 | #FFC857 | **#F5B942** |
+| Highlight as text (tagline) | `--highlight-fg` | `highlightFg` | #FFC857 | #E879F9 | #FFC857 | #FFC857 | #9A6400 |
 | Success | `--success` | `success` | **#34D399** | #34D399 | **#55E6C1** | #34D399 | #059669 |
 | Warning | `--warning` | `warning` | **#FFC857** | #FFC857 | #FFC857 | #FFC857 | #B45309 |
 | Danger | `--danger` | `danger` | **#FB7185** | #FB7185 | #FB7185 | #FB7185 | #E11D48 |
@@ -79,10 +80,16 @@ Supporting tokens:
 
 ### Type
 
-- Font: the kit's stack, `Inter, ui-sans-serif, system-ui, -apple-system,
-  Segoe UI, Roboto, Arial, sans-serif`. No font file is bundled: Inter is used
-  when the computer has it installed, otherwise the system sans. Android
-  uses the system sans.
+- Font: **Inter**, bundled in both apps so it works offline (SIL Open Font
+  License 1.1).
+  - Desktop: the `@fontsource-variable/inter` npm package, imported once in
+    `src/index.tsx` (`--font: "Inter Variable", Inter, ui-sans-serif, ...`).
+    Licence: `apps/desktop/ui/public/licenses/Inter-OFL.txt`.
+  - Android: static TTFs (400, 500, 600, 700, 800) from the npm package
+    `inter-font` 3.19.0, in `res/font/inter_*.ttf`, used by every style in
+    the Material `Typography`. Licence:
+    `apps/android/app/src/main/assets/licenses/Inter-OFL.txt`. It can't sit
+    next to the fonts, because `res/font` only accepts font files.
 - Body: 15 px with 1.55 line height.
 - Titles: extra-bold (800). Page titles are 26 px on desktop and 24 sp on
   Android, with slightly tight letter spacing.
@@ -134,10 +141,21 @@ Supporting tokens:
   dark navy text.
 - Check contrast on every real component before shipping.
 - Logo: the galaxy image, used as it is. Do not recolour, crop or redraw it.
-  Show it as a rounded square (22% corner radius) with a soft drop shadow. The
-  same image is used in every theme, the light one included.
-- Wordmark: in the kit it reads "My-Domain", with "Domain" in cyan. The
-  tagline "YOUR DEVICES. YOUR DOMAIN." is set in gold, small and bold.
+  - Dark themes: the dark galaxy (`public/logo.png`, Android `logo_mark`),
+    shown as a rounded square (22% corner radius) with a soft drop shadow.
+  - Cosmic Light: the light galaxy, the owner's spiral on a transparent
+    background (`public/logo-light.png`, Android
+    `drawable-nodpi/logo_mark_light.png`; master at
+    [`logo-galaxy-light-1024.png`](logo-galaxy-light-1024.png)). It has no
+    frame: no rounded square, just a faint blue drop shadow.
+  - Desktop picks the logo with `logoSrc()` (`components/Brand.tsx`); Android
+    with `logoRes()` (`ui/Brand.kt`).
+- Wordmark: "My-Domain", extra-bold, with "Domain" in the accent colour
+  (`--accent-fg`). Below it, the tagline "YOUR DEVICES. YOUR DOMAIN." in gold
+  (`--highlight-fg`), small, bold and uppercase. Both appear on the sign-in
+  screen in both apps, and in the desktop sidebar's brand area. Use the
+  `Wordmark` and `Tagline` components; don't retype them. Other copy keeps
+  the lowercase app name "my-domain".
 - Icons: simple monochrome glyphs (line or solid), tinted by role: cyan for
   interaction, gold for highlights, green for status. No emoji in the UI.
 
