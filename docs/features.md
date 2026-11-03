@@ -96,12 +96,12 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.2 Screen, camera & remote control
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Screen share (view) | Live view of the peer's screen | `screen.view` | A D | P (MediaProjection) | ⬜ |
-| Remote control | Tap, swipe, type on the peer | `input.control` | A D | P (Accessibility) | ⬜ |
+| Screen share (view) | Live view of the peer's screen | `screen.view` | A D | P (MediaProjection) | 🟡 (2026-11-03: snapshots about twice a second. Computer → phone behind the full-screen touchpad, tried from mdctl against the Mac; phone → computer in the desktop's "Its screen" tile, Android asks each time; macOS needs Screen Recording, Linux grim or ImageMagick; the phone views not tried live yet) |
+| Remote control | Tap, swipe, type on the peer | `input.control` | A D | P (Accessibility) | 🟡 (2026-11-03: computer ← computer from the "Its screen" tile: click, right-click, scroll, type; not tried live yet. Controlling a phone: not started) |
 | Screenshot | Grab a single frame | `screen.view` | A D | P | ⬜ |
 | Screen record | Record the peer's screen to a file | `screen.record` | A D | P | ⬜ |
 | Remote keyboard | Type into the phone from the desktop keyboard | `input.control` | A | P (Accessibility / IME) | ⬜ |
-| Phone as touchpad / keyboard | Control the desktop cursor from the phone | `input.control` | D | S | 🟡 (2026-11-03: move, left/right click, scroll, text, enter/backspace/arrows/esc; on/off switch on the computer; macOS needs Accessibility, Linux an X11/XWayland session; not tried live yet) |
+| Phone as touchpad / keyboard | Control the desktop cursor from the phone | `input.control` | D | S | ✅ (2026-11-03, tried on the Mac: move, clicks, two-finger scroll, typing, keys, three/four-finger swipes and buttons for them, full-screen pad, Point & click on the screen picture; macOS needs Accessibility, Linux an X11/XWayland session) |
 | Phone as webcam | Use the phone camera as a desktop webcam | `camera.view` | A→D | S | ⬜ |
 | Remote camera view | See the peer's front/back camera (indicator shown) | `camera.view` | A D | S | ⬜ |
 | Remote mic listen | Listen to the peer's mic (`ask` by default, indicator shown) | `mic.listen` | A D | S | ⬜ |
@@ -187,7 +187,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | DND follows the phone | Computers hold my-domain's pop-ups while the phone is in Do Not Disturb (the OS state is only read, never changed) | `device.settings` | A→D | — | ✅ (2026-11-03; no permission needed; option on the computer, off by default; not tried live yet) |
 | Flashlight | On/off | `device.settings` | A | S | ✅ |
 | Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop only: macOS display sleep, Linux logind / screen locker) |
-| Wake / keep awake | Keep a device from sleeping for N minutes | `device.settings` | A D | S | 🟡 (2026-11-03: action `keep_awake`; macOS `caffeinate`, Linux `systemd-inhibit`, phone screen wake lock; no buttons yet) |
+| Wake / keep awake | Keep a device from sleeping for N minutes | `device.settings` | A D | S | ✅ (2026-11-03: 30 min / 1 hour / Let it sleep on the phone's page for a computer, tried on the Mac; macOS `caffeinate`, Linux `systemd-inhibit`, phone screen wake lock) |
+| Wake-on-LAN | Wake a sleeping computer from the phone | `device.power` | A→D | — | 🟡 (2026-11-03: the computer says its network card in its status, the phone remembers it and shows "Wake it"; same network only; waking not tried yet) |
 | Battery alerts | Tell the other devices once when the battery drops below a level (default 15%) or finishes charging | `device.battery` | A D | — | ✅ (2026-11-03; on/off switch on the phone, desktop command only) |
 | Sleep / restart / shutdown | | `device.power` | A D | R on Android / S on desktop | ⬜ |
 | Desktop volume / mute | | `media.control` | D | — | ✅ (macOS, Linux) |
