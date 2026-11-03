@@ -105,18 +105,18 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Phone as webcam | Use the phone camera as a desktop webcam | `camera.view` | A→D | S | ⬜ |
 | Remote camera view | See the peer's front/back camera (indicator shown) | `camera.view` | A D | S | ⬜ |
 | Remote mic listen | Listen to the peer's mic (`ask` by default, indicator shown) | `mic.listen` | A D | S | ⬜ |
-| Presentation remote | Next/prev slide, laser pointer | `input.control` | D | S | ⬜ |
+| Presentation remote | Next/prev slide, laser pointer | `input.control` | D | S | 🟡 (next, previous, black screen; no laser pointer; macOS needs Accessibility) |
 | Single-app mirror | Stream just one Android app to the desktop | `screen.view` | A | R | ⬜ |
 
 ### 3.3 Media
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Now playing | Title, artist, artwork, position of any playing app | `media.read` | A D | P (Notification access) | ⬜ |
+| Now playing | Title, artist, artwork, position of any playing app | `media.read` | A D | P (Notification access) | 🟡 (title, artist, album, app, playing/paused; no artwork or position; macOS: Spotify and Music only) |
 | Media control | Play/pause/next/prev/seek **any app** (Spotify, YouTube, …) via MediaSession | `media.control` | A D | P | 🟡 (play/pause, next, previous on Android and Linux; no seek; not macOS) |
 | Volume control | Media/ring/alarm/call volume | `media.control` | A D | S | 🟡 (media volume up/down; desktop output volume) |
 | Ringer mode | Normal / vibrate / silent | `device.settings` | A | P (DND access) | ✅ (silent falls back to vibrate without DND access) |
-| Play on device | Send a URL or file to play on the peer | `media.control` | A D | S | ⬜ |
-| Deep-link play | Open Spotify/YouTube on the peer with a search or track | `apps.launch` | A D | S | ⬜ |
+| Play on device | Send a URL or file to play on the peer | `media.control` | A D | S | 🟡 (a link, opened in a chosen app on the phone; files: send, then open) |
+| Deep-link play | Open Spotify/YouTube on the peer with a search or track | `apps.launch` | A D | S | ✅ (search in YouTube / Spotify / the web; a track link opens in its app) |
 | Audio streaming | Route desktop audio to phone speakers or vice versa | `media.stream` | A D | S | ⬜ |
 | Auto-pause on call | Pause desktop media when the phone rings | `calls.read` | A→D | S | ⬜ |
 
@@ -163,13 +163,13 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.8 Connectivity
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Wi-Fi status | On/off, SSID, signal, IP | `wifi.read` | A D | S | ⬜ |
+| Wi-Fi status | On/off, SSID, signal, IP | `wifi.read` | A D | S | 🟡 (on, connected, signal; SSID on Linux, rarely on Android/macOS; no IP) |
 | Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | ⬜ |
 | Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | ⬜ |
 | Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | ⬜ |
 | Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | ⬜ |
 | Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | ⬜ |
-| Bluetooth status | On/off, paired and connected devices | `bluetooth.read` | A D | S | ⬜ |
+| Bluetooth status | On/off, paired and connected devices | `bluetooth.read` | A D | S | 🟡 (on/off only) |
 | Bluetooth toggle | | `bluetooth.manage` | A D | R on Android 13+ | ⬜ |
 | Connect / disconnect BT device | e.g. move earbuds to the desktop | `bluetooth.manage` | A D | R / Accessibility | ⬜ |
 | Airplane mode view | | `radio.read` | A | S | ⬜ |
@@ -180,8 +180,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.9 Device state & settings
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Battery | %, charging, temperature, health | `device.battery` | A D | — | 🟡 (% and charging) |
-| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage free/total in the status) |
+| Battery | %, charging, temperature, health | `device.battery` | A D | — | ✅ (temperature and health on Android) |
+| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage and RAM free/total; no CPU) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | ⬜ |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
 | Flashlight | On/off | `device.settings` | A | S | ✅ |

@@ -148,6 +148,50 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
   the Mac found it over Bluetooth, sent a message, and got the delivery
   receipt back the same way.
 
+## Now playing, richer status, slide remote, play on device (2026-11-03)
+
+- **Now playing** (`features/media.rs`): `Engine::set_now_playing(json)`
+  from the host; status replies carry `now_playing`, and devices that
+  asked for the status in the last 10 minutes get a `now_playing` push on
+  each change (live links only: a song change never wakes a device).
+  Event `NowPlaying` / `now-playing`; `now_playing_watched()` lets a host
+  read the OS only while someone looks.
+  - Android: media sessions through the notification listener's access
+    (`NowPlaying.kt`, `Core.nowPlaying`).
+  - Linux: `playerctl metadata`, polled every 3 s while watched.
+  - macOS: AppleScript to Spotify or Music, only when already running.
+    Nothing else works without private frameworks, so other players and
+    browsers aren't seen. Info.plist gets NSAppleEventsUsageDescription
+    (macOS asks once per app).
+- **Richer status**: `wifi` {on, connected, ssid?, signal 0-4},
+  `bluetooth`, `ram` {free, total}, and on Android `battery_temp` (C) and
+  `battery_health`. Desktop reads them with nmcli / bluetoothctl /
+  /proc/meminfo (Linux) and networksetup / ipconfig / system_profiler /
+  vm_stat (macOS; no signal, network name usually hidden by macOS).
+  Android shows the network name only if it reveals it without location
+  access (usually not).
+- **Presentation remote**: desktop action `slides {key: next | previous |
+  black}` (Page Down / Page Up / B to the front window). Linux: xdotool,
+  or wtype on Wayland. macOS: CoreGraphics key events (direct FFI), only
+  with Accessibility allowed. Listed in `actions` only when it can work;
+  otherwise `slides_needs` says what's missing. Android: `Core.slide`.
+- **Play on device**: `Engine::open_url_in(node, url, app_package)` opens a
+  link in that app on the phone (the browser if it's missing; a computer
+  always uses the browser). `search_in_app(node, youtube | spotify | web,
+  query)` is the `search` action: the phone opens the app's own search
+  (browser fallback) and lists what it has in `search_apps`; a computer
+  opens the search page in the browser. Desktop commands
+  `open_url_in_app`, `search_on`; `mdctl`: `open <node> <url> [app]`,
+  `search <node> <app> <text>`. Android: `Core.openUrlIn`, `Core.search`.
+- **features.md** statuses refreshed against the code.
+- Tests: `tests/media.rs` (3), media and package-name unit tests,
+  `device_actions` (richer status, slide keys, link in an app, search),
+  desktop parser tests (now playing, nmcli, bluetoothctl,
+  system_profiler, meminfo, vm_stat, Wi-Fi device, search pages). The
+  Kotlin compiles; nothing new tried on the phone or a Mac. The macOS
+  code (AppleScript now playing, CGEvent keys, sysinfo) isn't compiled
+  yet.
+
 ## Browse and download; send text; storage (2026-11-03)
 
 - Verified live 2026-11-03 against the phone from mdctl on the Mac: the
