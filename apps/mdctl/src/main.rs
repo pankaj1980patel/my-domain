@@ -29,8 +29,8 @@
 //! `share <name> <dir>` (let other devices browse `dir` as `name`),
 //! `ls <node> [root] [path] [offset]`, `get <node> <root> <path>`,
 //! `text <node> clipboard|notify <text...>`,
-//! `gallery <node> [offset] [limit]` (a phone's newest photos, no
-//! thumbnails), `gallery-get <node> <id> [name]`, `awake <node> <minutes>`,
+//! `gallery <node> [offset] [limit] [thumbs]` (a phone's newest photos;
+//! `thumbs` also sends their thumbnails), `gallery-get <node> <id> [name]`, `awake <node> <minutes>`,
 //! `battery-alerts on|off [low]`,
 //! `add <name> <ip> <quic_port>`, `forget` (remove
 //! this device from the server), `quit`.
@@ -511,7 +511,8 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             };
             let offset = num(0)?;
             let limit = num(30)?.min(100) as u32;
-            Ok(json!({ "req": engine.list_gallery(&to, offset, limit, false)? }))
+            let thumbs = words.next() == Some("thumbs");
+            Ok(json!({ "req": engine.list_gallery(&to, offset, limit, thumbs)? }))
         }
         "gallery-get" => {
             let to = resolve(engine, &arg(words.next())?)?;

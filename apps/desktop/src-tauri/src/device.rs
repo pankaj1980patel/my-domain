@@ -143,7 +143,11 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
         }
         "keep_awake" => {
             let minutes = args["minutes"].as_u64().unwrap_or(0);
-            awake::keep(minutes.min(u64::from(mdcore::engine::MAX_AWAKE_MINUTES)) * 60);
+            let secs = minutes.min(u64::from(mdcore::engine::MAX_AWAKE_MINUTES)) * 60;
+            if let Err(why) = awake::keep(secs) {
+                eprintln!("[device] keep awake: {why}");
+                crate::notify::post(app, "my-domain can't keep this computer awake", &why);
+            }
         }
         _ => return,
     }
@@ -554,27 +558,41 @@ mod awake {
     }
 
     /// Stay awake for `secs` from now (0 = stop).
-    pub fn keep(secs: u64) {
-        let Ok(mut cur) = CURRENT.lock() else { return };
+    /// Keep awake for `secs` (0 stops). `Err` says why it couldn't, for
+    /// the user: e.g. Linux refuses a sleep inhibitor to an app outside the
+    /// logged-in desktop session, and `systemd-inhibit` then exits at once.
+    pub fn keep(secs: u64) -> Result<(), String> {
+        let Ok(mut cur) = CURRENT.lock() else {
+            return Ok(());
+        };
         if let Some((mut child, _)) = cur.take() {
             let _ = child.kill();
             let _ = child.wait();
         }
         if secs == 0 {
-            return;
+            return Ok(());
         }
         let Some((cmd, args)) = command(secs) else {
-            return;
+            return Err("Keeping awake isn't supported on this computer.".into());
         };
-        match Command::new(&cmd)
+        let mut child = Command::new(&cmd)
             .args(&args)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
-        {
-            Ok(child) => *cur = Some((child, now() + secs)),
-            Err(e) => eprintln!("[device] couldn't run {cmd}: {e}"),
+            .map_err(|e| format!("Couldn't run {cmd}: {e}"))?;
+        // A refused inhibitor ends right away; a working one runs on.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                return Err(format!(
+                    "{cmd} was refused (the system may only allow this to apps \
+                     started from your desktop session)."
+                ));
+            }
         }
+        *cur = Some((child, now() + secs));
+        Ok(())
     }
 }
 

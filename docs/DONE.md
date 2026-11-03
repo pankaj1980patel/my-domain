@@ -133,6 +133,21 @@ ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
 ## Gallery, photo backup, battery alerts, keep awake (2026-11-03)
 
+- Verified live 2026-11-03 from mdctl on the Mac (photo access granted
+  with `pm grant`, as the Photos tile's button would):
+  - Gallery: the phone's five newest photos and videos listed; with
+    `thumbs`, three 160 px JPEG thumbnails arrived; a photo downloaded at
+    exactly its listed size.
+  - Battery alerts: the phone, at 100% and charging, sent "full" to the
+    Mac.
+  - Keep awake on the phone: the screen wake lock held for the minute
+    asked and was released by "0".
+  - Keep awake on the Linux laptop: refused by polkit, because the lab
+    starts the app over ssh, outside the desktop session. It used to fail
+    silently; now the computer shows a notice saying so.
+  - Not tried: photo backup (the phone was locked, and it's turned on in
+    its Settings, Photos tile).
+
 Core and both apps' backends are built and tested; the desktop has commands
 but no screens for these yet, and nothing here has been tried on the phone.
 
