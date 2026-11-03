@@ -953,7 +953,7 @@ impl MdEngine {
         Ok(self.inner.input_scroll(&node_id, dx, dy)?)
     }
 
-    /// Click "left" or "right".
+    /// Click "left", "right" or "middle".
     pub fn input_click(&self, node_id: String, button: String) -> MdResult<()> {
         Ok(self.inner.input_click(&node_id, &button)?)
     }
@@ -966,6 +966,12 @@ impl MdEngine {
     /// Press "enter", "backspace", "left", "right", "up", "down" or "esc".
     pub fn input_key(&self, node_id: String, key: String) -> MdResult<()> {
         Ok(self.inner.input_key(&node_id, &key)?)
+    }
+
+    /// A three- or four-finger swipe: `dir` is "left", "right", "up" or
+    /// "down", the way the fingers moved.
+    pub fn input_gesture(&self, node_id: String, fingers: u8, dir: String) -> MdResult<()> {
+        Ok(self.inner.input_gesture(&node_id, fingers, &dir)?)
     }
 
     // --- Do Not Disturb ---

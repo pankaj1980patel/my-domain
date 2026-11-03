@@ -2,7 +2,7 @@
 //! phone (see `features::input`, `features::dnd`).
 
 use super::*;
-use crate::model::{InputEvent, InputKey, MouseButton};
+use crate::model::{InputEvent, InputKey, MouseButton, SwipeDir};
 
 impl<P: Platform> Engine<P> {
     // --- touchpad and keyboard: the phone's side ---
@@ -22,7 +22,7 @@ impl<P: Platform> Engine<P> {
         crate::features::input::add(&self.ctx, node_id, dx, dy, true)
     }
 
-    /// Click `button` ("left" or "right") on a computer.
+    /// Click `button` ("left", "right" or "middle") on a computer.
     pub fn input_click(&self, node_id: &str, button: &str) -> crate::Result<()> {
         let button = MouseButton::parse(button)
             .ok_or_else(|| CoreError::InvalidInput(format!("not a mouse button: {button}")))?;
@@ -45,6 +45,20 @@ impl<P: Platform> Engine<P> {
         let key = InputKey::parse(key)
             .ok_or_else(|| CoreError::InvalidInput(format!("not a key: {key}")))?;
         self.send_input(node_id, vec![InputEvent::Key { key }])
+    }
+
+    /// A three- or four-finger swipe on a computer: `dir` is "left",
+    /// "right", "up" or "down", the way the fingers moved. The computer
+    /// turns it into its own shortcut (see the desktop's `remote_input`).
+    pub fn input_gesture(&self, node_id: &str, fingers: u8, dir: &str) -> crate::Result<()> {
+        let dir = SwipeDir::parse(dir)
+            .ok_or_else(|| CoreError::InvalidInput(format!("not a direction: {dir}")))?;
+        if !(3..=4).contains(&fingers) {
+            return Err(CoreError::InvalidInput(format!(
+                "gestures use 3 or 4 fingers, not {fingers}"
+            )));
+        }
+        self.send_input(node_id, vec![InputEvent::Gesture { fingers, dir }])
     }
 
     /// Send input events to a computer now, after any pending moves and

@@ -146,6 +146,16 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
   click, Right click, and "hello phone" from the Type field.
 - Do Not Disturb on the phone (on, then off): mdctl got `dnd-changed`
   on=true and on=false, and `dnd-active` listed the phone, then nobody.
+- Added after: three- and four-finger gestures and an Enlarge button.
+  A three-finger tap is a middle click. Swipes go as `gesture {fingers,
+  dir}` and the computer picks its own shortcut: three fingers sideways
+  switch apps (Cmd+Tab on a Mac, Alt+Tab elsewhere), four fingers sideways
+  switch desktops (Ctrl+arrow on a Mac, Ctrl+Win+arrow on Windows,
+  Ctrl+Alt+arrow on Linux), up shows all windows, down the desktop (App
+  Exposé on a Mac). Enlarge opens the pad full screen with Left, Right and
+  Done. mdctl: `gesture <node> 3|4 left|right|up|down`, `click <node>
+  middle`. Enlarge tried on the phone (it first drew under the system
+  bars; fixed); the gestures need real fingers (adb fakes only one).
 - Not tried yet: the arrow/Enter/Backspace/Esc buttons from the phone,
   two-finger scroll, input played back on a real desktop (the running Mac
   app wasn't restarted), and backup per computer on the phone.

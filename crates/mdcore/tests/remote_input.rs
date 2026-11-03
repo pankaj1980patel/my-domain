@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use md_testkit::{TestNode, WAIT};
 use mdcore::error::CoreError;
-use mdcore::model::{InputEvent, InputKey, MouseButton};
+use mdcore::model::{InputEvent, InputKey, MouseButton, SwipeDir};
 use mdcore::CoreEvent;
 
 /// A phone and a computer that know each other, with a live link.
@@ -130,6 +130,22 @@ fn a_computer_with_remote_input_off_ignores_it() {
     });
     // Only what was sent after it was turned back on.
     assert_eq!(played(&pc).0.len(), 1);
+
+    // A four-finger swipe and a middle click arrive as they were made.
+    phone
+        .engine
+        .input_gesture(&pc.node_id(), 4, "left")
+        .unwrap();
+    phone.engine.input_click(&pc.node_id(), "middle").unwrap();
+    wait_for(&pc, |e| {
+        *e == InputEvent::Click {
+            button: MouseButton::Middle,
+        }
+    });
+    assert!(played(&pc).0.contains(&InputEvent::Gesture {
+        fingers: 4,
+        dir: SwipeDir::Left
+    }));
 }
 
 #[test]
@@ -155,7 +171,9 @@ fn input_is_never_queued_for_later() {
 fn unknown_buttons_keys_and_devices_are_refused() {
     let (phone, pc) = linked("input-bad");
     let node = pc.node_id();
-    assert!(phone.engine.input_click(&node, "middle").is_err());
+    assert!(phone.engine.input_click(&node, "back").is_err());
+    assert!(phone.engine.input_gesture(&node, 2, "up").is_err());
+    assert!(phone.engine.input_gesture(&node, 3, "sideways").is_err());
     assert!(phone.engine.input_key(&node, "f13").is_err());
     assert!(phone.engine.input_text(&node, "\n\u{7}").is_err());
     assert!(matches!(

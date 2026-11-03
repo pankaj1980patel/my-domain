@@ -374,6 +374,7 @@ impl Default for BatteryAlertSettings {
 pub enum MouseButton {
     Left,
     Right,
+    Middle,
 }
 
 /// A key the phone's keyboard can press (typed text goes as `Text`).
@@ -390,21 +391,58 @@ pub enum InputKey {
     Esc,
 }
 
+/// Which way a multi-finger swipe went (the way the fingers moved).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum SwipeDir {
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
 /// One thing the phone's touchpad or keyboard did, for a computer to play
 /// back (`features::input`). Moves and scrolls are relative, in pixels.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum InputEvent {
-    Move { dx: i32, dy: i32 },
-    Click { button: MouseButton },
-    Scroll { dx: i32, dy: i32 },
-    Text { text: String },
-    Key { key: InputKey },
+    Move {
+        dx: i32,
+        dy: i32,
+    },
+    Click {
+        button: MouseButton,
+    },
+    Scroll {
+        dx: i32,
+        dy: i32,
+    },
+    Text {
+        text: String,
+    },
+    Key {
+        key: InputKey,
+    },
+    /// A three- or four-finger swipe; the computer turns it into its own
+    /// shortcut (switch apps, switch desktops, show all windows, show the
+    /// desktop).
+    Gesture {
+        fingers: u8,
+        dir: SwipeDir,
+    },
 }
 
 impl MouseButton {
-    /// "left" or "right".
+    /// "left", "right" or "middle".
+    pub fn parse(s: &str) -> Option<Self> {
+        serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
+    }
+}
+
+impl SwipeDir {
+    /// "left", "right", "up" or "down".
     pub fn parse(s: &str) -> Option<Self> {
         serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
     }

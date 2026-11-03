@@ -7,13 +7,20 @@
 // Privacy & Security > Accessibility; until then one notice says so (once per
 // run) instead of failing silently. On Linux, `enigo` talks to the X server,
 // so on Wayland it reaches only X (XWayland) windows.
+//
+// Three- and four-finger swipes become this computer's own shortcuts (see
+// `shortcut`), the way a laptop's touchpad does it:
+// - three fingers left/right: switch to the previous/next app;
+// - four fingers left/right: switch desktops (Spaces on a Mac);
+// - three or four fingers up: show all windows; down: show the desktop
+//   (a Mac: the app's windows, App Exposé).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Mutex, OnceLock};
 
 use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
-use mdcore::model::{InputEvent, InputKey, MouseButton};
+use mdcore::model::{InputEvent, InputKey, MouseButton, SwipeDir};
 use tauri::AppHandle;
 
 /// Pixels of scrolling on the phone per wheel step here.
@@ -102,6 +109,7 @@ impl Player {
                 let b = match button {
                     MouseButton::Left => Button::Left,
                     MouseButton::Right => Button::Right,
+                    MouseButton::Middle => Button::Middle,
                 };
                 enigo.button(b, Direction::Click)
             }
@@ -130,6 +138,73 @@ impl Player {
                 };
                 enigo.key(k, Direction::Click)
             }
+            InputEvent::Gesture { fingers, dir } => {
+                let (mods, key) = shortcut(*fingers, *dir);
+                press_combo(enigo, mods, key)
+            }
+        }
+    }
+}
+
+/// Hold `mods`, press `key`, let go of `mods` (in reverse), even if a
+/// press fails half way.
+fn press_combo(enigo: &mut Enigo, mods: &[Key], key: Key) -> Result<(), enigo::InputError> {
+    let mut held = Vec::new();
+    let mut result = Ok(());
+    for m in mods {
+        match enigo.key(*m, Direction::Press) {
+            Ok(()) => held.push(*m),
+            Err(e) => {
+                result = Err(e);
+                break;
+            }
+        }
+    }
+    if result.is_ok() {
+        result = enigo.key(key, Direction::Click);
+    }
+    for m in held.iter().rev() {
+        let _ = enigo.key(*m, Direction::Release);
+    }
+    result
+}
+
+/// The shortcut for a swipe on this computer: modifiers to hold, then the
+/// key. Fingers moving left show what's to the right (as on a touchpad).
+fn shortcut(fingers: u8, dir: SwipeDir) -> (&'static [Key], Key) {
+    use SwipeDir::*;
+    #[cfg(target_os = "macos")]
+    {
+        match (fingers, dir) {
+            (3, Right) => (&[Key::Meta], Key::Tab),
+            (3, Left) => (&[Key::Meta, Key::Shift], Key::Tab),
+            (_, Left) => (&[Key::Control], Key::RightArrow),
+            (_, Right) => (&[Key::Control], Key::LeftArrow),
+            (_, Up) => (&[Key::Control], Key::UpArrow),
+            (_, Down) => (&[Key::Control], Key::DownArrow),
+        }
+    }
+    #[cfg(target_os = "windows")]
+    {
+        match (fingers, dir) {
+            (3, Right) => (&[Key::Alt], Key::Tab),
+            (3, Left) => (&[Key::Alt, Key::Shift], Key::Tab),
+            (_, Left) => (&[Key::Control, Key::Meta], Key::RightArrow),
+            (_, Right) => (&[Key::Control, Key::Meta], Key::LeftArrow),
+            (_, Up) => (&[Key::Meta], Key::Tab),
+            (_, Down) => (&[Key::Meta], Key::Unicode('d')),
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        // GNOME and KDE both know these.
+        match (fingers, dir) {
+            (3, Right) => (&[Key::Alt], Key::Tab),
+            (3, Left) => (&[Key::Alt, Key::Shift], Key::Tab),
+            (_, Left) => (&[Key::Control, Key::Alt], Key::RightArrow),
+            (_, Right) => (&[Key::Control, Key::Alt], Key::LeftArrow),
+            (_, Up) => (&[], Key::Meta),
+            (_, Down) => (&[Key::Meta], Key::Unicode('d')),
         }
     }
 }
@@ -158,7 +233,19 @@ fn tell_once(app: &AppHandle, why: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::steps;
+    use super::{shortcut, steps};
+    use enigo::Key;
+    use mdcore::model::SwipeDir;
+
+    #[test]
+    fn swipes_become_shortcuts() {
+        // Three fingers sideways switch apps (Tab), four switch desktops
+        // (arrows), whatever the computer.
+        assert_eq!(shortcut(3, SwipeDir::Right).1, Key::Tab);
+        assert!(shortcut(3, SwipeDir::Left).0.contains(&Key::Shift));
+        assert_eq!(shortcut(4, SwipeDir::Left).1, Key::RightArrow);
+        assert_eq!(shortcut(4, SwipeDir::Right).1, Key::LeftArrow);
+    }
 
     #[test]
     fn scroll_pixels_become_wheel_steps() {

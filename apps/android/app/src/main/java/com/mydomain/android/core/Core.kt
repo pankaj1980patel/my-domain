@@ -711,7 +711,7 @@ object Core {
     fun inputScroll(node: String, dx: Int, dy: Int): Throwable? =
         runCatching { engine()?.inputScroll(node, dx, dy) }.exceptionOrNull()
 
-    /** Click "left" or "right" on [node]. */
+    /** Click "left", "right" or "middle" on [node]. */
     suspend fun inputClick(node: String, button: String) = call { it.inputClick(node, button) }
 
     /** Type [text] on [node]. */
@@ -719,6 +719,10 @@ object Core {
 
     /** Press "enter", "backspace", "left", "right", "up", "down" or "esc" on [node]. */
     suspend fun inputKey(node: String, key: String) = call { it.inputKey(node, key) }
+
+    /** A [fingers]-finger swipe (3 or 4) on [node]; [dir] is "left", "right", "up" or "down". */
+    suspend fun inputGesture(node: String, fingers: Int, dir: String) =
+        call { it.inputGesture(node, fingers.toUByte(), dir) }
 
     suspend fun toggleApp(node: String, pkg: String) {
         val cur = apps[node] ?: return

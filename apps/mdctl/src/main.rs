@@ -34,7 +34,8 @@
 //! `battery-alerts on|off [low]`,
 //! touchpad and keyboard for a computer: `move <node> <dx> <dy> [times]`
 //! (`times` small moves in a row, batched like a finger drag),
-//! `click <node> left|right`, `scroll <node> <dx> <dy>`,
+//! `click <node> left|right|middle`, `scroll <node> <dx> <dy>`,
+//! `gesture <node> 3|4 left|right|up|down` (a multi-finger swipe),
 //! `type <node> <text...>`, `key <node> enter|backspace|left|right|up|down|esc`;
 //! `input-allow on|off` (play back input from your devices here; "on" also
 //! lists "input" in this device's status, so a phone offers its touchpad),
@@ -578,6 +579,13 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let text = words.collect::<Vec<_>>().join(" ");
             engine.input_text(&to, &text)?;
             Ok(json!(text))
+        }
+        "gesture" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let fingers: u8 = arg(words.next())?.parse().map_err(|_| "fingers: 3 or 4")?;
+            let dir = arg(words.next())?;
+            engine.input_gesture(&to, fingers, &dir)?;
+            Ok(json!({ "fingers": fingers, "dir": dir }))
         }
         "key" => {
             let to = resolve(engine, &arg(words.next())?)?;

@@ -5,9 +5,11 @@
 //!   input { from, events: [InputEvent] }   phone → computer
 //!
 //! Each event is `{"kind": "move", "dx", "dy"}`, `{"kind": "click",
-//! "button": "left" | "right"}`, `{"kind": "scroll", "dx", "dy"}`,
-//! `{"kind": "text", "text"}` or `{"kind": "key", "key": "enter" |
-//! "backspace" | "left" | "right" | "up" | "down" | "esc"}`.
+//! "button": "left" | "right" | "middle"}`, `{"kind": "scroll", "dx", "dy"}`,
+//! `{"kind": "text", "text"}`, `{"kind": "key", "key": "enter" |
+//! "backspace" | "left" | "right" | "up" | "down" | "esc"}` or
+//! `{"kind": "gesture", "fingers": 3 | 4, "dir": "left" | "right" | "up" |
+//! "down"}` (a multi-finger swipe; the computer picks its own shortcut).
 //!
 //! - Only over a live link, never queued: a click or a key pressed minutes
 //!   late, when a link finally came up, would do something you didn't mean.
@@ -111,7 +113,7 @@ pub fn set_allowed<P: Platform>(ctx: &NetCtx<P>, on: bool) {
 
 /// Events made safe to play back: at most `MAX_EVENTS`, moves and scrolls
 /// within `MAX_STEP`, text without control characters and at most
-/// `MAX_TEXT` long; empty ones dropped.
+/// `MAX_TEXT` long, gestures with three or four fingers; empty ones dropped.
 pub fn clean(events: Vec<InputEvent>) -> Vec<InputEvent> {
     events
         .into_iter()
@@ -136,6 +138,7 @@ pub fn clean(events: Vec<InputEvent>) -> Vec<InputEvent> {
                     .collect();
                 (!text.is_empty()).then_some(InputEvent::Text { text })
             }
+            InputEvent::Gesture { fingers, .. } if !(3..=4).contains(&fingers) => None,
             other => Some(other),
         })
         .collect()
@@ -283,7 +286,7 @@ impl<P: Platform> ControlHandler<P> for InputHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{InputKey, MouseButton};
+    use crate::model::{InputKey, MouseButton, SwipeDir};
 
     #[test]
     fn events_are_made_safe() {
@@ -303,6 +306,27 @@ mod tests {
             },
         ]);
         assert_eq!(got.len(), 4);
+        let swipes = clean(vec![
+            InputEvent::Gesture {
+                fingers: 2,
+                dir: SwipeDir::Up,
+            },
+            InputEvent::Gesture {
+                fingers: 4,
+                dir: SwipeDir::Left,
+            },
+            InputEvent::Gesture {
+                fingers: 9,
+                dir: SwipeDir::Down,
+            },
+        ]);
+        assert_eq!(
+            swipes,
+            [InputEvent::Gesture {
+                fingers: 4,
+                dir: SwipeDir::Left
+            }]
+        );
         assert_eq!(
             got[0],
             InputEvent::Move {
@@ -347,6 +371,15 @@ mod tests {
             serde_json::from_value::<InputEvent>(json!({"kind": "key", "key": "f13"})).is_err()
         );
         assert_eq!(MouseButton::parse("left"), Some(MouseButton::Left));
+        assert_eq!(MouseButton::parse("middle"), Some(MouseButton::Middle));
+        assert_eq!(
+            serde_json::to_value(InputEvent::Gesture {
+                fingers: 3,
+                dir: SwipeDir::Up
+            })
+            .unwrap_or_default(),
+            json!({"kind": "gesture", "fingers": 3, "dir": "up"})
+        );
         assert_eq!(InputKey::parse("esc"), Some(InputKey::Esc));
         assert_eq!(InputKey::parse("Esc"), None);
     }

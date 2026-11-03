@@ -286,7 +286,9 @@
     <string name="touchpad_body">Use your phone as this computer\'s touchpad and keyboard.</string>
     <string name="touchpad_needs_accessibility">On the Mac, allow my-domain under System Settings &gt; Privacy &amp; Security &gt; Accessibility first.</string>
     <string name="touchpad_needs_display">This computer needs an X11 session (or XWayland) for the touchpad.</string>
-    <string name="touchpad_pad_hint">Drag to move · tap to click\nTwo fingers: scroll, or tap to right-click</string>
+    <string name="touchpad_pad_hint">Drag to move · tap to click\nTwo fingers: scroll, or tap to right-click\nThree fingers: tap to middle-click; swipe sideways to switch apps\nFour fingers sideways: switch desktops\nThree or four up: all windows · down: the desktop</string>
+    <string name="touchpad_enlarge">Enlarge</string>
+    <string name="touchpad_shrink">Done</string>
     <string name="touchpad_left_click">Left click</string>
     <string name="touchpad_right_click">Right click</string>
     <string name="touchpad_type_hint">Type on the computer</string>
