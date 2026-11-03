@@ -113,6 +113,21 @@ fun PhotosTile() {
     }
 }
 
+/** Touchpad: block screenshots while the full-screen pad is open, so a
+ *  phone's three-finger screenshot swipe doesn't fire over it. */
+@Composable
+fun TouchpadSettingsTile() {
+    val prefs = LocalContext.current.getSharedPreferences("md", Context.MODE_PRIVATE)
+    var on by remember { mutableStateOf(prefs.getBoolean(PREF_TOUCHPAD_SECURE, true)) }
+    Tile(title = stringResource(R.string.touchpad_title)) {
+        SwitchRow(stringResource(R.string.settings_touchpad_secure), on) {
+            on = it
+            prefs.edit().putBoolean(PREF_TOUCHPAD_SECURE, it).apply()
+        }
+        Muted(stringResource(R.string.settings_touchpad_secure_hint))
+    }
+}
+
 /** One line on what the backup is doing. */
 @Composable
 private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
@@ -165,6 +180,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
         }
 
         PhotosTile()
+        TouchpadSettingsTile()
 
         Tile(title = stringResource(R.string.settings_device_key)) {
             Muted(stringResource(R.string.settings_key_hint))

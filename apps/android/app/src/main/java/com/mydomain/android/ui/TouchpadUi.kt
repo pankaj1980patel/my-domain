@@ -27,7 +27,13 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import android.content.Context
+import android.view.WindowManager
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.ui.window.DialogProperties
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
@@ -41,6 +47,10 @@ private const val SPEED = 1.6f
 /** A touch shorter than this that barely moved is a tap (a click). */
 private const val TAP_MS = 250L
 private const val TAP_SLOP_PX = 24f
+/** Setting: block screenshots while the full-screen pad is open (on by
+ *  default), which on many phones also stops the three-finger screenshot
+ *  swipe there. */
+const val PREF_TOUCHPAD_SECURE = "touchpad_secure"
 /** How far three or four fingers must travel (on average) to be a swipe. */
 private const val SWIPE_PX = 120f
 
@@ -110,6 +120,14 @@ fun TouchpadTile(node: String, status: DeviceStatus) {
             onDismissRequest = { enlarged = false },
             properties = DialogProperties(usePlatformDefaultWidth = false),
         ) {
+            val secure = LocalContext.current
+                .getSharedPreferences("md", Context.MODE_PRIVATE)
+                .getBoolean(PREF_TOUCHPAD_SECURE, true)
+            val window = (LocalView.current.parent as? DialogWindowProvider)?.window
+            DisposableEffect(window, secure) {
+                if (secure) window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE) }
+            }
             Column(
                 Modifier.fillMaxSize().background(T.bg).padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
