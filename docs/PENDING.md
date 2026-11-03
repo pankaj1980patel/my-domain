@@ -385,6 +385,14 @@ A feature counts as done when it has:
 
 ## Known issues
 
+- **A peer that restarted isn't noticed at once.** After the phone's app
+  restarted (a reinstall), the computer still counted the old direct link
+  as live for a while and sent into it; only the next reliable message
+  showed "queued" and a reconnect fixed it. Found 2026-11-03 testing screen
+  sharing. The QUIC link should notice a dead peer sooner (keep-alive /
+  idle timeout), and the `boot` id in `Hello` already lets the new link
+  replace the old one once it comes.
+
 - **Linux FCM:** the first fresh registration failed with
   `PHONE_REGISTRATION_ERROR` and worked after a restart. Last seen
   2026-11-02 09:36. None since, across a dozen restarts of the Linux app

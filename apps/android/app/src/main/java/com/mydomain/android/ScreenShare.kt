@@ -46,12 +46,13 @@ object ScreenShare {
     /** A computer started ([on]) or stopped watching this screen. */
     fun onWatch(ctx: Context, from: String, on: Boolean) {
         if (!on || ScreenShareService.running) return
+        Log.i(TAG, "asked to share the screen (app on screen: ${Core.visible})")
         val app = ctx.applicationContext
         channel(app)
         val ask = Intent(app, ScreenConsentActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             .putExtra(ScreenConsentActivity.EXTRA_FROM, Core.peerName(from))
-        if (Core.visible && runCatching { app.startActivity(ask) }.isSuccess) return
+        if (Core.visible && runCatching { app.startActivity(ask) }.onFailure { Log.w(TAG, "can't open the prompt: $it") }.isSuccess) return
         val pi = PendingIntent.getActivity(app, NOTE_ASK, ask, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, CH)
             .setSmallIcon(android.R.drawable.ic_menu_view)
@@ -101,6 +102,7 @@ class ScreenConsentActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         @Suppress("DEPRECATION")
         super.onActivityResult(requestCode, resultCode, data)
+        Log.i("mydomain_screen", "prompt answered: ${if (resultCode == RESULT_OK) "yes" else "no ($resultCode)"}")
         if (requestCode == ASK && resultCode == RESULT_OK && data != null) {
             val start = Intent(this, ScreenShareService::class.java)
                 .putExtra(ScreenShareService.EXTRA_CODE, resultCode)

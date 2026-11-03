@@ -299,8 +299,14 @@ phone.
   on a device's page for devices that list `screen`: Show its screen /
   Stop, renewing every 10 s.
 
-Checks: desktop clippy, UI type check, APK build. Not tried live yet (the
-phone was locked).
+Checks: desktop clippy, UI type check, APK build. Tried: mdctl watching
+the phone brought up Android's prompt; with one app shared (YouTube),
+snapshots arrived about twice a second (about 100 KB each); after mdctl
+stopped watching, they stopped and the sharing service ended by itself
+within 30 s. The desktop tile itself: not tried yet.
+Found on the way: after the phone's app restarted (a reinstall), mdctl
+still counted its old link as live and sent into it ("queued" only showed
+on the next status); see Known issues.
 
 ## Point & click on the computer's screen (2026-11-03)
 
