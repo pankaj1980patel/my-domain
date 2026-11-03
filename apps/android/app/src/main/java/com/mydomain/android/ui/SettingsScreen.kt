@@ -1,6 +1,8 @@
 package com.mydomain.android.ui
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,6 +16,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -27,10 +30,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.BuildConfig
 import com.mydomain.android.NotifListener
+import com.mydomain.android.Privileged
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.niceName
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** The clipboard auto-sync switch; the choice survives restarts. */
@@ -128,6 +133,48 @@ fun TouchpadSettingsTile() {
     }
 }
 
+/** Shizuku (ADR-0006): lets your computers switch this phone's Wi-Fi,
+ *  Bluetooth, airplane mode and mobile data with no tap here. Says what's
+ *  missing, with the one button that fixes it. */
+@Composable
+fun ShizukuSettingsTile() {
+    val ctx = LocalContext.current
+    var state by remember { mutableStateOf(Privileged.state()) }
+    // Shizuku starts and stops in its own app: look again every few seconds.
+    LaunchedEffect(Unit) {
+        while (true) {
+            state = Privileged.state()
+            delay(2_000)
+        }
+    }
+    Tile(title = stringResource(R.string.shizuku_title)) {
+        Muted(stringResource(R.string.shizuku_hint))
+        Text(
+            stringResource(
+                when (state) {
+                    Privileged.State.NOT_INSTALLED -> R.string.shizuku_not_installed
+                    Privileged.State.NOT_RUNNING -> R.string.shizuku_not_running
+                    Privileged.State.NOT_ALLOWED -> R.string.shizuku_not_allowed
+                    Privileged.State.READY -> R.string.shizuku_ready
+                },
+            ),
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        when (state) {
+            Privileged.State.NOT_INSTALLED -> SoftButton(stringResource(R.string.shizuku_get), onClick = {
+                val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Privileged.SHIZUKU_PACKAGE}"))
+                val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/"))
+                runCatching { ctx.startActivity(market) }.onFailure { runCatching { ctx.startActivity(web) } }
+            })
+            Privileged.State.NOT_RUNNING -> SoftButton(stringResource(R.string.shizuku_open), onClick = {
+                ctx.packageManager.getLaunchIntentForPackage(Privileged.SHIZUKU_PACKAGE)?.let { runCatching { ctx.startActivity(it) } }
+            })
+            Privileged.State.NOT_ALLOWED -> SoftButton(stringResource(R.string.shizuku_allow), onClick = { Privileged.ask() })
+            Privileged.State.READY -> {}
+        }
+    }
+}
+
 /** One line on what the backup is doing. */
 @Composable
 private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
@@ -181,6 +228,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
 
         PhotosTile()
         TouchpadSettingsTile()
+        ShizukuSettingsTile()
 
         Tile(title = stringResource(R.string.settings_device_key)) {
             Muted(stringResource(R.string.settings_key_hint))

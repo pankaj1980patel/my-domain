@@ -170,5 +170,9 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:33.7.0"))
     implementation("com.google.firebase:firebase-messaging")
 
+    // Shizuku (ADR-0006): radios switched with ADB-shell rights, no root.
+    implementation("dev.rikka.shizuku:api:13.1.5")
+    implementation("dev.rikka.shizuku:provider:13.1.5")
+
     testImplementation("junit:junit:4.13.2")
 }

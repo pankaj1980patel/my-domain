@@ -287,7 +287,14 @@ the fallback half).
   screen). Switching with no tap waits for Shizuku.
 - Desktop: a row of radio buttons in the device's controls, lit when on;
   a tap asks the phone and says to confirm there.
-- Checks: APK builds, UI type check. Not tried live yet: the phone was
+- Shizuku (`Privileged.kt`, `dev.rikka.shizuku:api` 13.1.5): with Shizuku
+  running and allowed, Wi-Fi, Bluetooth, mobile data and airplane mode
+  (Android 11+) switch with no tap (`svc` / `cmd connectivity`); the
+  status lists them as `radio_direct`. The hotspot still opens Settings
+  (it needs a name and password). The phone's Settings has a "Switch
+  radios from your computers" tile: Get Shizuku / Open Shizuku / Allow,
+  whichever is missing.
+- Checks: APK builds and starts, UI type check. Not tried live yet: the phone was
   unreachable from the Mac after the reinstall (see Known issues).
 
 ## Control another computer from this one (2026-11-03)

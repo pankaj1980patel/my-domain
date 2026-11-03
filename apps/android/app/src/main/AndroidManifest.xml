@@ -125,5 +125,13 @@
             android:name=".TouchpadActivity"
             android:exported="false"
             android:theme="@style/Theme.App" />
+            <!-- Shizuku hands this app its binder here (ADR-0006, Privileged.kt). -->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
     </application>
 </manifest>

@@ -349,4 +349,13 @@
     <string name="radio_turn_off_title">%1$s: turn off %2$s</string>
     <string name="radio_bt_prompt_title">Turn on Bluetooth</string>
     <string name="radio_body">Tap to open the switch.</string>
+    <string name="shizuku_title">Switch radios from your computers</string>
+    <string name="shizuku_hint">With Shizuku, your computers can turn this phone\'s Wi-Fi, Bluetooth, mobile data and airplane mode on or off without you tapping here. Without it, the phone opens the switch for you.</string>
+    <string name="shizuku_not_installed">Shizuku isn\'t installed.</string>
+    <string name="shizuku_not_running">Shizuku isn\'t running. Open it and start it (after every restart of the phone).</string>
+    <string name="shizuku_not_allowed">Shizuku is running. Allow my-domain to use it.</string>
+    <string name="shizuku_ready">Ready: your computers can switch the radios.</string>
+    <string name="shizuku_get">Get Shizuku</string>
+    <string name="shizuku_open">Open Shizuku</string>
+    <string name="shizuku_allow">Allow</string>
 </resources>

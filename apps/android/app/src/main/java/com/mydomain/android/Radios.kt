@@ -25,8 +25,9 @@ import org.json.JSONObject
  * action does what it can: Wi-Fi and Bluetooth directly on the Android
  * versions that still allow it, Bluetooth on through Android's own "turn on
  * Bluetooth?" prompt, and otherwise opens the matching settings panel on the
- * phone (a notification to tap when the app isn't on screen). Switching
- * without a tap needs Shizuku (ADR-0006), not built yet.
+ * phone (a notification to tap when the app isn't on screen). With
+ * Shizuku running and allowed ([Privileged]), all but the hotspot switch
+ * with no tap.
  */
 object Radios {
     private const val TAG = "mydomain_radios"
@@ -36,6 +37,8 @@ object Radios {
 
     /** Tell [Controls.onChange] whenever a radio is switched, by anyone. */
     fun init(ctx: Context) {
+        Privileged.onChange = { Controls.onChange() }
+        Privileged.init()
         if (receiver != null) return
         val r = object : BroadcastReceiver() {
             override fun onReceive(c: Context, i: Intent) = Controls.onChange()
@@ -61,6 +64,10 @@ object Radios {
                 ?.takeIf { it >= 0 }?.let { o.put("mobile_data", it == 1) }
         }
         hotspotOn(ctx)?.let { o.put("hotspot", it) }
+        // The ones that switch with no tap on the phone.
+        if (Privileged.ready()) {
+            o.put("radio_direct", org.json.JSONArray(KINDS.filter { Privileged.radioCommand(it, true) != null }))
+        }
     }
 
     /** Hotspot on or off: a hidden but long-standing WifiManager call. */
@@ -75,6 +82,7 @@ object Radios {
         if (what !in KINDS) return false
         val app = ctx.applicationContext
         Log.i(TAG, "$fromName: $what ${if (on) "on" else "off"}")
+        Privileged.radioCommand(what, on)?.let { cmd -> if (Privileged.run(*cmd)) return true }
         if (direct(app, what, on)) return true
         val intent = panel(app, what) ?: return false
         val label = app.getString(
