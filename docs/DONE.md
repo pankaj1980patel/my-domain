@@ -289,6 +289,9 @@ it found:
   1.0.11, tokio 1.54.1, anyhow 1.0.104; the advisories with no reachable
   fix are listed in `deny.toml` with a reason each.
 - Server redeployed from the CI release build.
+- Two timing-sensitive tests made patient (network change, relay to
+  direct). CI is green on `main` (run 41630842469): fmt, clippy,
+  cargo-deny, the desktop UI, the Android build, tests on Linux and macOS.
 
 ## The phone's radios from a computer (2026-11-03)
 
