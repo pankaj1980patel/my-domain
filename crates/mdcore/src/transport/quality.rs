@@ -60,7 +60,7 @@ pub fn rate(rtt_ms: Option<u32>, loss_pct: Option<f32>, transport: TransportKind
     } else {
         Quality::Weak
     };
-    if transport == TransportKind::Relay && q == Quality::Excellent {
+    if transport.is_fallback() && q == Quality::Excellent {
         Quality::Good
     } else {
         q

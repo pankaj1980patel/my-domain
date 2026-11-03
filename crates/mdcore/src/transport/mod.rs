@@ -49,6 +49,15 @@ pub enum TransportKind {
     WebRtc,
     Quic,
     Relay,
+    /// Bluetooth LE, carried by the platform (`engine::ble`).
+    Ble,
+}
+
+impl TransportKind {
+    /// A link to use only until a direct one comes up (relay, Bluetooth).
+    pub fn is_fallback(self) -> bool {
+        matches!(self, TransportKind::Relay | TransportKind::Ble)
+    }
 }
 
 /// A live peer-to-peer link. `last_seen` drives heartbeat staleness for the
@@ -77,7 +86,7 @@ pub fn is_direct<P: Platform>(ctx: &NetCtx<P>, node_id: &str) -> bool {
     ctx.p2p_conns
         .lock()
         .get(node_id)
-        .is_some_and(|c| c.kind != TransportKind::Relay)
+        .is_some_and(|c| !c.kind.is_fallback())
 }
 
 /// Mark a peer live (first time) or refresh an existing link. The transport is
@@ -96,7 +105,7 @@ pub fn mark_live<P: Platform>(
         match m.get_mut(node_id) {
             // A relayed peer that now has a direct link is UPGRADED (and the
             // UI told, with the new transport). Never the other way round.
-            Some(c) if c.kind == TransportKind::Relay && kind != TransportKind::Relay => {
+            Some(c) if c.kind.is_fallback() && !kind.is_fallback() => {
                 *c = P2pConn {
                     kind,
                     last_seen: now_secs(),

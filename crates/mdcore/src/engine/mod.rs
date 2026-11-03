@@ -29,6 +29,8 @@ use crate::signal::{Signal, Signaler};
 use crate::transport::{self, P2pConns};
 
 mod background;
+mod ble;
+pub use ble::BleSender;
 mod ladder;
 mod messaging;
 pub use messaging::QUEUED;
@@ -169,6 +171,8 @@ pub struct NetCtx<P: Platform> {
     pub device_key: Arc<crate::device_key::DeviceKey>,
     /// The keys other devices used before (see `device_key::accept`).
     pub peer_keys: crate::device_key::Pins,
+    /// Open Bluetooth connections (see `ble`).
+    pub(crate) ble_links: ble::BleLinks,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -204,6 +208,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             outbox: self.outbox.clone(),
             device_key: self.device_key.clone(),
             peer_keys: self.peer_keys.clone(),
+            ble_links: self.ble_links.clone(),
             seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
@@ -347,6 +352,7 @@ impl<P: Platform> Engine<P> {
             files: Arc::default(),
             device_key,
             peer_keys: Arc::default(),
+            ble_links: Arc::default(),
             subs: subs.clone(),
             quic_failed: Arc::default(),
             manual_aliases: Arc::default(),
@@ -463,6 +469,7 @@ impl<P: Platform> Engine<P> {
             Some(WebRtc) => "webrtc",
             Some(Quic) => "QUIC",
             Some(Relay) => "relay",
+            Some(Ble) => "BLE",
             None => "QUIC",
         }
         .to_string()
@@ -518,7 +525,7 @@ impl<P: Platform> Engine<P> {
                 let loss = measured.and_then(|(_, lost, sent)| loss_pct(lost, sent));
                 let quality = rate(rtt_ms, loss, transport);
                 LinkStats {
-                    direct: transport != transport::TransportKind::Relay,
+                    direct: !transport.is_fallback(),
                     rtt_ms,
                     loss_pct: loss,
                     quality,

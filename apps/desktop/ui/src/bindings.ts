@@ -305,7 +305,9 @@ export type SessionInfo_Serialize = {
 export type Source = "registry" | "lan" | "manual";
 
 /**  Which transport a live P2P link is using. Serializes lowercase for the UI. */
-export type TransportKind = "punch" | "webrtc" | "quic" | "relay";
+export type TransportKind = "punch" | "webrtc" | "quic" | "relay" | 
+/**  Bluetooth LE, carried by the platform (`engine::ble`). */
+"ble";
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {
