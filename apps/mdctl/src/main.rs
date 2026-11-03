@@ -36,6 +36,7 @@
 //! (`times` small moves in a row, batched like a finger drag),
 //! `click <node> left|right|middle`, `scroll <node> <dx> <dy>`,
 //! `gesture <node> 3|4 left|right|up|down` (a multi-finger swipe),
+//! `point <node> <x> <y>` (pointer to a spot, 0-10000 across the screen),
 //! `type <node> <text...>`, `key <node> enter|backspace|left|right|up|down|esc`;
 //! `input-allow on|off` (play back input from your devices here; "on" also
 //! lists "input" in this device's status, so a phone offers its touchpad),
@@ -601,6 +602,13 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             let text = words.collect::<Vec<_>>().join(" ");
             engine.input_text(&to, &text)?;
             Ok(json!(text))
+        }
+        "point" => {
+            let to = resolve(engine, &arg(words.next())?)?;
+            let x: u16 = arg(words.next())?.parse().map_err(|_| "x: 0 to 10000")?;
+            let y: u16 = arg(words.next())?.parse().map_err(|_| "y: 0 to 10000")?;
+            engine.input_point(&to, x, y)?;
+            Ok(json!({ "x": x, "y": y }))
         }
         "gesture" => {
             let to = resolve(engine, &arg(words.next())?)?;

@@ -749,6 +749,10 @@ object Core {
     fun screenWatch(node: String, on: Boolean): Throwable? =
         runCatching { engine()?.screenWatch(node, on) }.exceptionOrNull()
 
+    /** Put [node]'s pointer at [x], [y] (0 to 10000 across its screen). */
+    suspend fun inputPoint(node: String, x: Int, y: Int) =
+        call { it.inputPoint(node, x.toUShort(), y.toUShort()) }
+
     /** A [fingers]-finger swipe (3 or 4) on [node]; [dir] is "left", "right", "up" or "down". */
     suspend fun inputGesture(node: String, fingers: Int, dir: String) =
         call { it.inputGesture(node, fingers.toUByte(), dir) }

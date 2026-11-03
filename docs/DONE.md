@@ -249,6 +249,20 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## Point & click on the computer's screen (2026-11-03)
+
+With the computer's screen showing behind the full-screen pad, "Point &
+click" makes a tap put the pointer where it landed on the picture, then
+click there (the bars around a fitted picture don't count). New input
+event `point {x, y}`: ten-thousandths of the main screen's width and
+height from the top left (`features::input::POINT_SCALE`), clamped by
+`clean`; the desktop scales it to the main display with `enigo`. Core
+`Engine::input_point`, FFI `input_point`, mdctl `point <node> <x> <y>`.
+
+Tried: mdctl → the Mac app, `point 5000 5000` put the pointer in the
+middle of the 1280x800 screen and `point 2500 7500` at (319, 599 from the
+top). The phone's mode: built, not tried yet (the phone was locked).
+
 ## Wake a sleeping computer from the phone (2026-11-03)
 
 - Core (`features/wake.rs`): a computer's status may say its network card

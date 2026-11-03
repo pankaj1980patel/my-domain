@@ -432,6 +432,13 @@ pub enum InputEvent {
         fingers: u8,
         dir: SwipeDir,
     },
+    /// Put the pointer at a spot on the main screen, in ten-thousandths of
+    /// its width (`x`) and height (`y`) from the top left: where you
+    /// tapped on the phone's picture of the screen.
+    Point {
+        x: u16,
+        y: u16,
+    },
 }
 
 impl MouseButton {

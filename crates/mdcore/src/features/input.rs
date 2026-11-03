@@ -9,7 +9,9 @@
 //! `{"kind": "text", "text"}`, `{"kind": "key", "key": "enter" |
 //! "backspace" | "left" | "right" | "up" | "down" | "esc"}` or
 //! `{"kind": "gesture", "fingers": 3 | 4, "dir": "left" | "right" | "up" |
-//! "down"}` (a multi-finger swipe; the computer picks its own shortcut).
+//! "down"}` (a multi-finger swipe; the computer picks its own shortcut) or
+//! `{"kind": "point", "x", "y"}` (the pointer to a spot on the screen, in
+//! ten-thousandths of its width and height).
 //!
 //! - Only over a live link, never queued: a click or a key pressed minutes
 //!   late, when a link finally came up, would do something you didn't mean.
@@ -44,6 +46,8 @@ pub const BATCH_EVERY: Duration = Duration::from_millis(20);
 pub const MAX_EVENTS: usize = 64;
 /// Longest typed text in one event, in characters.
 pub const MAX_TEXT: usize = 500;
+/// `InputEvent::Point` coordinates go from 0 to this (the far edge).
+pub const POINT_SCALE: u16 = 10_000;
 /// Largest move or scroll in one event, in pixels either way.
 pub const MAX_STEP: i32 = 4000;
 /// The batching thread stops after this long with nothing to send.
@@ -139,6 +143,10 @@ pub fn clean(events: Vec<InputEvent>) -> Vec<InputEvent> {
                 (!text.is_empty()).then_some(InputEvent::Text { text })
             }
             InputEvent::Gesture { fingers, .. } if !(3..=4).contains(&fingers) => None,
+            InputEvent::Point { x, y } => Some(InputEvent::Point {
+                x: x.min(POINT_SCALE),
+                y: y.min(POINT_SCALE),
+            }),
             other => Some(other),
         })
         .collect()
@@ -372,6 +380,13 @@ mod tests {
         );
         assert_eq!(MouseButton::parse("left"), Some(MouseButton::Left));
         assert_eq!(MouseButton::parse("middle"), Some(MouseButton::Middle));
+        assert_eq!(
+            clean(vec![InputEvent::Point { x: 12_000, y: 5 }]),
+            [InputEvent::Point {
+                x: POINT_SCALE,
+                y: 5
+            }]
+        );
         assert_eq!(
             serde_json::to_value(InputEvent::Gesture {
                 fingers: 3,

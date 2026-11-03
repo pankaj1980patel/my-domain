@@ -138,6 +138,12 @@ impl Player {
                 };
                 enigo.key(k, Direction::Click)
             }
+            InputEvent::Point { x, y } => {
+                let (w, h) = enigo.main_display()?;
+                let scale = i32::from(mdcore::features::input::POINT_SCALE);
+                let at = |v: u16, size: i32| (i32::from(v) * (size - 1)) / scale;
+                enigo.move_mouse(at(*x, w), at(*y, h), Coordinate::Abs)
+            }
             InputEvent::Gesture { fingers, dir } => {
                 let (mods, key) = shortcut(*fingers, *dir);
                 press_combo(enigo, mods, key)

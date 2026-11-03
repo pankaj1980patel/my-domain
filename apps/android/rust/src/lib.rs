@@ -988,6 +988,12 @@ impl MdEngine {
         Ok(self.inner.screen_watch(&node_id, on)?)
     }
 
+    /// Put a computer's pointer at a spot on its screen: `x`, `y` from 0 to
+    /// 10000 across its width and height, from the top left.
+    pub fn input_point(&self, node_id: String, x: u16, y: u16) -> MdResult<()> {
+        Ok(self.inner.input_point(&node_id, x, y)?)
+    }
+
     /// A three- or four-finger swipe: `dir` is "left", "right", "up" or
     /// "down", the way the fingers moved.
     pub fn input_gesture(&self, node_id: String, fingers: u8, dir: String) -> MdResult<()> {

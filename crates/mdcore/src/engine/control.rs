@@ -47,6 +47,14 @@ impl<P: Platform> Engine<P> {
         self.send_input(node_id, vec![InputEvent::Key { key }])
     }
 
+    /// Put a computer's pointer at a spot on its main screen: `x`, `y` in
+    /// ten-thousandths of its width and height from the top left (see
+    /// `features::input::POINT_SCALE`), e.g. where you tapped on a picture
+    /// of the screen.
+    pub fn input_point(&self, node_id: &str, x: u16, y: u16) -> crate::Result<()> {
+        self.send_input(node_id, vec![InputEvent::Point { x, y }])
+    }
+
     /// A three- or four-finger swipe on a computer: `dir` is "left",
     /// "right", "up" or "down", the way the fingers moved. The computer
     /// turns it into its own shortcut (see the desktop's `remote_input`).

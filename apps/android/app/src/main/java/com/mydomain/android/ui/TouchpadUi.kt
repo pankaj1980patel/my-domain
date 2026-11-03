@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,8 @@ private const val TAP_SLOP_PX = 24f
  *  default), which on many phones also stops the three-finger screenshot
  *  swipe there. */
 const val PREF_TOUCHPAD_SECURE = "touchpad_secure"
+/** Point & click coordinates go from 0 to this across the screen. */
+private const val POINT_SCALE = 10_000
 /** How often a watched screen is renewed (the watch lasts 25 s). */
 private const val RENEW_MS = 10_000L
 /** How far three or four fingers must travel (on average) to be a swipe. */
@@ -163,7 +166,15 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
                 }
             )
         }
-        Pad(node, click, Modifier.fillMaxWidth().weight(1f), Core.screens[node])
+        var pointMode by remember { mutableStateOf(false) }
+        val shown = Core.screens[node]
+        Pad(node, click, Modifier.fillMaxWidth().weight(1f), shown, pointMode)
+        if (shown != null) {
+            GhostButton(
+                stringResource(if (pointMode) R.string.touchpad_point_on else R.string.touchpad_point_off),
+                { pointMode = !pointMode }, Modifier.fillMaxWidth(), small = true,
+            )
+        }
         // The swipes as buttons too: some phones keep three-finger
         // swipes for themselves (a screenshot) and never pass them on.
         val swipe = { fingers: Int, dir: String ->
@@ -198,16 +209,25 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
  * when they lift.
  */
 @Composable
-private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier, screen: ImageBitmap? = null) {
+private fun Pad(
+    node: String,
+    click: (String) -> Unit,
+    modifier: Modifier,
+    screen: ImageBitmap? = null,
+    pointMode: Boolean = false,
+) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
+    // Read inside the touch handler, which isn't restarted when they change.
+    val pointing by rememberUpdatedState(pointMode && screen != null)
+    val shot by rememberUpdatedState(screen?.let { it.width to it.height })
     Box(
         modifier
             .background(T.surface2, MaterialTheme.shapes.small)
             .border(1.dp, T.border, MaterialTheme.shapes.small)
             .pointerInput(node) {
                 awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false)
+                    val at = awaitFirstDown(requireUnconsumed = false).position
                     val start = System.currentTimeMillis()
                     var travelled = 0f
                     var fingers = 1
@@ -252,7 +272,16 @@ private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier, scree
                     }
                     val quick = System.currentTimeMillis() - start < TAP_MS
                     val swipe = swipeDir(swipeX, swipeY)
+                    // Point & click: a tap puts the pointer where it landed on
+                    // the picture, then clicks there.
+                    val spot = if (pointing) shot?.let { (w, h) -> spotOnPicture(at, size.width, size.height, w, h) } else null
                     when {
+                        spot != null && fingers == 1 && quick && travelled < TAP_SLOP_PX -> scope.launch {
+                            try {
+                                Core.inputPoint(node, spot.first, spot.second)
+                                Core.inputClick(node, "left")
+                            } catch (e: Exception) { toast(friendlyError(e)) }
+                        }
                         fingers >= 3 && swipe != null -> scope.launch {
                             try { Core.inputGesture(node, minOf(fingers, 4), swipe) } catch (e: Exception) { toast(friendlyError(e)) }
                         }
@@ -270,6 +299,21 @@ private fun Pad(node: String, click: (String) -> Unit, modifier: Modifier, scree
             Muted(stringResource(R.string.touchpad_pad_hint), center = true)
         }
     }
+}
+
+/**
+ * Where [at] (in a [boxW] x [boxH] pad) falls on a [picW] x [picH] picture
+ * drawn fitted and centred in it: x and y from 0 to 10000 across the
+ * picture, or null outside it (in the bars around it).
+ */
+private fun spotOnPicture(at: androidx.compose.ui.geometry.Offset, boxW: Int, boxH: Int, picW: Int, picH: Int): Pair<Int, Int>? {
+    if (picW <= 0 || picH <= 0 || boxW <= 0 || boxH <= 0) return null
+    val scale = minOf(boxW.toFloat() / picW, boxH.toFloat() / picH)
+    val (w, h) = picW * scale to picH * scale
+    val fx = (at.x - (boxW - w) / 2) / w
+    val fy = (at.y - (boxH - h) / 2) / h
+    if (fx !in 0f..1f || fy !in 0f..1f) return null
+    return (fx * POINT_SCALE).toInt() to (fy * POINT_SCALE).toInt()
 }
 
 /** "left", "right", "up" or "down" for a swipe that went far enough. */
