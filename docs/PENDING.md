@@ -110,7 +110,9 @@ or with less battery.
   - ~~A message sent as a link is replaced could be lost~~: **fixed**
     (2026-11-02) by delivery receipts: every chat message has an id, the
     receiver acks it and drops repeats, and the sender resends until acked.
-- **Move the remaining loops to tokio.** Discovery, the heartbeat and the
+- **Move the remaining loops to tokio** (lower value now, 2026-11-03: the
+  `Shutdown` condvar already makes shutdown immediate, and the loops do
+  blocking work that would need blocking threads anyway). Discovery, the heartbeat and the
   feature/background loops still run on their own threads (the TCP/UDP/WS
   listeners are gone). Moving them to
   tokio tasks with a `CancellationToken` makes shutdown clean and immediate.
@@ -272,6 +274,13 @@ Why: [ADR-0005](../learnings/decisions/ADR-0005-device-keys-domains.md).
 
 - **A key per device** (Ed25519/X25519), stored in the OS keystore:
   Keychain on macOS, Android Keystore, Secret Service on Linux.
+  - **First step done** (2026-11-03): an Ed25519 key per install (secure
+    store, kv where there is none), QUIC certificates made from it on both
+    ends, and trust on first use: a device id that comes back with another
+    key, or none, is refused. Devices from before still connect,
+    unremembered. See DONE.md. Still to do: X25519, publishing keys through
+    the registry (a key that changed legitimately is then accepted), and
+    pairing as the way to trust a key.
   - Pair your own devices by QR code or a short code.
   - QUIC certificates come from these keys and are pinned. This closes the
     current gap where peers aren't authenticated (`AcceptAnyCert`).
@@ -378,5 +387,8 @@ A feature counts as done when it has:
 - **The office network blocks all three server names.** FortiGuard blocks
   the "Dynamic DNS" category (sslip.io, work.gd, servehttp.com). A paid
   domain would pass; your call.
-- **QUIC peers aren't authenticated yet.** Messages are still end-to-end
-  encrypted. Fixed in Phase 4.
+- **QUIC peers are trusted on first use.** A device's key is remembered the
+  first time it connects; until pairing (Phase 4), a device whose key
+  really changed (its secure store wiped) is refused until its data is
+  cleared on the other side. Relay and WebRTC links don't check keys yet.
+  Messages are end-to-end encrypted either way.

@@ -139,9 +139,10 @@ fn an_interrupted_transfer_resumes_where_it_stopped() {
     use md_testkit::MockPlatform;
     use std::sync::Arc;
 
-    let store = Arc::default();
+    let (store, secrets) = (Arc::default(), Arc::default());
     let device = || MockPlatform {
         kv: Arc::clone(&store),
+        secrets: Arc::clone(&secrets),
         ..MockPlatform::new("file-resume-b")
     };
     let a = TestNode::start("file-resume-a");

@@ -15,16 +15,15 @@
 //! same `Hello` / `Msg` frames the WebSocket link uses. Messages inside `Msg`
 //! are still end-to-end encrypted envelopes.
 //!
-//! SECURITY NOTE (until Phase 4): each engine uses a throwaway self-signed
-//! certificate and the dialer accepts ANY certificate. The QUIC connection is
-//! encrypted, but the peer is not authenticated (same as today's WS `Hello`).
-//! Phase 4 derives certificates from per-device identity keys and pins them,
-//! which makes the handshake itself prove who the peer is.
+//! Who the peer is: both ends present a certificate made from their device
+//! key (`device_key`), and the key must be the one that device used before
+//! (trust on first use). A device from before device keys still connects
+//! with a throwaway certificate, unremembered.
 //!
 //! Threading: the engine's public API is still synchronous, so a small tokio
 //! runtime per engine drives QUIC. Blocking engine code (`handle_incoming`)
-//! is called through `block_in_place`, and a tiny bridge thread forwards the
-//! engine's synchronous outgoing queue (`std::sync::mpsc`) into an async one.
+//! is called through `block_in_place`. The engine queues outgoing frames on
+//! a tokio channel (`engine::Route`), which the connection's writer awaits.
 
 use std::collections::HashMap;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
@@ -38,6 +37,7 @@ use quinn::crypto::rustls::{QuicClientConfig, QuicServerConfig};
 use quinn::{Connection, Endpoint, RecvStream, SendStream};
 
 use crate::config::KeepAlive;
+use crate::device_key::DeviceKey;
 use crate::engine::NetCtx;
 use crate::model::{Envelope, WsFrame};
 use crate::platform::Platform;
@@ -78,6 +78,8 @@ struct PeerConn {
     /// We dialed it (we're the QUIC client). Only the client side of a QUIC
     /// connection may change networks; the server follows it automatically.
     dialed: bool,
+    /// The boot id in the peer's `Hello`.
+    boot: String,
 }
 
 /// Each peer's registered connection, by node id.
@@ -93,6 +95,8 @@ pub struct QuicLink {
     /// Each peer's registered connection. Lets a peer that moved replace its
     /// stale link, and tells us which links survive OUR network change.
     conns: PeerConns,
+    /// New for every start; sent in our `Hello` (see `WsFrame::Hello`).
+    boot: String,
 }
 
 /// One UDP socket for both IP versions: IPv6 with IPv4-mapped addresses
@@ -168,7 +172,11 @@ fn canonical(addr: SocketAddr) -> SocketAddr {
 impl QuicNode {
     /// Create the runtime, a self-signed cert, and an endpoint bound to an
     /// ephemeral UDP port on all interfaces.
-    pub fn start(keepalive: KeepAlive, preferred_port: u16) -> std::io::Result<QuicNode> {
+    pub fn start(
+        keepalive: KeepAlive,
+        preferred_port: u16,
+        key: &DeviceKey,
+    ) -> std::io::Result<QuicNode> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("md-quic")
@@ -178,11 +186,13 @@ impl QuicNode {
             let _guard = runtime.enter(); // quinn needs a runtime context to bind
             let mut ep = Endpoint::new(
                 quinn::EndpointConfig::default(),
-                Some(server_config(keepalive).map_err(std::io::Error::other)?),
+                Some(server_config(keepalive, key).map_err(std::io::Error::other)?),
                 bind_udp(preferred_port)?,
                 Arc::new(quinn::TokioRuntime),
             )?;
-            ep.set_default_client_config(client_config(keepalive).map_err(std::io::Error::other)?);
+            ep.set_default_client_config(
+                client_config(keepalive, key).map_err(std::io::Error::other)?,
+            );
             ep
         };
         let port = endpoint.local_addr()?.port();
@@ -192,6 +202,7 @@ impl QuicNode {
                 rt: runtime.handle().clone(),
                 port,
                 conns: Arc::default(),
+                boot: uuid::Uuid::new_v4().to_string(),
             },
             _runtime: runtime,
         })
@@ -347,12 +358,15 @@ impl QuicLink {
         socket.set_read_timeout(None)?;
         let mut endpoint = Endpoint::new(
             quinn::EndpointConfig::default(),
-            Some(server_config(ctx.config.keepalive).map_err(std::io::Error::other)?),
+            Some(
+                server_config(ctx.config.keepalive, &ctx.device_key)
+                    .map_err(std::io::Error::other)?,
+            ),
             socket,
             Arc::new(quinn::TokioRuntime),
         )?;
         endpoint.set_default_client_config(
-            client_config(ctx.config.keepalive).map_err(std::io::Error::other)?,
+            client_config(ctx.config.keepalive, &ctx.device_key).map_err(std::io::Error::other)?,
         );
         self.rt.spawn(async move {
             let conn = if dial {
@@ -402,19 +416,28 @@ async fn run_connection<P: Platform>(
         serde_json::to_vec(&WsFrame::Hello {
             node_id: id.node_id.clone(),
             name: id.name.clone(),
+            boot: ctx.quic.boot.clone(),
         })
         .unwrap_or_default()
     };
     if write_frame(&mut send, &hello).await.is_err() {
         return;
     }
-    let peer_id = match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await {
+    let (peer_id, boot) = match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await {
         Ok(Ok(bytes)) => match serde_json::from_slice::<WsFrame>(&bytes) {
-            Ok(WsFrame::Hello { node_id, .. }) => node_id,
+            Ok(WsFrame::Hello { node_id, boot, .. }) => (node_id, boot),
             _ => return,
         },
         _ => return,
     };
+
+    // The handshake proved which key the peer holds: it must be the one this
+    // node id used before (or a first meeting).
+    let key = peer_key(&conn);
+    if !crate::device_key::accept(&ctx.peer_keys, &*ctx.platform, &peer_id, key.as_deref()) {
+        conn.close(0u32.into(), b"not the key this device had");
+        return;
+    }
 
     // A hand-entered peer is listed as `manual:<ip>` until we learn its real
     // node id: now. Swap the placeholder for the real id, keeping its name.
@@ -424,6 +447,9 @@ async fn run_connection<P: Platform>(
     // already has one:
     // - a relay link (or one that never went live): replace it, direct wins;
     // - another direct non-QUIC link (WebRTC): keep it;
+    // - a QUIC link from before the peer restarted (another boot id in its
+    //   `Hello`): that connection is dead, replace it (it would otherwise
+    //   block the peer until it times out);
     // - a QUIC link in the SAME direction from a different address: the peer
     //   moved networks, so the new one replaces the stale one;
     // - a QUIC link in the OPPOSITE direction (both sides dialed at once):
@@ -442,12 +468,15 @@ async fn run_connection<P: Platform>(
                 .lock()
                 .get(&peer_id)
                 .filter(|pc| pc.id == *existing_id)
-                .map(|pc| (pc.dialed, pc.remote, pc.conn.clone()));
+                .map(|pc| (pc.dialed, pc.remote, pc.conn.clone(), pc.boot.clone()));
             let replace = match &existing {
                 // Not QUIC: replace the relay (or a link that never went
                 // live); keep a working direct link (WebRTC).
                 None => !super::is_direct(&ctx, &peer_id),
-                Some((was_dialed, was_remote, _)) if *was_dialed == dialer => *was_remote != remote,
+                Some((_, _, _, was_boot)) if !boot.is_empty() && *was_boot != boot => true,
+                Some((was_dialed, was_remote, _, _)) if *was_dialed == dialer => {
+                    *was_remote != remote
+                }
                 Some(_) => dialer == (me < peer_id),
             };
             if !replace {
@@ -455,7 +484,7 @@ async fn run_connection<P: Platform>(
                 return;
             }
             g.remove(&peer_id);
-            if let Some((_, _, old)) = existing {
+            if let Some((_, _, old, _)) = existing {
                 old.close(0u32.into(), b"replaced");
             }
         }
@@ -473,6 +502,7 @@ async fn run_connection<P: Platform>(
                 remote,
                 conn: conn.clone(),
                 dialed: dialer,
+                boot,
             },
         );
     }
@@ -568,13 +598,13 @@ async fn read_frame(recv: &mut RecvStream) -> std::io::Result<Vec<u8>> {
 
 fn server_config(
     keepalive: KeepAlive,
+    key: &DeviceKey,
 ) -> Result<quinn::ServerConfig, Box<dyn std::error::Error + Send + Sync>> {
-    let cert = rcgen::generate_simple_self_signed(vec!["mydomain".into()])?;
-    let key = rustls::pki_types::PrivatePkcs8KeyDer::from(cert.signing_key.serialize_der());
+    let (cert, private) = key.certificate()?;
     let mut tls = rustls::ServerConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])?
-        .with_no_client_auth()
-        .with_single_cert(vec![cert.cert.der().clone()], key.into())?;
+        .with_client_cert_verifier(Arc::new(AnyCert(provider())))
+        .with_single_cert(vec![cert], private)?;
     tls.alpn_protocols = vec![ALPN.to_vec()];
     let mut cfg = quinn::ServerConfig::with_crypto(Arc::new(QuicServerConfig::try_from(tls)?));
     cfg.transport_config(transport_config(keepalive)?);
@@ -597,29 +627,41 @@ fn transport_config(
 
 fn client_config(
     keepalive: KeepAlive,
+    key: &DeviceKey,
 ) -> Result<quinn::ClientConfig, Box<dyn std::error::Error + Send + Sync>> {
+    let (cert, private) = key.certificate()?;
     let mut tls = rustls::ClientConfig::builder_with_provider(provider())
         .with_protocol_versions(&[&rustls::version::TLS13])?
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(AcceptAnyCert(provider())))
-        .with_no_client_auth();
+        .with_custom_certificate_verifier(Arc::new(AnyCert(provider())))
+        .with_client_auth_cert(vec![cert], private)?;
     tls.alpn_protocols = vec![ALPN.to_vec()];
     let mut cfg = quinn::ClientConfig::new(Arc::new(QuicClientConfig::try_from(tls)?));
     cfg.transport_config(transport_config(keepalive)?);
     Ok(cfg)
 }
 
+/// The device key in the certificate the peer presented, if it has one.
+fn peer_key(conn: &Connection) -> Option<String> {
+    let certs = conn
+        .peer_identity()?
+        .downcast::<Vec<rustls::pki_types::CertificateDer<'static>>>()
+        .ok()?;
+    crate::device_key::key_in_cert(certs.first()?.as_ref())
+}
+
 fn provider() -> Arc<rustls::crypto::CryptoProvider> {
     Arc::new(rustls::crypto::ring::default_provider())
 }
 
-/// Accepts any server certificate, but still checks that the handshake was
-/// signed by the key in that certificate (so the TLS session is sound; only
-/// the *identity* is unchecked). Replaced by key pinning in Phase 4.
+/// Accepts any certificate in the handshake, but checks that the handshake
+/// was signed by the key in it, so the key is proven. Whether that key is
+/// the right one for the device is decided after the `Hello`, when we know
+/// which device it claims to be (`device_key::accept`).
 #[derive(Debug)]
-struct AcceptAnyCert(Arc<rustls::crypto::CryptoProvider>);
+struct AnyCert(Arc<rustls::crypto::CryptoProvider>);
 
-impl rustls::client::danger::ServerCertVerifier for AcceptAnyCert {
+impl rustls::client::danger::ServerCertVerifier for AnyCert {
     fn verify_server_cert(
         &self,
         _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -629,6 +671,63 @@ impl rustls::client::danger::ServerCertVerifier for AcceptAnyCert {
         _now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
         Ok(rustls::client::danger::ServerCertVerified::assertion())
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.0.signature_verification_algorithms,
+        )
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.0.signature_verification_algorithms.supported_schemes()
+    }
+}
+
+/// The accepting side asks for the dialer's certificate too. Optional: a
+/// device from before device keys has none to give.
+impl rustls::server::danger::ClientCertVerifier for AnyCert {
+    fn offer_client_auth(&self) -> bool {
+        true
+    }
+
+    fn client_auth_mandatory(&self) -> bool {
+        false
+    }
+
+    fn root_hint_subjects(&self) -> &[rustls::DistinguishedName] {
+        &[]
+    }
+
+    fn verify_client_cert(
+        &self,
+        _end_entity: &rustls::pki_types::CertificateDer<'_>,
+        _intermediates: &[rustls::pki_types::CertificateDer<'_>],
+        _now: rustls::pki_types::UnixTime,
+    ) -> Result<rustls::server::danger::ClientCertVerified, rustls::Error> {
+        Ok(rustls::server::danger::ClientCertVerified::assertion())
     }
 
     fn verify_tls12_signature(

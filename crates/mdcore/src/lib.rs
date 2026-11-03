@@ -11,6 +11,7 @@
 pub mod capabilities;
 pub mod config;
 pub mod crypto;
+pub mod device_key;
 pub mod discovery;
 pub mod engine;
 pub mod error;

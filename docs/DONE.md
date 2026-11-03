@@ -131,6 +131,29 @@ Every message rides a live link. The old one-off paths (a TCP connection or
 a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
 ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
+## Device keys, first step (2026-11-03)
+
+- Each install makes an Ed25519 key once (`device_key.rs`), kept in the OS
+  secure store, or the kv store where there is none (mdctl). Signing out
+  keeps it.
+- QUIC certificates are made from it, and both ends present one (the
+  acceptor asks the dialer for its certificate). The handshake proves
+  which key each side holds.
+- Trust on first use: the key is remembered under the device's node id
+  the first time. A connection claiming that node id with another key,
+  or with none, is refused. Devices from before still connect with a
+  throwaway certificate, unremembered.
+- A locked keyring at startup doesn't replace the key: that run uses a
+  temporary one, and the next start finds the real key again.
+- Found on the way: a device that restarted on the same QUIC port was
+  refused by peers still holding its dead connection ("duplicate", same
+  direction, same address) until that timed out, up to 60 s. Each start
+  now has a boot id in the QUIC `Hello`; a new one replaces the old
+  connection at once.
+- Tests: `a_device_id_with_another_key_is_refused` (impostor refused, the
+  real device back at once after a restart) and the unit tests in
+  `device_key.rs`.
+
 ## Simulated routers: hole punching tested (2026-11-03)
 
 - `scripts/lab/nat-sim.sh` (Linux, no root): two mdctl devices, each behind

@@ -165,6 +165,10 @@ pub struct NetCtx<P: Platform> {
     /// Our NAT's mapping behaviour, measured with STUN at start and after
     /// network changes; published to the registry for the connect ladder.
     pub nat: Arc<Mutex<crate::nat::NatKind>>,
+    /// This device's own key: its QUIC certificate is made from it.
+    pub device_key: Arc<crate::device_key::DeviceKey>,
+    /// The keys other devices used before (see `device_key::accept`).
+    pub peer_keys: crate::device_key::Pins,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -198,6 +202,8 @@ impl<P: Platform> Clone for NetCtx<P> {
             shutdown: self.shutdown.clone(),
             background: self.background.clone(),
             outbox: self.outbox.clone(),
+            device_key: self.device_key.clone(),
+            peer_keys: self.peer_keys.clone(),
             seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
@@ -269,7 +275,8 @@ impl<P: Platform> Engine<P> {
             .kv_get(QUIC_PORT_KEY)
             .and_then(|p| p.parse().ok())
             .unwrap_or(0);
-        let quic = transport::quic::QuicNode::start(config.keepalive, last_port)?;
+        let device_key = Arc::new(crate::device_key::DeviceKey::load_or_create(&*platform));
+        let quic = transport::quic::QuicNode::start(config.keepalive, last_port, &device_key)?;
         platform.kv_set(QUIC_PORT_KEY, &quic.link().port().to_string());
 
         let identity = Arc::new(Mutex::new(Identity {
@@ -338,6 +345,8 @@ impl<P: Platform> Engine<P> {
             installed_apps: installed_apps.clone(),
             device_status: Arc::new(Mutex::new(String::from("{}"))),
             files: Arc::default(),
+            device_key,
+            peer_keys: Arc::default(),
             subs: subs.clone(),
             quic_failed: Arc::default(),
             manual_aliases: Arc::default(),

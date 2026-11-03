@@ -277,6 +277,7 @@ pub fn send_hello<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
         serde_json::to_string(&WsFrame::Hello {
             node_id: id.node_id.clone(),
             name: id.name.clone(),
+            boot: String::new(),
         })
         .unwrap_or_default()
     };

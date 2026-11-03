@@ -167,7 +167,14 @@ pub struct IncomingMessage {
 #[serde(tag = "type")]
 pub enum WsFrame {
     #[serde(rename = "hello")]
-    Hello { node_id: String, name: String },
+    Hello {
+        node_id: String,
+        name: String,
+        /// New every time the engine starts (QUIC only): a peer that sees
+        /// a new one knows we restarted and drops our old connection.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        boot: String,
+    },
     #[serde(rename = "msg")]
     Msg { nonce: String, ciphertext: String },
 }
