@@ -292,7 +292,9 @@ height from the top left (`features::input::POINT_SCALE`), clamped by
 
 Tried: mdctl → the Mac app, `point 5000 5000` put the pointer in the
 middle of the 1280x800 screen and `point 2500 7500` at (319, 599 from the
-top). The phone's mode: built, not tried yet (the phone was locked).
+top). On the phone, against the Mac app: the Mac's screen showed behind
+the full-screen pad, and with Point & click on, a tap on the middle of the
+picture's menu bar put the Mac's pointer at (639, 12) of 1280x800.
 
 ## Wake a sleeping computer from the phone (2026-11-03)
 
@@ -346,7 +348,9 @@ Checks: mdcore, mdctl and desktop clippy on the Mac, the new tests, the
 APK build. The Linux capture code hasn't been compiled (laptop offline).
 Tried: mdctl watching the real Mac app got about two snapshots a second
 (about 74 KB each) and they stopped when it stopped watching. On the
-phone: not yet (it locked itself).
+phone, the full-screen pad showed the Mac's screen behind it.
+Phone → computer: a watch from mdctl brought up Android's "Record or share
+your screen with my-domain" prompt on the phone (the yes is the owner's).
 
 ## Phone buttons for a computer's slides, keep awake, search and lock (2026-11-03)
 
