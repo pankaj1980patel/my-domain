@@ -8,7 +8,6 @@
 
 use std::net::UdpSocket;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc;
 use std::sync::Once;
 use std::time::{Duration, Instant};
 
@@ -110,7 +109,7 @@ const OPEN_WITHIN: Duration = Duration::from_secs(30);
 
 fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: String) {
     let local = socket.local_addr().ok();
-    let (tx, rx) = mpsc::channel::<String>();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     let my_conn_id = RTC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let mut cid: Option<ChannelId> = None;
     let mut registered = false;
@@ -157,7 +156,7 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                             if let std::collections::hash_map::Entry::Vacant(slot) =
                                 g.entry(node_id.clone())
                             {
-                                slot.insert((my_conn_id, tx.clone()));
+                                slot.insert((my_conn_id, crate::engine::Route::direct(tx.clone())));
                                 drop(g);
                                 registered = true;
                                 mark_live(&ctx, &node_id, TransportKind::WebRtc, None);

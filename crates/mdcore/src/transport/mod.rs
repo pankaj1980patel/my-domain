@@ -406,9 +406,9 @@ pub fn send_plaintext(
         .get(node_id)
         .map(|(_, s)| s.clone())
         .ok_or_else(|| CoreError::NoLink("not connected".into()))?;
-    sender
-        .send(frame)
-        .map_err(|_| CoreError::NoLink("connection closed".into()))?;
+    if !sender.send(frame) {
+        return Err(CoreError::NoLink("connection closed".into()));
+    }
     note_use(p2p, node_id);
     Ok(())
 }

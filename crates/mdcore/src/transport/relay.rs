@@ -21,7 +21,6 @@ use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
@@ -41,7 +40,7 @@ const CLOSE: &str = "\0close";
 pub struct RelayConn {
     id: u64,
     /// Raw text frames to send to the server.
-    tx: mpsc::Sender<String>,
+    tx: tokio::sync::mpsc::UnboundedSender<String>,
     /// Peers reached through the relay: node_id -> their `ws_conns` conn id.
     peers: HashMap<String, u64>,
     /// Peers whose `Hello` we've received (and answered once).
@@ -156,7 +155,7 @@ fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result
     let _ = raw.set_read_timeout(Some(Duration::from_millis(100)));
 
     let id = RELAY_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
-    let (tx, rx) = mpsc::channel::<String>();
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     {
         let mut slot = ctx.relay.lock();
         if slot.is_some() {
@@ -249,29 +248,18 @@ pub fn add_relay_link<P: Platform>(ctx: &NetCtx<P>, peer: &str) -> bool {
         }
     }
     let conn_id = RELAY_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
-    let (ptx, prx) = mpsc::channel::<String>();
     {
         let mut conns = ctx.ws_conns.lock();
         if conns.contains_key(peer) {
             return false; // a direct link exists; prefer it
         }
-        conns.insert(peer.to_string(), (conn_id, ptx));
+        let route = crate::engine::Route::relayed(relay_tx, peer);
+        conns.insert(peer.to_string(), (conn_id, route));
     }
     if let Some(r) = ctx.relay.lock().as_mut() {
         r.peers.insert(peer.to_string(), conn_id);
         r.used_at = Instant::now();
     }
-    // Wrap this peer's frames for the server. Ends when the link is removed
-    // (sender dropped) or the relay socket is gone.
-    let to = peer.to_string();
-    std::thread::spawn(move || {
-        while let Ok(frame) = prx.recv() {
-            let wrapped = json!({"to": to, "data": frame}).to_string();
-            if relay_tx.send(wrapped).is_err() {
-                break;
-            }
-        }
-    });
     true
 }
 
@@ -301,7 +289,7 @@ type RelaySocket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<Tc
 
 fn relay_loop<P: Platform>(
     mut ws: RelaySocket,
-    rx: mpsc::Receiver<String>,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<String>,
     ctx: NetCtx<P>,
     my_id: u64,
 ) {

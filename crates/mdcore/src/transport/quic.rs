@@ -432,7 +432,7 @@ async fn run_connection<P: Platform>(
     let my_conn_id = QUIC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let remote = canonical(conn.remote_address());
     let me = ctx.identity.lock().node_id.clone();
-    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
     {
         let mut g = ctx.ws_conns.lock();
         if let Some((existing_id, _)) = g.get(&peer_id) {
@@ -459,7 +459,10 @@ async fn run_connection<P: Platform>(
                 old.close(0u32.into(), b"replaced");
             }
         }
-        g.insert(peer_id.clone(), (my_conn_id, tx));
+        g.insert(
+            peer_id.clone(),
+            (my_conn_id, crate::engine::Route::direct(tx)),
+        );
         // Record the QUIC side under the SAME lock: a second connection
         // registering in between would otherwise find a link with no QUIC
         // record, mistake it for a dead non-QUIC link, and orphan it.
@@ -475,19 +478,10 @@ async fn run_connection<P: Platform>(
     }
     mark_live(&ctx, &peer_id, kind, Some(remote));
 
-    // Bridge: the engine queues outgoing frames on a std channel; forward them
-    // into an async channel the writer task awaits. The thread ends when the
-    // engine drops the std sender (link removed) or the writer is gone.
-    let (atx, mut arx) = tokio::sync::mpsc::unbounded_channel::<String>();
-    std::thread::spawn(move || {
-        while let Ok(frame) = rx.recv() {
-            if atx.send(frame).is_err() {
-                break;
-            }
-        }
-    });
+    // Writer: the frames the engine queued for this peer (the queue closes
+    // when the link is removed).
     let writer = tokio::spawn(async move {
-        while let Some(frame) = arx.recv().await {
+        while let Some(frame) = rx.recv().await {
             if write_frame(&mut send, frame.as_bytes()).await.is_err() {
                 break;
             }

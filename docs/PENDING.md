@@ -116,8 +116,11 @@ or with less battery.
   tokio tasks with a `CancellationToken` makes shutdown clean and immediate.
   Probably best done with Phase 3, because the UniFFI bridge wants an async
   engine anyway.
-- **Switch `ws_conns` to tokio channels.** This removes the thread that sits
-  between the threaded code and the async code (the "bridge thread").
+- ~~Switch `ws_conns` to tokio channels~~: **done** (2026-11-03). A peer's
+  route is a tokio sender (`engine::Route`; its `send` never blocks, from
+  any thread). Gone: the bridge thread per QUIC link, and the thread per
+  relayed peer that addressed its frames (a relayed route now does that
+  itself).
 - ~~Relay over `wss://` (TLS)~~: **done**. The live test chats through the
   real HTTPS server's relay.
 - ~~Test the engine against the real server's relay~~: **done**

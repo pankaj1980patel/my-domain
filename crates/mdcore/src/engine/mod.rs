@@ -45,7 +45,40 @@ pub use signaling::FirewallStatus;
 
 pub type KeyHolder = Arc<Mutex<Option<[u8; 32]>>>;
 /// node_id -> (connection id, outgoing-frame sender). One entry per peer.
-pub type WsConns = Arc<Mutex<HashMap<String, (u64, mpsc::Sender<String>)>>>;
+pub type WsConns = Arc<Mutex<HashMap<String, (u64, Route)>>>;
+
+/// Where a peer's frames go: its link's outgoing queue, which the link's
+/// async writer (QUIC) or loop (WebRTC, relay) drains. A relayed peer shares
+/// the relay socket's queue, so its frames are addressed to it on the way.
+#[derive(Clone)]
+pub struct Route {
+    tx: tokio::sync::mpsc::UnboundedSender<String>,
+    to: Option<String>,
+}
+
+impl Route {
+    /// A link of its own.
+    pub fn direct(tx: tokio::sync::mpsc::UnboundedSender<String>) -> Self {
+        Route { tx, to: None }
+    }
+
+    /// Through the relay socket whose queue is `tx`, to `peer`.
+    pub fn relayed(tx: tokio::sync::mpsc::UnboundedSender<String>, peer: &str) -> Self {
+        Route {
+            tx,
+            to: Some(peer.to_string()),
+        }
+    }
+
+    /// Queue one frame; false once the link is gone. Never blocks.
+    pub fn send(&self, frame: String) -> bool {
+        let frame = match &self.to {
+            Some(to) => serde_json::json!({"to": to, "data": frame}).to_string(),
+            None => frame,
+        };
+        self.tx.send(frame).is_ok()
+    }
+}
 /// node_id -> sender awaiting that peer's clipboard pull response.
 pub type ClipPending = Arc<Mutex<HashMap<String, mpsc::Sender<String>>>>;
 /// subscriber node_id -> the package names whose notifications they want
