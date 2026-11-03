@@ -108,6 +108,9 @@ struct Incoming {
     file: File,
     len: u64,
     hasher: Sha256,
+    /// A copied picture (`"clipboard": true` in the offer): the receiving
+    /// host also puts it on its clipboard.
+    clipboard: bool,
     progress_at: Option<Instant>,
     /// Last offer or chunk for it (see `INCOMING_IDLE`).
     last_seen: Instant,
@@ -721,6 +724,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                     file,
                     len,
                     hasher,
+                    clipboard: msg.json("clipboard").as_bool().unwrap_or(false),
                     progress_at: None,
                     last_seen: Instant::now(),
                 },
@@ -843,6 +847,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
             name: t.name.clone(),
             path: path.to_string_lossy().into_owned(),
             size: t.size,
+            clipboard: t.clipboard,
         });
         let _ = send(
             ctx,

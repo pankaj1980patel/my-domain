@@ -168,6 +168,16 @@ private fun ClipboardTile(node: String) {
                 try { Core.pullClipboard(node); toast(asked) } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
             }
         }, Modifier.fillMaxWidth(), enabled = !busy)
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        val pictureSent = stringResource(R.string.clipboard_picture_sent)
+        val noPicture = stringResource(R.string.clipboard_no_picture)
+        SoftButton(stringResource(R.string.clipboard_send_picture), {
+            scope.launch {
+                try {
+                    if (Core.sendClipboardImage(ctx, node)) toast(pictureSent) else toast(noPicture)
+                } catch (e: Exception) { toast(friendlyError(e)) }
+            }
+        }, Modifier.fillMaxWidth())
         ClipSyncSwitch(stringResource(R.string.clipboard_sync))
         ClipHistory()
     }

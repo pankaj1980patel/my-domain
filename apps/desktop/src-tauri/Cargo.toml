@@ -43,6 +43,8 @@ tungstenite = "0.24"
 # wayland-data-control adds native Wayland clipboard support (wlr data-control)
 # so copy/paste works under Wayland sessions, not just X11/XWayland.
 arboard = { version = "3", features = ["wayland-data-control"] }
+# Copied pictures to and from PNG (the clipboard gives raw pixels).
+png = "0.17"
 # Native FCM receiver: simulates an Android/web client to obtain an FCM token
 # and receive data messages over a persistent MTalk connection (no browser /
 # service worker needed). Blocking (reqwest blocking), so it runs in its own

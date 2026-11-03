@@ -981,6 +981,12 @@ impl MdEngine {
         Ok(u32::try_from(sent).unwrap_or(u32::MAX))
     }
 
+    /// Send a picture copied on this phone (a PNG or JPEG file) to a
+    /// device's clipboard. Returns the transfer id.
+    pub fn send_clipboard_image(&self, node_id: String, path: String) -> MdResult<String> {
+        Ok(self.inner.send_clipboard_image(&node_id, &path)?)
+    }
+
     /// Whether a device ever said how to wake it from sleep (Wake-on-LAN).
     pub fn can_wake(&self, node_id: String) -> bool {
         self.inner.can_wake(&node_id)

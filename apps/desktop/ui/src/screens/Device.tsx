@@ -284,6 +284,16 @@ function ClipboardTile(props: { node: string }) {
       >
         {busy() ? t("clipboard.getting") : t("clipboard.get")}
       </button>
+      <button
+        class="btn btn-soft btn-block"
+        onClick={async () => {
+          const r = await commands.sendClipboardImage(props.node);
+          if (r.status === "error") toast(friendlyError(r.error), "error");
+          else toast(t("clipboard.pictureSent", { name: niceName(peerName(props.node)) }), "ok");
+        }}
+      >
+        {t("clipboard.sendPicture")}
+      </button>
       <label class="switch-row">
         <span>{t("clipboard.sync")}</span>
         <input

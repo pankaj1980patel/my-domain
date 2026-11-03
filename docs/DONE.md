@@ -249,6 +249,28 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## Copied pictures between devices (2026-11-03)
+
+"Send the copied picture" in a device's Clipboard tile (desktop and phone):
+the picture on this clipboard goes as a PNG file whose offer says
+`"clipboard": true`; the receiver saves it like any file and also puts it
+on its clipboard (`FileReceived.clipboard`).
+
+- Core: `Engine::send_clipboard_image(node, path)`; incoming transfers
+  remember the flag. Test `files::a_copied_picture_arrives_marked_for_the_clipboard`.
+- Desktop (`clip_image.rs`): `arboard` image ↔ PNG with the `png` crate
+  (already in the lock file); one clipboard handle kept for the app's life
+  (an X11 picture lives as long as its owner). Command
+  `send_clipboard_image` (binding by hand).
+- Android: reads the clipboard's image (a button press, so the app is on
+  screen as Android 10+ needs), re-encodes it as PNG and sends it; a
+  received one goes on the clipboard through its saved file's Uri.
+- mdctl: `send-picture <node> <png>`.
+
+Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
+landed on the phone's clipboard couldn't be seen over adb (no clipboard
+command; the screen-share prompt was on top). Desktop side: clippy only.
+
 ## Control another computer from this one (2026-11-03)
 
 A computer's "Its screen" tile, for a device that also lists `input`:

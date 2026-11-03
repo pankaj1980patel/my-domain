@@ -180,6 +180,22 @@ impl<P: Platform> Engine<P> {
     /// Send a file. Returns the transfer id at once; progress comes as
     /// `FileProgress`, then `FileSent` or `FileFailed`. Like a message, the
     /// offer waits for the device to be reachable.
+    /// Send a picture copied on this device (a PNG or JPEG file at `path`)
+    /// for `node_id` to put on its clipboard; it's also saved there like any
+    /// received file. Returns the transfer id.
+    pub fn send_clipboard_image(&self, node_id: &str, path: &str) -> crate::Result<String> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        crate::features::files::start_with_extra(
+            &self.ctx,
+            node_id,
+            std::path::Path::new(path),
+            &crate::transport::outbox::new_id(),
+            Some(serde_json::json!({ "clipboard": true })),
+        )
+    }
+
     pub fn send_file(&self, node_id: &str, path: &str) -> crate::Result<String> {
         if !self.ctx.peers.lock().contains_key(node_id) {
             return Err(CoreError::PeerNotFound);

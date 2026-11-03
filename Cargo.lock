@@ -4289,6 +4289,7 @@ dependencies = [
  "md-ble",
  "mdcore",
  "native-tls",
+ "png 0.17.16",
  "serde",
  "serde_json",
  "socket2 0.5.10",

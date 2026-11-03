@@ -147,6 +147,9 @@ pub enum CoreEvent {
         name: String,
         path: String,
         size: u64,
+        /// A copied picture from the other device's clipboard: put it on
+        /// this one's clipboard too.
+        clipboard: bool,
     },
     /// The other device confirmed it saved our file.
     FileSent {

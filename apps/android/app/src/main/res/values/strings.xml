@@ -68,6 +68,9 @@
     <string name="clipboard_body">Copy something there, paste it here.</string>
     <string name="clipboard_getting">Getting it…</string>
     <string name="clipboard_get">Get its clipboard</string>
+    <string name="clipboard_send_picture">Send the copied picture</string>
+    <string name="clipboard_picture_sent">Sending the picture to its clipboard</string>
+    <string name="clipboard_no_picture">There\'s no picture on the clipboard. Copy one first.</string>
     <string name="clipboard_asked">Asked for its clipboard</string>
     <string name="clipboard_sync">Keep clipboards in sync</string>
     <string name="clipboard_recent">Recent</string>

@@ -739,6 +739,29 @@ object Core {
     /** Press "enter", "backspace", "left", "right", "up", "down" or "esc" on [node]. */
     suspend fun inputKey(node: String, key: String) = call { it.inputKey(node, key) }
 
+    /**
+     * Send the picture on this phone's clipboard to [node]'s clipboard (as a
+     * PNG). False when the clipboard holds no picture. Reading the clipboard
+     * needs the app on screen (Android 10+), which a button press is.
+     */
+    suspend fun sendClipboardImage(ctx: Context, node: String): Boolean {
+        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java) ?: return false
+        val clip = cm.primaryClip ?: return false
+        val uri = (0 until clip.itemCount).firstNotNullOfOrNull { clip.getItemAt(it).uri } ?: return false
+        val type = ctx.contentResolver.getType(uri).orEmpty()
+        if (!type.startsWith("image/")) return false
+        val file = withContext(Dispatchers.IO) {
+            val bmp = ctx.contentResolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it) }
+                ?: return@withContext null
+            val dir = java.io.File(ctx.cacheDir, "clipboard").apply { mkdirs() }
+            java.io.File(dir, "Copied picture ${System.currentTimeMillis() / 1000}.png").also { f ->
+                f.outputStream().use { bmp.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        } ?: return false
+        call { it.sendClipboardImage(node, file.absolutePath) }
+        return true
+    }
+
     /** Whether [node] ever said how to wake it from sleep (Wake-on-LAN). */
     fun canWake(node: String): Boolean = runCatching { engine()?.canWake(node) }.getOrNull() == true
 

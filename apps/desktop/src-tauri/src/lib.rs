@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod clip_image;
 mod device;
 mod fcm;
 mod notify;
@@ -313,6 +314,30 @@ impl EventSink for TauriSink {
             }
             // Photo backups arrive by themselves, often many: no notice each.
             CoreEvent::FileReceived { path, .. } if is_backup(path) => {}
+            // A picture copied on another device: on this clipboard too.
+            CoreEvent::FileReceived {
+                from,
+                path,
+                clipboard: true,
+                ..
+            } => {
+                let (app, from, path) = (self.app.clone(), from.clone(), path.clone());
+                std::thread::spawn(move || {
+                    let device = notify::device_name(&app, &from);
+                    match clip_image::put_on_clipboard(std::path::Path::new(&path)) {
+                        Ok(()) => notify::post_if_away(
+                            &app,
+                            "my-domain",
+                            &format!("Copied a picture from {device}"),
+                        ),
+                        Err(why) => notify::post(
+                            &app,
+                            &format!("Couldn't copy the picture from {device}"),
+                            &why,
+                        ),
+                    }
+                });
+            }
             CoreEvent::FileReceived { from, name, .. } => {
                 let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
                 std::thread::spawn(move || {
@@ -804,6 +829,15 @@ fn send_input(node_id: String, events_json: String, engine: State<Eng>) -> Resul
     engine.send_input(&node_id, events)
 }
 
+/// Send the picture on this clipboard to a device's clipboard. Returns the
+/// transfer id (progress as `file-progress`).
+#[tauri::command]
+#[specta::specta]
+fn send_clipboard_image(node_id: String, engine: State<Eng>) -> Result<String, CoreError> {
+    let path = clip_image::copied_to_png().map_err(CoreError::InvalidInput)?;
+    engine.send_clipboard_image(&node_id, &path.to_string_lossy())
+}
+
 /// Start (`on`) or stop watching a device's screen: snapshots arrive as
 /// `screen-frame` events. Renew every 10 s while it shows (a watch ends by
 /// itself after 25 s).
@@ -1113,7 +1147,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         screen_allowed,
         set_screen_allowed,
         screen_watch,
-        send_input
+        send_input,
+        send_clipboard_image
     ])
 }
 

@@ -95,6 +95,8 @@ export const en = {
   "clipboard.copied": "Copied to your clipboard",
   "clipboard.getting": "Getting it…",
   "clipboard.get": "Get its clipboard",
+  "clipboard.sendPicture": "Send the copied picture",
+  "clipboard.pictureSent": "Sending the picture. It'll be on {name}'s clipboard.",
   "clipboard.sync": "Keep clipboards in sync",
   "clipboard.recent": "Recent",
   "clipboard.recentHint": "Kept on this computer until it restarts.",

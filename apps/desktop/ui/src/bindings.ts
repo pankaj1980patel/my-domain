@@ -172,6 +172,11 @@ export const commands = {
 	 *  "text"}`, `{"kind": "key", "key"}`; see mdcore `features::input`).
 	 */
 	sendInput: (nodeId: string, eventsJson: string) => typedError<null, string>(__TAURI_INVOKE("send_input", { nodeId, eventsJson })),
+	/**
+	 *  Send the picture on this clipboard to a device's clipboard. Returns the
+	 *  transfer id (progress as `file-progress`).
+	 */
+	sendClipboardImage: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard_image", { nodeId })),
 };
 
 /* Types */

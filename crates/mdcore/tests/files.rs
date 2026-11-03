@@ -270,3 +270,35 @@ fn a_missing_file_fails_at_once() {
     assert!(a.engine.send_file(&b.node_id(), "/no/such/file").is_err());
     assert!(a.engine.send_file("nobody", "/etc/hosts").is_err());
 }
+
+#[test]
+fn a_copied_picture_arrives_marked_for_the_clipboard() {
+    let (a, b) = pair("file-clip");
+    let (src, dst) = (temp_dir("clip-src"), temp_dir("clip-dst"));
+    b.engine.set_download_dir(dst.to_str().unwrap());
+    let path = src.join("Copied picture.png");
+    std::fs::write(&path, b"\x89PNG not really").unwrap();
+    let plain = src.join("plain.txt");
+    std::fs::write(&plain, b"just a file").unwrap();
+
+    let is_clip = |id: &str| {
+        b.sink
+            .wait_until(BIG_WAIT, |e| match e {
+                CoreEvent::FileReceived {
+                    id: got, clipboard, ..
+                } if got == id => Some(*clipboard),
+                _ => None,
+            })
+            .expect("not received")
+    };
+    let id = a
+        .engine
+        .send_clipboard_image(&b.node_id(), path.to_str().unwrap())
+        .unwrap();
+    assert!(is_clip(&id), "a copied picture is for the clipboard");
+    let id = a
+        .engine
+        .send_file(&b.node_id(), plain.to_str().unwrap())
+        .unwrap();
+    assert!(!is_clip(&id), "a plain file isn't");
+}

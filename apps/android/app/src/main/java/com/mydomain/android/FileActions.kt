@@ -155,6 +155,13 @@ object FileActions {
         val saved = save(ctx, File(o.optString("path")), name) ?: return
         val (uri, mime) = saved
         Core.fileSaved(id, uri, mime)
+        // A picture copied on the other device: on this clipboard too.
+        if (o.optBoolean("clipboard")) {
+            runCatching {
+                ctx.getSystemService(android.content.ClipboardManager::class.java)
+                    ?.setPrimaryClip(android.content.ClipData.newUri(ctx.contentResolver, name, uri))
+            }
+        }
         val open = PendingIntent.getActivity(
             ctx, notifId(id), viewIntent(uri, mime),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
