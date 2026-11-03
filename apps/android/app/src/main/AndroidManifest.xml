@@ -108,5 +108,10 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- The touchpad full screen (the touchpad tile's Enlarge). -->
+        <activity
+            android:name=".TouchpadActivity"
+            android:exported="false"
+            android:theme="@style/Theme.App" />
     </application>
 </manifest>

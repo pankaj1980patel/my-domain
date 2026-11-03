@@ -154,8 +154,12 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
   Ctrl+Alt+arrow on Linux), up shows all windows, down the desktop (App
   Exposé on a Mac). Enlarge opens the pad full screen with Left, Right and
   Done. mdctl: `gesture <node> 3|4 left|right|up|down`, `click <node>
-  middle`. Enlarge tried on the phone (it first drew under the system
-  bars; fixed); the gestures need real fingers (adb fakes only one).
+  middle`. The full-screen pad is its own screen (`TouchpadActivity`): as
+  a Compose dialog its window was fitted between the system bars but laid
+  out at the screen's full height, so the bottom row sat under the
+  navigation bar. Tried on the phone: everything above the bars, pad,
+  buttons and Done work. The gestures need real fingers (adb fakes only
+  one).
 - On the vivo phone a three-finger swipe still takes a screenshot: the
   phone handles it before any app, and apps can't turn it off. A setting
   ("Block screenshots on the full-screen touchpad", on by default) marks
