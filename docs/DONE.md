@@ -313,8 +313,11 @@ the fallback half).
   (it needs a name and password). The phone's Settings has a "Switch
   radios from your computers" tile: Get Shizuku / Open Shizuku / Allow,
   whichever is missing.
-- Checks: APK builds and starts, UI type check. Not tried live yet: the phone was
-  unreachable from the Mac after the reinstall (see Known issues).
+- Checks: APK builds and starts, UI type check. Tried live (2026-11-03,
+  after the server redeploy): the phone, away from the Mac on mobile
+  data, answered with the radio fields over a punched link, and a `radio`
+  Wi-Fi-on from mdctl posted "mac lab: turn on Wi-Fi" on it. Shizuku not
+  tried (not installed on the phone).
 
 ## Control another computer from this one (2026-11-03)
 
