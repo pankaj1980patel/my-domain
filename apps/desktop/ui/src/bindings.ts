@@ -165,6 +165,13 @@ export const commands = {
 	 *  itself after 25 s).
 	 */
 	screenWatch: (nodeId: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("screen_watch", { nodeId, on })),
+	/**
+	 *  Control another computer from this one (its screen tile): `events_json`
+	 *  is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
+	 *  "click", "button"}`, `{"kind": "scroll", "dx", "dy"}`, `{"kind": "text",
+	 *  "text"}`, `{"kind": "key", "key"}`; see mdcore `features::input`).
+	 */
+	sendInput: (nodeId: string, eventsJson: string) => typedError<null, string>(__TAURI_INVOKE("send_input", { nodeId, eventsJson })),
 };
 
 /* Types */

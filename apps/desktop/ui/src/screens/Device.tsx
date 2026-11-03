@@ -338,6 +338,42 @@ function ScreenTile(props: { node: string }) {
   let renew: ReturnType<typeof setInterval> | undefined;
   let unlisten: (() => void) | undefined;
 
+  // A computer that takes input: clicks, scrolls and typing on the picture
+  // go to it.
+  const controls = () => state.status[props.node]?.actions.includes("input") ?? false;
+  const send = (events: object[]) =>
+    commands.sendInput(props.node, JSON.stringify(events)).then((r) => {
+      if (r.status === "error") toast(friendlyError(r.error), "error");
+    });
+  const clickAt = (e: MouseEvent, button: "left" | "right") => {
+    if (!controls()) return;
+    e.preventDefault();
+    const img = e.currentTarget as HTMLImageElement;
+    img.focus();
+    const spot = (v: number, size: number) => Math.max(0, Math.min(10000, Math.round((v / size) * 10000)));
+    send([
+      { kind: "point", x: spot(e.offsetX, img.clientWidth), y: spot(e.offsetY, img.clientHeight) },
+      { kind: "click", button },
+    ]);
+  };
+  const wheel = (e: WheelEvent) => {
+    if (!controls()) return;
+    e.preventDefault();
+    send([{ kind: "scroll", dx: Math.round(e.deltaX), dy: Math.round(e.deltaY) }]);
+  };
+  const keys: Record<string, string> = {
+    Enter: "enter", Backspace: "backspace", Escape: "esc",
+    ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down",
+  };
+  const keyDown = (e: KeyboardEvent) => {
+    if (!controls() || e.metaKey || e.ctrlKey) return;
+    const key = keys[e.key];
+    if (key) send([{ kind: "key", key }]);
+    else if (e.key.length === 1) send([{ kind: "text", text: e.key }]);
+    else return;
+    e.preventDefault();
+  };
+
   const watch = async (on: boolean) => {
     const r = await commands.screenWatch(props.node, on);
     if (r.status === "error") throw new Error(r.error);
@@ -371,7 +407,20 @@ function ScreenTile(props: { node: string }) {
       <h2>{t("screen.title")}</h2>
       <p class="muted small">{t("screen.hint")}</p>
       <Show when={watching() && frame()} fallback={<Show when={watching()}><p class="muted small">{t("screen.waiting")}</p></Show>}>
-        <img class="screen-view" src={frame()} alt={t("screen.alt")} />
+        <img
+          class="screen-view"
+          classList={{ "screen-control": controls() }}
+          src={frame()}
+          alt={t("screen.alt")}
+          tabIndex={controls() ? 0 : undefined}
+          onClick={(e) => clickAt(e, "left")}
+          onContextMenu={(e) => clickAt(e, "right")}
+          onWheel={wheel}
+          onKeyDown={keyDown}
+        />
+        <Show when={controls()}>
+          <p class="muted small">{t("screen.controlHint")}</p>
+        </Show>
       </Show>
       <button class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"} onClick={() => (watching() ? stop() : start())}>
         {watching() ? t("screen.stop") : t("screen.show")}

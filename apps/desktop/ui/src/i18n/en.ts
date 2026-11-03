@@ -123,6 +123,7 @@ export const en = {
   "screen.stop": "Stop",
   "screen.waiting": "Waiting for the picture… (on a phone, say yes on it first)",
   "screen.alt": "Its screen",
+  "screen.controlHint": "Click, right-click or scroll on the picture to do it there. Click it, then type to type there.",
   "control.title": "Find & control",
   "control.hint": "Ring it to find it, or open a link on it.",
   "control.ring": "Ring",

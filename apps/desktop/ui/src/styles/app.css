@@ -1033,3 +1033,10 @@ input[type="checkbox"][role="switch"]:checked::after {
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
   margin: 8px 0;
 }
+.screen-control {
+  cursor: crosshair;
+}
+.screen-control:focus-visible {
+  outline: 2px solid var(--accent, #4c8dff);
+  outline-offset: 2px;
+}

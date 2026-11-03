@@ -249,6 +249,16 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `a_restarted_phone_does_not_repeat_its_state`, desktop
     `held_pop_ups_are_summed_up`.
 
+## Control another computer from this one (2026-11-03)
+
+A computer's "Its screen" tile, for a device that also lists `input`:
+clicking the picture clicks there (a `point` then a `click`), right-click
+right-clicks, the wheel scrolls, and with the picture focused, keys
+(Enter, Backspace, Esc, arrows) and typed characters go there. Desktop
+command `send_input(node_id, events_json)` takes any list of input events
+(binding by hand). Checks: desktop clippy, UI type check. Not tried live
+yet (needs a second computer; the laptop is offline).
+
 ## See the phone's screen on the computer (2026-11-03)
 
 The same `features::screen` the other way round: a computer watches the

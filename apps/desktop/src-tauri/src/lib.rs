@@ -792,6 +792,18 @@ fn set_remote_input_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
 
 // --- your phone sees this screen, and you see its ---
 
+/// Control another computer from this one (its screen tile): `events_json`
+/// is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
+/// "click", "button"}`, `{"kind": "scroll", "dx", "dy"}`, `{"kind": "text",
+/// "text"}`, `{"kind": "key", "key"}`; see mdcore `features::input`).
+#[tauri::command]
+#[specta::specta]
+fn send_input(node_id: String, events_json: String, engine: State<Eng>) -> Result<(), CoreError> {
+    let events: Vec<mdcore::model::InputEvent> = serde_json::from_str(&events_json)
+        .map_err(|e| CoreError::InvalidInput(format!("input events: {e}")))?;
+    engine.send_input(&node_id, events)
+}
+
 /// Start (`on`) or stop watching a device's screen: snapshots arrive as
 /// `screen-frame` events. Renew every 10 s while it shows (a watch ends by
 /// itself after 25 s).
@@ -1100,7 +1112,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_remote_input_allowed,
         screen_allowed,
         set_screen_allowed,
-        screen_watch
+        screen_watch,
+        send_input
     ])
 }
 
