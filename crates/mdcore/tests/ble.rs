@@ -12,12 +12,40 @@ use mdcore::engine::{BleSender, Engine};
 use mdcore::CoreConfig;
 
 /// One direction of the "radio": frames go to the other engine's link.
+/// Frames sent before it's connected (the `Hello` goes out at once) wait,
+/// like a real radio's queue.
 #[derive(Default)]
-struct Pipe(Mutex<Option<(Weak<Engine<MockPlatform>>, u64)>>);
+struct Pipe(Mutex<PipeState>);
+
+#[derive(Default)]
+struct PipeState {
+    to: Option<(Weak<Engine<MockPlatform>>, u64)>,
+    waiting: Vec<Vec<u8>>,
+}
+
+impl Pipe {
+    fn connect(&self, engine: &Arc<Engine<MockPlatform>>, id: u64) {
+        let waiting = {
+            let mut s = self.0.lock().unwrap();
+            s.to = Some((Arc::downgrade(engine), id));
+            std::mem::take(&mut s.waiting)
+        };
+        for frame in waiting {
+            engine.ble_frame(id, &frame);
+        }
+    }
+}
 
 impl BleSender for Pipe {
     fn send(&self, frame: Vec<u8>) {
-        let to = self.0.lock().unwrap().clone();
+        let to = {
+            let mut s = self.0.lock().unwrap();
+            if s.to.is_none() {
+                s.waiting.push(frame);
+                return;
+            }
+            s.to.clone()
+        };
         if let Some((engine, id)) = to {
             if let Some(engine) = engine.upgrade() {
                 engine.ble_frame(id, &frame);
@@ -31,8 +59,8 @@ fn radio(a: &TestNode, b: &TestNode) -> (u64, u64) {
     let (to_b, to_a) = (Arc::new(Pipe::default()), Arc::new(Pipe::default()));
     let id_a = a.engine.ble_opened(to_b.clone());
     let id_b = b.engine.ble_opened(to_a.clone());
-    *to_b.0.lock().unwrap() = Some((Arc::downgrade(&b.engine), id_b));
-    *to_a.0.lock().unwrap() = Some((Arc::downgrade(&a.engine), id_a));
+    to_b.connect(&b.engine, id_b);
+    to_a.connect(&a.engine, id_a);
     (id_a, id_b)
 }
 
