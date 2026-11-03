@@ -9,6 +9,10 @@
 export const en = {
   // App shell
   "app.name": "my-domain",
+  // The brand wordmark "My-Domain" ("Domain" in the accent colour) and tagline.
+  "brand.wordmarkLead": "My-",
+  "brand.wordmarkAccent": "Domain",
+  "brand.tagline": "Your devices. Your domain.",
   "nav.label": "Main",
   "nav.devices": "Devices",
   "nav.activity": "Activity",

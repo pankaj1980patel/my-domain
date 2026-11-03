@@ -6,6 +6,7 @@ import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
+import { logoSrc, Tagline, Wordmark } from "./components/Brand";
 import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
 import Device from "./screens/Device";
@@ -40,8 +41,11 @@ export default function App() {
         <div class="shell">
           <nav class="sidebar" aria-label={t("nav.label")}>
             <div class="brand">
-              <img src="/logo.png" alt="" />
-              <span>{t("app.name")}</span>
+              <img src={logoSrc()} alt="" />
+              <span class="brand-text" aria-label={t("app.name")}>
+                <Wordmark />
+                <Tagline />
+              </span>
             </div>
             <button class={`nav-item ${is("home") ? "active" : ""}`} onClick={() => go({ name: "home" })}>
               {t("nav.devices")}

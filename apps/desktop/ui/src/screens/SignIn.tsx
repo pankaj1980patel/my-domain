@@ -6,6 +6,7 @@ import { commands } from "../bindings";
 import { signIn } from "../lib/core";
 import { friendlyError } from "../lib/words";
 import { t } from "../i18n";
+import { logoSrc, Tagline, Wordmark } from "../components/Brand";
 
 const DEFAULT_SERVER = "https://mydomain.servehttp.com";
 
@@ -55,7 +56,11 @@ export default function SignIn(props: { onDone: () => void }) {
   return (
     <main class="signin">
       <form class="signin-card" onSubmit={submit}>
-        <img class="signin-logo" src="/logo.png" alt="" />
+        <img class="signin-logo" src={logoSrc()} alt="" />
+        <div class="signin-brand">
+          <Wordmark class="wordmark-lg" />
+          <Tagline />
+        </div>
         <h1>{create() ? t("signIn.titleCreate") : t("signIn.titleWelcome")}</h1>
         <p class="muted">{t("signIn.tagline")}</p>
 

@@ -281,6 +281,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   object-fit: cover;
   border-radius: var(--r-logo);
   box-shadow: var(--shadow-logo);
+  filter: var(--logo-filter);
 }
 .error {
   color: var(--danger);
@@ -319,6 +320,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   object-fit: cover;
   border-radius: var(--r-logo);
   box-shadow: var(--shadow-logo);
+  filter: var(--logo-filter);
 }
 .nav-item {
   font: inherit;
@@ -982,4 +984,42 @@ input[type="checkbox"][role="switch"]:checked::after {
 .theme-desc {
   font-size: var(--text-xs);
   color: var(--text-3);
+}
+
+/* Brand: the "My-Domain" wordmark and the gold tagline (kit hero). */
+.brand-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.wordmark {
+  font-weight: var(--weight-strong);
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+.wordmark-accent {
+  color: var(--accent-fg);
+}
+.wordmark-lg {
+  font-size: var(--text-2xl);
+  line-height: 1.1;
+}
+.brand-tagline {
+  color: var(--highlight-fg);
+  font-size: 9px; /* fits the 220 px sidebar; larger on sign-in */
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.signin-brand {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-1);
+  margin-top: calc(-1 * var(--s-2));
+}
+.signin-brand .brand-tagline {
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
 }
