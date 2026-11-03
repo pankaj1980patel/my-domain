@@ -33,6 +33,11 @@ class MainActivity : ComponentActivity() {
         val wanted = buildList {
             add(Manifest.permission.READ_PHONE_STATE)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) add(Manifest.permission.POST_NOTIFICATIONS)
+            // Bluetooth: reach a computer when there's no shared network.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
         }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (wanted.isNotEmpty()) runCatching { ActivityCompat.requestPermissions(this, wanted.toTypedArray(), 1001) }
 
@@ -46,6 +51,13 @@ class MainActivity : ComponentActivity() {
         devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
         if (savedInstanceState == null) takeShare(intent)
         setContent { MdTheme { App(prefs) } }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        // The service started before the answer; start Bluetooth now that
+        // it's allowed (does nothing if it's already running or still denied).
+        if (requestCode == 1001) BleLink.start(applicationContext)
     }
 
     /** Files, text or a link shared from another app (share sheet): the UI
