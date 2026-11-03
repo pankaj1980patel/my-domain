@@ -12,6 +12,11 @@
     <!-- Find my phone: keep the CPU up while the ring plays (MediaPlayer wake mode),
          and vibrate with the ring notification. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- my-domain over Bluetooth LE (BleLink): advertise and accept computers. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- Best-effort IMEI as a stable device id (granted apps only; falls back to ANDROID_ID). -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />

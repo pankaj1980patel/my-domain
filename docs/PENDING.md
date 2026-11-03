@@ -82,7 +82,11 @@ or with less battery.
     **done**. Still to do:
     - Relays in more than one region.
     - A QUIC-based relay.
-11. **Bluetooth LE.**
+11. **Bluetooth LE**: **first step done** (2026-11-03), see DONE.md.
+    Still to do: the Android app asking for the Bluetooth permissions (UI;
+    tested with `pm grant`), the desktop app starting `md-ble` (mdctl has
+    `--ble`), the Linux laptop (its Bluetooth is blocked), and a phone
+    connecting to a phone.
     - Find nearby devices and send small commands (ring, media keys, wake,
       "connect to my hotspot") when there is no shared Wi-Fi or no internet
       at all.

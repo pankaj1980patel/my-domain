@@ -131,6 +131,23 @@ Every message rides a live link. The old one-off paths (a TCP connection or
 a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
 ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
+## Bluetooth LE: messages with no network at all (2026-11-03)
+
+- The core takes links the platform carries (`engine/ble.rs`:
+  `Engine::ble_opened`, `ble_frame`, `ble_closed`): same `Hello`/`Msg`
+  frames, so messages stay end-to-end encrypted and every feature works
+  over it. Like the relay it is a fallback (`TransportKind::Ble`, never
+  direct); any direct link replaces it. Tests: `crates/mdcore/tests/ble.rs`.
+- Phone (`BleLink.kt`): advertises the my-domain GATT service and carries
+  frames for computers that connect (writes in, notifications out, frames
+  split into packets with a one-byte "last" flag; long writes handled).
+- Computer (`crates/md-ble`, btleplug): scans for the service, connects to
+  phones it has no direct link to, drops the connection once it has one.
+  `mdctl --ble` turns it on.
+- Verified 2026-11-03 with the phone's Wi-Fi and mobile data off: mdctl on
+  the Mac found it over Bluetooth, sent a message, and got the delivery
+  receipt back the same way.
+
 ## Device keys, first step (2026-11-03)
 
 - Each install makes an Ed25519 key once (`device_key.rs`), kept in the OS

@@ -7,6 +7,7 @@ description = "my-domain without a UI: a scriptable device for Linux boxes and t
 
 [dependencies]
 mdcore = { workspace = true }
+md-ble = { workspace = true }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 if-addrs = "0.13"

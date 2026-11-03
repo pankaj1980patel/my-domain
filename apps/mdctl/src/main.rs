@@ -14,7 +14,8 @@
 //! For simulated networks (scripts/lab/nat-sim.sh): `--stun a:3478,b:3478`
 //! replaces the public STUN servers, `--relay URL` sets the relay WebSocket,
 //! `--signal-channel` keeps it open so signals arrive without FCM, and
-//! `--no-lan` turns off mDNS and router port mapping.
+//! `--no-lan` turns off mDNS and router port mapping. `--ble` also looks
+//! for phones over Bluetooth LE (`md-ble`).
 //!
 //! `--server/--user/--pass/--key` default to `MD_DEV_SERVER`, `MD_DEV_USER`,
 //! `MD_DEV_PASS`, `MD_DEV_KEY` (scripts/lab/test-creds.env).
@@ -271,6 +272,7 @@ struct Args {
     relay: Option<String>,
     signal_channel: bool,
     no_lan: bool,
+    ble: bool,
 }
 
 impl Args {
@@ -318,10 +320,11 @@ fn parse_args() -> Result<Args, String> {
             "--relay" => a.relay = Some(val()?),
             "--signal-channel" => a.signal_channel = true,
             "--no-lan" => a.no_lan = true,
+            "--ble" => a.ble = true,
             "-h" | "--help" => {
                 return Err("usage: mdctl [--name N] [--data DIR] [--script FILE] \
                     [--server URL --user U --pass P | --offline USER] --key KEY \
-                    [--stun LIST] [--relay URL] [--signal-channel] [--no-lan]"
+                    [--stun LIST] [--relay URL] [--signal-channel] [--no-lan] [--ble]"
                     .into())
             }
             other => return Err(format!("unknown argument {other}")),
@@ -518,6 +521,9 @@ fn main() {
         }
     }
     let engine = Arc::new(engine);
+    if args.ble {
+        md_ble::central::start(engine.clone());
+    }
     // `echo on`: answer from here, off the core's event thread.
     {
         let engine = engine.clone();

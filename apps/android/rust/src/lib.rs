@@ -159,6 +159,22 @@ pub trait SecretStore: Send + Sync {
     fn set(&self, key: String, value: Option<String>);
 }
 
+/// Sends one whole frame over a Bluetooth connection (Kotlin: `BleLink`,
+/// which splits it into packets). Called on core threads.
+#[uniffi::export(callback_interface)]
+pub trait BleOut: Send + Sync {
+    fn send(&self, frame: Vec<u8>);
+}
+
+/// Adapts the Kotlin sender to the core's `BleSender`.
+struct BleOutSender(Box<dyn BleOut>);
+
+impl mdcore::engine::BleSender for BleOutSender {
+    fn send(&self, frame: Vec<u8>) {
+        self.0.send(frame);
+    }
+}
+
 /// This device as the core sees it.
 #[derive(uniffi::Record)]
 pub struct DeviceIdentity {
@@ -386,6 +402,24 @@ impl MdEngine {
     /// has a key but no server session, so it isn't "ready".)
     pub fn is_ready(&self) -> bool {
         self.inner.is_ready()
+    }
+
+    // --- Bluetooth LE (the GATT server lives in Kotlin: BleLink) ---
+
+    /// A computer connected over Bluetooth: returns the link id for
+    /// `ble_frame` / `ble_closed`. Our `Hello` goes out through `out` at once.
+    pub fn ble_opened(&self, out: Box<dyn BleOut>) -> u64 {
+        self.inner.ble_opened(Arc::new(BleOutSender(out)))
+    }
+
+    /// A whole frame arrived over Bluetooth link `id`.
+    pub fn ble_frame(&self, id: u64, frame: Vec<u8>) {
+        self.inner.ble_frame(id, &frame);
+    }
+
+    /// Bluetooth link `id` ended.
+    pub fn ble_closed(&self, id: u64) {
+        self.inner.ble_closed(id);
     }
 
     // --- devices and links ---

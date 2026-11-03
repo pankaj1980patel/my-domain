@@ -92,6 +92,7 @@ class NetService : Service() {
         Controls.init(this)
         watchBattery()
         startNetworking()
+        BleLink.start(this)
     }
 
     /**
@@ -366,6 +367,7 @@ class NetService : Service() {
         multicastLock?.let { if (it.isHeld) it.release() }
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
+        BleLink.stop()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
