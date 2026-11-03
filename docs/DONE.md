@@ -131,6 +131,77 @@ Every message rides a live link. The old one-off paths (a TCP connection or
 a UDP datagram per message, direct and signaled WebSocket links, the LAN UDP
 ping) were removed on 2026-11-02, about 800 lines; QUIC covers each case.
 
+## Gallery, photo backup, battery alerts, keep awake (2026-11-03)
+
+Core and both apps' backends are built and tested; the desktop has commands
+but no screens for these yet, and nothing here has been tried on the phone.
+
+- **Gallery** (`features/gallery.rs`): a computer asks a phone for its
+  photos and videos, newest first, a page at a time
+  (`Engine::list_gallery(node, offset, limit, thumbs)` → request id). On
+  the phone the core asks the host (`GalleryRequest` event); the host
+  answers with `gallery_reply` (items with their path and a small JPEG).
+  The asker gets `GalleryListing` (id, name, type, size, date taken, size
+  in pixels, video length; no paths) and then a `GalleryThumb` per item
+  (base64 JPEG, sent one per message over the live link).
+  `download_gallery_item(node, id, name)` fetches one with the normal
+  resumable download; the phone only sends items it listed (it keeps id →
+  path for the last 5000), so an id it never showed is refused ("list it
+  again"). A device with no gallery (a computer) answers "no photo gallery";
+  a phone without photo access answers so.
+  - Android (`Gallery.kt`): MediaStore (images and videos, by date added),
+    160 px thumbnails (`loadThumbnail` on Android 10+), at most 48 KB.
+    `requestLegacyExternalStorage` added so Android 10 can read the files
+    by path too.
+  - Desktop commands `list_gallery`, `download_gallery_item`; events
+    `gallery-listing`, `gallery-thumb`. `mdctl`: `gallery <node> [offset]
+    [limit]`, `gallery-get <node> <id> [name]`.
+- **Photo backup** (`features/backup.rs`): the phone sends new photos and
+  videos to one chosen computer by itself. The core owns the queue and the
+  decisions; the host reports new media (`backup_enqueue`) and conditions
+  (`backup_conditions(unmetered, charging)`).
+  - Only on unmetered Wi-Fi, optionally only while charging; when that
+    ends mid-file the transfer is dropped quietly (`files::forget`) and the
+    computer keeps its partial file; the same transfer id (from computer,
+    item, try) resumes it later, also after a restart.
+  - Everything sent is remembered in the key-value store (in chunks of 500
+    keys), so nothing goes twice; and the computer answers "done" at once
+    for a file it already has (same name, size and SHA-256), so even a
+    reinstalled phone doesn't send it again.
+  - Saved on the computer in `<downloads>/Phone backup/<phone name>/YYYY-MM`
+    (the phone's local month). The file offer carries a `backup` field;
+    the desktop shows no notice per backed-up file.
+  - `backup_configure(enabled, target, charging_only)`, `backup_state()`
+    (also as `BackupState` events: queued, sent, what it waits for, the
+    current file and its progress, the last error).
+  - Android (`PhotoBackup.kt`): a ContentObserver on photos and videos plus
+    a network callback inside the running NetService (no WorkManager),
+    scanning everything added since the backup was turned on. **UI hook**:
+    a "Photos" tile in Settings with "Allow photo access", the backup switch,
+    the computer to back up to, "Only while charging", a status line, and
+    the battery-alerts switch (otherwise these couldn't be turned on).
+- **Battery alerts** (`features/battery.rs`): worked out from the status
+  each device already pushes (`set_device_status`), so phones and laptops
+  both send them. Once per crossing: "low" at or below the level (default
+  15%) while not charging, re-armed on charging or 5 points up; "full" when
+  charging reaches 100%, re-armed at 97%. Which ones went out survives a
+  restart. Sent to every device the reliable way; arrives as
+  `BatteryAlert` (desktop and phone show a notification).
+  `set_battery_alerts({enabled, low})`; desktop commands `battery_alerts`,
+  `set_battery_alerts`; `mdctl battery-alerts on|off [low]`.
+- **Keep awake**: `Engine::keep_awake(node, minutes)` (0 stops) sends the
+  `keep_awake` action. The desktop runs `caffeinate -d -i -t` (macOS) or
+  `systemd-inhibit --what=idle:sleep ... sleep` (Linux), one at a time, and
+  lists `keep_awake` (and `awake_until`) in its status only where the tool
+  exists. The phone keeps its screen on with a timed wake lock. Desktop
+  command `keep_awake`; `mdctl awake <node> <minutes>`.
+- Tests: `tests/gallery.rs` (3), `tests/backup.rs` (4: only on Wi-Fi and
+  never twice across a restart, charging only and off, cut off Wi-Fi
+  mid-video resumes past where it stopped, a file the computer has isn't
+  sent), `tests/battery_alerts.rs` (3, with keep awake), unit tests for
+  the crossings, months, ids and paths, desktop `keep_awake_runs_the_os_tool_for_the_time_asked`.
+  Android compiled only.
+
 ## Bluetooth LE: messages with no network at all (2026-11-03)
 
 - The core takes links the platform carries (`engine/ble.rs`:

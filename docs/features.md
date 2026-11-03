@@ -186,7 +186,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
 | Flashlight | On/off | `device.settings` | A | S | ✅ |
 | Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop only: macOS display sleep, Linux logind / screen locker) |
-| Wake / keep awake | | `device.settings` | A D | S | ⬜ |
+| Wake / keep awake | Keep a device from sleeping for N minutes | `device.settings` | A D | S | 🟡 (2026-11-03: action `keep_awake`; macOS `caffeinate`, Linux `systemd-inhibit`, phone screen wake lock; no buttons yet) |
+| Battery alerts | Tell the other devices once when the battery drops below a level (default 15%) or finishes charging | `device.battery` | A D | — | ✅ (2026-11-03; on/off switch on the phone, desktop command only) |
 | Sleep / restart / shutdown | | `device.power` | A D | R on Android / S on desktop | ⬜ |
 | Desktop volume / mute | | `media.control` | D | — | ✅ (macOS, Linux) |
 
@@ -207,8 +208,8 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | 🟡 (files, resumable; no folders) |
 | Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (folders each device shares; no screens yet) |
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
-| Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | ⬜ |
-| Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ⬜ |
+| Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-03: newest first, paged, 160 px thumbnails, download; desktop commands only, no grid screen yet) |
+| Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ✅ (2026-11-03: unmetered Wi-Fi, optionally only while charging, resumable, never twice; switch in the phone's Settings) |
 | Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | ⬜ |
 
 ### 3.12 Automation
