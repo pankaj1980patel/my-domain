@@ -48,6 +48,11 @@ fn push_status(app: &AppHandle) {
     if screen::can_lock() {
         actions.push("lock");
     }
+    match slides::ready() {
+        Ok(()) => actions.push("slides"),
+        // Tell the phone why there's no slide remote, so it can say so.
+        Err(why) => status["slides_needs"] = why.into(),
+    }
     if !actions.is_empty() {
         status["actions"] = actions.into();
     }
@@ -102,7 +107,8 @@ fn parse_now_playing(line: &str, app: &str) -> Option<serde_json::Value> {
 }
 
 /// A sibling asked this computer to run an action (`volume {step}`,
-/// `mute {on}`, `media {key}` or `lock`); then the status is pushed again
+/// `mute {on}`, `media {key}`, `lock` or `slides {key}`: next, previous,
+/// black); then the status is pushed again
 /// so it shows the new level.
 pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
     match name {
@@ -114,6 +120,11 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
         "mute" => sound::mute(args["on"].as_bool()),
         "media" => sound::media(args["key"].as_str().unwrap_or_default()),
         "lock" => screen::lock(),
+        "slides" => {
+            if let Err(why) = slides::press(args["key"].as_str().unwrap_or_default()) {
+                crate::notify::post(app, "my-domain can't change slides", why);
+            }
+        }
         _ => return,
     }
     push_status(app);
@@ -298,6 +309,158 @@ mod sound {
 
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     pub fn mute(_on: Option<bool>) {}
+}
+
+/// Presentation remote: the keys a slide clicker sends, typed into whatever
+/// window is in front (PowerPoint, Keynote, Impress, Google Slides, a PDF
+/// viewer). `next` / `previous` are Page Down / Page Up, `black` is B.
+mod slides {
+    /// Whether keys can be sent here; else what's missing, for the user.
+    #[cfg(target_os = "linux")]
+    pub fn ready() -> Result<(), &'static str> {
+        let wayland = std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "wayland");
+        // Wayland: wtype; X11 (or an X app under Wayland): xdotool.
+        let wtype = wayland && has("wtype", &["-h"]);
+        let xdotool = std::env::var_os("DISPLAY").is_some() && has("xdotool", &["version"]);
+        if wtype || xdotool {
+            Ok(())
+        } else if wayland {
+            Err("wtype")
+        } else {
+            Err("xdotool")
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn has(cmd: &str, args: &[&str]) -> bool {
+        std::process::Command::new(cmd).args(args).output().is_ok()
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn press(key: &str) -> Result<(), &'static str> {
+        let (x, w) = match key {
+            "next" => ("Next", "Next"),
+            "previous" => ("Prior", "Prior"),
+            "black" => ("b", "b"),
+            _ => return Ok(()),
+        };
+        ready().map_err(|_| {
+            "Install xdotool (X11) or wtype (Wayland) to change slides from your phone."
+        })?;
+        let wayland = std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "wayland");
+        let ok = if wayland && has("wtype", &["-h"]) {
+            run("wtype", &["-k", w])
+        } else {
+            run("xdotool", &["key", x])
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err("The key couldn't be sent.")
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn run(cmd: &str, args: &[&str]) -> bool {
+        std::process::Command::new(cmd)
+            .args(args)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    /// Key events through CoreGraphics. macOS only delivers them once the
+    /// user has allowed my-domain under Privacy & Security > Accessibility;
+    /// until then this says so instead of offering the remote.
+    #[cfg(target_os = "macos")]
+    #[allow(unsafe_code)]
+    mod mac {
+        use std::ffi::c_void;
+
+        #[link(name = "ApplicationServices", kind = "framework")]
+        extern "C" {
+            fn AXIsProcessTrusted() -> bool;
+        }
+
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGEventCreateKeyboardEvent(
+                source: *const c_void,
+                keycode: u16,
+                key_down: bool,
+            ) -> *mut c_void;
+            fn CGEventPost(tap: u32, event: *mut c_void);
+        }
+
+        #[link(name = "CoreFoundation", kind = "framework")]
+        extern "C" {
+            fn CFRelease(cf: *const c_void);
+        }
+
+        /// `kCGHIDEventTap`: as if typed on the keyboard.
+        const HID_EVENT_TAP: u32 = 0;
+
+        pub fn trusted() -> bool {
+            // SAFETY: no arguments; only reads this process's permission.
+            unsafe { AXIsProcessTrusted() }
+        }
+
+        /// Press and release virtual key `code`.
+        pub fn tap(code: u16) -> bool {
+            for down in [true, false] {
+                // SAFETY: a null source is allowed (the default source);
+                // the event is checked for null, posted, then released
+                // exactly once (it was created here, so we own it).
+                unsafe {
+                    let ev = CGEventCreateKeyboardEvent(std::ptr::null(), code, down);
+                    if ev.is_null() {
+                        return false;
+                    }
+                    CGEventPost(HID_EVENT_TAP, ev);
+                    CFRelease(ev);
+                }
+            }
+            true
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn ready() -> Result<(), &'static str> {
+        if mac::trusted() {
+            Ok(())
+        } else {
+            Err("accessibility")
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn press(key: &str) -> Result<(), &'static str> {
+        // Virtual key codes: Page Down 121, Page Up 116, B 11.
+        let code = match key {
+            "next" => 121,
+            "previous" => 116,
+            "black" => 11,
+            _ => return Ok(()),
+        };
+        let needs = "Allow my-domain under System Settings > Privacy & Security > Accessibility to change slides from your phone.";
+        if !mac::trusted() {
+            return Err(needs);
+        }
+        if mac::tap(code) {
+            Ok(())
+        } else {
+            Err(needs)
+        }
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn ready() -> Result<(), &'static str> {
+        Err("unsupported")
+    }
+
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    pub fn press(_key: &str) -> Result<(), &'static str> {
+        Err("Changing slides isn't supported on this computer yet.")
+    }
 }
 
 /// Locking the screen ("I walked away and left it open").

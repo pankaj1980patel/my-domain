@@ -113,6 +113,32 @@ fn an_action_reaches_the_device_with_its_arguments() {
 }
 
 #[test]
+fn a_slide_key_reaches_the_computer() {
+    let (a, b) = pair("slides");
+    for key in ["next", "previous", "black"] {
+        a.engine
+            .run_action(&b.node_id(), "slides", &format!(r#"{{"key":"{key}"}}"#))
+            .unwrap();
+    }
+    let mut keys = Vec::new();
+    while keys.len() < 3 {
+        let k = b
+            .sink
+            .wait_until(WAIT, |e| match e {
+                CoreEvent::Action { name, args, .. } if name == "slides" => {
+                    let k = args["key"].as_str().unwrap_or_default().to_string();
+                    (!keys.contains(&k)).then_some(k)
+                }
+                _ => None,
+            })
+            .expect("not every key arrived");
+        keys.push(k);
+    }
+    keys.sort();
+    assert_eq!(keys, ["black", "next", "previous"]);
+}
+
+#[test]
 fn a_shared_code_lands_on_the_other_clipboard() {
     let (a, b) = pair("code");
     assert!(a.engine.share_code("hello", None).is_err());

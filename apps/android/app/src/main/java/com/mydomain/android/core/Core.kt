@@ -68,6 +68,9 @@ data class DeviceStatus(
     val wifiOn: Boolean? = null, val wifiConnected: Boolean? = null, val ssid: String? = null, val wifiSignal: Int? = null,
     val bluetooth: Boolean? = null,
     val ramFree: Long? = null, val ramTotal: Long? = null,
+    /** Why a computer has no slide remote: "accessibility" (macOS
+     *  permission), "xdotool" or "wtype" (tool to install). */
+    val slidesNeeds: String? = null,
     val storageFree: Long? = null, val storageTotal: Long? = null,
 )
 
@@ -356,6 +359,7 @@ object Core {
                     ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },
                     wifiSignal = st.optJSONObject("wifi")?.let { if (it.has("signal")) it.optInt("signal") else null },
                     bluetooth = if (st.has("bluetooth")) st.optBoolean("bluetooth") else null,
+                    slidesNeeds = st.optString("slides_needs").ifEmpty { null },
                     ramFree = st.optJSONObject("ram")?.optLong("free"),
                     ramTotal = st.optJSONObject("ram")?.optLong("total"),
                     storageFree = st.optJSONObject("storage")?.optLong("free"),
@@ -534,6 +538,12 @@ object Core {
         runCatching { requestStatus(node) }
         return via
     }
+
+    /** Presentation remote: [key] "next", "previous" or "black" on a
+     *  computer that lists `slides` in its actions. Not followed by a status
+     *  request (nothing to show changes). */
+    suspend fun slide(node: String, key: String): String =
+        call { it.runAction(node, "slides", JSONObject().put("key", key).toString()) }
 
     /** Open a web link on a device. */
     suspend fun openUrl(node: String, url: String): String = call { it.openUrl(node, url) }
