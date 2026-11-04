@@ -28,6 +28,9 @@
 //! - Frames go only over a live link, never queued: a stale picture of the
 //!   screen is worth nothing. One that's too big (`MAX_FRAME_BYTES`) isn't
 //!   sent.
+//! - To a device whose QUIC link reads binary media frames, a frame goes as
+//!   one (the JPEG's bytes, not base64 twice over; `transport::media`); it
+//!   arrives as the same `CoreEvent::ScreenFrame`.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -41,6 +44,7 @@ use crate::engine::NetCtx;
 use crate::error::CoreError;
 use crate::events::CoreEvent;
 use crate::platform::Platform;
+use crate::transport::media::{self, Sent};
 
 use super::{ControlHandler, ControlMsg};
 
@@ -162,14 +166,50 @@ pub fn send_frame_to<P: Platform>(
     if to.is_empty() {
         return Ok(0);
     }
-    let me = ctx.identity.lock().node_id.clone();
     let seq = ctx.extras.screen.seq.fetch_add(1, Ordering::Relaxed);
-    let msg = json!({
-        "type": "screen_frame", "from": me, "seq": seq,
-        "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
-    })
-    .to_string();
-    Ok(to.iter().filter(|n| send(ctx, n, &msg).is_ok()).count())
+    let header = media::Header {
+        session: ctx.quic.media_session,
+        seq,
+        ts_ms: media::now_ms(),
+        format: media::Format::Jpeg {
+            width: 0,
+            height: 0,
+            quality: 0,
+        },
+    };
+    // The JSON message, made only if a peer needs it.
+    let mut msg: Option<String> = None;
+    Ok(to
+        .iter()
+        .filter(|n| match media::send(ctx, n, &header, jpeg) {
+            Sent::Yes => true,
+            Sent::Dropped => false,
+            Sent::NotBinary => {
+                let msg = msg.get_or_insert_with(|| {
+                    let me = ctx.identity.lock().node_id.clone();
+                    json!({
+                        "type": "screen_frame", "from": me, "seq": seq,
+                        "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
+                    })
+                    .to_string()
+                });
+                send(ctx, n, msg).is_ok()
+            }
+        })
+        .count())
+}
+
+/// A snapshot that came as a binary frame (`transport::media`) from `from`,
+/// the link's peer: checked as the JSON one, the same event.
+pub(crate) fn deliver<P: Platform>(ctx: &NetCtx<P>, from: &str, seq: u64, jpeg: &[u8]) {
+    if jpeg.is_empty() || jpeg.len() > MAX_FRAME_BYTES || !ctx.peers.lock().contains_key(from) {
+        return;
+    }
+    ctx.sink.emit(CoreEvent::ScreenFrame {
+        from: from.to_string(),
+        seq,
+        jpeg: base64::engine::general_purpose::STANDARD.encode(jpeg),
+    });
 }
 
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &str) -> crate::Result<()> {

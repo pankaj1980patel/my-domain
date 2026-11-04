@@ -336,6 +336,7 @@ pub fn send_hello<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
             node_id: id.node_id.clone(),
             name: id.name.clone(),
             boot: String::new(),
+            bin_media: 0,
         })
         .unwrap_or_default()
     };

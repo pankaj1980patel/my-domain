@@ -5,6 +5,7 @@
 //! or a single UDP datagram per message, and direct WebSocket links) are
 //! gone: QUIC covers each of those cases, encrypted and reliable.
 
+pub mod media;
 pub mod outbox;
 pub mod punch;
 pub mod quality;

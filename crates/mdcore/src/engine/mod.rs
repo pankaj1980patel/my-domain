@@ -555,6 +555,20 @@ impl<P: Platform> Engine<P> {
             .collect()
     }
 
+    /// UDP bytes sent so far on the QUIC link to `node_id` (frames,
+    /// QUIC's own headers and acknowledgements); `None` without a QUIC link.
+    /// For measuring what a feature costs on the wire.
+    pub fn link_bytes_sent(&self, node_id: &str) -> Option<u64> {
+        self.ctx.quic.tx_stats(node_id).map(|(bytes, _)| bytes)
+    }
+
+    /// DATAGRAM frames sent so far on the QUIC link to `node_id` (binary
+    /// audio frames that fit one; `transport::media`). For tests.
+    #[doc(hidden)]
+    pub fn link_datagrams_sent(&self, node_id: &str) -> Option<u64> {
+        self.ctx.quic.tx_stats(node_id).map(|(_, d)| d)
+    }
+
     pub fn connected_peers(&self) -> Vec<String> {
         self.ctx.p2p_conns.lock().keys().cloned().collect()
     }

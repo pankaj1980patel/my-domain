@@ -54,6 +54,10 @@
 //!   follows a change.
 //! - Only your own devices (decrypted with your key, in this device's
 //!   list).
+//! - To a device whose QUIC link reads binary media frames, a frame goes as
+//!   one (the PCM itself, as a DATAGRAM when it fits; `transport::media`),
+//!   not as base64 twice over: about 1.5 Mbit/s for 48 kHz stereo instead
+//!   of 2.8. It arrives as the same `CoreEvent::AudioFrame`.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -67,6 +71,7 @@ use crate::engine::NetCtx;
 use crate::error::CoreError;
 use crate::events::CoreEvent;
 use crate::platform::Platform;
+use crate::transport::media::{self, Sent};
 use crate::transport::TransportKind;
 
 use super::{ControlHandler, ControlMsg};
@@ -307,14 +312,61 @@ pub fn send_frame_to<P: Platform>(
     if to.is_empty() {
         return Ok(0);
     }
-    let me = ctx.identity.lock().node_id.clone();
     let seq = ctx.extras.audio.seq.fetch_add(1, Ordering::Relaxed);
-    let msg = json!({
-        "type": "audio_frame", "from": me, "seq": seq, "rate": rate, "ch": channels,
-        "data": base64::engine::general_purpose::STANDARD.encode(pcm),
-    })
-    .to_string();
-    Ok(to.iter().filter(|n| send(ctx, n, &msg).is_ok()).count())
+    let header = media::Header {
+        session: ctx.quic.media_session,
+        seq,
+        ts_ms: media::now_ms(),
+        format: media::Format::Pcm { rate, channels },
+    };
+    // The JSON message, made only if a peer needs it.
+    let mut msg: Option<String> = None;
+    Ok(to
+        .iter()
+        .filter(|n| match media::send(ctx, n, &header, pcm) {
+            Sent::Yes => true,
+            Sent::Dropped => false,
+            Sent::NotBinary => {
+                let msg = msg.get_or_insert_with(|| {
+                    let me = ctx.identity.lock().node_id.clone();
+                    json!({
+                        "type": "audio_frame", "from": me, "seq": seq, "rate": rate, "ch": channels,
+                        "data": base64::engine::general_purpose::STANDARD.encode(pcm),
+                    })
+                    .to_string()
+                });
+                send(ctx, n, msg).is_ok()
+            }
+        })
+        .count())
+}
+
+/// Audio that came as a binary frame (`transport::media`) from `from`, the
+/// link's peer: checked as the JSON one, the same event.
+pub(crate) fn deliver<P: Platform>(
+    ctx: &NetCtx<P>,
+    from: &str,
+    seq: u64,
+    rate: u32,
+    channels: u8,
+    pcm: &[u8],
+) {
+    if pcm.is_empty()
+        || pcm.len() > MAX_FRAME_BYTES
+        || !RATES.contains(&rate)
+        || !(1..=2).contains(&channels)
+        || !ctx.peers.lock().contains_key(from)
+        || !ctx.extras.audio.listening.lock().contains(from)
+    {
+        return;
+    }
+    ctx.sink.emit(CoreEvent::AudioFrame {
+        from: from.to_string(),
+        seq,
+        rate,
+        channels,
+        pcm: base64::engine::general_purpose::STANDARD.encode(pcm),
+    });
 }
 
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &str) -> crate::Result<()> {

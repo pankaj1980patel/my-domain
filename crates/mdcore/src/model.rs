@@ -162,6 +162,10 @@ pub struct IncomingMessage {
     pub id: Option<String>,
 }
 
+fn is_zero(v: &u8) -> bool {
+    *v == 0
+}
+
 /// WebSocket frames (legacy protocol v1; v2 framing lives in `wire::frame`).
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -174,6 +178,11 @@ pub enum WsFrame {
         /// a new one knows we restarted and drops our old connection.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         boot: String,
+        /// The binary media frame version this end reads (QUIC only; see
+        /// `transport::media`), 0 for none. Older apps leave it out (and
+        /// ignore it), so they keep getting media as JSON messages.
+        #[serde(default, skip_serializing_if = "is_zero")]
+        bin_media: u8,
     },
     #[serde(rename = "msg")]
     Msg { nonce: String, ciphertext: String },
@@ -248,6 +257,31 @@ mod tests {
             no_quic.quic_targets().is_empty(),
             "no QUIC port, nothing to dial"
         );
+    }
+
+    #[test]
+    fn hello_says_bin_media_only_when_set_and_old_hellos_still_parse() {
+        let hello = |bin_media| WsFrame::Hello {
+            node_id: "n".into(),
+            name: "x".into(),
+            boot: String::new(),
+            bin_media,
+        };
+        let old = serde_json::to_string(&hello(0)).unwrap();
+        assert!(!old.contains("bin_media"), "{old}");
+        let new = serde_json::to_string(&hello(1)).unwrap();
+        assert!(new.contains("\"bin_media\":1"), "{new}");
+        // An older app's hello (no flag): it reads none.
+        let parsed: WsFrame =
+            serde_json::from_str(r#"{"type":"hello","node_id":"n","name":"x"}"#).unwrap();
+        assert!(matches!(parsed, WsFrame::Hello { bin_media: 0, .. }));
+        // A hello with fields this build doesn't know still parses, as ours
+        // does for an older app.
+        let parsed: WsFrame = serde_json::from_str(
+            r#"{"type":"hello","node_id":"n","name":"x","bin_media":2,"later":true}"#,
+        )
+        .unwrap();
+        assert!(matches!(parsed, WsFrame::Hello { bin_media: 2, .. }));
     }
 }
 

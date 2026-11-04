@@ -15,6 +15,10 @@
 //! same `Hello` / `Msg` frames the WebSocket link uses. Messages inside `Msg`
 //! are still end-to-end encrypted envelopes.
 //!
+//! Screen and audio frames can also go as binary records beside that stream
+//! (DATAGRAMs and unidirectional streams; see `transport::media`), to a peer
+//! whose `Hello` says it reads them.
+//!
 //! Who the peer is: both ends present a certificate made from their device
 //! key (`device_key`), and the key must be the one that device used before
 //! (trust on first use). A device from before device keys still connects
@@ -42,6 +46,7 @@ use crate::engine::NetCtx;
 use crate::model::{Envelope, WsFrame};
 use crate::platform::Platform;
 
+use super::media::{self, MediaKind, Sent};
 use super::{drop_live, handle_incoming, mark_live, TransportKind};
 
 /// ALPN protocol id: both ends must agree, or the TLS handshake fails. Bump
@@ -80,6 +85,26 @@ struct PeerConn {
     dialed: bool,
     /// The boot id in the peer's `Hello`.
     boot: String,
+    /// Its outgoing media lanes, when the peer's `Hello` said it reads
+    /// binary media frames (and this end sends them).
+    media: Option<Arc<MediaLanes>>,
+}
+
+/// A peer's outgoing unidirectional media streams, one per kind, each
+/// opened on first use and fed by a bounded queue.
+#[derive(Default)]
+struct MediaLanes {
+    /// Audio, screen.
+    lanes: Mutex<[Option<tokio::sync::mpsc::Sender<Vec<u8>>>; 2]>,
+}
+
+/// Frames a media lane holds before it drops new ones: a second of 20 ms
+/// audio, a few snapshots.
+fn lane_depth(kind: MediaKind) -> usize {
+    match kind {
+        MediaKind::Audio => 50,
+        MediaKind::Screen => 8,
+    }
 }
 
 /// Each peer's registered connection, by node id.
@@ -97,6 +122,8 @@ pub struct QuicLink {
     conns: PeerConns,
     /// New for every start; sent in our `Hello` (see `WsFrame::Hello`).
     pub(crate) boot: String,
+    /// New for every start: `media::Header::session`.
+    pub(crate) media_session: u32,
 }
 
 /// One UDP socket for both IP versions: IPv6 with IPv4-mapped addresses
@@ -203,6 +230,7 @@ impl QuicNode {
                 port,
                 conns: Arc::default(),
                 boot: uuid::Uuid::new_v4().to_string(),
+                media_session: uuid::Uuid::new_v4().as_u128() as u32,
             },
             _runtime: runtime,
         })
@@ -230,6 +258,90 @@ impl QuicLink {
     /// after a send means the link is dead. `None` without a QUIC link.
     pub fn rx_datagrams(&self, peer: &str) -> Option<u64> {
         Some(self.conns.lock().get(peer)?.conn.stats().udp_rx.datagrams)
+    }
+
+    /// What went out on the QUIC link to `peer` so far: (UDP bytes, all of
+    /// it: our frames, QUIC's headers, acknowledgements; DATAGRAM frames).
+    /// `None` without a QUIC link.
+    pub fn tx_stats(&self, peer: &str) -> Option<(u64, u64)> {
+        let s = self.conns.lock().get(peer)?.conn.stats();
+        Some((s.udp_tx.bytes, s.frame_tx.datagram))
+    }
+
+    /// Whether `peer`'s QUIC connection `route` (its live link's id) takes
+    /// binary media frames.
+    pub(crate) fn reads_media(&self, peer: &str, route: u64) -> bool {
+        self.conns
+            .lock()
+            .get(peer)
+            .is_some_and(|pc| pc.id == route && pc.media.is_some())
+    }
+
+    /// Send a media record to `peer` over its QUIC connection `route`:
+    /// audio as a DATAGRAM when it fits one, otherwise on the kind's
+    /// stream.
+    pub(crate) fn send_media(
+        &self,
+        peer: &str,
+        route: u64,
+        kind: MediaKind,
+        record: Vec<u8>,
+    ) -> Sent {
+        let (conn, lanes) = {
+            let g = self.conns.lock();
+            match g.get(peer) {
+                Some(PeerConn {
+                    id,
+                    conn,
+                    media: Some(lanes),
+                    ..
+                }) if *id == route => (conn.clone(), lanes.clone()),
+                _ => return Sent::NotBinary,
+            }
+        };
+        if kind == MediaKind::Audio
+            && conn
+                .max_datagram_size()
+                .is_some_and(|max| record.len() <= max)
+        {
+            return match conn.send_datagram(record.into()) {
+                Ok(()) => Sent::Yes,
+                Err(_) => Sent::NotBinary,
+            };
+        }
+        let i = kind as usize - 1;
+        let mut l = lanes.lanes.lock();
+        let tx = l[i].get_or_insert_with(|| self.open_lane(conn, kind));
+        match tx.try_send(record) {
+            Ok(()) => Sent::Yes,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => Sent::Dropped,
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
+                // The stream failed (the connection is going): the JSON
+                // path over the same link decides.
+                l[i] = None;
+                Sent::NotBinary
+            }
+        }
+    }
+
+    /// Open a media stream on `conn` and feed it from the returned queue.
+    fn open_lane(&self, conn: Connection, kind: MediaKind) -> tokio::sync::mpsc::Sender<Vec<u8>> {
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(lane_depth(kind));
+        self.rt.spawn(async move {
+            let Ok(mut s) = conn.open_uni().await else {
+                return;
+            };
+            if s.write_all(media::STREAM_MAGIC).await.is_err() {
+                return;
+            }
+            while let Some(record) = rx.recv().await {
+                if write_frame(&mut s, &record).await.is_err() {
+                    return;
+                }
+            }
+            let _ = s.finish();
+        });
+        tx
     }
 
     /// Measured path stats of the QUIC link to `peer`: (RTT, lost packets,
@@ -417,19 +529,30 @@ async fn run_connection<P: Platform>(
             node_id: id.node_id.clone(),
             name: id.name.clone(),
             boot: ctx.quic.boot.clone(),
+            bin_media: if ctx.config.bin_media {
+                media::VERSION
+            } else {
+                0
+            },
         })
         .unwrap_or_default()
     };
     if write_frame(&mut send, &hello).await.is_err() {
         return;
     }
-    let (peer_id, boot) = match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await {
-        Ok(Ok(bytes)) => match serde_json::from_slice::<WsFrame>(&bytes) {
-            Ok(WsFrame::Hello { node_id, boot, .. }) => (node_id, boot),
+    let (peer_id, boot, bin_media) =
+        match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await {
+            Ok(Ok(bytes)) => match serde_json::from_slice::<WsFrame>(&bytes) {
+                Ok(WsFrame::Hello {
+                    node_id,
+                    boot,
+                    bin_media,
+                    ..
+                }) => (node_id, boot, bin_media),
+                _ => return,
+            },
             _ => return,
-        },
-        _ => return,
-    };
+        };
 
     // The handshake proved which key the peer holds: it must be the one this
     // node id used before (or a first meeting).
@@ -508,6 +631,7 @@ async fn run_connection<P: Platform>(
                 conn: conn.clone(),
                 dialed: dialer,
                 boot,
+                media: (ctx.config.bin_media && bin_media >= media::VERSION).then(Arc::default),
             },
         );
     }
@@ -531,6 +655,13 @@ async fn run_connection<P: Platform>(
         }
     });
 
+    // Binary media frames from the peer, if this end reads them (it said so
+    // in its `Hello`): DATAGRAMs, and the peer's media streams.
+    let media_reader = ctx
+        .config
+        .bin_media
+        .then(|| tokio::spawn(read_media(conn.clone(), ctx.clone(), peer_id.clone())));
+
     // Reader: every `Msg` frame goes through the normal incoming path.
     let ip = remote.ip().to_string();
     while let Ok(bytes) = read_frame(&mut recv).await {
@@ -546,6 +677,9 @@ async fn run_connection<P: Platform>(
 
     // Cleanup: only remove our own entry (a newer link may have replaced it).
     writer.abort();
+    if let Some(r) = media_reader {
+        r.abort();
+    }
     // The PEER closed this as the loser of a simultaneous dial (or as stale):
     // the winning connection is on its way. Give it a moment to take over
     // before reporting the peer disconnected, so the UI doesn't flap.
@@ -573,6 +707,35 @@ async fn run_connection<P: Platform>(
     };
     if ours {
         drop_live(&ctx, &peer_id);
+    }
+}
+
+/// Read `peer`'s binary media frames on `conn` until it closes.
+async fn read_media<P: Platform>(conn: Connection, ctx: NetCtx<P>, peer: String) {
+    let datagrams = {
+        let (conn, ctx, peer) = (conn.clone(), ctx.clone(), peer.clone());
+        async move {
+            while let Ok(d) = conn.read_datagram().await {
+                tokio::task::block_in_place(|| media::on_record(&ctx, &peer, &d));
+            }
+        }
+    };
+    let streams = async move {
+        while let Ok(s) = conn.accept_uni().await {
+            tokio::spawn(read_media_stream(s, ctx.clone(), peer.clone()));
+        }
+    };
+    tokio::join!(datagrams, streams);
+}
+
+/// One media stream: the magic, then length-prefixed records.
+async fn read_media_stream<P: Platform>(mut recv: RecvStream, ctx: NetCtx<P>, peer: String) {
+    let mut magic = [0u8; 4];
+    if recv.read_exact(&mut magic).await.is_err() || &magic != media::STREAM_MAGIC {
+        return;
+    }
+    while let Ok(record) = read_frame(&mut recv).await {
+        tokio::task::block_in_place(|| media::on_record(&ctx, &peer, &record));
     }
 }
 

@@ -53,6 +53,7 @@ impl<P: Platform> Engine<P> {
                 node_id: me.node_id.clone(),
                 name: me.name.clone(),
                 boot: String::new(),
+                bin_media: 0,
             })
             .unwrap_or_default()
         };

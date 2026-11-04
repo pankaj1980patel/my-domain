@@ -43,6 +43,44 @@ pub fn decrypt(key: &[u8; 32], env: &Envelope) -> Option<Vec<u8>> {
     cipher.decrypt(XNonce::from_slice(&nonce), ct.as_ref()).ok()
 }
 
+/// Seal `plaintext` as raw bytes: `[nonce 24][ciphertext + tag]`, with
+/// `aad` authenticated but not sent. The same key and cipher as
+/// [`encrypt`], without the base64 and JSON around it: for the binary
+/// media frames (`transport::media`), where every byte counts.
+pub fn seal(key: &[u8; 32], aad: &[u8], plaintext: &[u8]) -> Option<Vec<u8>> {
+    use chacha20poly1305::aead::Payload;
+    let cipher = XChaCha20Poly1305::new_from_slice(key).ok()?;
+    let mut nonce = [0u8; 24];
+    OsRng.fill_bytes(&mut nonce);
+    let ct = cipher
+        .encrypt(
+            XNonce::from_slice(&nonce),
+            Payload {
+                msg: plaintext,
+                aad,
+            },
+        )
+        .ok()?;
+    let mut out = Vec::with_capacity(24 + ct.len());
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    Some(out)
+}
+
+/// Open what [`seal`] made (with the same `aad`); `None` if it was
+/// tampered with, sealed under another key, or isn't one.
+pub fn open(key: &[u8; 32], aad: &[u8], sealed: &[u8]) -> Option<Vec<u8>> {
+    use chacha20poly1305::aead::Payload;
+    if sealed.len() < 24 + 16 {
+        return None;
+    }
+    let (nonce, ct) = sealed.split_at(24);
+    let cipher = XChaCha20Poly1305::new_from_slice(key).ok()?;
+    cipher
+        .decrypt(XNonce::from_slice(nonce), Payload { msg: ct, aad })
+        .ok()
+}
+
 /// The tag a device puts in its LAN announcements: a one-way hash of the
 /// device key, so only devices sharing the key recognise each other on the
 /// network (others' devices, and test runs, aren't listed). Reveals nothing
@@ -104,6 +142,20 @@ mod tests {
         let b = encrypt(&key, b"same").unwrap();
         assert_ne!(a.nonce, b.nonce);
         assert_ne!(a.ciphertext, b.ciphertext);
+    }
+
+    #[test]
+    fn seal_then_open_round_trips_and_checks_key_and_aad() {
+        let key = [7u8; 32];
+        let sealed = seal(&key, b"ctx", b"pcm bytes").unwrap();
+        assert_eq!(sealed.len(), 24 + 9 + 16);
+        assert_eq!(open(&key, b"ctx", &sealed).unwrap(), b"pcm bytes");
+        assert!(open(&[8u8; 32], b"ctx", &sealed).is_none(), "other key");
+        assert!(open(&key, b"other", &sealed).is_none(), "other aad");
+        let mut bad = sealed.clone();
+        bad[30] ^= 1;
+        assert!(open(&key, b"ctx", &bad).is_none(), "tampered");
+        assert!(open(&key, b"ctx", &sealed[..20]).is_none(), "short");
     }
 
     #[test]
