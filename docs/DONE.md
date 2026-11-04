@@ -298,6 +298,18 @@ Built by three agents in parallel (worktrees), merged and built here.
   sends it onto the computer's clipboard and closes) and "Lock computer".
   "The computer" is the device that takes `lock`, preferring a live link,
   remembered for later. Add them from the phone's Quick Settings editor.
+- **Lock this computer when my phone goes away** (desktop `away_lock.rs`,
+  Settings; off by default): no live link to any of your phones for 2, 5
+  or 10 minutes locks the screen once, with a notification; re-arms when a
+  phone is back; never right after start. 7 unit tests on the decision.
+- **Shortcut: send what I copied to my phone** (desktop `shortcut.rs`,
+  `tauri-plugin-global-shortcut` 2.3.2; default Cmd/Ctrl+Shift+Y, changeable
+  in Settings): copied text onto the phone's clipboard, else a copied
+  picture; a notification says sent or queued.
+- **Share this computer's Wi-Fi with the phone** (desktop `wifi_share.rs`,
+  a button in the phone's Wi-Fi section): reads the network name and its
+  password here (macOS asks to allow the keychain read), sends the phone's
+  `wifi connect`; the password stays in Rust, never in the page or logs.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
