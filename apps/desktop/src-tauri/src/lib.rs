@@ -26,6 +26,7 @@ mod remote_input;
 mod screen_share;
 mod sysinfo;
 mod tray;
+mod wifi_share;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
 
@@ -1205,6 +1206,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_follow_phone_dnd,
         share_location,
         set_share_location,
+        wifi_share::current_wifi_name,
+        wifi_share::share_wifi_to,
         location_available,
         away_lock::away_lock,
         away_lock::set_away_lock,

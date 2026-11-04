@@ -36,6 +36,7 @@ import {
   type Radio,
   type WifiNetwork,
   type Transfer,
+  unwrap,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
 import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
@@ -934,6 +935,16 @@ function LocateRow(props: { node: string; st: DeviceStatus }) {
 function WifiList(props: { node: string; st: DeviceStatus }) {
   const [asking, setAsking] = createSignal<string | null>(null);
   const [password, setPassword] = createSignal("");
+  // This computer's own Wi-Fi, to hand to the phone (its password is read
+  // and sent in Rust: it never comes to this page).
+  const [mine, setMine] = createSignal<string | null>(null);
+  onMount(() => commands.currentWifiName().then(setMine, () => {}));
+  const name = () => niceName(peerName(props.node));
+  const shareMine = () =>
+    unwrap(commands.shareWifiTo(props.node)).then(
+      (ssid) => toast(t("wifi.shareSent", { ssid, name: name() }), "ok"),
+      (e) => toast(friendlyError(e), "error"),
+    );
   const wifi = (args: Record<string, unknown>) =>
     runAction(props.node, "wifi", args).catch((e) => toast(friendlyError(e), "error"));
   const join = (n: WifiNetwork) => {
@@ -973,6 +984,13 @@ function WifiList(props: { node: string; st: DeviceStatus }) {
           </button>
         </Show>
       </div>
+      <Show when={mine()}>
+        {(ssid) => (
+          <button class="btn btn-soft btn-sm" title={t("wifi.shareHint", { name: name() })} onClick={shareMine}>
+            {t("wifi.share", { ssid: ssid(), name: name() })}
+          </button>
+        )}
+      </Show>
       <Show when={props.st.wifiScanNeeds}>
         <p class="muted small">
           {props.st.wifiScanNeeds === "location" ? t("wifi.needsLocation") : t("wifi.needsPermission")}

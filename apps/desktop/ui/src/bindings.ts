@@ -164,6 +164,13 @@ export const commands = {
 	shareLocation: () => __TAURI_INVOKE<boolean>("share_location"),
 	/**  Let your phone see where this computer is, or stop it. */
 	setShareLocation: (on: boolean) => __TAURI_INVOKE<void>("set_share_location", { on }),
+	/**  The name of the Wi-Fi network this computer is on, if it can tell. */
+	currentWifiName: () => __TAURI_INVOKE<string | null>("current_wifi_name"),
+	/**
+	 *  Send this computer's Wi-Fi (name and password) to `node_id` so it joins
+	 *  it. Returns the network's name. Async: the OS may wait on a prompt.
+	 */
+	shareWifiTo: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("share_wifi_to", { nodeId })),
 	/**  This computer can tell where it is at all (macOS for now). */
 	locationAvailable: () => __TAURI_INVOKE<boolean>("location_available"),
 	/**
