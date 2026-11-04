@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
+import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
 import com.mydomain.android.ui.App
@@ -26,6 +27,12 @@ private const val ASK_WIFI_SCAN = 1002
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // A share to one device's share-sheet target: sent from there, no UI.
+        if (savedInstanceState == null && directShare(intent)) {
+            finish()
+            overridePendingTransition(0, 0)
+            return
+        }
         Core.init(this)
         enableEdgeToEdge()
 
@@ -54,6 +61,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) takeShare(intent)
         askWifiScan(intent)
         openSettings(intent)
+        openDevice(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -82,6 +90,34 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(PhoneLocation.EXTRA_OPEN_SETTINGS, false) != true) return
         intent.removeExtra(PhoneLocation.EXTRA_OPEN_SETTINGS)
         Core.showSettings = true
+    }
+
+    /** A launcher shortcut ([ShareTargets]) asked for a device's screen. */
+    private fun openDevice(intent: Intent?) {
+        val node = intent?.getStringExtra(ShareTargets.EXTRA_OPEN_DEVICE) ?: return
+        intent.removeExtra(ShareTargets.EXTRA_OPEN_DEVICE)
+        Core.showDevice = node
+    }
+
+    /**
+     * A share through one device's target in the share sheet (Android 10+
+     * sharing shortcuts, [ShareTargets]): the sheet starts this activity
+     * with the shortcut's id, the device's node id. Handed to
+     * [DirectShareActivity] (with read access to the files), which sends it
+     * there without the device picker. False: an ordinary share (or none).
+     */
+    private fun directShare(intent: Intent?): Boolean {
+        if (!ShareTargets.supported()) return false
+        if (intent == null) return false
+        if (intent.action != Intent.ACTION_SEND && intent.action != Intent.ACTION_SEND_MULTIPLE) return false
+        val node = intent.getStringExtra(ShortcutManagerCompat.EXTRA_SHORTCUT_ID)
+        if (node.isNullOrBlank()) return false
+        val forward = Intent(intent).setClass(this, DirectShareActivity::class.java)
+        // Only the read grant, none of the share sheet's task flags.
+        forward.flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+        return runCatching { startActivity(forward) }
+            .onFailure { Log.w("MainActivity", "direct share failed", it) }
+            .isSuccess
     }
 
     /** From the "allow Wi-Fi scanning" notification (WifiNetworks): ask for
@@ -132,7 +168,8 @@ class MainActivity : ComponentActivity() {
         if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
         openSettings(intent)
         askWifiScan(intent)
-        takeShare(intent)
+        openDevice(intent)
+        if (!directShare(intent)) takeShare(intent)
     }
 
     override fun onResume() {

@@ -100,6 +100,17 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
+    // A launcher shortcut asked for one device's screen.
+    LaunchedEffect(Core.showDevice) {
+        Core.showDevice?.let { node ->
+            developer = false
+            automations = false
+            tab = Tab.Devices
+            device = node
+            Core.showDevice = null
+        }
+    }
+
     BackHandler(enabled = device != null || developer || automations || tab != Tab.Devices) {
         when {
             device != null -> device = null

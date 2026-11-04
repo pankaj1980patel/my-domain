@@ -125,7 +125,17 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- Direct Share: each of your devices in the share sheet (ShareTargets.kt). -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+        <!-- A share to one device's share-sheet target, sent without the picker. -->
+        <activity
+            android:name=".DirectShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Your computers see this screen: Android's prompt, then the sharing. -->
         <activity
             android:name=".ScreenConsentActivity"

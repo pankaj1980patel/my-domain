@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import com.mydomain.android.BuildConfig
 import com.mydomain.android.HomeWidget
 import com.mydomain.android.R
+import com.mydomain.android.ShareTargets
 import com.mydomain.android.ffi.DeviceIdentity
 import com.mydomain.android.ffi.MdEngine
 import com.mydomain.android.ffi.PeerInfo
@@ -189,6 +190,9 @@ object Core {
     /** Ask the UI to show the Settings tab (from a notification). */
     var showSettings by mutableStateOf(false)
 
+    /** Ask the UI to open this device's screen (a launcher shortcut). */
+    var showDevice by mutableStateOf<String?>(null)
+
     /** Text or a link shared to the app from another app, waiting for the
      *  user to pick a device (files win if both came). */
     var pendingText by mutableStateOf<String?>(null); private set
@@ -213,6 +217,10 @@ object Core {
 
     /** Events that change what the home-screen widget shows. */
     private val WIDGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "device_status")
+
+    /** Events that change the share sheet's device targets (which devices,
+     *  and which have a live link: those rank first). */
+    private val SHARE_TARGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected")
 
     /** The app context, for strings built outside the screens (set by
      *  MainActivity and NetService, whichever starts first). */
@@ -267,6 +275,7 @@ object Core {
     fun setDeviceLabel(node: String, nickname: String?, icon: String?, color: String?) {
         DeviceLabels.set(app, node, nickname, icon, color)
         HomeWidget.refresh(app)
+        ShareTargets.refresh(app)
     }
 
     private fun onMain(block: () -> Unit) {
@@ -295,6 +304,7 @@ object Core {
             links.clear()
             p.forEach { peer -> peer.link?.let { links[peer.nodeId] = it } }
             HomeWidget.refresh(app)
+            ShareTargets.refresh(app)
         }
     }
 
@@ -388,6 +398,7 @@ object Core {
             if (devLog.size > 500) devLog.removeRange(500, devLog.size)
             apply(o, peersNow)
             if (kind in WIDGET_KINDS) HomeWidget.refresh(app)
+            if (kind in SHARE_TARGET_KINDS) ShareTargets.refresh(app)
         }
     }
 
@@ -799,11 +810,14 @@ object Core {
 
     /** Text from the share sheet: a lone web link opens on the device, any
      *  other text goes onto its clipboard. */
-    suspend fun sendSharedText(node: String, text: String): String {
+    suspend fun sendSharedText(node: String, text: String): String =
+        if (isSharedLink(text)) openUrl(node, text.trim()) else sendText(node, text, "clipboard")
+
+    /** Is shared [text] a lone web link ([sendSharedText] opens it)? */
+    fun isSharedLink(text: String): Boolean {
         val t = text.trim()
         val scheme = runCatching { Uri.parse(t).scheme?.lowercase() }.getOrNull()
-        val link = (scheme == "http" || scheme == "https") && t.none(Char::isWhitespace)
-        return if (link) openUrl(node, t) else sendText(node, text, "clipboard")
+        return (scheme == "http" || scheme == "https") && t.none(Char::isWhitespace)
     }
 
     /** [sendSharedText] from a click handler, off the screen's lifetime. */
