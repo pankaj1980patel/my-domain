@@ -1,7 +1,6 @@
 // One device: its status, then a tile per feature.
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
-import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
 import {
@@ -24,7 +23,6 @@ import {
   revealFile,
   ringDevice,
   runAction,
-  sendFile,
   sendMessage,
   setClipSync,
   shareNotification,
@@ -44,6 +42,7 @@ import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
+import DropToSend from "./device/DropToSend";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -119,6 +118,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <NotificationsTile node={props.node} />
             <ClipboardTile node={props.node} />
             <FilesTile node={props.node} />
+            <DropToSend node={props.node} />
             <BrowseTile node={props.node} />
             <ControlTile node={props.node} />
             <Show when={state.status[props.node]?.actions.includes("screen")}>
@@ -645,21 +645,11 @@ function AppsTile(props: { node: string }) {
 
 function FilesTile(props: { node: string }) {
   const [busy, setBusy] = createSignal(false);
-  const [dropping, setDropping] = createSignal(false);
   const name = () => niceName(peerName(props.node));
   const list = () =>
     Object.values(state.transfers)
       .filter((x) => x.node === props.node)
       .sort((a, b) => b.ts - a.ts);
-
-  const sendAll = async (paths: string[]) => {
-    try {
-      for (const p of paths) await sendFile(props.node, p);
-      toast(tn("files.started", paths.length, { name: name() }), "ok");
-    } catch (e) {
-      toast(friendlyError(e), "error");
-    }
-  };
 
   const pick = async () => {
     setBusy(true);
@@ -672,24 +662,10 @@ function FilesTile(props: { node: string }) {
     }
   };
 
-  // Files dropped anywhere on the window go to this device.
-  onMount(async () => {
-    const unlisten = await getCurrentWebview().onDragDropEvent((ev) => {
-      const p = ev.payload;
-      if (p.type === "enter" || p.type === "over") setDropping(true);
-      else if (p.type === "leave") setDropping(false);
-      else if (p.type === "drop") {
-        setDropping(false);
-        if (p.paths.length) sendAll(p.paths);
-      }
-    });
-    onCleanup(unlisten);
-  });
-
   return (
-    <article class="tile" classList={{ "tile-drop": dropping() }}>
+    <article class="tile">
       <h2>{t("files.title")}</h2>
-      <p class="muted small">{dropping() ? t("files.dropHere", { name: name() }) : t("files.hint")}</p>
+      <p class="muted small">{t("files.hint")}</p>
       <button class="btn btn-soft btn-block" disabled={busy()} onClick={pick}>
         {busy() ? t("files.choosing") : t("files.send")}
       </button>
