@@ -200,7 +200,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Ring device | Full volume even when silent | `find.ring` | A D | P (DND access) | ✅ (phone: alarm stream at full volume; desktop: window + sound) |
 | Locate | Current GPS location on a map | `find.locate` | A | S (background location) | 🟡 (2026-11-04: both ways: the phone (allowed on the phone, notification each time) and a Mac (allowed in its Settings); Open map) |
 | Location history | Last known locations | `find.locate` | A | S | ⬜ |
-| Lost mode | Lock with a message and contact number | `find.lost` | A | P (Device admin) | ⬜ |
+| Lost mode | Show a message and contact number over the lock screen | `find.lost` | A | — | 🟡 (2026-11-04: started from the phone's page on a computer (action `lost`, status `lost: true`); message full screen over the lock screen without unlocking, Call owner opens the dialer, one ring, one location share only if sharing is on; survives restarts (back before the first unlock); stopped from the computer or "I found it" after unlocking; not tried on a phone yet) |
 | Remote wipe | Factory reset (Owner domain only) | `find.wipe` | A | P (Device admin) | ⬜ |
 | SIM change alert | Notify when the SIM is swapped | `find.locate` | A | S | ⬜ |
 | Failed-unlock alert | Alert after repeated wrong PINs | `find.lost` | A | P (Device admin) | ⬜ |

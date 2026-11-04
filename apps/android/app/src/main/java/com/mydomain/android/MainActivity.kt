@@ -123,6 +123,8 @@ class MainActivity : ComponentActivity() {
         Core.setVisible(true)
         // Opening the app (or tapping the ring notification) stops a ring.
         DeviceActions.stopRing()
+        // Lost mode on: its screen first (the owner turns it off there).
+        if (LostMode.isOn(this)) LostMode.open(this)
     }
 
     override fun onNewIntent(intent: Intent) {

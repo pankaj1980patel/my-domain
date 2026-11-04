@@ -78,6 +78,19 @@ object PhoneLocation {
         return true
     }
 
+    /** Like [locate], but only when sharing, the permission and Location are
+     *  all already on: it never opens a screen or asks (lost mode, with the
+     *  phone locked). Off: nothing is shared. */
+    fun locateQuietly(ctx: Context, fromName: String): Boolean {
+        val app = ctx.applicationContext
+        if (!allowed(app)) return false
+        if (app.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) return false
+        val lm = app.getSystemService(LocationManager::class.java) ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && !lm.isLocationEnabled) return false
+        fix(app, lm, fromName)
+        return true
+    }
+
     /** The last known position at once, then a fresh one when it comes. */
     @SuppressLint("MissingPermission")
     private fun fix(app: Context, lm: LocationManager, fromName: String) {

@@ -34,6 +34,8 @@ import org.json.JSONObject
  *   screen_settings {brightness?, auto_brightness?, timeout_s?, rotate?}
  *                                        brightness 0-100, screen timeout in
  *                                        seconds, auto-rotate (see ScreenSettings)
+ *   lost       {on, message?, contact?}  your message over the lock screen, one
+ *                                        ring, a "Call owner" button (see LostMode)
  *
  * [actions] lists the ones this phone supports and [state] what they're set
  * to now; both go into the status other devices ask for, so they only show
@@ -82,6 +84,7 @@ object Controls {
         // answers "allow photo access" until it's allowed).
         put("gallery")
         put("screen_settings")
+        put("lost")
     }
 
     fun state(ctx: Context): JSONObject {
@@ -91,6 +94,7 @@ object Controls {
         WifiNetworks.state(o)
         PhoneLocation.state(ctx, o)
         ScreenSettings.state(ctx, o)
+        LostMode.state(ctx, o)
         o.put("helper", PhoneHelper.instance != null)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
@@ -158,6 +162,7 @@ object Controls {
                 "wifi" -> WifiNetworks.run(ctx, args)
                 "locate" -> PhoneLocation.locate(ctx, fromName)
                 "screen_settings" -> ScreenSettings.run(ctx, args)
+                "lost" -> LostMode.run(ctx, args, fromName)
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

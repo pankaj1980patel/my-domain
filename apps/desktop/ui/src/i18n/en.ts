@@ -284,6 +284,24 @@ export const en = {
   "locate.map": "Open map",
   "locate.asking": "Asking where it is…",
 
+  // Lost mode for a phone (LostModeTile)
+  "lost.title": "Lost mode",
+  "lost.hint": "If {name} is lost, show your message on its lock screen. It stays locked.",
+  "lost.open": "Lost mode…",
+  "lost.message": "Message",
+  "lost.messagePlaceholder": "This phone is lost. Please call me.",
+  "lost.contact": "Number to call (optional)",
+  "lost.contactPlaceholder": "Like +91 98765 43210",
+  "lost.startHint": "It rings once, shows a Call owner button with your number, and shares where it is if location sharing is on there. You can stop it here, or on the phone after unlocking it.",
+  "lost.start": "Start",
+  "lost.cancel": "Cancel",
+  "lost.started": "Lost mode is on for {name}",
+  "lost.queued": "Lost mode starts when {name} is reachable",
+  "lost.on": "Lost mode is on",
+  "lost.onHint": "{name} shows your message on its lock screen.",
+  "lost.stop": "Stop",
+  "lost.stopped": "Lost mode is off for {name}",
+
   // Phone screen settings (ScreenSettingsRow)
   "screenSettings.brightness": "Brightness",
   "screenSettings.brightnessLevel": "Brightness {level}%",

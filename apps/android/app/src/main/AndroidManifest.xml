@@ -44,6 +44,10 @@
          (ScreenSettings); the user grants it on a system screen. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Lost mode (LostMode.kt): its screen over the lock screen, from the
+         background (a full-screen notification), and back after a restart. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:allowBackup="true"
@@ -193,6 +197,24 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- Lost mode: your message over the lock screen (never unlocks it).
+             Direct-boot aware, so it's back after a restart before the first unlock. -->
+        <activity
+            android:name=".LostModeActivity"
+            android:directBootAware="true"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleInstance"
+            android:theme="@style/Theme.App" />
+        <receiver
+            android:name=".LostModeBootReceiver"
+            android:directBootAware="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <!-- Shizuku hands this app its binder here (ADR-0006, Privileged.kt). -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

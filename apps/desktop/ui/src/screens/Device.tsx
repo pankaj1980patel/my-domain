@@ -47,6 +47,7 @@ import DropToSend from "./device/DropToSend";
 import InfoTile from "./device/InfoTile";
 import ScheduleTile from "./device/ScheduleTile";
 import CommandsTile from "./device/CommandsTile";
+import LostModeTile from "./device/LostModeTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -136,6 +137,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <Show when={state.status[props.node]?.actions.includes("gallery")}>
               <PhotosTile node={props.node} />
             </Show>
+            <LostModeTile node={props.node} />
             <NotifyTile />
             <AppsTile node={props.node} />
           </div>

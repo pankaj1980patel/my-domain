@@ -473,4 +473,13 @@
     <string name="run_refused">%1$s didn\'t run it: %2$s</string>
     <string name="run_no_answer">No answer yet from %1$s. It may still be running.</string>
     <string name="run_no_output">No output.</string>
+    <!-- Lost mode (LostMode.kt): your message over the lock screen -->
+    <string name="channel_lost">Lost mode</string>
+    <string name="lost_title">This phone is lost</string>
+    <string name="lost_default_message">Please help return it to its owner.</string>
+    <string name="lost_call">Call owner</string>
+    <string name="lost_call_number">Call %1$s</string>
+    <string name="lost_found">I found it</string>
+    <string name="lost_found_hint">For the owner: unlock the phone to turn lost mode off.</string>
+    <string name="lost_notification_body">Tap to show the message.</string>
 </resources>

@@ -96,6 +96,8 @@ export type DeviceStatus = {
   autoRotate?: boolean;
   /** It may change those (Android's "Modify system settings"). */
   writeSettings?: boolean;
+  /** Lost mode is on there (its message shows on its lock screen). */
+  lost?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
   /** How many folders it lets you browse (absent: it can't be browsed). */
@@ -427,6 +429,7 @@ export async function startEvents() {
         locationSharing: status?.location_sharing === true,
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
         location: locationOf(status?.location),
+        lost: status?.lost === true,
         brightness: typeof status?.brightness === "number" ? Math.round(status.brightness) : undefined,
         autoBrightness: typeof status?.auto_brightness === "boolean" ? status.auto_brightness : undefined,
         screenTimeoutS: typeof status?.screen_timeout_s === "number" ? Math.round(status.screen_timeout_s) : undefined,

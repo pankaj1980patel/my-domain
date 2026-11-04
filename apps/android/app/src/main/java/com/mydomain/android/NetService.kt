@@ -103,6 +103,10 @@ class NetService : Service() {
         Radios.init(this)
         ScreenSettings.init(this)
         WifiNetworks.init(this)
+        // Lost mode survives a restart of the app: its screen comes back now
+        // and each time the screen turns on, until it's turned off.
+        LostMode.watchScreen(this)
+        LostMode.show(this, Core.visible || PhoneHelper.instance != null)
         watchBattery()
         // Your computers hear when this phone goes into Do Not Disturb.
         DndWatch.start(this)
@@ -479,6 +483,7 @@ class NetService : Service() {
         BleLink.stop()
         PhotoBackup.stop()
         DndWatch.stop(this)
+        LostMode.unwatchScreen(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
