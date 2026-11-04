@@ -61,7 +61,19 @@ class MainActivity : ComponentActivity() {
         // The service started before the answer; start Bluetooth now that
         // it's allowed (does nothing if it's already running or still denied).
         if (requestCode == 1001) BleLink.start(applicationContext)
-        if (requestCode == ASK_WIFI_SCAN) Controls.onChange()
+        if (requestCode == ASK_WIFI_SCAN) {
+            val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
+            // Denied for good ("Don't ask again"): Android shows no prompt
+            // any more, so open this app's settings to allow it there.
+            if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                runCatching {
+                    startActivity(
+                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                    )
+                }
+            }
+            Controls.onChange()
+        }
     }
 
     /** From the "allow Wi-Fi scanning" notification (WifiNetworks): ask for

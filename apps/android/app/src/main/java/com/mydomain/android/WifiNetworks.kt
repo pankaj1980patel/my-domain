@@ -16,6 +16,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.mydomain.android.core.Core
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -162,14 +163,20 @@ object WifiNetworks {
         return if (on) null else "location"
     }
 
-    /** A notification that fixes [need] with a tap (the app asks for the
-     *  permission; or the Location settings open). */
+    /** Fix [need] on the phone: the app's permission prompt, or Location
+     *  settings, opened straight away when Android lets this app open a
+     *  screen (it's on screen, or its Accessibility helper is on: Android
+     *  exempts those); else a notification that opens it with a tap. */
     private fun askFor(app: Context, need: String) {
         val open = if (need == "permission") {
             Intent(app, MainActivity::class.java).putExtra(EXTRA_ASK, true)
         } else {
             Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if ((Core.visible || PhoneHelper.instance != null) && runCatching { app.startActivity(open) }.isSuccess) {
+            Log.i(TAG, "opened the $need prompt")
+            return
+        }
         val pi = PendingIntent.getActivity(app, NOTE_ID, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, DeviceActions.CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_dialog_info)

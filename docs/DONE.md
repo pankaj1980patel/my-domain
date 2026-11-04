@@ -292,8 +292,12 @@ command; the screen-share prompt was on top). Desktop side: clippy only.
   notification that fixes it with a tap; the location is never read.
   Desktop: a Wi-Fi section in the device's controls (Show networks, Join,
   a password box for a new secured network, Leave network, Rejoin).
-  Tried: the scan asked for the permission as designed; the list itself
-  waits for the permission and Location on the phone.
+  The prompt (or Location settings) opens on the phone straight away when
+  the app may open a screen (on screen, or the Accessibility helper on);
+  denied for good, the app's own settings open instead; a notification
+  only as the last resort. Tried live: 17 networks on the computer,
+  strongest first, current and saved marked; joining "WorkSpaceCo. Rise"
+  from the desktop worked.
 - Android builds for the phone now use `-Prust.targets=arm64` (CI still
   builds all four), to save disk.
 
