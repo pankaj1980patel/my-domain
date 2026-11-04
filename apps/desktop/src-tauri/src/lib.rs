@@ -962,7 +962,8 @@ fn set_share_location(on: bool, app: AppHandle, pref: State<location::LocationPr
     device::refresh_status(&app);
 }
 
-/// This computer can tell where it is at all (macOS for now).
+/// This computer can tell where it is at all (macOS; Linux with GeoClue;
+/// Windows).
 #[tauri::command]
 #[specta::specta]
 fn location_available() -> bool {

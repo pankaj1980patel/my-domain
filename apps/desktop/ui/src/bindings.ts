@@ -214,7 +214,10 @@ export const commands = {
 	 *  it. Returns the network's name. Async: the OS may wait on a prompt.
 	 */
 	shareWifiTo: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("share_wifi_to", { nodeId })),
-	/**  This computer can tell where it is at all (macOS for now). */
+	/**
+	 *  This computer can tell where it is at all (macOS; Linux with GeoClue;
+	 *  Windows).
+	 */
 	locationAvailable: () => __TAURI_INVOKE<boolean>("location_available"),
 	/**
 	 *  "Lock this computer when my phone goes away": on or off, how long to

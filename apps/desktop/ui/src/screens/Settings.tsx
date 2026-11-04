@@ -20,7 +20,15 @@ import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { WebhookSetting } from "../components/WebhookSetting";
 import { CallsSetting } from "../components/CallsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
-import { t, tRich } from "../i18n";
+import { t, tRich, type Key } from "../i18n";
+
+/** Which OS's location permission the "find my computer" hint explains. */
+const locationHintKey: Key = (() => {
+  const p = navigator.platform || navigator.userAgent;
+  if (/Mac/i.test(p)) return "settings.shareLocationHint";
+  if (/Win/i.test(p)) return "settings.shareLocationHintWindows";
+  return "settings.shareLocationHintLinux";
+})();
 
 export default function Settings(props: { onDeveloper: () => void }) {
   const [taps, setTaps] = createSignal(0);
@@ -153,7 +161,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
               onChange={(e) => toggleShareLocation(e.currentTarget.checked)}
             />
           </label>
-          <p class="muted small">{t("settings.shareLocationHint")}</p>
+          <p class="muted small">{t(locationHintKey)}</p>
         </Show>
         <Show when={awayLock().can_lock}>
           <label class="switch-row">

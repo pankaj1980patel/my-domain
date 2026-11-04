@@ -1,0 +1,22 @@
+[package]
+name = "md-geo"
+description = "my-domain: where this computer is (find my computer) on Linux (GeoClue2 over D-Bus) and Windows (Windows.Devices.Geolocation)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# No dependencies on macOS (the desktop app uses CoreLocation itself). The
+# versions below are the ones Tauri already pulls in: no new crates.
+[target.'cfg(target_os = "linux")'.dependencies]
+# Blocking API (default features: async-io + blocking-api), the same zbus
+# tauri-plugin-opener and notify-rust use.
+zbus = "5.16"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = ["Devices_Geolocation", "Foundation"] }
+# `IAsyncOperation::get` needs its `std` feature, which `windows` leaves off.
+windows-future = "0.2.1"
+
+[lints]
+workspace = true

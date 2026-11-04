@@ -25,6 +25,8 @@ md-ble = { workspace = true }
 # every OS (so the Linux glue type-checks in the macOS test build); its
 # D-Bus/SCO part only on Linux.
 md-hfp = { workspace = true }
+# Find my computer on Linux (GeoClue2) and Windows (Geolocator); see `location.rs`.
+md-geo = { workspace = true }
 # Typed commands: generates TypeScript bindings for the UI from the Rust
 # commands (ADR-0003). The three crates move in lockstep (release candidates).
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }

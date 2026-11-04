@@ -649,6 +649,10 @@ export const en = {
   "settings.remoteInputHint": "Use your phone as a touchpad and keyboard here. On a Mac, also allow my-domain under Privacy & Security > Accessibility.",
   "settings.shareLocation": "Let my phone see where this computer is",
   "settings.shareLocationHint": "Only when your own phone asks, and you get a notification each time. macOS asks once for location access.",
+  "settings.shareLocationHintWindows":
+    "Only when your own phone asks, and you get a notification each time. Windows’ location settings still apply: Settings > Privacy & security > Location, with Location services and “Let desktop apps access your location” on.",
+  "settings.shareLocationHintLinux":
+    "Only when your own phone asks, and you get a notification each time. It asks GeoClue, so your desktop’s Location Services switch applies and it may ask you once.",
   "settings.awayLock": "Lock this computer when my phone goes away",
   "settings.awayLockAfter": "After my phone is gone for",
   "settings.awayLockMinutes": "{n} minutes",

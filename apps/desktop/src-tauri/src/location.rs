@@ -7,11 +7,14 @@
 //    Settings (`<app config dir>/prefs.json`, key `share_location`); asked
 //    while off, a notification says so and nothing is shared;
 //  - a notification each time it's shared;
-//  - the OS's own location permission still applies (macOS asks once);
+//  - the OS's own location permission still applies (macOS asks once;
+//    on Linux GeoClue's agent and the desktop's Location Services switch,
+//    on Windows Settings → Privacy & security → Location);
 //  - only on request, never in the background.
 //
-// macOS only for now (CoreLocation); elsewhere `available()` is false and
-// the action isn't listed.
+// macOS: CoreLocation, below. Linux (GeoClue2 over D-Bus) and Windows
+// (Windows.Devices.Geolocation): crates/md-geo. Where none of them can
+// work, `available()` is false and the action isn't listed.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
@@ -65,7 +68,7 @@ impl LocationPref {
 
 /// This computer can tell where it is at all.
 pub fn available() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(target_os = "macos") || md_geo::available()
 }
 
 /// Sharing state and the last position, into the status.
@@ -166,10 +169,17 @@ fn fix(app: &AppHandle) -> Result<(f64, f64, f64, u64), String> {
     Ok((lat, lon, acc, at.max(0.0) as u64))
 }
 
+/// Linux and Windows: GeoClue2 / Geolocator (crates/md-geo), blocking on
+/// this (already spawned) thread.
 #[cfg(not(target_os = "macos"))]
 fn fix(_app: &AppHandle) -> Result<(f64, f64, f64, u64), String> {
-    Err("finding this computer's location isn't supported here yet".into())
+    md_geo::fix(DESKTOP_ID)
 }
+
+/// The app's desktop file name without `.desktop` (the Linux bundles'
+/// `my-domain.desktop`), which GeoClue's agent asks about.
+#[cfg(not(target_os = "macos"))]
+const DESKTOP_ID: &str = "my-domain";
 
 /// CoreLocation, used only on the main thread (where it delivers updates).
 #[cfg(target_os = "macos")]

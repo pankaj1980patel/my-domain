@@ -4034,6 +4034,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-geo"
+version = "0.1.0"
+dependencies = [
+ "windows 0.61.3",
+ "windows-future 0.2.1",
+ "zbus 5.16.0",
+]
+
+[[package]]
 name = "md-hfp"
 version = "0.1.0"
 dependencies = [
@@ -4318,6 +4327,7 @@ dependencies = [
  "keyring",
  "machine-uid",
  "md-ble",
+ "md-geo",
  "md-hfp",
  "mdcore",
  "native-tls",
