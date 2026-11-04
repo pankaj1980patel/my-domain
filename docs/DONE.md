@@ -372,6 +372,7 @@ Built by three agents in parallel (worktrees), merged and built here.
   restart; stopped from the computer or "I found it" after unlocking.
   Wipe is not built (excluded).
 - **Notification history** (desktop `notif_history.rs`, `NotificationHistory.tsx`): the phone's notifications kept on the computer (newest 500, `notification-history.json`), searchable by words, filtered by app, grouped by day; mute an app to stop its pop-ups and history (`prefs.json` `muted_apps`). Dismissals made on the phone aren't reported yet (no `onNotificationRemoved` message).
+- **Battery history** (desktop `battery_log.rs`, `BatteryChart.tsx`; phone `core/BatteryLog.kt`, `ui/InfoTile.kt`): a 24-hour battery graph for each of your other devices (a sample every 5 min and on each charging change, kept 48 h in `battery_history.json`), charging stretches shaded, hover for time and %, and "About 6 h left" / "Full in about 40 min" from the last hour's trend.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
