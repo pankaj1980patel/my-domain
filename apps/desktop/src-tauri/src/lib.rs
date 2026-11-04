@@ -23,6 +23,7 @@ mod commands_run;
 mod device;
 mod fcm;
 mod location;
+mod notif_history;
 mod notify;
 mod remote_input;
 mod schedule;
@@ -388,13 +389,27 @@ impl EventSink for TauriSink {
                     notify::post(&app, &title, &body);
                 });
             }
+            // Kept in the history first (cheap, and before the window
+            // hears of it); a muted app's get no further.
             CoreEvent::Notification {
                 from,
                 title,
                 body,
                 app: source,
+                key,
                 ..
             } => {
+                let shown = notif_history::on_notification(
+                    &self.app,
+                    from,
+                    source.as_deref(),
+                    title,
+                    body,
+                    key.as_deref(),
+                );
+                if !shown {
+                    return;
+                }
                 let app = self.app.clone();
                 let (from, title, body, source) =
                     (from.clone(), title.clone(), body.clone(), source.clone());
@@ -741,9 +756,15 @@ fn notification_action(
     key: String,
     index: i32,
     text: Option<String>,
+    app: AppHandle,
     engine: State<Eng>,
 ) -> Result<String, CoreError> {
-    engine.notification_action(&node_id, &key, i64::from(index), text.as_deref())
+    let via = engine.notification_action(&node_id, &key, i64::from(index), text.as_deref())?;
+    // Still in the history, marked dismissed.
+    if index < 0 {
+        notif_history::on_dismissed(&app, &node_id, &key);
+    }
+    Ok(via)
 }
 
 // --- quick device actions (find my device, status, open a link) ---
@@ -1220,6 +1241,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         request_apps,
         subscribe_apps,
         notification_action,
+        notif_history::notification_history,
+        notif_history::clear_notification_history,
+        notif_history::muted_apps,
+        notif_history::set_muted_apps,
         request_status,
         ring_device,
         open_url_on,
@@ -1310,6 +1335,7 @@ pub fn run() {
             let handle = app.handle().clone();
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
+            app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));

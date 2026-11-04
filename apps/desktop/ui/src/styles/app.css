@@ -1430,3 +1430,53 @@ input[type="checkbox"][role="switch"]:checked::after {
 .lost-banner-hint {
   display: block;
 }
+
+/* --- notification history (screens/device/NotificationHistory.tsx) --- */
+
+.history-search {
+  width: 100%;
+}
+.history-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-height: 520px;
+  overflow-y: auto;
+}
+.history-day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.history-day-label {
+  margin: 0;
+  font-weight: 600;
+}
+.history-rows {
+  max-height: none;
+  overflow: visible;
+}
+.history-dismissed {
+  opacity: 0.6;
+}
+.history-muted {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.history-muted-app {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}

@@ -67,6 +67,18 @@ export const commands = {
 	 */
 	notificationAction: (nodeId: string, key: string, index: number, text: string | null) => typedError<string, string>(__TAURI_INVOKE("notification_action", { nodeId, key, index, text })),
 	/**
+	 *  Device `node_id`'s kept notifications, newest first: the first `limit`
+	 *  matching `query` (title, text or app; ignoring case), from `app` only when
+	 *  given.
+	 */
+	notificationHistory: (nodeId: string, query: string, app: string | null, limit: number) => __TAURI_INVOKE<HistoryPage_Serialize>("notification_history", { nodeId, query, app, limit }),
+	/**  Forget device `node_id`'s kept notifications. */
+	clearNotificationHistory: (nodeId: string) => __TAURI_INVOKE<void>("clear_notification_history", { nodeId }),
+	/**  The apps whose notifications aren't shown or kept here. */
+	mutedApps: () => __TAURI_INVOKE<string[]>("muted_apps"),
+	/**  Replace the muted list; returns it tidied (see `tidy_muted`). */
+	setMutedApps: (apps: string[]) => __TAURI_INVOKE<string[]>("set_muted_apps", { apps }),
+	/**
 	 *  Ask a device for its battery/charging; the answer arrives as
 	 *  `device-status-event`.
 	 */
@@ -372,6 +384,71 @@ export type DevCredentials = {
 export type FirewallStatus = {
 	outbound_ok: boolean,
 	inbound_blocked: boolean,
+};
+
+/**  One notification as kept. */
+export type HistoryEntry = HistoryEntry_Serialize | HistoryEntry_Deserialize;
+
+/**  One notification as kept. */
+export type HistoryEntry_Deserialize = {
+	id: number,
+	/**  The device it came from (node id). */
+	from: string,
+	/**  The app's name on the phone ("" when it didn't say). */
+	app: string,
+	title: string,
+	body: string,
+	/**  Its key on the phone, when it had one. */
+	key?: string | null,
+	/**  When it arrived, in milliseconds since 1970. */
+	ts: number | null,
+	/**  Dismissed from this computer. */
+	dismissed?: boolean,
+};
+
+/**  One notification as kept. */
+export type HistoryEntry_Serialize = {
+	id: number,
+	/**  The device it came from (node id). */
+	from: string,
+	/**  The app's name on the phone ("" when it didn't say). */
+	app: string,
+	title: string,
+	body: string,
+	/**  Its key on the phone, when it had one. */
+	key: string | null,
+	/**  When it arrived, in milliseconds since 1970. */
+	ts: number | null,
+	/**  Dismissed from this computer. */
+	dismissed: boolean,
+};
+
+/**
+ *  What the history view shows: the first matches, how many there are, how
+ *  many this device has kept in all, and its apps (for the filter chips).
+ */
+export type HistoryPage = HistoryPage_Serialize | HistoryPage_Deserialize;
+
+/**
+ *  What the history view shows: the first matches, how many there are, how
+ *  many this device has kept in all, and its apps (for the filter chips).
+ */
+export type HistoryPage_Deserialize = {
+	entries: HistoryEntry_Deserialize[],
+	total: number,
+	kept: number,
+	apps: string[],
+};
+
+/**
+ *  What the history view shows: the first matches, how many there are, how
+ *  many this device has kept in all, and its apps (for the filter chips).
+ */
+export type HistoryPage_Serialize = {
+	entries: HistoryEntry_Serialize[],
+	total: number,
+	kept: number,
+	apps: string[],
 };
 
 /**  This device's own endpoints, advertised to peers and the registry. */

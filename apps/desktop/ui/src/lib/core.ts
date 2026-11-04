@@ -4,9 +4,10 @@
 // Screens read `state` and call the functions here; they never talk to Tauri
 // directly.
 
+import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { commands, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
@@ -394,6 +395,7 @@ export async function startEvents() {
       (n) => {
         addActivity({ icon: "🔔", tone: "info", text: n.body ? t("activity.notificationWithBody", { title: n.title, body: n.body }) : t("activity.notification", { title: n.title }) });
         addNotification(n);
+        setHistoryTick((x) => x + 1);
       },
     ),
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
@@ -655,9 +657,47 @@ export async function notificationAction(n: PhoneNotification, index: number, te
     throw new Error(t("notifications.cantAct"));
   }
   const via = await unwrap(commands.notificationAction(n.from, n.key, index, text ?? null));
-  if (index < 0) drop();
-  else setState("notifications", n.from, (x) => x.id === n.id, "handled", true);
+  if (index < 0) {
+    drop();
+    setHistoryTick((x) => x + 1);
+  } else setState("notifications", n.from, (x) => x.id === n.id, "handled", true);
   return via;
+}
+
+// --- notification history (kept by the backend, notif_history.rs) ---
+
+export type HistoryPage = HistoryPage_Serialize;
+export type HistoryEntry = HistoryPage["entries"][number];
+
+/** Bumped when the history may have changed (a notification came, one was
+ *  dismissed), so the history view reloads. */
+const [historyTick, setHistoryTick] = createSignal(0);
+export { historyTick };
+
+/** A device's kept notifications: the first `limit` matching `query`
+ *  (title, text or app), from `app` only when given. */
+export function notificationHistory(node: string, query: string, app: string | null, limit: number): Promise<HistoryPage> {
+  return commands.notificationHistory(node, query, app, limit);
+}
+
+export async function clearNotificationHistory(node: string) {
+  await commands.clearNotificationHistory(node);
+  setHistoryTick((x) => x + 1);
+}
+
+export function mutedApps(): Promise<string[]> {
+  return commands.mutedApps();
+}
+
+/** Replace the muted list (returned tidied). A newly muted app's
+ *  notifications also leave the lists here. */
+export async function setMutedApps(apps: string[]): Promise<string[]> {
+  const muted = await commands.setMutedApps(apps);
+  const isMuted = (app?: string) => !!app && muted.some((m) => m.toLowerCase() === app.trim().toLowerCase());
+  for (const node of Object.keys(state.notifications)) {
+    setState("notifications", node, (list = []) => list.filter((n) => !isMuted(n.app)));
+  }
+  return muted;
 }
 
 export async function requestApps(node: string) {
