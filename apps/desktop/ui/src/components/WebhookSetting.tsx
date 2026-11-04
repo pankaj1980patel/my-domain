@@ -68,7 +68,7 @@ export function WebhookSetting() {
     ].join("\n");
 
   return (
-    <article class="tile">
+    <article class="tile" id="settings-webhooks">
       <h2>{t("webhooks.title")}</h2>
       <p class="muted small">{t("webhooks.hint")}</p>
       <label class="switch-row">

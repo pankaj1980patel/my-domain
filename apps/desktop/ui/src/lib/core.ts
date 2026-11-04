@@ -760,6 +760,17 @@ export async function runAction(node: string, name: string, args: Record<string,
   return via;
 }
 
+/** Run one of this computer's own actions (`localActions`) now. */
+export async function runLocalAction(name: string, args: Record<string, unknown> = {}): Promise<string> {
+  return unwrap(commands.runLocalAction(name, JSON.stringify(args)));
+}
+
+/** Send what's copied on this computer (text, else a picture) to a device's
+ *  clipboard. Returns "sent", or "queued" (goes once it's reachable). */
+export async function sendClipboardTo(node: string): Promise<string> {
+  return unwrap(commands.sendClipboard(node));
+}
+
 export async function ringDevice(node: string): Promise<string> {
   return unwrap(commands.ringDevice(node));
 }

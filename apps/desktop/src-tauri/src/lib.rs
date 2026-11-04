@@ -1348,6 +1348,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         schedule::delete_schedule,
         schedule::run_schedule_now,
         schedule::local_actions,
+        schedule::run_local_action,
         automations::list_automations,
         automations::add_automation,
         automations::update_automation,
@@ -1369,7 +1370,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_screen_allowed,
         screen_watch,
         send_input,
-        send_clipboard_image
+        send_clipboard_image,
+        shortcut::send_clipboard
     ])
 }
 

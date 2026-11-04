@@ -496,6 +496,23 @@ pub async fn local_actions(app: AppHandle) -> Result<LocalActions, CoreError> {
     })
 }
 
+/// Run one of this computer's own actions now (the command palette).
+/// Returns "here". Async, off the main thread: checking what this computer
+/// can do may run a command.
+#[tauri::command]
+#[specta::specta]
+pub async fn run_local_action(
+    name: String,
+    args_json: String,
+    app: AppHandle,
+) -> Result<String, CoreError> {
+    let engine = app
+        .try_state::<Eng>()
+        .ok_or_else(|| CoreError::Other("not started yet".into()))?;
+    let me = engine.identity().node_id;
+    run_action(&app, &me, &name, &args_json)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

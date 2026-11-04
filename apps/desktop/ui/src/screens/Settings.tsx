@@ -101,7 +101,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <h1>{t("settings.title")}</h1>
       </header>
 
-      <article class="tile">
+      <article class="tile" id="settings-account">
         <h2>{t("settings.account")}</h2>
         <p>{tRich("settings.signedInAs", { name: <strong>{state.account.username || "…"}</strong> })}</p>
         <button class="btn btn-ghost" onClick={signOut}>
@@ -109,7 +109,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </button>
       </article>
 
-      <article class="tile">
+      <article class="tile" id="settings-device">
         <h2>{t("settings.thisDevice")}</h2>
         <p>{tRich("settings.seenAs", { name: <strong>{niceName(state.me?.name ?? "")}</strong> })}</p>
         <label class="switch-row">
@@ -214,7 +214,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
 
       <ShellCommandsSetting />
 
-      <article class="tile">
+      <article class="tile" id="settings-schedules">
         <h2>{t("schedule.local.title")}</h2>
         <p class="muted small">{t("schedule.local.hint")}</p>
         <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
@@ -229,7 +229,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </Show>
       </article>
 
-      <article class="tile">
+      <article class="tile" id="settings-automations">
         <h2>{t("automation.title")}</h2>
         <p class="muted small">{t("automation.hint")}</p>
         <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
@@ -239,7 +239,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
 
       <WebhookSetting />
 
-      <article class="tile">
+      <article class="tile" id="settings-key">
         <h2>{t("settings.deviceKey")}</h2>
         <p class="muted small">{t("settings.deviceKeyHint")}</p>
         <Show
@@ -279,7 +279,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </Show>
       </article>
 
-      <article class="tile">
+      <article class="tile" id="settings-appearance">
         <h2>{t("settings.appearance")}</h2>
         <p class="muted small">{t("settings.appearanceHint")}</p>
         <ThemePicker />

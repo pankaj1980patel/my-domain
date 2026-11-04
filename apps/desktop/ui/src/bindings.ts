@@ -241,6 +241,12 @@ export const commands = {
 	 *  reading the volume runs a command.
 	 */
 	localActions: () => typedError<LocalActions, string>(__TAURI_INVOKE("local_actions")),
+	/**
+	 *  Run one of this computer's own actions now (the command palette).
+	 *  Returns "here". Async, off the main thread: checking what this computer
+	 *  can do may run a command.
+	 */
+	runLocalAction: (name: string, argsJson: string) => typedError<string, string>(__TAURI_INVOKE("run_local_action", { name, argsJson })),
 	/**  Your automations. */
 	listAutomations: () => __TAURI_INVOKE<Automation_Serialize[]>("list_automations"),
 	/**  Add an automation: when something happens, do something. */
@@ -301,6 +307,11 @@ export const commands = {
 	 *  transfer id (progress as `file-progress`).
 	 */
 	sendClipboardImage: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard_image", { nodeId })),
+	/**
+	 *  Send this computer's clipboard to a device (the command palette).
+	 *  Returns "sent", or "queued" when it goes once the device is reachable.
+	 */
+	sendClipboard: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard", { nodeId })),
 };
 
 /* Types */

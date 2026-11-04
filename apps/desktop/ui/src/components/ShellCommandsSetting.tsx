@@ -52,7 +52,7 @@ export function ShellCommandsSetting() {
     commands.deleteShellCommand(c.id).then(() => setList((l) => l.filter((x) => x.id !== c.id)));
 
   return (
-    <article class="tile">
+    <article class="tile" id="settings-commands">
       <h2>{t("commands.title")}</h2>
       <p class="muted small">{t("commands.hint")}</p>
       <Show when={list().length} fallback={<p class="muted small">{t("commands.empty")}</p>}>

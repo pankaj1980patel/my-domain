@@ -6,6 +6,7 @@ import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
+import CommandPalette, { type Place } from "./components/CommandPalette";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
 import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
@@ -26,6 +27,15 @@ export default function App() {
   });
   const [view, setView] = createSignal<View>({ name: "home" });
   const go = (v: View) => setView(v);
+  // The command palette's places; a Settings section scrolls into view once
+  // the page is drawn.
+  const goPlace = (place: Place, section?: string) => {
+    go({ name: place });
+    if (!section) return;
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ block: "start" })),
+    );
+  };
   // The tray's "Open" on a device jumps to that device's page.
   onMount(() => {
     const off = onOpenDevice((node) => go({ name: "device", node }));
@@ -81,6 +91,7 @@ export default function App() {
             </Switch>
           </main>
         </div>
+        <CommandPalette onDevice={(node) => go({ name: "device", node })} onPlace={goPlace} />
         </Show>
       </Show>
       <Show when={state.ringing}>
