@@ -2162,3 +2162,19 @@ input[type="checkbox"][role="switch"]:checked::after {
 .xfer-resumed {
   font-style: italic;
 }
+
+/* --- Calls on this computer: a standing problem (Linux: another program has
+   the hands-free role) with what to do; its config snippet keeps its lines. */
+.call-problem {
+  border-left: 3px solid var(--warning);
+  background: var(--warning-soft);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0;
+}
+.call-problem p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}

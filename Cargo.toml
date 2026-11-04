@@ -12,6 +12,7 @@ members = [
     "crates/mdcore",
     "crates/md-testkit",
     "crates/md-ble",
+    "crates/md-hfp",
     "apps/server",
     "apps/desktop/src-tauri",
     "apps/android/rust",
@@ -28,6 +29,7 @@ repository = "https://github.com/pankaj1980patel/my-domain"
 mdcore = { path = "crates/mdcore" }
 md-testkit = { path = "crates/md-testkit" }
 md-ble = { path = "crates/md-ble" }
+md-hfp = { path = "crates/md-hfp" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 socket2 = { version = "0.5", features = ["all"] }

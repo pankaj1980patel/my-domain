@@ -1,25 +1,56 @@
-// Phone calls on this Mac over Bluetooth, like a car kit: the Mac takes the
-// Hands-Free (HFP "HF") role for a phone you've already paired in System
-// Settings, so an incoming call shows here (number, and the name when the
-// phone sends one), you answer, decline, hang up, mute this Mac's
-// microphone, dial or redial, send keypad tones, and move the call audio
-// between the phone and this Mac.
+// Phone calls on this computer over Bluetooth, like a car kit: the computer
+// takes the Hands-Free (HFP "HF") role for a phone you've already paired in
+// the system's Bluetooth settings, so an incoming call shows here (number,
+// and the name when the phone sends one), you answer, decline, hang up,
+// mute this computer's microphone, dial or redial, send keypad tones, and
+// move the call audio between the phone and this computer.
 //
 // This computer stays in charge:
-//  - off until "Calls on this Mac" is turned on in Settings, with a phone
-//    picked there (`<app config dir>/prefs.json`, keys `calls`,
+//  - off until "Calls on this computer" is turned on in Settings, with a
+//    phone picked there (`<app config dir>/prefs.json`, keys `calls`,
 //    `calls_device`, `calls_answer_audio`);
-//  - it never pairs: only phones already paired in System Settings →
-//    Bluetooth are offered (those whose SDP record has the Hands-Free Audio
-//    Gateway service, 0x111F);
+//  - it never pairs: only phones already paired are offered (those whose
+//    SDP record has the Hands-Free Audio Gateway service, 0x111F);
 //  - Contacts aren't read: a caller is the name the phone sends, or the
 //    number.
 //
-// macOS only (IOBluetooth's `IOBluetoothHandsFreeDevice`; everything on the
-// main thread, where its delegate calls arrive). Elsewhere `available()` is
-// false and every command says "not available".
+// Everything above the Bluetooth layer is shared: the call state (`Machine`,
+// pure), the commands, events, tray items and the audio bridge (`audio`).
+// The Bluetooth layer is a backend module per OS, picked as `backend`:
+//  - macOS: `mac`, IOBluetooth's `IOBluetoothHandsFreeDevice`, everything
+//    on the main thread, where its delegate calls arrive;
+//  - Linux: `linux`, the `md-hfp` crate (a BlueZ HFP profile over D-Bus,
+//    the AT dialogue, SCO sockets) on threads of its own;
+//  - anything else: `none`, every command says "not available"
+//    (`available()` is false).
 //
-// Call audio: the phone sends it over a SCO link. When that link opens, the
+// THE BACKEND SEAM. A backend module provides exactly these (all errors are
+// sentences for a person):
+//   exec(app, f) -> Result<T, String>   run a backend call where it must
+//                                       run, wait (bounded) for its result
+//   run_later(app, f)                   the same, fire and forget
+//   gateways() -> Result<Vec<CallDevice>, String>   paired phones (0x111F)
+//   connect(addr) / disconnect()        the hands-free link to a phone; the
+//                                       outcome arrives as events, not here
+//   answer(on_computer) / end_call() / dial(number) / redial() / dtmf(c)
+//   set_muted(on)                       sets MIC_MUTED and feeds Ev::Muted
+//   audio_to_phone() / audio_to_mac()   move the audio link (ask the phone)
+//   connect_sco()                       open the audio link directly
+//   phone_end() -> Option<audio::PhoneEnd>  what to bridge once it's open
+//   device_name() / known_name() -> String  the connected phone (any thread
+//                                       for known_name; "" when none)
+//   cached_name(Option<&str>) -> Option<String>     a paired phone's name
+//   problem() -> Option<String>         a standing issue for Settings
+// and reports what happens by calling `feed(Ev::...)` (any thread):
+// Connected(bool) when the service-level link comes or goes, the phone's
+// indicators (Call, Setup, Held, Signal, Battery), Incoming / CallInfo for
+// the caller, Sco(bool) when the audio link opens or closes. A Windows
+// backend adds `#[cfg(target_os = "windows")] mod windows;` with the same
+// functions and one more line in the `use ... as backend` list below.
+//
+// Call audio: the phone sends it over a SCO link. On macOS, when that link
+// opens, the
+
 // Mac shows it as a CoreAudio device named after the phone (input: the
 // caller's voice; output: what the caller hears). `audio` below bridges it
 // with a small pass-through (cpal, i.e. CoreAudio AudioUnits): the phone's
@@ -41,8 +72,14 @@
 // the controls here still work) moves the audio to the phone; opening it
 // again brings it back. The phone can do the same from its side; the
 // delegate's SCO opened/closed calls keep `audio` in the state current.
+//
+// On Linux the SCO link is a socket this app holds (Linux lets apps carry
+// call audio): `md-hfp` hands its samples over (8 kHz CVSD) and `audio`
+// bridges them to the chosen speaker and microphone with the same
+// resampling and device choice. Linux has no device-change listener here
+// (ALSA device probing during a call would fight the bridge's own devices).
 
-#![cfg_attr(not(target_os = "macos"), allow(dead_code))]
+#![cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -51,6 +88,13 @@ use mdcore::kv::FileKv;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "linux")]
+use linux as backend;
+#[cfg(target_os = "macos")]
+use mac as backend;
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+use none as backend;
+
 const KEY_ON: &str = "calls";
 const KEY_DEVICE: &str = "calls_device";
 const KEY_ANSWER_AUDIO: &str = "calls_answer_audio";
@@ -58,20 +102,21 @@ const KEY_ANSWER_AUDIO: &str = "calls_answer_audio";
 const KEY_MAC_AUDIO: &str = "calls_mac_audio";
 /// The longest number `call_dial` accepts.
 const MAX_NUMBER: usize = 32;
-const NOT_AVAILABLE: &str = "Calls on this computer aren\u{2019}t available here (macOS only).";
+const NOT_AVAILABLE: &str =
+    "Calls on this computer aren\u{2019}t available here (macOS and Linux only).";
 
 /// The app, for delegate callbacks (they carry no context).
 static APP: OnceLock<AppHandle> = OnceLock::new();
 /// The call as the phone last told it.
 static MACHINE: Mutex<Machine> = Mutex::new(Machine::new());
-/// This Mac's microphone is muted for the call (read by the audio bridge).
+/// This computer's microphone is muted for the call (read by the audio bridge).
 static MIC_MUTED: AtomicBool = AtomicBool::new(false);
 
 // ---------------------------------------------------------------------------
 // Preferences
 // ---------------------------------------------------------------------------
 
-/// Where a call's audio goes: the phone, or this Mac with a chosen output
+/// Where a call's audio goes: the phone, or this computer with a chosen output
 /// and input (`None`: the system's default one).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, specta::Type)]
 pub struct AudioTarget {
@@ -80,7 +125,7 @@ pub struct AudioTarget {
     pub input: Option<String>,
 }
 
-/// Where this call's audio should go on this Mac (reset from Settings at
+/// Where this call's audio should go on this computer (reset from Settings at
 /// each new call, changed from the in-call picker).
 static CALL_TARGET: Mutex<Option<AudioTarget>> = Mutex::new(None);
 
@@ -109,6 +154,7 @@ fn mac_audio_refused() -> bool {
 
 /// macOS refused the call's audio link (`kIOReturnUnsupported`): remember
 /// it, keep the audio on the phone, and say so once.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 fn on_mac_audio_refused() {
     let Some(app) = APP.get() else {
         return;
@@ -143,7 +189,7 @@ struct PrefsInner {
     mac_audio_refused: bool,
 }
 
-/// "Calls on this Mac": the switch, the phone, where answered audio goes.
+/// "Calls on this computer": the switch, the phone, where answered audio goes.
 pub struct CallsPrefs {
     kv: Option<FileKv>,
     inner: Mutex<PrefsInner>,
@@ -201,7 +247,7 @@ impl CallsPrefs {
 
 /// Calls can work on this computer at all.
 pub fn available() -> bool {
-    cfg!(target_os = "macos")
+    cfg!(any(target_os = "macos", target_os = "linux"))
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +272,7 @@ pub enum Phase {
 pub enum AudioRoute {
     /// No call.
     None,
-    /// This Mac's speaker and microphone (the SCO link is open).
+    /// This computer's speaker and microphone (the SCO link is open).
     Mac,
     /// The phone's own earpiece or speaker.
     Phone,
@@ -254,7 +300,7 @@ pub enum Ev {
     },
     /// The SCO (audio) link opened or closed.
     Sco(bool),
-    /// This Mac's microphone muted or not.
+    /// This computer's microphone muted or not.
     Muted(bool),
 }
 
@@ -479,7 +525,7 @@ pub fn tray_entries(m: &Machine) -> Vec<(&'static str, String)> {
             let mut v = vec![("hangup", format!("Hang up ({who})"))];
             match m.audio() {
                 AudioRoute::Mac => v.push(("tophone", "Use phone for audio".into())),
-                _ => v.push(("tomac", "Use this Mac for audio".into())),
+                _ => v.push(("tomac", "Use this computer for audio".into())),
             }
             v
         }
@@ -499,7 +545,7 @@ pub struct CallStateEvent {
     pub signal: Option<u8>,
     pub battery: Option<u8>,
     pub audio: AudioRoute,
-    /// The devices in use on this Mac while the audio's here.
+    /// The devices in use on this computer while the audio's here.
     pub output: Option<String>,
     pub input: Option<String>,
 }
@@ -545,25 +591,26 @@ fn feed(ev: Ev) {
         m.phase(),
         if m.sco { "open" } else { "closed" }
     );
-    #[cfg(target_os = "macos")]
     match sco {
-        Some(true) => audio::start(mac::device_name(), call_target()),
+        Some(true) => {
+            if let Some(phone) = backend::phone_end() {
+                audio::start(phone, call_target());
+            }
+        }
         Some(false) => audio::stop(),
         None => {}
     }
-    // A call dialling or under way with its audio meant for this Mac, and
-    // no audio link yet: ask for it. The phone doesn't open one by itself
-    // for a call placed from here or answered on the phone.
-    #[cfg(target_os = "macos")]
-    if matches!(m.phase(), Phase::Outgoing | Phase::Active)
+    // A call dialling or under way with its audio meant for this computer,
+    // and no audio link yet: ask for it. The phone doesn't open one by
+    // itself for a call placed from here or answered on the phone.
+    if available()
+        && matches!(m.phase(), Phase::Outgoing | Phase::Active)
         && was != m.phase()
         && !m.sco
         && !call_target().phone
     {
         request_mac_audio(app);
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = sco;
     let mut tray = false;
     for o in outs {
         match o {
@@ -590,7 +637,6 @@ fn feed(ev: Ev) {
             }
             Out::Ended => {
                 MIC_MUTED.store(false, Ordering::Relaxed);
-                #[cfg(target_os = "macos")]
                 audio::stop();
                 let _ = app.emit("call-ended", serde_json::json!({}));
                 tray = true;
@@ -606,12 +652,9 @@ fn feed(ev: Ev) {
     }
 }
 
-/// The devices the call audio is using on this Mac: (output, input).
+/// The devices the call audio is using on this computer: (output, input).
 fn in_use() -> (Option<String>, Option<String>) {
-    #[cfg(target_os = "macos")]
-    return audio::in_use();
-    #[cfg(not(target_os = "macos"))]
-    (None, None)
+    audio::in_use()
 }
 
 fn emit_state(app: &AppHandle, m: &Machine) {
@@ -648,34 +691,32 @@ pub fn tray_items() -> Vec<(&'static str, String)> {
 
 /// A tray call item was chosen (main thread).
 pub fn tray_action(app: &AppHandle, what: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        let r = match what {
-            "answer" => mac::answer(!call_target().phone),
-            "decline" | "hangup" => mac::end_call(),
-            "tophone" => set_call_audio(AudioTarget {
-                phone: true,
-                ..call_target()
-            }),
-            "tomac" => set_call_audio(AudioTarget {
-                phone: false,
-                ..call_target()
-            }),
-            _ => Ok(()),
-        };
-        if let Err(e) = r {
-            crate::notify::post_always(app, "Couldn\u{2019}t do that on the call", &e);
-        }
+    if !available() {
+        return;
     }
-    #[cfg(not(target_os = "macos"))]
-    let _ = (app, what);
+    let r = match what {
+        "answer" => backend::answer(!call_target().phone),
+        "decline" | "hangup" => backend::end_call(),
+        "tophone" => set_call_audio(AudioTarget {
+            phone: true,
+            ..call_target()
+        }),
+        "tomac" => set_call_audio(AudioTarget {
+            phone: false,
+            ..call_target()
+        }),
+        _ => Ok(()),
+    };
+    if let Err(e) = r {
+        crate::notify::post_always(app, "Couldn\u{2019}t do that on the call", &e);
+    }
 }
 
-/// Ask the phone to send the call's audio to this Mac (main thread); if no
-/// audio link has opened two seconds later, open one directly.
-#[cfg(target_os = "macos")]
+/// Ask the phone to send the call's audio to this computer (where backend
+/// calls run); if no audio link has opened two seconds later, open one
+/// directly.
 fn request_mac_audio(app: &AppHandle) {
-    if let Err(e) = mac::audio_to_mac() {
+    if let Err(e) = backend::audio_to_mac() {
         eprintln!("[calls] couldn't ask for the call audio: {e}");
     }
     let app = app.clone();
@@ -687,8 +728,8 @@ fn request_mac_audio(app: &AppHandle) {
             .unwrap_or(false);
         if still && !call_target().phone {
             eprintln!("[calls] no audio link yet: opening one");
-            let _ = app.run_on_main_thread(|| {
-                if let Err(e) = mac::connect_sco() {
+            backend::run_later(&app, || {
+                if let Err(e) = backend::connect_sco() {
                     eprintln!("[calls] couldn't open the audio link: {e}");
                 }
             });
@@ -696,22 +737,23 @@ fn request_mac_audio(app: &AppHandle) {
     });
 }
 
-/// Send this call's audio somewhere (main thread): to the phone (closes the
-/// audio link), or to this Mac on the given devices (opens the link, or
-/// moves the running bridge).
-#[cfg(target_os = "macos")]
+/// Send this call's audio somewhere (where backend calls run): to the
+/// phone (closes the audio link), or to this computer on the given devices
+/// (opens the link, or moves the running bridge).
 fn set_call_audio(target: AudioTarget) -> Result<(), String> {
     if let Ok(mut t) = CALL_TARGET.lock() {
         *t = Some(target.clone());
     }
     let sco = MACHINE.lock().map(|m| m.sco).unwrap_or(false);
     if target.phone {
-        mac::audio_to_phone()
+        backend::audio_to_phone()
     } else if sco {
-        audio::start(mac::device_name(), target);
+        if let Some(phone) = backend::phone_end() {
+            audio::start(phone, target);
+        }
         Ok(())
     } else {
-        mac::audio_to_mac()
+        backend::audio_to_mac()
     }
 }
 
@@ -719,7 +761,6 @@ fn set_call_audio(target: AudioTarget) -> Result<(), String> {
 /// the chosen phone if calls are on.
 pub fn init(app: &AppHandle) {
     let _ = APP.set(app.clone());
-    #[cfg(target_os = "macos")]
     audio::watch_devices();
     let Some(prefs) = app.try_state::<CallsPrefs>() else {
         return;
@@ -728,10 +769,9 @@ pub fn init(app: &AppHandle) {
     if !(available() && p.on) {
         return;
     }
-    #[cfg(target_os = "macos")]
     if let Some(addr) = p.device {
-        let _ = app.run_on_main_thread(move || {
-            if let Err(e) = mac::connect(&addr) {
+        backend::run_later(app, move || {
+            if let Err(e) = backend::connect(&addr) {
                 eprintln!("[calls] couldn't reconnect to the phone: {e}");
             }
         });
@@ -742,7 +782,7 @@ pub fn init(app: &AppHandle) {
 // Commands
 // ---------------------------------------------------------------------------
 
-/// A paired phone that can take the Mac as its hands-free.
+/// A paired phone that can take this computer as its hands-free.
 #[derive(Clone, Debug, Serialize, specta::Type)]
 pub struct CallDevice {
     pub address: String,
@@ -770,7 +810,7 @@ pub struct CallsStatus {
     pub signal: Option<u8>,
     pub battery: Option<u8>,
     pub audio: AudioRoute,
-    /// The devices in use on this Mac while the audio's here.
+    /// The devices in use on this computer while the audio's here.
     pub output: Option<String>,
     pub input: Option<String>,
     /// Where this call's audio was asked to go.
@@ -779,9 +819,14 @@ pub struct CallsStatus {
     pub answer: AudioTarget,
     /// This Mac can carry call audio (false once macOS refused it).
     pub mac_audio: bool,
+    /// Something keeps calls from working here, and what to do about it
+    /// (e.g. another program has the hands-free role on Linux).
+    pub problem: Option<String>,
+    /// "macos", "linux", ... (the Settings wording differs a little).
+    pub os: String,
 }
 
-/// The audio devices on this Mac (by name), for the pickers.
+/// The audio devices on this computer (by name), for the pickers.
 #[derive(Clone, Debug, Default, Serialize, specta::Type)]
 pub struct AudioDevices {
     pub outputs: Vec<String>,
@@ -796,10 +841,7 @@ fn status_of(app: &AppHandle) -> CallsStatus {
         .map(|p| p.get())
         .unwrap_or_default();
     let m = MACHINE.lock().map(|m| m.clone()).unwrap_or_default();
-    #[cfg(target_os = "macos")]
-    let device_name = mac::cached_name(p.device.as_deref());
-    #[cfg(not(target_os = "macos"))]
-    let device_name = None;
+    let device_name = backend::cached_name(p.device.as_deref());
     let (output, input) = in_use();
     CallsStatus {
         output,
@@ -821,43 +863,16 @@ fn status_of(app: &AppHandle) -> CallsStatus {
         audio: m.audio(),
         answer: p.answer,
         mac_audio: !p.mac_audio_refused,
+        problem: if p.on { backend::problem() } else { None },
+        os: std::env::consts::OS.to_string(),
     }
 }
 
-/// Run `f` on the main thread (IOBluetooth lives there) and wait for it.
-#[cfg(target_os = "macos")]
-fn on_main<T: Send + 'static>(
-    app: &AppHandle,
-    f: impl FnOnce() -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    let (tx, rx) = std::sync::mpsc::channel();
-    app.run_on_main_thread(move || {
-        let _ = tx.send(f());
-    })
-    .map_err(|e| e.to_string())?;
-    rx.recv_timeout(std::time::Duration::from_secs(5))
-        .map_err(|_| "Bluetooth didn\u{2019}t answer in time.".to_string())?
-}
-
-#[cfg(not(target_os = "macos"))]
-fn on_main<T: Send + 'static>(
-    _app: &AppHandle,
-    _f: impl FnOnce() -> Result<T, String> + Send + 'static,
-) -> Result<T, String> {
-    Err(NOT_AVAILABLE.into())
-}
-
-/// Main-thread IOBluetooth call, or "not available" off macOS.
-macro_rules! mac_call {
+/// A backend call, run where the backend needs it (macOS: the main thread)
+/// and waited for; "not available" where there's no backend.
+macro_rules! hf_call {
     ($app:expr, $body:expr) => {{
-        #[cfg(target_os = "macos")]
-        let r = on_main(&$app, move || $body);
-        #[cfg(not(target_os = "macos"))]
-        let r: Result<_, String> = {
-            let _ = &$app;
-            Err(NOT_AVAILABLE.to_string())
-        };
-        r
+        backend::exec(&$app, move || $body)
     }};
 }
 
@@ -872,10 +887,10 @@ pub fn calls_status(app: AppHandle) -> CallsStatus {
 #[tauri::command]
 #[specta::specta]
 pub async fn calls_devices(app: AppHandle) -> Result<Vec<CallDevice>, String> {
-    mac_call!(app, mac::gateways())
+    hf_call!(app, backend::gateways())
 }
 
-/// Turn "Calls on this Mac" on or off (off disconnects).
+/// Turn "Calls on this computer" on or off (off disconnects).
 #[tauri::command]
 #[specta::specta]
 pub async fn calls_set_enabled(on: bool, app: AppHandle) -> Result<CallsStatus, String> {
@@ -886,7 +901,7 @@ pub async fn calls_set_enabled(on: bool, app: AppHandle) -> Result<CallsStatus, 
         p.update(|p| p.on = on);
     }
     if !on && available() {
-        mac_call!(app, mac::disconnect())?;
+        hf_call!(app, backend::disconnect())?;
     }
     Ok(status_of(&app))
 }
@@ -901,7 +916,7 @@ pub async fn calls_set_device(
     let address = address.filter(|a| !a.trim().is_empty());
     let old = app.try_state::<CallsPrefs>().and_then(|p| p.get().device);
     if old != address && old.is_some() && available() {
-        mac_call!(app, mac::disconnect())?;
+        hf_call!(app, backend::disconnect())?;
     }
     if let Some(p) = app.try_state::<CallsPrefs>() {
         p.update(|p| p.device = address);
@@ -910,7 +925,7 @@ pub async fn calls_set_device(
 }
 
 /// Where the audio goes when a call is answered here: the phone, or this
-/// Mac's default or chosen devices.
+/// computer's default or chosen devices.
 #[tauri::command]
 #[specta::specta]
 pub fn calls_set_answer_audio(target: AudioTarget, app: AppHandle) -> CallsStatus {
@@ -920,23 +935,19 @@ pub fn calls_set_answer_audio(target: AudioTarget, app: AppHandle) -> CallsStatu
     status_of(&app)
 }
 
-/// This Mac's audio outputs and inputs (the phone's own device left out).
+/// This computer's audio outputs and inputs (the phone's own device left out).
 #[tauri::command]
 #[specta::specta]
 pub async fn calls_audio_devices() -> AudioDevices {
-    #[cfg(target_os = "macos")]
-    return audio::list();
-    #[cfg(not(target_os = "macos"))]
-    AudioDevices::default()
+    audio::list()
 }
 
-/// Move this call's audio: to the phone, or to this Mac on the given
+/// Move this call's audio: to the phone, or to this computer on the given
 /// output and input (`None`: the system default).
 #[tauri::command]
 #[specta::specta]
 pub async fn call_set_audio(target: AudioTarget, app: AppHandle) -> Result<(), String> {
-    let _ = &target;
-    mac_call!(app, set_call_audio(target))
+    hf_call!(app, set_call_audio(target))
 }
 
 /// Connect to the chosen phone as its hands-free (the delegate says when).
@@ -951,19 +962,19 @@ pub async fn calls_connect(app: AppHandle) -> Result<(), String> {
         return Err(NOT_AVAILABLE.into());
     }
     if !p.on {
-        return Err("Turn on \u{201c}Calls on this Mac\u{201d} first.".into());
+        return Err("Turn on \u{201c}Calls on this computer\u{201d} first.".into());
     }
     let Some(addr) = p.device else {
         return Err("Pick your phone first.".into());
     };
-    mac_call!(app, mac::connect(&addr))
+    hf_call!(app, backend::connect(&addr))
 }
 
 /// Drop the hands-free link to the phone.
 #[tauri::command]
 #[specta::specta]
 pub async fn calls_disconnect(app: AppHandle) -> Result<(), String> {
-    mac_call!(app, mac::disconnect())
+    hf_call!(app, backend::disconnect())
 }
 
 /// Answer the ringing call (audio where Settings says).
@@ -971,22 +982,21 @@ pub async fn calls_disconnect(app: AppHandle) -> Result<(), String> {
 #[specta::specta]
 pub async fn call_answer(app: AppHandle) -> Result<(), String> {
     let on_mac = !call_target().phone;
-    let _ = on_mac;
-    mac_call!(app, mac::answer(on_mac))
+    hf_call!(app, backend::answer(on_mac))
 }
 
 /// Turn down the ringing call.
 #[tauri::command]
 #[specta::specta]
 pub async fn call_decline(app: AppHandle) -> Result<(), String> {
-    mac_call!(app, mac::end_call())
+    hf_call!(app, backend::end_call())
 }
 
 /// End the call.
 #[tauri::command]
 #[specta::specta]
 pub async fn call_hang_up(app: AppHandle) -> Result<(), String> {
-    mac_call!(app, mac::end_call())
+    hf_call!(app, backend::end_call())
 }
 
 /// Call a number through the phone.
@@ -994,15 +1004,14 @@ pub async fn call_hang_up(app: AppHandle) -> Result<(), String> {
 #[specta::specta]
 pub async fn call_dial(number: String, app: AppHandle) -> Result<(), String> {
     let number = sanitize_number(&number)?;
-    let _ = &number;
-    mac_call!(app, mac::dial(&number))
+    hf_call!(app, backend::dial(&number))
 }
 
 /// Call the last number again (the phone remembers it).
 #[tauri::command]
 #[specta::specta]
 pub async fn call_redial(app: AppHandle) -> Result<(), String> {
-    mac_call!(app, mac::redial())
+    hf_call!(app, backend::redial())
 }
 
 /// One keypad tone during the call.
@@ -1010,16 +1019,14 @@ pub async fn call_redial(app: AppHandle) -> Result<(), String> {
 #[specta::specta]
 pub async fn call_dtmf(digit: String, app: AppHandle) -> Result<(), String> {
     let d = dtmf_digit(&digit).ok_or("Only 0-9, *, # and A-D.")?;
-    let _ = d;
-    mac_call!(app, mac::dtmf(d))
+    hf_call!(app, backend::dtmf(d))
 }
 
-/// Mute or unmute this Mac's microphone for the call.
+/// Mute or unmute this computer's microphone for the call.
 #[tauri::command]
 #[specta::specta]
 pub async fn call_mute(on: bool, app: AppHandle) -> Result<(), String> {
-    let _ = on;
-    mac_call!(app, mac::set_muted(on))
+    hf_call!(app, backend::set_muted(on))
 }
 
 /// Move the call audio to the phone (the controls here keep working).
@@ -1030,11 +1037,10 @@ pub async fn call_audio_to_phone(app: AppHandle) -> Result<(), String> {
         phone: true,
         ..call_target()
     };
-    let _ = &target;
-    mac_call!(app, set_call_audio(target))
+    hf_call!(app, set_call_audio(target))
 }
 
-/// Bring the call audio to this Mac (on the devices last chosen).
+/// Bring the call audio to this computer (on the devices last chosen).
 #[tauri::command]
 #[specta::specta]
 pub async fn call_audio_to_mac(app: AppHandle) -> Result<(), String> {
@@ -1042,8 +1048,7 @@ pub async fn call_audio_to_mac(app: AppHandle) -> Result<(), String> {
         phone: false,
         ..call_target()
     };
-    let _ = &target;
-    mac_call!(app, set_call_audio(target))
+    hf_call!(app, set_call_audio(target))
 }
 
 // ---------------------------------------------------------------------------
@@ -1079,7 +1084,7 @@ mod mac {
     /// call's audio link for an app.
     const UNSUPPORTED: i32 = 0xE000_02C7_u32 as i32;
 
-    const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this Mac.";
+    const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this computer.";
 
     struct Session {
         address: String,
@@ -1480,10 +1485,349 @@ mod mac {
             let _: () = msg_send![hf, connectSCO];
         })
     }
+
+    /// Run `f` on the main thread (IOBluetooth lives there) and wait for it.
+    pub fn exec<T: Send + 'static>(
+        app: &tauri::AppHandle,
+        f: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        let (tx, rx) = std::sync::mpsc::channel();
+        app.run_on_main_thread(move || {
+            let _ = tx.send(f());
+        })
+        .map_err(|e| e.to_string())?;
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+            .map_err(|_| "Bluetooth didn\u{2019}t answer in time.".to_string())?
+    }
+
+    /// Run `f` on the main thread later.
+    pub fn run_later(app: &tauri::AppHandle, f: impl FnOnce() + Send + 'static) {
+        let _ = app.run_on_main_thread(f);
+    }
+
+    /// The call audio shows up as a CoreAudio device named after the phone.
+    pub fn phone_end() -> Option<super::audio::PhoneEnd> {
+        Some(super::audio::PhoneEnd::Device(device_name()))
+    }
+
+    /// Nothing stands in the way on macOS (a refused audio link is
+    /// `mac_audio_refused`, handled on its own).
+    pub fn problem() -> Option<String> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
-// Call audio: the phone's SCO audio device <-> this Mac's speaker and mic
+// Linux: BlueZ through md-hfp (its own threads)
+// ---------------------------------------------------------------------------
+
+// Compiled into the macOS test build too (md-hfp's stub `Hfp` has the same
+// API there), so this glue is at least type-checked off Linux.
+#[cfg(any(target_os = "linux", test))]
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+mod linux {
+    use std::sync::{Arc, Mutex};
+
+    use md_hfp::{Event, HfEvent, Hfp};
+
+    use super::{call_status_phase, feed, CallDevice, Ev, Phase, MIC_MUTED};
+
+    const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this computer.";
+
+    /// The hands-free unit, started on first use.
+    static HFP: Mutex<Option<Arc<Hfp>>> = Mutex::new(None);
+    /// Why it couldn't start (BlueZ not running...), for Settings.
+    static START_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+    fn current() -> Option<Arc<Hfp>> {
+        HFP.lock().ok()?.clone()
+    }
+
+    /// The running unit, starting it if need be.
+    fn hfp() -> Result<Arc<Hfp>, String> {
+        let mut g = HFP
+            .lock()
+            .map_err(|_| "Bluetooth calls stopped.".to_string())?;
+        if let Some(h) = g.as_ref() {
+            return Ok(h.clone());
+        }
+        let started = Hfp::start(on_event);
+        if let Ok(mut e) = START_ERROR.lock() {
+            *e = started.as_ref().err().cloned();
+        }
+        let h = Arc::new(started?);
+        *g = Some(h.clone());
+        Ok(h)
+    }
+
+    /// md-hfp's events (its dispatcher thread, in order) into the call state.
+    fn on_event(ev: HfEvent) {
+        match ev {
+            HfEvent::At(e) => match e {
+                Event::Ready { .. } => feed(Ev::Connected(true)),
+                Event::Call(on) => feed(Ev::Call(on)),
+                Event::Setup(s) => {
+                    feed(Ev::Setup(s));
+                    if s == 1 {
+                        // The caller's name, when the phone lists it.
+                        if let Some(h) = current() {
+                            let _ = h.list_calls();
+                        }
+                    }
+                }
+                Event::Held(h) => feed(Ev::Held(h)),
+                Event::Signal(s) => feed(Ev::Signal(s)),
+                Event::Battery(b) => feed(Ev::Battery(b)),
+                Event::Caller { number, name } => {
+                    feed(Ev::Incoming(number.clone()));
+                    if name.is_some() {
+                        feed(Ev::CallInfo {
+                            number: Some(number),
+                            name,
+                        });
+                    }
+                }
+                Event::ListedCall(c) => {
+                    // Only the ringing or current call's caller is shown.
+                    if call_status_phase(c.status as i32) != Phase::Idle {
+                        feed(Ev::CallInfo {
+                            number: c.number,
+                            name: c.name,
+                        });
+                    }
+                }
+                Event::Refused { command } => {
+                    eprintln!("[calls] the phone refused {command}");
+                }
+                _ => {}
+            },
+            HfEvent::Disconnected => feed(Ev::Connected(false)),
+            HfEvent::Audio(a) => feed(Ev::Sco(a.is_some())),
+            HfEvent::ConnectFailed(why) => {
+                eprintln!("[calls] connect failed: {why}");
+                if let Some(app) = super::APP.get() {
+                    crate::notify::post_always(
+                        app,
+                        "Couldn\u{2019}t connect to your phone for calls",
+                        &why,
+                    );
+                }
+                feed(Ev::Connected(false));
+            }
+            HfEvent::Problem(p) => {
+                if let Some(p) = &p {
+                    eprintln!("[calls] {p}");
+                }
+                if let Some(app) = super::APP.get() {
+                    if let Ok(m) = super::MACHINE.lock().map(|m| m.clone()) {
+                        super::emit_state(app, &m);
+                    }
+                }
+            }
+        }
+    }
+
+    /// md-hfp blocks only briefly (its worker answers within seconds), so
+    /// calls run right here, on the caller's thread.
+    pub fn exec<T: Send + 'static>(
+        _app: &tauri::AppHandle,
+        f: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        f()
+    }
+
+    pub fn run_later(_app: &tauri::AppHandle, f: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(f);
+    }
+
+    pub fn gateways() -> Result<Vec<CallDevice>, String> {
+        Ok(hfp()?
+            .gateways()?
+            .into_iter()
+            .map(|g| CallDevice {
+                address: g.address,
+                name: g.name,
+                connected: g.connected,
+            })
+            .collect())
+    }
+
+    pub fn connect(addr: &str) -> Result<(), String> {
+        hfp()?.connect(addr)
+    }
+
+    pub fn disconnect() -> Result<(), String> {
+        match current() {
+            Some(h) => h.disconnect(),
+            None => Ok(()),
+        }
+    }
+
+    fn connected() -> Result<Arc<Hfp>, String> {
+        current().ok_or_else(|| NOT_CONNECTED.to_string())
+    }
+
+    pub fn answer(on_computer: bool) -> Result<(), String> {
+        connected()?.answer(on_computer)
+    }
+
+    pub fn end_call() -> Result<(), String> {
+        connected()?.hang_up()
+    }
+
+    pub fn dial(number: &str) -> Result<(), String> {
+        connected()?.dial(number)
+    }
+
+    pub fn redial() -> Result<(), String> {
+        connected()?.redial()
+    }
+
+    pub fn dtmf(c: char) -> Result<(), String> {
+        connected()?.dtmf(c)
+    }
+
+    /// The microphone is ours on Linux: muting just silences what the
+    /// bridge sends.
+    pub fn set_muted(on: bool) -> Result<(), String> {
+        connected()?;
+        MIC_MUTED.store(on, std::sync::atomic::Ordering::Relaxed);
+        feed(Ev::Muted(on));
+        Ok(())
+    }
+
+    pub fn audio_to_phone() -> Result<(), String> {
+        connected()?.audio_to_phone()
+    }
+
+    pub fn audio_to_mac() -> Result<(), String> {
+        connected()?.audio_here()
+    }
+
+    pub fn connect_sco() -> Result<(), String> {
+        connected()?.connect_audio()
+    }
+
+    /// The open audio link's samples (none while it's closed).
+    pub fn phone_end() -> Option<super::audio::PhoneEnd> {
+        current()?.audio().map(super::audio::PhoneEnd::Sco)
+    }
+
+    pub fn device_name() -> String {
+        current().map(|h| h.device_name()).unwrap_or_default()
+    }
+
+    pub fn known_name() -> String {
+        device_name()
+    }
+
+    pub fn cached_name(addr: Option<&str>) -> Option<String> {
+        current()?.cached_name(addr?)
+    }
+
+    /// Why calls can't work here right now: BlueZ missing, or another
+    /// program with the hands-free role (and how to turn that off).
+    pub fn problem() -> Option<String> {
+        match current() {
+            Some(h) => h.problem(),
+            None => START_ERROR.lock().ok()?.clone(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// No backend on this OS: everything says "not available"
+// ---------------------------------------------------------------------------
+
+#[cfg(any(not(any(target_os = "macos", target_os = "linux")), test))]
+#[allow(dead_code)]
+mod none {
+    use super::{CallDevice, NOT_AVAILABLE};
+
+    fn no<T>() -> Result<T, String> {
+        Err(NOT_AVAILABLE.into())
+    }
+
+    pub fn exec<T: Send + 'static>(
+        _app: &tauri::AppHandle,
+        _f: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        no()
+    }
+
+    pub fn run_later(_app: &tauri::AppHandle, _f: impl FnOnce() + Send + 'static) {}
+
+    pub fn gateways() -> Result<Vec<CallDevice>, String> {
+        no()
+    }
+
+    pub fn connect(_addr: &str) -> Result<(), String> {
+        no()
+    }
+
+    pub fn disconnect() -> Result<(), String> {
+        no()
+    }
+
+    pub fn answer(_on_computer: bool) -> Result<(), String> {
+        no()
+    }
+
+    pub fn end_call() -> Result<(), String> {
+        no()
+    }
+
+    pub fn dial(_number: &str) -> Result<(), String> {
+        no()
+    }
+
+    pub fn redial() -> Result<(), String> {
+        no()
+    }
+
+    pub fn dtmf(_c: char) -> Result<(), String> {
+        no()
+    }
+
+    pub fn set_muted(_on: bool) -> Result<(), String> {
+        no()
+    }
+
+    pub fn audio_to_phone() -> Result<(), String> {
+        no()
+    }
+
+    pub fn audio_to_mac() -> Result<(), String> {
+        no()
+    }
+
+    pub fn connect_sco() -> Result<(), String> {
+        no()
+    }
+
+    pub fn phone_end() -> Option<super::audio::PhoneEnd> {
+        None
+    }
+
+    pub fn device_name() -> String {
+        String::new()
+    }
+
+    pub fn known_name() -> String {
+        String::new()
+    }
+
+    pub fn cached_name(_addr: Option<&str>) -> Option<String> {
+        None
+    }
+
+    pub fn problem() -> Option<String> {
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Call audio: the phone's audio link <-> this computer's speaker and mic
 // ---------------------------------------------------------------------------
 
 /// Linear resampling of mono samples from one rate to another (call audio is
@@ -1575,26 +1919,37 @@ pub fn pick_device(
     .or_else(|| available.iter().find(|a| usable(a)).cloned())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod audio {
     use std::collections::VecDeque;
-    use std::ffi::c_void;
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
-    use std::sync::{Arc, Mutex, Once};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-    use tauri::Emitter;
 
     use super::{
         downmix, is_phone_device, pick_device, AudioDevices, AudioTarget, Resampler, MIC_MUTED,
     };
 
+    /// The phone's end of the call audio, as the backend has it.
+    #[derive(Clone)]
+    pub enum PhoneEnd {
+        /// macOS: the CoreAudio device the system makes for the audio
+        /// link, named after the phone.
+        #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+        Device(String),
+        /// Linux: the audio link's samples (md-hfp holds the socket).
+        #[cfg_attr(target_os = "macos", allow(dead_code))]
+        Sco(Arc<md_hfp::ScoPcm>),
+    }
+
     /// How often, and how many times, to look for the phone's audio device
-    /// after the SCO link opens (it can take a moment to appear).
+    /// after the SCO link opens (it can take a moment to appear). On Linux
+    /// the samples are handed over directly (its bridge never waits).
     const FIND_EVERY: Duration = Duration::from_millis(300);
-    const FIND_TRIES: u32 = 10;
+    const FIND_TRIES: u32 = if cfg!(target_os = "macos") { 10 } else { 1 };
 
     /// A bridge thread; dropping `_stop` ends it (and its streams).
     struct Running {
@@ -1606,9 +1961,9 @@ mod audio {
     }
 
     struct State {
-        /// The phone's name and where its audio should go, while the SCO
+        /// The phone's end and where its audio should go, while the SCO
         /// link is open.
-        want: Option<(String, AudioTarget)>,
+        want: Option<(PhoneEnd, AudioTarget)>,
         running: Option<Running>,
         gen: u64,
     }
@@ -1619,9 +1974,9 @@ mod audio {
         gen: 0,
     });
 
-    /// Bridge the phone's audio device to `target` (restarting a running
-    /// bridge). Doesn't block.
-    pub fn start(phone: String, target: AudioTarget) {
+    /// Bridge the phone's audio to `target` (restarting a running bridge).
+    /// Doesn't block.
+    pub fn start(phone: PhoneEnd, target: AudioTarget) {
         let (tx, rx) = mpsc::channel::<()>();
         let gen = {
             let Ok(mut s) = STATE.lock() else {
@@ -1729,10 +2084,10 @@ mod audio {
         v
     }
 
-    /// This Mac's outputs and inputs, without the phone's own device.
+    /// This computer's outputs and inputs, without the phone's own device.
     pub fn list() -> AudioDevices {
         let host = cpal::default_host();
-        let phone = super::mac::known_name();
+        let phone = super::backend::known_name();
         let keep = |v: Vec<String>| -> Vec<String> {
             v.into_iter()
                 .filter(|n| !is_phone_device(n, &phone))
@@ -1748,7 +2103,9 @@ mod audio {
 
     /// Devices came or went: tell the UI, and move a running bridge whose
     /// device went (or retry one that found no phone device).
+    #[cfg(target_os = "macos")]
     fn devices_changed() {
+        use tauri::Emitter;
         if let Some(app) = super::APP.get() {
             let _ = app.emit("calls-audio-devices", ());
         }
@@ -1780,45 +2137,49 @@ mod audio {
         }
     }
 
-    #[repr(C)]
-    struct PropertyAddress {
-        selector: u32,
-        scope: u32,
-        element: u32,
-    }
-
-    type Listener = unsafe extern "C" fn(u32, u32, *const PropertyAddress, *mut c_void) -> i32;
-
-    #[link(name = "CoreAudio", kind = "framework")]
-    extern "C" {
-        fn AudioObjectAddPropertyListener(
-            object: u32,
-            address: *const PropertyAddress,
-            listener: Listener,
-            data: *mut c_void,
-        ) -> i32;
-    }
-
-    const fn fourcc(s: &[u8; 4]) -> u32 {
-        u32::from_be_bytes(*s)
-    }
-
-    /// `kAudioObjectSystemObject`.
-    const SYSTEM_OBJECT: u32 = 1;
-
-    unsafe extern "C" fn on_devices(
-        _object: u32,
-        _count: u32,
-        _addresses: *const PropertyAddress,
-        _data: *mut c_void,
-    ) -> i32 {
-        // CoreAudio's own thread: do the work elsewhere.
-        std::thread::spawn(devices_changed);
-        0
-    }
-
     /// Listen for audio devices coming and going (once per process).
+    #[cfg(target_os = "macos")]
     pub fn watch_devices() {
+        use std::ffi::c_void;
+        use std::sync::Once;
+
+        #[repr(C)]
+        struct PropertyAddress {
+            selector: u32,
+            scope: u32,
+            element: u32,
+        }
+
+        type Listener = unsafe extern "C" fn(u32, u32, *const PropertyAddress, *mut c_void) -> i32;
+
+        #[link(name = "CoreAudio", kind = "framework")]
+        extern "C" {
+            fn AudioObjectAddPropertyListener(
+                object: u32,
+                address: *const PropertyAddress,
+                listener: Listener,
+                data: *mut c_void,
+            ) -> i32;
+        }
+
+        const fn fourcc(s: &[u8; 4]) -> u32 {
+            u32::from_be_bytes(*s)
+        }
+
+        /// `kAudioObjectSystemObject`.
+        const SYSTEM_OBJECT: u32 = 1;
+
+        unsafe extern "C" fn on_devices(
+            _object: u32,
+            _count: u32,
+            _addresses: *const PropertyAddress,
+            _data: *mut c_void,
+        ) -> i32 {
+            // CoreAudio's own thread: do the work elsewhere.
+            std::thread::spawn(devices_changed);
+            0
+        }
+
         static ONCE: Once = Once::new();
         ONCE.call_once(|| {
             let address = PropertyAddress {
@@ -1842,12 +2203,72 @@ mod audio {
         });
     }
 
-    type Ring = Arc<Mutex<VecDeque<f32>>>;
-    type Bridge = (Vec<cpal::Stream>, String, String);
+    /// No device watching on Linux (see the top of this file): the pickers
+    /// refresh when opened.
+    #[cfg(not(target_os = "macos"))]
+    pub fn watch_devices() {}
 
-    /// Four streams: phone -> output, input -> phone, on the devices
-    /// `pick_device` chooses. `None` while the phone's device isn't there.
-    fn bridge(phone: &str, target: &AudioTarget) -> Result<Option<Bridge>, String> {
+    /// A running bridge's streams; dropping it ends them and unhooks the
+    /// audio link's sink.
+    struct Streams {
+        streams: Vec<cpal::Stream>,
+        sco: Option<Arc<md_hfp::ScoPcm>>,
+    }
+
+    impl Drop for Streams {
+        fn drop(&mut self) {
+            if let Some(sco) = &self.sco {
+                sco.set_sink(None);
+            }
+            self.streams.clear();
+        }
+    }
+
+    type Bridge = (Streams, String, String);
+
+    /// Bridge the phone's end to `target`'s devices. `None` while the
+    /// phone's device isn't there (macOS).
+    fn bridge(phone: &PhoneEnd, target: &AudioTarget) -> Result<Option<Bridge>, String> {
+        match phone {
+            PhoneEnd::Device(name) => bridge_device(name, target),
+            PhoneEnd::Sco(sco) => bridge_sco(sco, target).map(Some),
+        }
+    }
+
+    /// The speaker and microphone to use: (output name, device, input
+    /// name, device), never the phone's own device.
+    fn choose(
+        host: &cpal::Host,
+        target: &AudioTarget,
+        phone: &str,
+    ) -> Result<(String, cpal::Device, String, cpal::Device), String> {
+        let name = |d: &cpal::Device| d.name().unwrap_or_default();
+        let outs = host
+            .output_devices()
+            .map(names)
+            .map_err(|e| e.to_string())?;
+        let ins = host.input_devices().map(names).map_err(|e| e.to_string())?;
+        let def_out = host.default_output_device().map(|d| name(&d));
+        let def_in = host.default_input_device().map(|d| name(&d));
+        let out_name = pick_device(target.output.as_deref(), &outs, def_out.as_deref(), phone)
+            .ok_or("no speaker or headset to play the call on")?;
+        let in_name = pick_device(target.input.as_deref(), &ins, def_in.as_deref(), phone)
+            .ok_or("no microphone for the call")?;
+        let out = host
+            .output_devices()
+            .map_err(|e| e.to_string())?
+            .find(|d| name(d) == out_name)
+            .ok_or("the speaker went away")?;
+        let inp = host
+            .input_devices()
+            .map_err(|e| e.to_string())?
+            .find(|d| name(d) == in_name)
+            .ok_or("the microphone went away")?;
+        Ok((out_name, out, in_name, inp))
+    }
+
+    /// macOS: four streams, phone device -> output, input -> phone device.
+    fn bridge_device(phone: &str, target: &AudioTarget) -> Result<Option<Bridge>, String> {
         let host = cpal::default_host();
         let name = |d: &cpal::Device| d.name().unwrap_or_default();
         let phone_in = host
@@ -1861,33 +2282,73 @@ mod audio {
         let (Some(phone_in), Some(phone_out)) = (phone_in, phone_out) else {
             return Ok(None);
         };
-        let outs = host
-            .output_devices()
-            .map(names)
-            .map_err(|e| e.to_string())?;
-        let ins = host.input_devices().map(names).map_err(|e| e.to_string())?;
-        let def_out = host.default_output_device().map(|d| name(&d));
-        let def_in = host.default_input_device().map(|d| name(&d));
-        let out_name = pick_device(target.output.as_deref(), &outs, def_out.as_deref(), phone)
-            .ok_or("no speaker or headset to play the call on")?;
-        let in_name = pick_device(target.input.as_deref(), &ins, def_in.as_deref(), phone)
-            .ok_or("no microphone for the call")?;
-        let mac_out = host
-            .output_devices()
-            .map_err(|e| e.to_string())?
-            .find(|d| name(d) == out_name)
-            .ok_or("the speaker went away")?;
-        let mac_in = host
-            .input_devices()
-            .map_err(|e| e.to_string())?
-            .find(|d| name(d) == in_name)
-            .ok_or("the microphone went away")?;
+        let (out_name, mac_out, in_name, mac_in) = choose(&host, target, phone)?;
         let mut streams = pipe(&phone_in, &mac_out, false)?;
         streams.extend(pipe(&mac_in, &phone_out, true)?);
         for s in &streams {
             s.play().map_err(|e| e.to_string())?;
         }
-        Ok(Some((streams, out_name, in_name)))
+        Ok(Some((Streams { streams, sco: None }, out_name, in_name)))
+    }
+
+    /// Linux: the audio link's samples -> output; input -> the audio link.
+    fn bridge_sco(sco: &Arc<md_hfp::ScoPcm>, target: &AudioTarget) -> Result<Bridge, String> {
+        let host = cpal::default_host();
+        let (out_name, out, in_name, inp) = choose(&host, target, "")?;
+        let out_cfg = out.default_output_config().map_err(|e| e.to_string())?;
+        let out_hz = out_cfg.sample_rate().0;
+        let ring = Ring::new(out_hz);
+        let speaker = play(&out, &out_cfg, ring.clone())?;
+        let link = sco.clone();
+        let mic = capture(&inp, sco.rate(), true, move |s| link.push_mic(s))?;
+        let streams = vec![mic, speaker];
+        for s in &streams {
+            s.play().map_err(|e| e.to_string())?;
+        }
+        // Only now, with everything playing: the caller's voice, resampled
+        // to the speaker's rate.
+        let mut resampler = Resampler::new(sco.rate(), out_hz);
+        let mut buf = Vec::new();
+        sco.set_sink(Some(Box::new(move |s: &[f32]| {
+            buf.clear();
+            resampler.process(s, &mut buf);
+            ring.push(&buf);
+        })));
+        Ok((
+            Streams {
+                streams,
+                sco: Some(sco.clone()),
+            },
+            out_name,
+            in_name,
+        ))
+    }
+
+    /// Mono samples waiting for an output stream: half a second at most,
+    /// so a stall doesn't build up delay.
+    #[derive(Clone)]
+    struct Ring {
+        q: Arc<Mutex<VecDeque<f32>>>,
+        cap: usize,
+    }
+
+    impl Ring {
+        fn new(hz: u32) -> Self {
+            let cap = (hz / 2) as usize;
+            Ring {
+                q: Arc::new(Mutex::new(VecDeque::with_capacity(cap))),
+                cap,
+            }
+        }
+
+        fn push(&self, samples: &[f32]) {
+            if let Ok(mut r) = self.q.lock() {
+                r.extend(samples.iter().copied());
+                while r.len() > self.cap {
+                    r.pop_front();
+                }
+            }
+        }
     }
 
     /// Input device -> output device; `mic` ones are silenced while muted.
@@ -1896,53 +2357,89 @@ mod audio {
         to: &cpal::Device,
         mic: bool,
     ) -> Result<Vec<cpal::Stream>, String> {
-        let in_cfg = from.default_input_config().map_err(|e| e.to_string())?;
         let out_cfg = to.default_output_config().map_err(|e| e.to_string())?;
-        let (in_ch, out_ch) = (in_cfg.channels() as usize, out_cfg.channels() as usize);
-        let out_hz = out_cfg.sample_rate().0;
-        // Half a second at most, so a stall doesn't build up delay.
-        let cap = (out_hz / 2) as usize;
-        let ring: Ring = Arc::new(Mutex::new(VecDeque::with_capacity(cap)));
-        let mut resampler = Resampler::new(in_cfg.sample_rate().0, out_hz);
+        let ring = Ring::new(out_cfg.sample_rate().0);
         let writer = ring.clone();
-        let mut buf = Vec::new();
-        let input = from
-            .build_input_stream::<f32, _, _>(
-                &in_cfg.config(),
-                move |data, _| {
-                    let mut mono = downmix(data, in_ch);
-                    if mic && MIC_MUTED.load(Ordering::Relaxed) {
-                        mono.iter_mut().for_each(|s| *s = 0.0);
-                    }
-                    buf.clear();
-                    resampler.process(&mono, &mut buf);
-                    if let Ok(mut r) = writer.lock() {
-                        r.extend(buf.iter().copied());
-                        while r.len() > cap {
-                            r.pop_front();
-                        }
-                    }
-                },
-                |e| eprintln!("[calls] audio input: {e}"),
-                None,
-            )
-            .map_err(|e| e.to_string())?;
-        let output = to
-            .build_output_stream::<f32, _, _>(
-                &out_cfg.config(),
-                move |data: &mut [f32], _| {
-                    let mut r = ring.lock().ok();
-                    for frame in data.chunks_mut(out_ch.max(1)) {
-                        let s = r.as_mut().and_then(|r| r.pop_front()).unwrap_or(0.0);
-                        frame.iter_mut().for_each(|o| *o = s);
-                    }
-                },
-                |e| eprintln!("[calls] audio output: {e}"),
-                None,
-            )
-            .map_err(|e| e.to_string())?;
+        let input = capture(from, out_cfg.sample_rate().0, mic, move |s| writer.push(s))?;
+        let output = play(to, &out_cfg, ring)?;
         Ok(vec![input, output])
     }
+
+    /// Record `from` as mono at `to_hz` (silenced while muted when `mic`)
+    /// and hand each piece to `sink`.
+    fn capture(
+        from: &cpal::Device,
+        to_hz: u32,
+        mic: bool,
+        mut sink: impl FnMut(&[f32]) + Send + 'static,
+    ) -> Result<cpal::Stream, String> {
+        let in_cfg = from.default_input_config().map_err(|e| e.to_string())?;
+        let in_ch = in_cfg.channels() as usize;
+        let mut resampler = Resampler::new(in_cfg.sample_rate().0, to_hz);
+        let mut buf = Vec::new();
+        from.build_input_stream::<f32, _, _>(
+            &in_cfg.config(),
+            move |data, _| {
+                let mut mono = downmix(data, in_ch);
+                if mic && MIC_MUTED.load(Ordering::Relaxed) {
+                    mono.iter_mut().for_each(|s| *s = 0.0);
+                }
+                buf.clear();
+                resampler.process(&mono, &mut buf);
+                sink(&buf);
+            },
+            |e| eprintln!("[calls] audio input: {e}"),
+            None,
+        )
+        .map_err(|e| e.to_string())
+    }
+
+    /// Play `ring` (at `cfg`'s rate) on `to`, the same sample on every
+    /// channel; silence when it runs dry.
+    fn play(
+        to: &cpal::Device,
+        cfg: &cpal::SupportedStreamConfig,
+        ring: Ring,
+    ) -> Result<cpal::Stream, String> {
+        let out_ch = cfg.channels() as usize;
+        to.build_output_stream::<f32, _, _>(
+            &cfg.config(),
+            move |data: &mut [f32], _| {
+                let mut r = ring.q.lock().ok();
+                for frame in data.chunks_mut(out_ch.max(1)) {
+                    let s = r.as_mut().and_then(|r| r.pop_front()).unwrap_or(0.0);
+                    frame.iter_mut().for_each(|o| *o = s);
+                }
+            },
+            |e| eprintln!("[calls] audio output: {e}"),
+            None,
+        )
+        .map_err(|e| e.to_string())
+    }
+}
+
+/// No audio bridge on this OS (no backend to give it a phone end).
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+mod audio {
+    use super::{AudioDevices, AudioTarget};
+
+    pub enum PhoneEnd {}
+
+    pub fn start(phone: PhoneEnd, _target: AudioTarget) {
+        match phone {}
+    }
+
+    pub fn stop() {}
+
+    pub fn in_use() -> (Option<String>, Option<String>) {
+        (None, None)
+    }
+
+    pub fn list() -> AudioDevices {
+        AudioDevices::default()
+    }
+
+    pub fn watch_devices() {}
 }
 
 #[cfg(test)]

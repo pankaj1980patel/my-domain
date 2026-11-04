@@ -20,6 +20,11 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 mdcore = { workspace = true, features = ["specta"] }
 md-ble = { workspace = true }
+# Calls on this computer, Linux side (see `calls.rs`): the HFP hands-free
+# unit over BlueZ. Its AT engine and PCM helpers are pure Rust and build on
+# every OS (so the Linux glue type-checks in the macOS test build); its
+# D-Bus/SCO part only on Linux.
+md-hfp = { workspace = true }
 # Typed commands: generates TypeScript bindings for the UI from the Rust
 # commands (ADR-0003). The three crates move in lockstep (release candidates).
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }
@@ -85,7 +90,10 @@ getrandom = "0.3"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate", "NSString", "NSValue", "NSArray"] }
 objc2-core-location = { version = "0.3.2", default-features = false, features = ["std", "CLLocation", "CLLocationManager"] }
-# Calls on this Mac (see `calls.rs`): the phone's call audio to and from
-# this Mac's speakers and microphones (CoreAudio). Already built: rodio
-# (via fcm_receiver_rs) pulls in this exact version, so no new crates.
+
+# Calls on this computer (see `calls.rs`): the phone's call audio to and
+# from this computer's speakers and microphones (CoreAudio on macOS, ALSA
+# on Linux). Already built: rodio (via fcm_receiver_rs) pulls in this exact
+# version on both, so no new crates.
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 cpal = "0.16"

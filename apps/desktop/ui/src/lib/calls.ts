@@ -1,5 +1,5 @@
-// Calls on this Mac (calls.rs): the phone's call state, kept current by the
-// call-* events, and the Mac's audio devices for the pickers (refreshed on
+// Calls on this computer (calls.rs): the phone's call state, kept current by
+// the call-* events, and the computer's audio devices for the pickers (refreshed on
 // `calls-audio-devices` when one comes or goes).
 
 import { createSignal } from "solid-js";

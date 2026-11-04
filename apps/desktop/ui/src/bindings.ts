@@ -341,16 +341,16 @@ export const commands = {
 	callsStatus: () => __TAURI_INVOKE<CallsStatus_Serialize>("calls_status"),
 	/**  Paired phones that offer the Hands-Free Audio Gateway service. */
 	callsDevices: () => typedError<CallDevice[], string>(__TAURI_INVOKE("calls_devices")),
-	/**  Turn "Calls on this Mac" on or off (off disconnects). */
+	/**  Turn "Calls on this computer" on or off (off disconnects). */
 	callsSetEnabled: (on: boolean) => typedError<CallsStatus_Serialize, string>(__TAURI_INVOKE("calls_set_enabled", { on })),
 	/**  Pick the phone (its Bluetooth address), or none. */
 	callsSetDevice: (address: string | null) => typedError<CallsStatus_Serialize, string>(__TAURI_INVOKE("calls_set_device", { address })),
 	/**
 	 *  Where the audio goes when a call is answered here: the phone, or this
-	 *  Mac's default or chosen devices.
+	 *  computer's default or chosen devices.
 	 */
 	callsSetAnswerAudio: (target: AudioTarget_Deserialize) => __TAURI_INVOKE<CallsStatus_Serialize>("calls_set_answer_audio", { target }),
-	/**  This Mac's audio outputs and inputs (the phone's own device left out). */
+	/**  This computer's audio outputs and inputs (the phone's own device left out). */
 	callsAudioDevices: () => __TAURI_INVOKE<AudioDevices_Serialize>("calls_audio_devices"),
 	/**  Connect to the chosen phone as its hands-free (the delegate says when). */
 	callsConnect: () => typedError<null, string>(__TAURI_INVOKE("calls_connect")),
@@ -368,16 +368,16 @@ export const commands = {
 	callRedial: () => typedError<null, string>(__TAURI_INVOKE("call_redial")),
 	/**  One keypad tone during the call. */
 	callDtmf: (digit: string) => typedError<null, string>(__TAURI_INVOKE("call_dtmf", { digit })),
-	/**  Mute or unmute this Mac's microphone for the call. */
+	/**  Mute or unmute this computer's microphone for the call. */
 	callMute: (on: boolean) => typedError<null, string>(__TAURI_INVOKE("call_mute", { on })),
 	/**
-	 *  Move this call's audio: to the phone, or to this Mac on the given
+	 *  Move this call's audio: to the phone, or to this computer on the given
 	 *  output and input (`None`: the system default).
 	 */
 	callSetAudio: (target: AudioTarget_Deserialize) => typedError<null, string>(__TAURI_INVOKE("call_set_audio", { target })),
 	/**  Move the call audio to the phone (the controls here keep working). */
 	callAudioToPhone: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_phone")),
-	/**  Bring the call audio to this Mac (on the devices last chosen). */
+	/**  Bring the call audio to this computer (on the devices last chosen). */
 	callAudioToMac: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_mac")),
 	/**  The picker's paths (taken: asked again, it's `None` until more arrive). */
 	takeSendRequest: () => __TAURI_INVOKE<SendRequest_Serialize | null>("take_send_request"),
@@ -392,10 +392,10 @@ export const commands = {
 };
 
 /* Types */
-/**  The audio devices on this Mac (by name), for the pickers. */
+/**  The audio devices on this computer (by name), for the pickers. */
 export type AudioDevices = AudioDevices_Serialize | AudioDevices_Deserialize;
 
-/**  The audio devices on this Mac (by name), for the pickers. */
+/**  The audio devices on this computer (by name), for the pickers. */
 export type AudioDevices_Deserialize = {
 	outputs: string[],
 	inputs: string[],
@@ -403,7 +403,7 @@ export type AudioDevices_Deserialize = {
 	default_input?: string | null,
 };
 
-/**  The audio devices on this Mac (by name), for the pickers. */
+/**  The audio devices on this computer (by name), for the pickers. */
 export type AudioDevices_Serialize = {
 	outputs: string[],
 	inputs: string[],
@@ -415,19 +415,19 @@ export type AudioDevices_Serialize = {
 export type AudioRoute = 
 /**  No call. */
 "none" | 
-/**  This Mac's speaker and microphone (the SCO link is open). */
+/**  This computer's speaker and microphone (the SCO link is open). */
 "mac" | 
 /**  The phone's own earpiece or speaker. */
 "phone";
 
 /**
- *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  Where a call's audio goes: the phone, or this computer with a chosen output
  *  and input (`None`: the system's default one).
  */
 export type AudioTarget = AudioTarget_Serialize | AudioTarget_Deserialize;
 
 /**
- *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  Where a call's audio goes: the phone, or this computer with a chosen output
  *  and input (`None`: the system's default one).
  */
 export type AudioTarget_Deserialize = {
@@ -437,7 +437,7 @@ export type AudioTarget_Deserialize = {
 };
 
 /**
- *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  Where a call's audio goes: the phone, or this computer with a chosen output
  *  and input (`None`: the system's default one).
  */
 export type AudioTarget_Serialize = {
@@ -543,7 +543,7 @@ export type BatterySample = {
 	charging: boolean,
 };
 
-/**  A paired phone that can take the Mac as its hands-free. */
+/**  A paired phone that can take this computer as its hands-free. */
 export type CallDevice = {
 	address: string,
 	name: string,
@@ -572,7 +572,7 @@ export type CallsStatus_Deserialize = {
 	signal?: number | null,
 	battery?: number | null,
 	audio: AudioRoute,
-	/**  The devices in use on this Mac while the audio's here. */
+	/**  The devices in use on this computer while the audio's here. */
 	output?: string | null,
 	input?: string | null,
 	/**  Where this call's audio was asked to go. */
@@ -581,6 +581,13 @@ export type CallsStatus_Deserialize = {
 	answer: AudioTarget_Deserialize,
 	/**  This Mac can carry call audio (false once macOS refused it). */
 	mac_audio: boolean,
+	/**
+	 *  Something keeps calls from working here, and what to do about it
+	 *  (e.g. another program has the hands-free role on Linux).
+	 */
+	problem?: string | null,
+	/**  "macos", "linux", ... (the Settings wording differs a little). */
+	os: string,
 };
 
 /**  Everything the Settings tile and the in-call bar show. */
@@ -601,7 +608,7 @@ export type CallsStatus_Serialize = {
 	signal: number | null,
 	battery: number | null,
 	audio: AudioRoute,
-	/**  The devices in use on this Mac while the audio's here. */
+	/**  The devices in use on this computer while the audio's here. */
 	output: string | null,
 	input: string | null,
 	/**  Where this call's audio was asked to go. */
@@ -610,6 +617,13 @@ export type CallsStatus_Serialize = {
 	answer: AudioTarget_Serialize,
 	/**  This Mac can carry call audio (false once macOS refused it). */
 	mac_audio: boolean,
+	/**
+	 *  Something keeps calls from working here, and what to do about it
+	 *  (e.g. another program has the hands-free role on Linux).
+	 */
+	problem: string | null,
+	/**  "macos", "linux", ... (the Settings wording differs a little). */
+	os: string,
 };
 
 /**  Which way a clip went. */

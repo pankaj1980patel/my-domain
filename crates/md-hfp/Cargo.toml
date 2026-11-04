@@ -1,0 +1,20 @@
+[package]
+name = "md-hfp"
+description = "Phone calls over Bluetooth on Linux: an HFP hands-free (HF) unit for a paired phone (AT engine, BlueZ profile over D-Bus, SCO audio)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# The AT engine and the PCM helpers are pure Rust and build everywhere (so
+# they're unit-tested on any machine). The BlueZ/SCO side is Linux only.
+[target.'cfg(target_os = "linux")'.dependencies]
+# D-Bus to BlueZ (ProfileManager1, Device1, ObjectManager). Pure Rust; the
+# same 5.x that Tauri's notify-rust already pulls in on Linux (default
+# features: its own async-io executor thread and the blocking API).
+zbus = "5"
+# The SCO (audio) sockets: AF_BLUETOOTH has no std or socket2 support.
+libc = "0.2"
+
+[lints]
+workspace = true

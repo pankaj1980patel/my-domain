@@ -4034,6 +4034,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-hfp"
+version = "0.1.0"
+dependencies = [
+ "libc",
+ "zbus 5.16.0",
+]
+
+[[package]]
 name = "md-testkit"
 version = "0.1.0"
 dependencies = [
@@ -4310,6 +4318,7 @@ dependencies = [
  "keyring",
  "machine-uid",
  "md-ble",
+ "md-hfp",
  "mdcore",
  "native-tls",
  "objc2 0.6.4",

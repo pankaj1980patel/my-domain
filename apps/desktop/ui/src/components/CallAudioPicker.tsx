@@ -1,4 +1,4 @@
-// Where a call's audio goes: the phone, or this Mac on a speaker and a
+// Where a call's audio goes: the phone, or this computer on a speaker and a
 // microphone of your choice (built-in, AirPods, a USB headset, a display…)
 // or the system default. Used in the in-call bar and in Settings (for
 // answered calls). The device list follows devices coming and going.

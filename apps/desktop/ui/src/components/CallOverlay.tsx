@@ -1,6 +1,6 @@
-// A phone call taken on this Mac (calls.rs): the incoming-call dialog
+// A phone call taken on this computer (calls.rs): the incoming-call dialog
 // (Answer / Decline) and, during a call, the in-call bar: who, how long,
-// where the audio is (and a picker to move it: phone, this Mac, another
+// where the audio is (and a picker to move it: phone, this computer, another
 // speaker or headset), Mute, Keypad, Hang up.
 
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";

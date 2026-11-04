@@ -1,6 +1,8 @@
-// "Calls on this Mac" (calls.rs): off by default; pick a phone already
-// paired in System Settings, connect, choose where answered audio goes, and
-// a dial pad. Elsewhere than macOS it only says it isn't available.
+// "Calls on this computer" (calls.rs): off by default; pick a phone already
+// paired with this computer, connect, choose where answered audio goes, and
+// a dial pad. On macOS and Linux only; elsewhere it says it isn't
+// available. A standing problem (Linux: another program has the hands-free
+// role) shows with what to do about it.
 
 import { createSignal, For, onMount, Show } from "solid-js";
 import { commands, type CallDevice } from "../bindings";
@@ -56,13 +58,14 @@ export function CallsSetting() {
     e.preventDefault();
     if (number().trim()) callDo(commands.callDial(number()));
   };
+  const mac = () => s()?.os === "macos";
   const deviceLabel = () => s()?.device_name ?? phones().find((p) => p.address === s()?.device)?.name ?? s()?.device ?? "";
 
   return (
     <article class="tile" id="settings-calls">
       <h2>{t("calls.title")}</h2>
       <Show when={s()?.available} fallback={<p class="muted small">{t("calls.unavailable")}</p>}>
-        <p class="muted small">{t("calls.hint")}</p>
+        <p class="muted small">{t(mac() ? "calls.hintMac" : "calls.hint")}</p>
         <label class="switch-row">
           <span>{t("calls.switch")}</span>
           <input
@@ -74,7 +77,15 @@ export function CallsSetting() {
           />
         </label>
         <Show when={s()?.enabled}>
-          <Show when={!loaded() || phones().length > 0} fallback={<p class="muted small">{t("calls.noPhones")}</p>}>
+          <Show when={s()?.problem}>
+            {(p) => (
+              <div class="call-problem" role="alert">
+                <strong class="small">{t("calls.problem")}</strong>
+                <p class="small">{p()}</p>
+              </div>
+            )}
+          </Show>
+          <Show when={!loaded() || phones().length > 0} fallback={<p class="muted small">{t(mac() ? "calls.noPhonesMac" : "calls.noPhones")}</p>}>
             <label class="row small">
               <span class="muted">{t("calls.phone")}</span>
               <select aria-label={t("calls.phone")} disabled={busy()} onChange={(e) => pick(e.currentTarget.value)}>

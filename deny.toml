@@ -30,9 +30,9 @@ ignore = [
   { id = "RUSTSEC-2025-0080", reason = "unic-*: unmaintained, transitive" },
   { id = "RUSTSEC-2025-0100", reason = "unic-*: unmaintained, transitive" },
   { id = "RUSTSEC-2025-0098", reason = "unic-*: unmaintained, transitive" },
-  { id = "RUSTSEC-2026-0371", reason = "zbus_names: unmaintained, transitive (Linux D-Bus)" },
-  { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained, transitive (Linux D-Bus)" },
-  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: unmaintained, transitive (Linux D-Bus)" },
+  { id = "RUSTSEC-2026-0371", reason = "zbus_names: unmaintained, via zbus (Linux D-Bus: notify-rust, md-hfp)" },
+  { id = "RUSTSEC-2026-0370", reason = "zvariant: unmaintained, via zbus (Linux D-Bus: notify-rust, md-hfp)" },
+  { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: unmaintained, via zbus (Linux D-Bus: notify-rust, md-hfp)" },
 ]
 
 [bans]
