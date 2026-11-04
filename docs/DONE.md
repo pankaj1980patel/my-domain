@@ -310,6 +310,20 @@ Built by three agents in parallel (worktrees), merged and built here.
   a button in the phone's Wi-Fi section): reads the network name and its
   password here (macOS asks to allow the keychain read), sends the phone's
   `wifi connect`; the password stays in Rust, never in the page or logs.
+- **Drop files onto a device's page to send them** (desktop
+  `screens/device/DropToSend.tsx`): a full-page "Drop to send to {name}"
+  overlay while dragging; each file goes through `send_file` and shows
+  under Files; folders are skipped with a toast. Replaces the Files tile's
+  own drop listener (which never unregistered).
+- **Tray quick actions per phone** (desktop `tray.rs`): the title says
+  connected / not connected; Ring, Send clipboard, Locate (greyed out
+  "off on the phone" without location sharing; the map opens by itself
+  when the answer arrives within 5 minutes) and Show on a map. 4 unit tests.
+- **Battery charged alert** (core `BatteryAlertSettings.charged`, desktop
+  and phone Settings: Off / 80% / 90% / 100%): one `charged` alert per
+  charge at the chosen level, replacing "full"; 100 is sent as "full" for
+  older versions; re-arms 5 points below. mdctl `battery-alerts on|off
+  [low] [charged]`. Unit tests plus a 2-node test.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
