@@ -1138,6 +1138,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .photo-picked .photo-check {
   background: var(--accent);
   border-color: var(--accent);
+}
 
 /* --- phone screen settings (ScreenSettingsRow) ---------------------------- */
 
@@ -1283,6 +1284,8 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .info-row .progress {
   grid-column: 1 / -1;
+}
+
 /* --- scheduled actions (screens/device/ScheduleTile.tsx) ---------------------- */
 
 .schedule-list {
