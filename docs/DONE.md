@@ -329,6 +329,12 @@ Built by three agents in parallel (worktrees), merged and built here.
   `folder` path in the offer (old receivers save flat); 4 at a time; the
   receiver checks the path (no `..`, absolute, backslash); symlinks and
   hidden entries skipped; 10,000 files / 32 levels max. 2-node tests.
+  Pickers: desktop "Send a folder" on the Files tile and "Send a folder…"
+  in each device's tray submenu; the phone's "Send a folder" picks one with
+  the system folder picker, copies it into the cache (hidden files left
+  out, 2 GB max, free space checked) and sends the copy, deleted once
+  `Engine::folders_sending` is 0 (or after a day). Phone side not built
+  or run yet.
 - **Device info card** (desktop `InfoTile.tsx`, phone `ui/InfoTile.kt`):
   battery, storage, memory, CPU and uptime. Computers send `cpu` (busy %
   since the last push; macOS `host_statistics`, Linux `/proc/stat`) and

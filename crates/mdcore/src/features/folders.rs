@@ -73,6 +73,16 @@ pub fn start<P: Platform>(ctx: &NetCtx<P>, node: &str, path: &Path) -> crate::Re
     Ok(count)
 }
 
+/// How many folders are still being sent (files going or still to start).
+pub fn sending<P: Platform>(ctx: &NetCtx<P>) -> usize {
+    ctx.files
+        .folders
+        .lock()
+        .iter()
+        .filter(|f| !f.queue.is_empty() || !f.going.is_empty())
+        .count()
+}
+
 /// The files under `dir` (sorted by name, folder by folder), each with the
 /// folder it goes into on the receiver (`rel`, then its subfolders).
 fn walk(

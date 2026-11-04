@@ -342,8 +342,12 @@ object Core {
         val kind = o.optString("kind")
         val peersNow = if (kind == "peers_updated") engine()?.peers() else null
         if (kind == "backup_state") engine()?.let { e -> runCatching { e.backupState() }.getOrNull()?.let { s -> onMain { backup = s } } }
-        // An outgoing transfer ended: its cache copy can go.
-        if (kind == "file_sent" || (kind == "file_failed" && !o.optBoolean("incoming"))) OutgoingFiles.end(o.optString("id"))
+        // An outgoing transfer ended: its cache copy can go (a folder's, once
+        // the whole folder is done).
+        if (kind == "file_sent" || (kind == "file_failed" && !o.optBoolean("incoming"))) {
+            OutgoingFiles.end(o.optString("id"))
+            OutgoingFolders.transferEnded()
+        }
         onMain {
             devLog.add(0, DevEvent(System.currentTimeMillis(), name, payloadJson))
             if (devLog.size > 500) devLog.removeRange(500, devLog.size)
@@ -680,6 +684,49 @@ object Core {
             }
             failed?.let(onError)
             onDone()
+        }
+    }
+
+    /**
+     * Send a folder picked with the system's folder picker ([tree], a content
+     * tree Uri) to a device: copied to the cache first (the core sends from a
+     * path; [onProgress] gets the files copied so far and how many, on the
+     * main thread), then handed to the core, which sends each file as its own
+     * transfer. Returns how many files go; the copy is deleted once they're
+     * done (see [OutgoingFolders]).
+     */
+    suspend fun sendFolder(node: String, tree: Uri, onProgress: (Int, Int) -> Unit = { _, _ -> }): Int {
+        val dir = withContext(Dispatchers.IO) {
+            OutgoingFolders.stage(app, tree) { done, total -> onMain { onProgress(done, total) } }
+        }
+        val n = try {
+            call { it.sendFolder(node, dir.path) }
+        } catch (e: Exception) {
+            OutgoingFolders.discard(dir)
+            throw e
+        }
+        OutgoingFolders.track(dir)
+        return n.toInt()
+    }
+
+    /** [sendFolder] off the screen's lifetime (copying a big folder keeps
+     *  going when the user navigates away). [onSent] gets how many files go. */
+    fun sendFolderAsync(
+        node: String,
+        tree: Uri,
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        onSent: (Int) -> Unit = {},
+        onError: (Throwable) -> Unit = {},
+        onDone: () -> Unit = {},
+    ) {
+        appScope.launch {
+            try {
+                onSent(sendFolder(node, tree, onProgress))
+            } catch (e: Exception) {
+                onError(e)
+            } finally {
+                onDone()
+            }
         }
     }
 

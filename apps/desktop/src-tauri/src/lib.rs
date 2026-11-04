@@ -1097,6 +1097,23 @@ async fn pick_file(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
+/// The native "choose a folder" dialog; `None` if the user closed it. Async
+/// for the same reason as `pick_file`.
+#[tauri::command]
+#[specta::specta]
+async fn pick_folder(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    let (tx, rx) = std::sync::mpsc::channel();
+    app.dialog().file().pick_folder(move |folder| {
+        let _ = tx.send(folder.and_then(|f| f.into_path().ok()));
+    });
+    tauri::async_runtime::spawn_blocking(move || rx.recv().ok().flatten())
+        .await
+        .ok()
+        .flatten()
+        .map(|p| p.to_string_lossy().into_owned())
+}
+
 /// A received file, checked to be inside the downloads folder: the UI may
 /// only open or reveal what this app saved.
 fn received_file(path: &str, dir: &DownloadDir) -> Result<std::path::PathBuf, CoreError> {
@@ -1207,6 +1224,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         download_file,
         shared_folders,
         pick_file,
+        pick_folder,
         run_action,
         clipboard_history,
         clear_clipboard_history,

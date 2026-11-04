@@ -91,6 +91,8 @@ fn a_nested_folder_arrives_as_a_tree() {
         .send_folder(&b.node_id(), trip.to_str().unwrap())
         .unwrap();
     assert_eq!(n, 3, "the three plain files");
+    // Each file needs the other device's answer, so it's still going.
+    assert_eq!(a.engine.folders_sending(), 1);
 
     let got = poll(|| {
         let r = received(&b);
@@ -121,6 +123,10 @@ fn a_nested_folder_arrives_as_a_tree() {
     assert!(
         poll(|| (sent(&a) >= 3).then_some(())).is_some(),
         "the sender hears each was saved"
+    );
+    assert!(
+        poll(|| (a.engine.folders_sending() == 0).then_some(())).is_some(),
+        "the folder is done once every file is"
     );
 
     // Nothing else came: no hidden files, nothing through the links, no

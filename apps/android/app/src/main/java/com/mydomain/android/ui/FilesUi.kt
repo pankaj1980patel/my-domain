@@ -34,25 +34,50 @@ import com.mydomain.android.core.TransferState
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.niceName
 
-/** Files: send one (system picker), and this device's transfers. */
+/** Files: send some or a whole folder (system pickers), and this device's
+ *  transfers. */
 @Composable
 fun FilesTile(node: String) {
     val toast = LocalToast.current
     var busy by remember { mutableStateOf(false) }
+    // A picked folder being copied: files done and how many (null = not yet counted).
+    var folderBusy by remember { mutableStateOf(false) }
+    var copied by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    val preparingFolder = stringResource(R.string.folder_preparing)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         busy = true
         Core.sendFiles(node, uris, onDone = { busy = false }, onError = { toast(friendlyError(it)) })
     }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        if (tree == null) return@rememberLauncherForActivityResult
+        folderBusy = true
+        toast(preparingFolder)
+        Core.sendFolderAsync(
+            node, tree,
+            onProgress = { done, total -> copied = done to total },
+            onSent = { n -> toast(Core.plural(R.plurals.folder_started, n, n, Core.peerName(node))) },
+            onError = { toast(friendlyError(it)) },
+            onDone = { folderBusy = false; copied = null },
+        )
+    }
     val list = Core.transfers.filter { it.node == node }.take(20)
 
     Tile(title = stringResource(R.string.files_title)) {
         Muted(stringResource(R.string.files_body))
-        SoftButton(
-            stringResource(if (busy) R.string.files_preparing else R.string.files_send),
-            { picker.launch(arrayOf("*/*")) },
-            Modifier.fillMaxWidth(), enabled = !busy,
-        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SoftButton(
+                stringResource(if (busy) R.string.files_preparing else R.string.files_send),
+                { picker.launch(arrayOf("*/*")) },
+                Modifier.weight(1f), enabled = !busy && !folderBusy,
+            )
+            SoftButton(
+                copied?.let { (done, total) -> stringResource(R.string.folder_preparing_count, done, total) }
+                    ?: stringResource(if (folderBusy) R.string.files_preparing else R.string.files_send_folder),
+                { folderPicker.launch(null) },
+                Modifier.weight(1f), enabled = !busy && !folderBusy,
+            )
+        }
         list.forEach { TransferRow(it) }
     }
 }

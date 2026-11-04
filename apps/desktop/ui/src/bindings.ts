@@ -122,6 +122,11 @@ export const commands = {
 	 *  it doesn't run on (and block) the main thread the dialog needs.
 	 */
 	pickFile: () => __TAURI_INVOKE<string | null>("pick_file"),
+	/**
+	 *  The native "choose a folder" dialog; `None` if the user closed it. Async
+	 *  for the same reason as `pick_file`.
+	 */
+	pickFolder: () => __TAURI_INVOKE<string | null>("pick_folder"),
 	/**  Run an action a device listed in its status (`actions`). */
 	runAction: (nodeId: string, name: string, argsJson: string) => typedError<string, string>(__TAURI_INVOKE("run_action", { nodeId, name, argsJson })),
 	/**

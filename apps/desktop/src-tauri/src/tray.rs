@@ -33,6 +33,7 @@ const LOCATE_WAIT_SECS: u64 = 5 * 60;
 const LABEL_OPEN_APP: &str = "Open my-domain";
 const LABEL_RING: &str = "Ring";
 const LABEL_SEND: &str = "Send a file…";
+const LABEL_SEND_FOLDER: &str = "Send a folder…";
 const LABEL_OPEN: &str = "Open";
 const LABEL_QUIT: &str = "Quit";
 const LABEL_NO_DEVICES: &str = "No devices yet";
@@ -307,6 +308,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         }
         let sub = sub
             .text(format!("send:{node}"), LABEL_SEND)
+            .text(format!("folder:{node}"), LABEL_SEND_FOLDER)
             .text(format!("open:{node}"), LABEL_OPEN)
             .build()?;
         menu = menu.item(&sub);
@@ -324,6 +326,7 @@ fn on_menu(app: &AppHandle, id: &str) {
         _ => match id.split_once(':') {
             Some(("ring", node)) => ring(app, node),
             Some(("send", node)) => send_file(app, node),
+            Some(("folder", node)) => send_folder(app, node),
             Some(("clip", node)) => send_clipboard(app, node),
             Some(("locate", node)) => locate(app, node),
             Some(("map", node)) => show_on_map(app, node),
@@ -449,6 +452,34 @@ fn send_file(app: &AppHandle, node: &str) {
             let body = match engine.send_file(&node, &path.to_string_lossy()) {
                 Ok(_) => format!("Sending {file} to {name}"),
                 Err(e) => format!("Couldn't send {file} to {name}: {e}"),
+            };
+            notify::post(&handle, "my-domain", &body);
+        });
+    });
+}
+
+/// Pick a folder and send everything in it to a device (each file as its
+/// own transfer); off the main thread.
+fn send_folder(app: &AppHandle, node: &str) {
+    use tauri_plugin_dialog::DialogExt;
+    let (handle, node) = (app.clone(), node.to_string());
+    app.dialog().file().pick_folder(move |folder| {
+        let Some(path) = folder.and_then(|f| f.into_path().ok()) else {
+            return;
+        };
+        std::thread::spawn(move || {
+            let Some(engine) = handle.try_state::<Eng>() else {
+                return;
+            };
+            let name = notify::device_name(&handle, &node);
+            let folder = path
+                .file_name()
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_else(|| "the folder".to_string());
+            let body = match engine.send_folder(&node, &path.to_string_lossy()) {
+                Ok(1) => format!("Sending 1 file to {name}"),
+                Ok(n) => format!("Sending {n} files to {name}"),
+                Err(e) => format!("Couldn't send {folder} to {name}: {e}"),
             };
             notify::post(&handle, "my-domain", &body);
         });

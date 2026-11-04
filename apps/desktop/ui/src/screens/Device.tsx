@@ -16,6 +16,7 @@ import {
   openUrlOn,
   peerName,
   pickAndSendFile,
+  pickAndSendFolder,
   pullClipboard,
   reconnect,
   requestApps,
@@ -657,13 +658,30 @@ function FilesTile(props: { node: string }) {
     }
   };
 
+  const pickFolder = async () => {
+    setBusy(true);
+    try {
+      const sent = await pickAndSendFolder(props.node);
+      if (sent) toast(tn("files.started", sent, { name: name() }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <article class="tile">
       <h2>{t("files.title")}</h2>
       <p class="muted small">{t("files.hint")}</p>
-      <button class="btn btn-soft btn-block" disabled={busy()} onClick={pick}>
-        {busy() ? t("files.choosing") : t("files.send")}
-      </button>
+      <div class="row">
+        <button class="btn btn-soft grow" disabled={busy()} onClick={pick}>
+          {busy() ? t("files.choosing") : t("files.send")}
+        </button>
+        <button class="btn btn-soft grow" disabled={busy()} onClick={pickFolder}>
+          {t("files.sendFolder")}
+        </button>
+      </div>
       <Show when={list().length} fallback={<p class="muted small">{t("files.empty")}</p>}>
         <ul class="transfers">
           <For each={list()}>{(x) => <TransferRow x={x} device={name()} />}</For>

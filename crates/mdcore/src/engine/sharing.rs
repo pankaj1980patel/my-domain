@@ -215,6 +215,13 @@ impl<P: Platform> Engine<P> {
         Ok(n as u32)
     }
 
+    /// How many folders `send_folder` is still sending. 0 once every file
+    /// of every folder has ended (or the folder was stopped), so a copy made
+    /// just for sending can go.
+    pub fn folders_sending(&self) -> u32 {
+        crate::features::folders::sending(&self.ctx) as u32
+    }
+
     /// Stop a transfer (either way); the other device is told.
     pub fn cancel_file(&self, id: &str) {
         crate::features::files::cancel(&self.ctx, id);

@@ -207,7 +207,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.11 Files
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | ✅ (files, resumable; 2026-11-04: folders, file by file with their subfolders: dropped on the desktop or `mdctl sendfile`; no folder picker yet) |
+| File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | ✅ (files, resumable; 2026-11-04: folders, file by file with their subfolders: dropped or picked on the desktop, the tray, picked on the phone, or `mdctl sendfile`) |
 | Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (2026-11-04: screens on both apps: folders, path, Load more, Download) |
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
 | Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-04: desktop Photos tile: grid, newest first, paged, Download per item or selected; tried: listing from the phone) |

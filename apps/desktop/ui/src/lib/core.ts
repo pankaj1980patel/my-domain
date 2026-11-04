@@ -688,6 +688,14 @@ export async function pickAndSendFile(node: string): Promise<boolean> {
   return true;
 }
 
+/** Choose a folder in the system dialog and send everything in it; how many
+ *  files went, 0 if none was chosen. */
+export async function pickAndSendFolder(node: string): Promise<number> {
+  const path = await commands.pickFolder();
+  if (!path) return 0;
+  return sendFolder(node, path);
+}
+
 /** Stop a transfer; the core answers with file-failed ("cancelled"). */
 export async function cancelFile(id: string) {
   await commands.cancelFile(id);

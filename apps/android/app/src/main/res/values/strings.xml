@@ -212,6 +212,18 @@
     <string name="files_body">Send photos, documents or anything else, straight to this device.</string>
     <string name="files_send">Send a file</string>
     <string name="files_preparing">Preparing…</string>
+    <string name="files_send_folder">Send a folder</string>
+    <string name="folder_preparing">Getting the folder ready to send…</string>
+    <string name="folder_preparing_count">Preparing %1$d of %2$d…</string>
+    <plurals name="folder_started">
+        <item quantity="one">Sending %1$d file to %2$s</item>
+        <item quantity="other">Sending %1$d files to %2$s</item>
+    </plurals>
+    <string name="folder_empty">The folder has no files to send</string>
+    <string name="folder_too_many">The folder has more than %1$d files</string>
+    <string name="folder_too_big">The folder is bigger than %1$s. Send a smaller one.</string>
+    <string name="folder_no_space">Not enough free space on this phone to get the folder ready</string>
+    <string name="folder_unreadable">Couldn\'t read the folder</string>
     <string name="file_waiting">Waiting for the device…</string>
     <string name="file_sending">Sending %1$s of %2$s</string>
     <string name="file_receiving">Receiving %1$s of %2$s</string>

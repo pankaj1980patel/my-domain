@@ -752,6 +752,19 @@ impl MdEngine {
         Ok(self.inner.send_file(&node_id, &path)?)
     }
 
+    /// Send the folder at `path`: each file inside goes as its own transfer
+    /// (with the usual `file-*` events), and the other device recreates the
+    /// folder under its downloads. Returns how many files it holds.
+    pub fn send_folder(&self, node_id: String, path: String) -> MdResult<u32> {
+        Ok(self.inner.send_folder(&node_id, &path)?)
+    }
+
+    /// How many folders `send_folder` is still sending; 0 once all their
+    /// files have ended (the app then deletes the copies it sent from).
+    pub fn folders_sending(&self) -> u32 {
+        self.inner.folders_sending()
+    }
+
     /// Stop a transfer, either way (a `file-failed` with reason
     /// "cancelled" follows; the other device is told).
     pub fn cancel_file(&self, id: String) {
