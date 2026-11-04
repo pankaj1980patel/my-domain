@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod automations;
 mod away_lock;
 mod clip_image;
 mod commands_run;
@@ -251,14 +252,20 @@ impl EventSink for TauriSink {
         // Ring / open-link need the desktop to act, not just the UI. Off the
         // core's thread: these look up peers and talk to the OS.
         match &ev {
-            // The tray's device submenus follow the peer list and link state.
+            // The tray's device submenus follow the peer list and link state,
+            // and automations wait for devices to connect or disconnect.
             CoreEvent::PeersUpdated { .. }
             | CoreEvent::PeerConnected { .. }
-            | CoreEvent::PeerDisconnected { .. } => tray::refresh(&self.app),
+            | CoreEvent::PeerDisconnected { .. } => {
+                tray::refresh(&self.app);
+                automations::on_link(&self.app);
+            }
             // Which of your devices are phones: lock when they go away,
             // where the copy shortcut sends, and the tray's phone actions.
+            // Automations watch battery and charging.
             CoreEvent::DeviceStatus { from, status } => {
                 away_lock::on_status(&self.app, from, status);
+                automations::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
             }
@@ -1258,6 +1265,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         schedule::delete_schedule,
         schedule::run_schedule_now,
         schedule::local_actions,
+        automations::list_automations,
+        automations::add_automation,
+        automations::update_automation,
+        automations::delete_automation,
         commands_run::list_shell_commands,
         commands_run::add_shell_command,
         commands_run::update_shell_command,
@@ -1302,6 +1313,7 @@ pub fn run() {
             app.manage(location::LocationPref::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
+            app.manage(automations::Automations::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
@@ -1353,6 +1365,7 @@ pub fn run() {
             device::spawn_now_playing(handle.clone());
             away_lock::spawn(handle.clone());
             schedule::spawn(handle.clone());
+            automations::spawn(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

@@ -218,7 +218,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.12 Automation
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Triggers | Battery low, call ringing, arrived home, Wi-Fi joined, device online/offline | `automation` | A D | varies | ⬜ |
+| Triggers | Battery low, call ringing, arrived home, Wi-Fi joined, device online/offline | `automation` | A D | varies | 🟡 (2026-11-04, desktop only: Automations in Settings: when a device connects, disconnects (after a minute), its battery drops below N%, it starts or stops charging, or this computer wakes from sleep → a schedule preset on this computer or another device, or just a notification; once a minute at most, a notification each time; runs while the app is open; overlaps "lock when my phone goes away"; call ringing, arrived home, Wi-Fi joined not yet; not tried live yet) |
 | Actions | Any feature above, as a step | per-action flag | A D | varies | ⬜ |
 | Scenes | e.g. *Meeting*: phone on DND, desktop media paused | `automation` | A D | varies | ⬜ |
 | Scheduled actions | Run at a set time | `automation` | A D | — | 🟡 (2026-11-04, desktop only: a Schedules tile on a device's page; runs while the app is open, a time missed asleep or off is skipped; not tried live yet) |

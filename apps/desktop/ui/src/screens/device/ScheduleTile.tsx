@@ -6,19 +6,9 @@
 
 import { peerName, state } from "../../lib/core";
 import { niceName } from "../../lib/words";
-import { ScheduleList, type Preset } from "../../components/ScheduleList";
+import { ScheduleList } from "../../components/ScheduleList";
+import { DEVICE_PRESETS } from "../../lib/presets";
 import { t } from "../../i18n";
-
-const PRESETS: Preset[] = [
-  { id: "ringer_normal", action: "ringer", args: { mode: "normal" }, label: "schedule.preset.ringerNormal" },
-  { id: "ringer_vibrate", action: "ringer", args: { mode: "vibrate" }, label: "schedule.preset.ringerVibrate" },
-  { id: "ringer_silent", action: "ringer", args: { mode: "silent" }, label: "schedule.preset.ringerSilent" },
-  { id: "lock", action: "lock", args: {}, label: "schedule.preset.lock" },
-  { id: "ring", action: "ring", args: {}, label: "schedule.preset.ring", always: true },
-  { id: "torch_off", action: "flashlight", args: { on: false }, label: "schedule.preset.torchOff" },
-  { id: "awake_off", action: "keep_awake", args: { minutes: 0 }, label: "schedule.preset.awakeOff" },
-  { id: "media", action: "media", args: { key: "play_pause" }, label: "schedule.preset.media" },
-];
 
 export default function ScheduleTile(props: { node: string }) {
   const name = () => niceName(peerName(props.node));
@@ -29,7 +19,7 @@ export default function ScheduleTile(props: { node: string }) {
       <ScheduleList
         node={props.node}
         name={name()}
-        presets={PRESETS}
+        presets={DEVICE_PRESETS}
         actions={state.status[props.node]?.actions}
         unknownHint={t("schedule.moreWhenConnected", { name: name() })}
       />

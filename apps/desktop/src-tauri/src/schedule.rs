@@ -156,18 +156,26 @@ fn clean_days(days: &[u8]) -> Result<Vec<u8>, CoreError> {
     Ok(days)
 }
 
+/// A device, an action it can be sent ("ring", or a listed action's name)
+/// and arguments that are JSON (or none). Automations check theirs the same.
+pub(crate) fn check_action(node: &str, action: &str, args: &str) -> Result<(), CoreError> {
+    let bad = |why: &str| Err(CoreError::InvalidInput(why.to_string()));
+    if node.trim().is_empty() {
+        return bad("choose a device");
+    }
+    if action != "ring" && !mdcore::features::device::is_action_name(action) {
+        return bad("not an action");
+    }
+    if !args.trim().is_empty() && serde_json::from_str::<serde_json::Value>(args).is_err() {
+        return bad("bad action arguments");
+    }
+    Ok(())
+}
+
 /// Check what the UI sent, and tidy it.
 fn checked(mut s: Schedule) -> Result<Schedule, CoreError> {
     let bad = |why: &str| Err(CoreError::InvalidInput(why.to_string()));
-    if s.node.trim().is_empty() {
-        return bad("choose a device");
-    }
-    if s.action != "ring" && !mdcore::features::device::is_action_name(&s.action) {
-        return bad("not an action");
-    }
-    if !s.args.trim().is_empty() && serde_json::from_str::<serde_json::Value>(&s.args).is_err() {
-        return bad("bad action arguments");
-    }
+    check_action(&s.node, &s.action, &s.args)?;
     let Some(time) = parse_time(&s.time) else {
         return bad("the time is HH:MM");
     };
@@ -331,10 +339,10 @@ enum Route {
     Send,
 }
 
-fn route(s: &Schedule, me: &str) -> Route {
-    if s.node == me {
+fn route(node: &str, action: &str, me: &str) -> Route {
+    if node == me {
         Route::Here
-    } else if s.action == "ring" {
+    } else if action == "ring" {
         Route::Ring
     } else {
         Route::Send
@@ -345,27 +353,41 @@ fn route(s: &Schedule, me: &str) -> Route {
 /// transport, "queued" (sent once the device is reachable) or "here" (this
 /// computer).
 fn run(app: &AppHandle, s: &Schedule) -> Result<String, CoreError> {
+    run_action(app, &s.node, &s.action, &s.args)
+}
+
+/// Run `action` on `node` now: here for this computer, else sent the way
+/// the device page's buttons send it. Shared with automations.
+pub(crate) fn run_action(
+    app: &AppHandle,
+    node: &str,
+    action: &str,
+    args: &str,
+) -> Result<String, CoreError> {
     let engine = app
         .try_state::<Eng>()
         .ok_or_else(|| CoreError::Other("not started yet".into()))?;
-    match route(s, &engine.identity().node_id) {
+    match route(node, action, &engine.identity().node_id) {
         Route::Here => {
             // `on_action` skips what it doesn't know: say so instead.
-            if !crate::device::local_actions(app).contains(&s.action) {
+            if !crate::device::local_actions(app)
+                .iter()
+                .any(|a| a == action)
+            {
                 return Err(CoreError::InvalidInput(
                     "this computer can\u{2019}t do that right now".into(),
                 ));
             }
-            let args = serde_json::from_str(&s.args).unwrap_or(serde_json::Value::Null);
+            let args = serde_json::from_str(args).unwrap_or(serde_json::Value::Null);
             // Off this thread, as a sibling's action is: "Run now" comes
             // from the UI, and locking can take a moment.
-            let (app, action) = (app.clone(), s.action.clone());
-            let me = s.node.clone();
+            let (app, action) = (app.clone(), action.to_string());
+            let me = node.to_string();
             std::thread::spawn(move || crate::device::on_action(&app, &me, &action, &args));
             Ok("here".into())
         }
-        Route::Ring => engine.ring(&s.node),
-        Route::Send => engine.run_action(&s.node, &s.action, &s.args),
+        Route::Ring => engine.ring(node),
+        Route::Send => engine.run_action(node, action, args),
     }
 }
 
@@ -645,17 +667,10 @@ mod tests {
     fn this_computers_own_run_here() {
         // Locking this computer runs here (`device::on_action`), not through
         // the core, which only sends to other devices.
-        let mut s = sched("23:00", &[]);
-        s.node = "me".into();
-        s.action = "lock".into();
-        s.args = "{}".into();
-        assert_eq!(route(&s, "me"), Route::Here);
-        s.action = "ring".into();
-        assert_eq!(route(&s, "me"), Route::Here);
-        s.node = "phone".into();
-        assert_eq!(route(&s, "me"), Route::Ring);
-        s.action = "lock".into();
-        assert_eq!(route(&s, "me"), Route::Send);
+        assert_eq!(route("me", "lock", "me"), Route::Here);
+        assert_eq!(route("me", "ring", "me"), Route::Here);
+        assert_eq!(route("phone", "ring", "me"), Route::Ring);
+        assert_eq!(route("phone", "lock", "me"), Route::Send);
     }
 
     #[test]

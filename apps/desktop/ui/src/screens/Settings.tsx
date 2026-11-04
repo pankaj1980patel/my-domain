@@ -13,19 +13,11 @@ import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
 import { ShortcutSetting } from "../components/ShortcutSetting";
-import { ScheduleList, type Preset } from "../components/ScheduleList";
+import { ScheduleList } from "../components/ScheduleList";
+import { AutomationList } from "../components/AutomationList";
+import { LOCAL_PRESETS } from "../lib/presets";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { t, tRich } from "../i18n";
-
-/** What a schedule can do on this computer (only those it takes are shown). */
-const LOCAL_PRESETS: Preset[] = [
-  { id: "lock", action: "lock", args: {}, label: "schedule.preset.lockComputer" },
-  { id: "mute", action: "mute", args: { on: true }, label: "schedule.preset.mute" },
-  { id: "unmute", action: "mute", args: { on: false }, label: "schedule.preset.unmute" },
-  // Media keys only toggle, so it says so.
-  { id: "media", action: "media", args: { key: "play_pause" }, label: "schedule.preset.media" },
-  { id: "awake_off", action: "keep_awake", args: { minutes: 0 }, label: "schedule.preset.awakeOffComputer" },
-];
 
 export default function Settings(props: { onDeveloper: () => void }) {
   const [taps, setTaps] = createSignal(0);
@@ -222,6 +214,14 @@ export default function Settings(props: { onDeveloper: () => void }) {
               actions={me().actions}
             />
           )}
+        </Show>
+      </article>
+
+      <article class="tile">
+        <h2>{t("automation.title")}</h2>
+        <p class="muted small">{t("automation.hint")}</p>
+        <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
+          {(me) => <AutomationList me={me().node} localActions={me().actions} />}
         </Show>
       </article>
 

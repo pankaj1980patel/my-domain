@@ -1384,3 +1384,18 @@ input[type="checkbox"][role="switch"]:checked::after {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
 }
+
+/* --- automations (components/AutomationList.tsx, in Settings) ----------------- */
+
+.automation-line {
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.automation-arrow {
+  color: var(--text-2);
+}
+.row input.automation-level {
+  flex: 0 0 auto;
+  width: 4.5em;
+  padding: 4px 8px;
+}

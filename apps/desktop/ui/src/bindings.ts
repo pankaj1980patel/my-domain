@@ -218,6 +218,14 @@ export const commands = {
 	 *  reading the volume runs a command.
 	 */
 	localActions: () => typedError<LocalActions, string>(__TAURI_INVOKE("local_actions")),
+	/**  Your automations. */
+	listAutomations: () => __TAURI_INVOKE<Automation_Serialize[]>("list_automations"),
+	/**  Add an automation: when something happens, do something. */
+	addAutomation: (automation: NewAutomation_Deserialize) => typedError<Automation_Serialize, string>(__TAURI_INVOKE("add_automation", { automation })),
+	/**  Change an automation (what starts it, what it does, on/off…). */
+	updateAutomation: (automation: Automation_Deserialize) => typedError<Automation_Serialize, string>(__TAURI_INVOKE("update_automation", { automation })),
+	/**  Remove an automation. */
+	deleteAutomation: (id: string) => __TAURI_INVOKE<void>("delete_automation", { id }),
 	/**  The commands your other devices can run. */
 	listShellCommands: () => __TAURI_INVOKE<ShellCommand[]>("list_shell_commands"),
 	/**  Add a command your other devices can run. */
@@ -260,6 +268,43 @@ export const commands = {
 };
 
 /* Types */
+/**  One automation. */
+export type Automation = Automation_Serialize | Automation_Deserialize;
+
+/**  One automation. */
+export type Automation_Deserialize = {
+	id: string,
+	trigger: Trigger_Deserialize,
+	/**  The device the action runs on. */
+	node: string,
+	/**  An action the device lists in its status, "ring", or "notify". */
+	action: string,
+	/**  The action's arguments, as JSON text ("" for none). */
+	args?: string,
+	/**  What it does, for people ("Set the ringer to normal"). */
+	label?: string,
+	enabled: boolean,
+	/**  The last time it fired, local "YYYY-MM-DD HH:MM". */
+	last_fired?: string | null,
+};
+
+/**  One automation. */
+export type Automation_Serialize = {
+	id: string,
+	trigger: Trigger_Serialize,
+	/**  The device the action runs on. */
+	node: string,
+	/**  An action the device lists in its status, "ring", or "notify". */
+	action: string,
+	/**  The action's arguments, as JSON text ("" for none). */
+	args: string,
+	/**  What it does, for people ("Set the ringer to normal"). */
+	label: string,
+	enabled: boolean,
+	/**  The last time it fired, local "YYYY-MM-DD HH:MM". */
+	last_fired: string | null,
+};
+
 /**  The setting, as the UI sees it. */
 export type AwayLock = {
 	on: boolean,
@@ -423,6 +468,29 @@ export type NatKind =
  *  BOTH sides are like this.
  */
 "symmetric";
+
+/**  A new automation, from the UI. */
+export type NewAutomation = NewAutomation_Serialize | NewAutomation_Deserialize;
+
+/**  A new automation, from the UI. */
+export type NewAutomation_Deserialize = {
+	trigger: Trigger_Deserialize,
+	node: string,
+	action: string,
+	args: string,
+	label: string,
+	enabled: boolean,
+};
+
+/**  A new automation, from the UI. */
+export type NewAutomation_Serialize = {
+	trigger: Trigger_Serialize,
+	node: string,
+	action: string,
+	args: string,
+	label: string,
+	enabled: boolean,
+};
 
 /**  A new schedule, from the UI. */
 export type NewSchedule = {
@@ -657,6 +725,29 @@ export type Source = "registry" | "lan" | "manual";
 export type TransportKind = "punch" | "webrtc" | "quic" | "relay" | 
 /**  Bluetooth LE, carried by the platform (`engine::ble`). */
 "ble";
+
+/**  What starts an automation. */
+export type Trigger = Trigger_Serialize | Trigger_Deserialize;
+
+/**  What starts an automation. */
+export type Trigger_Deserialize = {
+	/**  One of `KINDS`. */
+	kind: string,
+	/**  The device it watches ("" for "wakes": this computer). */
+	node?: string,
+	/**  For "battery_below": the percent (1–99). */
+	level?: number | null,
+};
+
+/**  What starts an automation. */
+export type Trigger_Serialize = {
+	/**  One of `KINDS`. */
+	kind: string,
+	/**  The device it watches ("" for "wakes": this computer). */
+	node: string,
+	/**  For "battery_below": the percent (1–99). */
+	level: number | null,
+};
 
 /* Tauri Specta runtime */
 async function typedError<T, E>(result: Promise<T>): Promise<{ status: "ok"; data: T } | { status: "error"; error: E }> {

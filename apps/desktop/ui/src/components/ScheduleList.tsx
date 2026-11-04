@@ -8,11 +8,9 @@ import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { commands, type Schedule_Serialize as Schedule } from "../bindings";
 import { unwrap } from "../lib/core";
 import { friendlyError } from "../lib/words";
+import { offeredPresets, type Preset } from "../lib/presets";
 import { Gate, toast } from "./ui";
 import { t, type Key } from "../i18n";
-
-/** Something to schedule; `always` ones need nothing listed (ringing). */
-export type Preset = { id: string; action: string; args: Record<string, unknown>; label: Key; always?: boolean };
 
 /** 1 = Monday … 7 = Sunday, as the schedule stores them. */
 const DAYS: [number, Key][] = [
@@ -47,7 +45,7 @@ export function ScheduleList(props: {
   const [busy, setBusy] = createSignal(false);
   const offered = (action: string) =>
     !!props.presets.find((p) => p.action === action)?.always || !!props.actions?.includes(action);
-  const presets = () => props.presets.filter((p) => p.always || props.actions?.includes(p.action));
+  const presets = () => offeredPresets(props.presets, props.actions);
   const chosen = () => presets().find((p) => p.id === preset()) ?? presets()[0];
   const mine = () => list().filter((s) => s.node === props.node);
 
