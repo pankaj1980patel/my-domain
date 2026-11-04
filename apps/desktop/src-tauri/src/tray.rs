@@ -5,18 +5,29 @@
 // The device submenus follow the peer list and link state: the event sink
 // calls `refresh` on PeersUpdated / PeerConnected / PeerDisconnected, which
 // rebuilds the menu at most once per `DEBOUNCE`.
+//
+// Phones (devices whose status says `"platform": "android"`, as remembered
+// by `shortcut`) get quick actions in their submenu: ring, send the
+// clipboard, and locate (the answer arrives in the phone's status as
+// `location {lat, lon, acc, at}`, and the map opens then). Statuses come in
+// through `on_status`, which rebuilds the menu when something it shows
+// changed.
 
+use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::{notify, Eng};
+use crate::{notify, shortcut, Eng};
 
 const TRAY_ID: &str = "main";
 const DEBOUNCE: Duration = Duration::from_millis(500);
+/// How long after "Locate" an arriving position still opens the map.
+const LOCATE_WAIT_SECS: u64 = 5 * 60;
 
 // Menu labels (the Rust side has no i18n).
 const LABEL_OPEN_APP: &str = "Open my-domain";
@@ -25,7 +36,9 @@ const LABEL_SEND: &str = "Send a file…";
 const LABEL_OPEN: &str = "Open";
 const LABEL_QUIT: &str = "Quit";
 const LABEL_NO_DEVICES: &str = "No devices yet";
-const CONNECTED_SUFFIX: &str = " — connected";
+const CONNECTED_SUFFIX: &str = " · connected";
+const NOT_CONNECTED_SUFFIX: &str = " · not connected";
+const LOCATE_OFF_SUFFIX: &str = " (off on the phone)";
 
 // Menu item ids; device items are `<action>:<node_id>`.
 const ID_OPEN_APP: &str = "app:open";
@@ -36,6 +49,37 @@ const ID_NONE: &str = "app:none";
 static QUITTING: AtomicBool = AtomicBool::new(false);
 /// A rebuild is already scheduled.
 static PENDING: AtomicBool = AtomicBool::new(false);
+/// What the phones' latest statuses say (node id -> status).
+static PHONES: Mutex<BTreeMap<String, PhoneStatus>> = Mutex::new(BTreeMap::new());
+/// Phones asked "where are you?" and not answered yet.
+static ASKED: Mutex<BTreeMap<String, Asked>> = Mutex::new(BTreeMap::new());
+
+/// A reported position (`location` in a phone's status).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Place {
+    lat: f64,
+    lon: f64,
+    /// When the phone took it (unix seconds).
+    at: u64,
+}
+
+/// The parts of a phone's status the tray uses.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct PhoneStatus {
+    /// `location_sharing: true`: the phone answers "Locate".
+    sharing: bool,
+    place: Option<Place>,
+}
+
+/// A "Locate" waiting for its answer.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Asked {
+    /// When it was asked (unix seconds).
+    at: u64,
+    /// The position known when it was asked: the same one coming back isn't
+    /// the answer.
+    before: Option<Place>,
+}
 
 /// Create the tray icon (after the Engine is managed, so devices show).
 pub fn init(app: &AppHandle) -> tauri::Result<()> {
@@ -92,22 +136,142 @@ pub fn show_window(app: &AppHandle) {
     }
 }
 
-/// One entry per device: (node id, display name, connected), sorted by name.
-fn devices(app: &AppHandle) -> Vec<(String, String, bool)> {
+/// A device's status arrived (`CoreEvent::DeviceStatus`): remember what a
+/// phone's says, open the map if it answers a "Locate", and rebuild the menu
+/// when something it shows changed.
+pub fn on_status(app: &AppHandle, from: &str, status: &serde_json::Value) {
+    let Some(st) = phone_status(status) else {
+        return;
+    };
+    let changed = match PHONES.lock() {
+        Ok(mut phones) => {
+            let old = phones.insert(from.to_string(), st);
+            old.map(|o| (o.sharing, o.place.is_some())) != Some((st.sharing, st.place.is_some()))
+        }
+        Err(_) => false,
+    };
+    if changed {
+        refresh(app);
+    }
+    let Some(place) = st.place else {
+        return;
+    };
+    let answered = match ASKED.lock() {
+        Ok(mut asked) => match asked.get(from) {
+            Some(a) if now().saturating_sub(a.at) > LOCATE_WAIT_SECS => {
+                asked.remove(from);
+                false
+            }
+            Some(a) if answers(a, &place) => {
+                asked.remove(from);
+                true
+            }
+            _ => false,
+        },
+        Err(_) => false,
+    };
+    if answered {
+        let (app, from) = (app.clone(), from.to_string());
+        std::thread::spawn(move || {
+            let name = notify::device_name(&app, &from);
+            match crate::open_map(place.lat, place.lon, app.clone()) {
+                Ok(()) => notify::post(&app, &format!("Found {name}"), "It's on the map."),
+                Err(e) => notify::post(
+                    &app,
+                    &format!("Couldn't show {name} on a map"),
+                    &e.to_string(),
+                ),
+            }
+        });
+    }
+}
+
+/// The tray's view of a status, or `None` when it isn't a phone's.
+fn phone_status(status: &serde_json::Value) -> Option<PhoneStatus> {
+    if status.get("platform").and_then(|p| p.as_str()) != Some("android") {
+        return None;
+    }
+    let sharing = status.get("location_sharing").and_then(|v| v.as_bool()) == Some(true);
+    let place = status.get("location").and_then(|l| {
+        Some(Place {
+            lat: l.get("lat")?.as_f64()?,
+            lon: l.get("lon")?.as_f64()?,
+            at: l.get("at").and_then(|a| a.as_u64()).unwrap_or(0),
+        })
+    });
+    Some(PhoneStatus { sharing, place })
+}
+
+/// Whether a reported position answers a "Locate": taken since the asking
+/// (give or take a minute of clock difference), or simply a new one.
+fn answers(asked: &Asked, place: &Place) -> bool {
+    place.at + 60 >= asked.at || asked.before != Some(*place)
+}
+
+/// A device's submenu title: its name and whether it's connected.
+fn device_label(name: &str, connected: bool) -> String {
+    let suffix = if connected {
+        CONNECTED_SUFFIX
+    } else {
+        NOT_CONNECTED_SUFFIX
+    };
+    format!("{name}{suffix}")
+}
+
+/// "Locate {name}", and whether it can be chosen: not when the phone's
+/// status says location sharing is off. With no status yet it's offered
+/// (the phone asks its owner to turn sharing on if needed).
+fn locate_label(name: &str, status: Option<&PhoneStatus>) -> (String, bool) {
+    match status {
+        Some(st) if !st.sharing => (format!("Locate {name}{LOCATE_OFF_SUFFIX}"), false),
+        _ => (format!("Locate {name}"), true),
+    }
+}
+
+/// One of your devices, as the menu shows it.
+struct Device {
+    node: String,
+    name: String,
+    connected: bool,
+    /// Set for a phone: what its latest status said, if one came.
+    phone: Option<Option<PhoneStatus>>,
+}
+
+/// Your devices, sorted by name. A device is a phone if `shortcut` has seen
+/// it say so (also before a restart) or a status here says so.
+fn devices(app: &AppHandle) -> Vec<Device> {
     let Some(engine) = app.try_state::<Eng>() else {
         return Vec::new();
     };
     let live: Vec<String> = engine.links().into_iter().map(|(id, _)| id).collect();
-    let mut out: Vec<(String, String, bool)> = engine
+    let known = shortcut::known_phones(app);
+    let statuses = PHONES.lock().map(|p| p.clone()).unwrap_or_default();
+    let mut out: Vec<Device> = engine
         .get_peers()
         .into_iter()
         .map(|p| {
-            let connected = live.contains(&p.node_id);
-            (p.node_id, notify::nice_name(&p.name), connected)
+            let status = statuses.get(&p.node_id).copied();
+            let phone = phone_entry(&p.node_id, &known, status);
+            Device {
+                connected: live.contains(&p.node_id),
+                name: notify::nice_name(&p.name),
+                node: p.node_id,
+                phone,
+            }
         })
         .collect();
-    out.sort_by_key(|(_, name, _)| name.to_lowercase());
+    out.sort_by_key(|d| d.name.to_lowercase());
     out
+}
+
+/// For a phone, its latest status if one came (`Some(None)` when none has);
+/// `None` when the device isn't known to be a phone.
+fn phone_entry(
+    node: &str,
+    known: &[String],
+    status: Option<PhoneStatus>,
+) -> Option<Option<PhoneStatus>> {
+    (status.is_some() || known.iter().any(|k| k == node)).then_some(status)
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
@@ -121,14 +285,27 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             .build(app)?;
         menu = menu.item(&none);
     }
-    for (node, name, connected) in devices {
-        let label = if connected {
-            format!("{name}{CONNECTED_SUFFIX}")
-        } else {
-            name
-        };
-        let sub = SubmenuBuilder::new(app, label)
-            .text(format!("ring:{node}"), LABEL_RING)
+    for d in devices {
+        let (node, name) = (&d.node, &d.name);
+        let mut sub = SubmenuBuilder::new(app, device_label(name, d.connected));
+        match d.phone {
+            Some(status) => {
+                let (locate, can_locate) = locate_label(name, status.as_ref());
+                let locate = MenuItemBuilder::with_id(format!("locate:{node}"), locate)
+                    .enabled(can_locate)
+                    .build(app)?;
+                sub = sub
+                    .text(format!("ring:{node}"), format!("Ring {name}"))
+                    .text(format!("clip:{node}"), format!("Send clipboard to {name}"))
+                    .item(&locate);
+                if status.is_some_and(|s| s.place.is_some()) {
+                    sub = sub.text(format!("map:{node}"), format!("Show {name} on a map"));
+                }
+                sub = sub.separator();
+            }
+            None => sub = sub.text(format!("ring:{node}"), LABEL_RING),
+        }
+        let sub = sub
             .text(format!("send:{node}"), LABEL_SEND)
             .text(format!("open:{node}"), LABEL_OPEN)
             .build()?;
@@ -147,6 +324,9 @@ fn on_menu(app: &AppHandle, id: &str) {
         _ => match id.split_once(':') {
             Some(("ring", node)) => ring(app, node),
             Some(("send", node)) => send_file(app, node),
+            Some(("clip", node)) => send_clipboard(app, node),
+            Some(("locate", node)) => locate(app, node),
+            Some(("map", node)) => show_on_map(app, node),
             Some(("open", node)) => {
                 show_window(app);
                 let _ = app.emit("open-device", serde_json::json!({ "node_id": node }));
@@ -177,6 +357,78 @@ fn ring(app: &AppHandle, node: &str) {
     });
 }
 
+/// Send this computer's clipboard to a phone; off the main thread.
+fn send_clipboard(app: &AppHandle, node: &str) {
+    let (app, node) = (app.clone(), node.to_string());
+    std::thread::spawn(move || {
+        if let Some(engine) = app.try_state::<Eng>() {
+            shortcut::send_clipboard_to(&app, &engine, &node);
+        }
+    });
+}
+
+/// Ask a phone where it is (the `locate` action); the map opens when the
+/// answer arrives in its status (`on_status`).
+fn locate(app: &AppHandle, node: &str) {
+    let (app, node) = (app.clone(), node.to_string());
+    std::thread::spawn(move || {
+        let Some(engine) = app.try_state::<Eng>() else {
+            return;
+        };
+        let name = notify::device_name(&app, &node);
+        if let Ok(mut asked) = ASKED.lock() {
+            asked.insert(
+                node.clone(),
+                Asked {
+                    at: now(),
+                    before: last_place(&node),
+                },
+            );
+        }
+        match engine.run_action(&node, "locate", "") {
+            Ok(how) if how == "queued" => notify::post(
+                &app,
+                "my-domain",
+                &format!("Will ask where {name} is when it's reachable"),
+            ),
+            Ok(_) => notify::post(&app, "my-domain", &format!("Asking where {name} is")),
+            Err(e) => {
+                if let Ok(mut asked) = ASKED.lock() {
+                    asked.remove(&node);
+                }
+                notify::post(&app, "my-domain", &format!("Couldn't locate {name}: {e}"));
+            }
+        }
+    });
+}
+
+/// Open a map at a phone's last reported position.
+fn show_on_map(app: &AppHandle, node: &str) {
+    let Some(place) = last_place(node) else {
+        return;
+    };
+    if let Err(e) = crate::open_map(place.lat, place.lon, app.clone()) {
+        let name = notify::device_name(app, node);
+        notify::post(
+            app,
+            &format!("Couldn't show {name} on a map"),
+            &e.to_string(),
+        );
+    }
+}
+
+/// The last position a phone reported, if any.
+fn last_place(node: &str) -> Option<Place> {
+    PHONES.lock().ok()?.get(node)?.place
+}
+
+fn now() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
 /// Pick a file with the native dialog, then send it.
 fn send_file(app: &AppHandle, node: &str) {
     use tauri_plugin_dialog::DialogExt;
@@ -201,4 +453,124 @@ fn send_file(app: &AppHandle, node: &str) {
             notify::post(&handle, "my-domain", &body);
         });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn tray_only_phones_have_a_phone_status() {
+        assert_eq!(phone_status(&json!({ "platform": "macos" })), None);
+        assert_eq!(phone_status(&json!({})), None);
+        assert_eq!(
+            phone_status(&json!({ "platform": "android" })),
+            Some(PhoneStatus {
+                sharing: false,
+                place: None
+            })
+        );
+        let st = phone_status(&json!({
+            "platform": "android",
+            "location_sharing": true,
+            "location": { "lat": 12.5, "lon": 77.25, "acc": 9.0, "at": 1700 },
+        }));
+        assert_eq!(
+            st,
+            Some(PhoneStatus {
+                sharing: true,
+                place: Some(Place {
+                    lat: 12.5,
+                    lon: 77.25,
+                    at: 1700
+                }),
+            })
+        );
+        // A position without coordinates isn't one.
+        let st = phone_status(&json!({ "platform": "android", "location": { "at": 5 } }));
+        assert_eq!(st.and_then(|s| s.place), None);
+    }
+
+    #[test]
+    fn tray_which_devices_are_phones() {
+        let known = vec!["phone".to_string()];
+        let st = PhoneStatus {
+            sharing: true,
+            place: None,
+        };
+        // Remembered as a phone, no status yet this run.
+        assert_eq!(phone_entry("phone", &known, None), Some(None));
+        // A phone's status here is enough.
+        assert_eq!(phone_entry("other", &known, Some(st)), Some(Some(st)));
+        // A computer.
+        assert_eq!(phone_entry("mac", &known, None), None);
+    }
+
+    #[test]
+    fn tray_labels() {
+        assert_eq!(device_label("I2405", true), "I2405 · connected");
+        assert_eq!(device_label("I2405", false), "I2405 · not connected");
+        let on = PhoneStatus {
+            sharing: true,
+            place: None,
+        };
+        let off = PhoneStatus {
+            sharing: false,
+            place: None,
+        };
+        assert_eq!(
+            locate_label("I2405", Some(&on)),
+            ("Locate I2405".into(), true)
+        );
+        assert_eq!(locate_label("I2405", None), ("Locate I2405".into(), true));
+        assert_eq!(
+            locate_label("I2405", Some(&off)),
+            ("Locate I2405 (off on the phone)".into(), false)
+        );
+    }
+
+    #[test]
+    fn tray_locate_answer() {
+        let old = Place {
+            lat: 1.0,
+            lon: 2.0,
+            at: 100,
+        };
+        let asked = Asked {
+            at: 1000,
+            before: Some(old),
+        };
+        // The same old position coming back isn't the answer.
+        assert!(!answers(&asked, &old));
+        // A new one is, and so is one taken since the asking.
+        assert!(answers(
+            &asked,
+            &Place {
+                lat: 1.5,
+                lon: 2.0,
+                at: 900
+            }
+        ));
+        let fresh = Asked {
+            at: 1000,
+            before: None,
+        };
+        assert!(answers(
+            &fresh,
+            &Place {
+                lat: 1.0,
+                lon: 2.0,
+                at: 1001
+            }
+        ));
+        let again = Place { at: 1001, ..old };
+        assert!(answers(
+            &Asked {
+                at: 1000,
+                before: Some(again)
+            },
+            &again
+        ));
+    }
 }

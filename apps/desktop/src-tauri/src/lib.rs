@@ -253,11 +253,12 @@ impl EventSink for TauriSink {
             CoreEvent::PeersUpdated { .. }
             | CoreEvent::PeerConnected { .. }
             | CoreEvent::PeerDisconnected { .. } => tray::refresh(&self.app),
-            // Which of your devices are phones: lock when they go away, and
-            // where the copy shortcut sends.
+            // Which of your devices are phones: lock when they go away,
+            // where the copy shortcut sends, and the tray's phone actions.
             CoreEvent::DeviceStatus { from, status } => {
                 away_lock::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
+                tray::on_status(&self.app, from, status);
             }
             CoreEvent::Ring { from } => {
                 let (app, from) = (self.app.clone(), from.clone());

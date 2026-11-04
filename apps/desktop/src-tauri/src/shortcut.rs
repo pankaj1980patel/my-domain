@@ -191,6 +191,13 @@ pub fn saw_status(app: &AppHandle, from: &str, status: &serde_json::Value) {
     }
 }
 
+/// The node ids of the phones seen so far (also across restarts).
+pub fn known_phones(app: &AppHandle) -> Vec<String> {
+    app.try_state::<ShortcutPref>()
+        .map(|pref| pref.phones().into_keys().collect())
+        .unwrap_or_default()
+}
+
 /// Send this computer's clipboard to the phone, and say how it went.
 fn send_copied(app: &AppHandle) {
     let Some(engine) = app.try_state::<Eng>() else {
@@ -204,15 +211,21 @@ fn send_copied(app: &AppHandle) {
         );
         return;
     };
-    let name = crate::notify::device_name(app, &phone);
+    send_clipboard_to(app, &engine, &phone);
+}
+
+/// Send this computer's clipboard to `phone` (text onto its clipboard, else
+/// a copied picture), and say how it went. Also the tray's "Send clipboard".
+pub fn send_clipboard_to(app: &AppHandle, engine: &Eng, phone: &str) {
+    let name = crate::notify::device_name(app, phone);
     let live = engine.links().iter().any(|(id, _)| *id == phone);
     let sent = match crate::clip_image::copied_text().filter(|t| !t.trim().is_empty()) {
         Some(text) => engine
-            .send_text(&phone, &text, "clipboard")
+            .send_text(phone, &text, "clipboard")
             .map(|how| how != "queued"),
         None => match crate::clip_image::copied_to_png() {
             Ok(path) => engine
-                .send_clipboard_image(&phone, &path.to_string_lossy())
+                .send_clipboard_image(phone, &path.to_string_lossy())
                 .map(|_| live),
             Err(_) => {
                 crate::notify::post_urgent(
