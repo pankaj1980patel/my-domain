@@ -88,6 +88,14 @@ export type DeviceStatus = {
   locationSharing: boolean;
   /** Its Accessibility helper is on (phone keys, no-tap radios). */
   helper?: boolean;
+  /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
+   *  brightness, screen timeout in seconds, auto-rotate. */
+  brightness?: number;
+  autoBrightness?: boolean;
+  screenTimeoutS?: number;
+  autoRotate?: boolean;
+  /** It may change those (Android's "Modify system settings"). */
+  writeSettings?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
   ts: number;
@@ -373,6 +381,11 @@ export async function startEvents() {
         locationSharing: status?.location_sharing === true,
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
         location: locationOf(status?.location),
+        brightness: typeof status?.brightness === "number" ? Math.round(status.brightness) : undefined,
+        autoBrightness: typeof status?.auto_brightness === "boolean" ? status.auto_brightness : undefined,
+        screenTimeoutS: typeof status?.screen_timeout_s === "number" ? Math.round(status.screen_timeout_s) : undefined,
+        autoRotate: typeof status?.auto_rotate === "boolean" ? status.auto_rotate : undefined,
+        writeSettings: typeof status?.write_settings === "boolean" ? status.write_settings : undefined,
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],

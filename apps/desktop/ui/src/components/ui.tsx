@@ -6,6 +6,16 @@ import { initial, linkLabel, linkState, niceName, qualityLabel, type LinkState }
 import type { Quality } from "../bindings";
 import { t, tn } from "../i18n";
 
+/** Wraps a control that may be unavailable: greyed out, with [reason] as
+ *  the hover tooltip (a disabled button shows none on its own in WebKit). */
+export function Gate(props: { reason?: string; children: JSX.Element }) {
+  return (
+    <span class="gate" classList={{ "gate-off": !!props.reason }} title={props.reason}>
+      {props.children}
+    </span>
+  );
+}
+
 // --- toasts -------------------------------------------------------------------
 
 type Toast = { id: number; text: string; tone: "ok" | "error" | "info" };

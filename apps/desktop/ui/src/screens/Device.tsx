@@ -1,6 +1,6 @@
 // One device: its status, then a tile per feature.
 
-import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, type JSX } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
@@ -38,7 +38,8 @@ import {
   type Transfer,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
-import { linkStateOf, StatusPill, toast } from "../components/ui";
+import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
+import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import PhotosTile from "./device/PhotosTile";
 
@@ -822,6 +823,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
       <Show when={has("locate")}>
         <LocateRow node={props.node} st={props.st} />
       </Show>
+      <Show when={has("screen_settings")}>
+        <ScreenSettingsRow node={props.node} st={props.st} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -920,16 +924,6 @@ function LocateRow(props: { node: string; st: DeviceStatus }) {
         )}
       </Show>
     </div>
-  );
-}
-
-/** Wraps a control that may be unavailable: greyed out, with [reason] as
- *  the hover tooltip (a disabled button shows none on its own in WebKit). */
-function Gate(props: { reason?: string; children: JSX.Element }) {
-  return (
-    <span class="gate" classList={{ "gate-off": !!props.reason }} title={props.reason}>
-      {props.children}
-    </span>
   );
 }
 

@@ -1061,7 +1061,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 
 /* A control that's unavailable on the other device: greyed out; the
-   wrapper carries the tooltip (see Gate in Device.tsx). */
+   wrapper carries the tooltip (see Gate in components/ui.tsx). */
 .gate {
   display: inline-flex;
 }
@@ -1142,4 +1142,36 @@ input[type="checkbox"][role="switch"]:checked::after {
 .photo-picked .photo-check {
   background: var(--accent);
   border-color: var(--accent);
+
+/* --- phone screen settings (ScreenSettingsRow) ---------------------------- */
+
+.screen-set input[type="range"] {
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  accent-color: var(--accent);
+}
+.screen-set .screen-bright > .gate {
+  flex: 1;
+  min-width: 0;
+}
+.screen-set .screen-bright > .gate > input[type="range"] {
+  width: 100%;
+}
+.screen-set select {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 4px 8px;
+}
+.screen-set label.row {
+  gap: var(--s-1);
+  cursor: pointer;
 }

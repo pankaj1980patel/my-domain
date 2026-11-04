@@ -382,4 +382,6 @@
     <string name="location_ask_on">To share where this phone is, Location needs to be on. Tap to open Location settings.</string>
     <string name="location_shared_title">Location shared with %1$s</string>
     <string name="location_shared_body">You allowed your computers to see where this phone is. Tap to change that.</string>
+    <string name="screen_settings_ask_title">Let your computers change screen settings?</string>
+    <string name="screen_settings_ask_body">To change brightness, screen timeout and auto-rotate from your computer, allow my-domain to modify system settings. Tap to open that setting.</string>
 </resources>
