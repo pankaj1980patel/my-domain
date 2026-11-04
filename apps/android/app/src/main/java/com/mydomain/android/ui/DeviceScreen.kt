@@ -117,7 +117,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             item { FindTile(node, niceName(peer.name)) }
             // What it said about itself: battery, storage, memory, processor, uptime.
             Core.deviceStatus[node]?.takeIf { hasInfo(it) }?.let { st ->
-                item { InfoTile(niceName(peer.name), st) }
+                item { InfoTile(node, niceName(peer.name), st) }
             }
             // Commands its owner lets your devices run (it lists "run").
             if (Core.deviceStatus[node]?.actions?.contains("run") == true) {

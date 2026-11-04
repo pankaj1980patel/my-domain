@@ -1,15 +1,18 @@
 // What another device last said about itself: battery, storage, memory,
 // processor and how long it has been on. Each row is shown only when its
 // field is in the status (phones send no processor use; older versions
-// send no uptime), and the tile only when there's something to show.
+// send no uptime), and the tile only when there's something to show. Under
+// the battery bar, its last 24 hours (BatteryChart).
 
-import { For, Show } from "solid-js";
+import { Index, Show } from "solid-js";
 import { peerName, state, type DeviceStatus, type Space } from "../../lib/core";
 import { humanSize, niceName } from "../../lib/words";
 import { t, tn } from "../../i18n";
+import BatteryChart from "./BatteryChart";
 
-/** One line: a label, an optional bar (percent full) and the value. */
-type Row = { label: string; value: string; pct?: number };
+/** One line: a label, an optional bar (percent full) and the value; the
+ *  battery's has its graph under it. */
+type Row = { label: string; value: string; pct?: number; battery?: boolean };
 
 export default function InfoTile(props: { node: string }) {
   const rows = () => rowsOf(state.status[props.node]);
@@ -19,19 +22,24 @@ export default function InfoTile(props: { node: string }) {
         <h2>{t("info.title")}</h2>
         <p class="muted small">{t("info.hint", { name: niceName(peerName(props.node)) })}</p>
         <dl class="info-rows">
-          <For each={rows()}>
+          {/* By place, not by object: a new status updates the rows in
+              place, so the battery graph isn't rebuilt each time. */}
+          <Index each={rows()}>
             {(r) => (
               <div class="info-row">
-                <dt class="small muted">{r.label}</dt>
-                <dd class="small">{r.value}</dd>
-                <Show when={r.pct !== undefined}>
+                <dt class="small muted">{r().label}</dt>
+                <dd class="small">{r().value}</dd>
+                <Show when={r().pct !== undefined}>
                   <div class="progress" role="presentation">
-                    <span style={{ width: `${r.pct}%` }} />
+                    <span style={{ width: `${r().pct}%` }} />
                   </div>
+                </Show>
+                <Show when={r().battery}>
+                  <BatteryChart node={props.node} />
                 </Show>
               </div>
             )}
-          </For>
+          </Index>
         </dl>
       </article>
     </Show>
@@ -47,6 +55,7 @@ function rowsOf(st: DeviceStatus | undefined): Row[] {
       label: t("info.battery"),
       value: st.charging ? t("info.batteryCharging", { level }) : t("info.batteryLevel", { level }),
       pct: level,
+      battery: true,
     });
   }
   // Disk and memory bars show how full they are.

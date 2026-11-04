@@ -180,7 +180,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 ### 3.9 Device state & settings
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
-| Battery | %, charging, temperature, health | `device.battery` | A D | — | ✅ (temperature and health on Android) |
+| Battery | %, charging, temperature, health, 24-hour history | `device.battery` | A D | — | ✅ (temperature and health on Android; 2026-11-04: a 24-hour battery graph in the "This device" card: on the computer for each other device (charging shaded, time and % on hover), on the phone for the computer (when it has a battery); "About 6 h left at this rate" / "Full in about 40 min" from the last hour when there's enough data; a sample at most every 5 minutes plus each charging change, kept 48 h in a small file so it survives a restart; graph not tried live) |
 | Storage / RAM / CPU | Usage overview | `device.read` | A D | — | ✅ (2026-11-04: storage and RAM free/total, uptime, and CPU % on computers (Android apps can't read it); shown as a "This device" card on the other device's page; not tried live) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | 🟡 (2026-11-04: phone, from the computer; needs "Modify system settings" on the phone; not tried live) |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |

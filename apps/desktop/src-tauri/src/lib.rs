@@ -18,6 +18,7 @@ use mdcore::CoreError;
 
 mod automations;
 mod away_lock;
+mod battery_log;
 mod clip_image;
 mod commands_run;
 mod device;
@@ -263,10 +264,12 @@ impl EventSink for TauriSink {
             }
             // Which of your devices are phones: lock when they go away,
             // where the copy shortcut sends, and the tray's phone actions.
-            // Automations watch battery and charging.
+            // Automations watch battery and charging, and the battery graph
+            // keeps a sample.
             CoreEvent::DeviceStatus { from, status } => {
                 away_lock::on_status(&self.app, from, status);
                 automations::on_status(&self.app, from, status);
+                battery_log::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
             }
@@ -1294,6 +1297,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         automations::add_automation,
         automations::update_automation,
         automations::delete_automation,
+        battery_log::battery_history,
         commands_run::list_shell_commands,
         commands_run::add_shell_command,
         commands_run::update_shell_command,
@@ -1340,6 +1344,7 @@ pub fn run() {
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
             app.manage(automations::Automations::load(&handle));
+            app.manage(battery_log::BatteryLog::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
@@ -1392,6 +1397,7 @@ pub fn run() {
             away_lock::spawn(handle.clone());
             schedule::spawn(handle.clone());
             automations::spawn(handle.clone());
+            battery_log::spawn(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

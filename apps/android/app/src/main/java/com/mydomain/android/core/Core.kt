@@ -221,6 +221,7 @@ object Core {
 
     fun init(context: Context) {
         app = context.applicationContext
+        BatteryLog.load(app)
     }
 
     fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
@@ -423,6 +424,8 @@ object Core {
                 val from = o.optString("from")
                 playingOf(st.optJSONObject("now_playing"))?.let { nowPlaying[from] = it } ?: nowPlaying.remove(from)
                 val acts = st.optJSONArray("actions")
+                // A sample for its battery graph (InfoTile).
+                if (st.has("battery")) BatteryLog.record(from, st.optInt("battery"), st.optBoolean("charging", false))
                 deviceStatus[o.optString("from")] = DeviceStatus(
                     battery = if (st.has("battery")) st.optInt("battery") else null,
                     charging = if (st.has("charging")) st.optBoolean("charging") else null,

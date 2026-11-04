@@ -238,6 +238,8 @@ export const commands = {
 	updateAutomation: (automation: Automation_Deserialize) => typedError<Automation_Serialize, string>(__TAURI_INVOKE("update_automation", { automation })),
 	/**  Remove an automation. */
 	deleteAutomation: (id: string) => __TAURI_INVOKE<void>("delete_automation", { id }),
+	/**  A device's battery over the last 48 hours, oldest first. */
+	batteryHistory: (node: string) => __TAURI_INVOKE<BatterySample[]>("battery_history", { node }),
 	/**  The commands your other devices can run. */
 	listShellCommands: () => __TAURI_INVOKE<ShellCommand[]>("list_shell_commands"),
 	/**  Add a command your other devices can run. */
@@ -366,6 +368,15 @@ export type BatteryAlertSettings_Serialize = {
 	 *  before it existed, so it defaults to off.
 	 */
 	charged: number,
+};
+
+/**  One reading of a device's battery. */
+export type BatterySample = {
+	/**  Unix seconds. */
+	at: number,
+	/**  Percent, 0-100. */
+	level: number,
+	charging: boolean,
 };
 
 /**
