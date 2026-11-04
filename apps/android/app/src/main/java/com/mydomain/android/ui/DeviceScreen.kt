@@ -112,6 +112,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             }
             item { ChatTile(node) }
             item { FilesTile(node) }
+            // Its shared folders, for a device that can be browsed.
+            if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, niceName(peer.name)) }
             item { FindTile(node, niceName(peer.name)) }
             // A computer that lets the phone control it (it lists "input").
             Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->

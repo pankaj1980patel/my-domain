@@ -389,4 +389,18 @@
     <string name="locate_asking">Asking where %1$s is…</string>
     <string name="locate_where">Near %1$s, %2$s (±%3$d m, %4$d min ago)</string>
     <string name="locate_off">Location sharing is off on %1$s. Turn on “Let my phone see where this computer is” in my-domain’s Settings there.</string>
+    <string name="browse_title">Browse files</string>
+    <string name="browse_open">Browse %1$s\'s files</string>
+    <string name="browse_shared">Folders %1$s shares</string>
+    <string name="browse_up">Up</string>
+    <string name="browse_close">Close</string>
+    <string name="browse_loading">Asking…</string>
+    <string name="browse_empty">This folder is empty.</string>
+    <string name="browse_none_shared">Nothing is shared there yet.</string>
+    <string name="browse_download">Download</string>
+    <string name="browse_downloading">Downloading: it shows under Files.</string>
+    <string name="browse_more">Load more</string>
+    <string name="browse_err_not_shared">That folder isn\'t shared any more.</string>
+    <string name="browse_err_missing">That folder or file isn\'t there any more.</string>
+    <string name="browse_err_access">my-domain can\'t read that folder on the other device.</string>
 </resources>
