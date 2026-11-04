@@ -1072,3 +1072,74 @@ input[type="checkbox"][role="switch"]:checked::after {
   pointer-events: none;
   opacity: 0.45;
 }
+
+/* Photos tile: a phone's gallery as a grid of thumbnails (PhotosTile.tsx). */
+.photos-bar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photo {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: stretch;
+}
+.photo-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  padding: 0;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--surface-2);
+  border: 2px solid transparent;
+  border-radius: var(--r-md);
+  transition: border-color var(--fast) var(--ease);
+}
+.photo-thumb:hover {
+  border-color: var(--border-strong);
+}
+.photo-picked .photo-thumb {
+  border-color: var(--accent);
+}
+.photo-thumb img,
+.photo-blank {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.photo-badge {
+  position: absolute;
+  left: var(--s-1);
+  bottom: var(--s-1);
+  padding: 0 var(--s-1);
+  font-size: var(--text-xs);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: var(--r-full);
+}
+.photo-check {
+  position: absolute;
+  top: var(--s-1);
+  right: var(--s-1);
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: var(--text-xs);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--r-full);
+}
+.photo-picked .photo-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}

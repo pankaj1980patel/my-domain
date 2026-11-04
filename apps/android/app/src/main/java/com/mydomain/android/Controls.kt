@@ -75,6 +75,9 @@ object Controls {
         put("key")
         // Computers can see this screen (Android asks each time).
         put("screen")
+        // Computers can browse its photos and videos (Gallery; the phone
+        // answers "allow photo access" until it's allowed).
+        put("gallery")
     }
 
     fun state(ctx: Context): JSONObject {

@@ -40,6 +40,7 @@ import {
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
 import { linkStateOf, StatusPill, toast } from "../components/ui";
 import { t, tn } from "../i18n";
+import PhotosTile from "./device/PhotosTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -118,6 +119,9 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <ControlTile node={props.node} />
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />
+            </Show>
+            <Show when={state.status[props.node]?.actions.includes("gallery")}>
+              <PhotosTile node={props.node} />
             </Show>
             <NotifyTile />
             <AppsTile node={props.node} />
