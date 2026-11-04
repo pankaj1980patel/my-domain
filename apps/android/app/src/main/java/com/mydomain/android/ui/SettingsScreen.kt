@@ -264,6 +264,7 @@ fun SettingsScreen(
     onDeveloper: () -> Unit,
     onAutomations: () -> Unit = {},
     onSetup: () -> Unit = {},
+    onHelp: () -> Unit = {},
 ) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
@@ -281,6 +282,10 @@ fun SettingsScreen(
         PageHead(stringResource(R.string.settings_title))
 
         SetupSettingsTile(onSetup)
+
+        Tile(title = stringResource(R.string.help_title), onClick = onHelp) {
+            Muted(stringResource(R.string.help_settings_hint))
+        }
 
         Tile(title = stringResource(R.string.settings_account)) {
             Text(

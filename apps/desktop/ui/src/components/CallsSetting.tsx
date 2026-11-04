@@ -14,6 +14,7 @@ import { CallAudioPicker } from "./CallAudioPicker";
 import { Keypad } from "./CallOverlay";
 import { toast } from "./ui";
 import { t } from "../i18n";
+import { HelpLink } from "../help/HelpLink";
 
 export function CallsSetting() {
   const [phones, setPhones] = createSignal<CallDevice[]>([]);
@@ -64,7 +65,10 @@ export function CallsSetting() {
 
   return (
     <article class="tile" id="settings-calls">
-      <h2>{t("calls.title")}</h2>
+      <h2>
+        {t("calls.title")}
+        <HelpLink topic="calls" />
+      </h2>
       <Show when={s()?.available} fallback={<p class="muted small">{t("calls.unavailable")}</p>}>
         <p class="muted small">{t(mac() ? "calls.hintMac" : s()?.os === "windows" ? "calls.hintWindows" : "calls.hint")}</p>
         <label class="switch-row">

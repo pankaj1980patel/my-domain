@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -118,7 +119,7 @@ private fun purposeOf(item: SetupItem): Int = when (item) {
  *  for, whether it's on, and the button that opens Android's screen for
  *  it. The app never turns any of them on itself. */
 @Composable
-fun SetupScreen(onBack: () -> Unit) {
+fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
     val ctx = LocalContext.current
     val toast = LocalToast.current
     val setup = rememberSetupRows()
@@ -163,14 +164,18 @@ fun SetupScreen(onBack: () -> Unit) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
             }
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineSmall, color = T.text)
                 val (on, total) = setup.count
                 Muted(stringResource(R.string.setup_count, on, total))
+            }
+            // "?": the Help topic on what each item is for.
+            IconButton(onClick = onHelp) {
+                Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
             }
         }
         Muted(stringResource(R.string.setup_hint))

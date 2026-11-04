@@ -18,6 +18,7 @@ export const en = {
   "nav.activity": "Activity",
   "nav.transfers": "Transfers",
   "nav.settings": "Settings",
+  "nav.help": "Help",
 
   // Sign in
   "signIn.titleCreate": "Create your account",
@@ -831,6 +832,8 @@ export const en = {
   "palette.transfers": "Transfers",
   "palette.settings": "Settings",
   "palette.settingsSection": "Settings: {section}",
+  "palette.help": "Help",
+  "palette.helpTopic": "Help: {topic}",
   "palette.sent": "Sent “{what}” to {name}",
   "palette.queued": "“{what}” goes to {name} when it's reachable",
   "palette.doneHere": "Done: {what}",
@@ -909,6 +912,14 @@ export const en = {
   "sendTo.settingLinuxHint": "Adds Send with my-domain to Open with for any file or folder, to Dolphin's right-click menu and to the Scripts menu in Files (Nautilus). You pick the device here.",
   "sendTo.settingOther": "This computer's file manager can't add a menu item for my-domain.",
   "sendTo.settingCli": "From a terminal or a script: my-domain --send <files or folders>. If my-domain is already open, it takes them.",
+  // Help (screens/Help.tsx; the topics themselves are docs/help/*.md).
+  "help.title": "Help",
+  "help.subtitle": "What each feature does, what it needs, and what it can’t do.",
+  "help.search": "Search help",
+  "help.searchLabel": "Search the help topics",
+  "help.topics": "Help topics",
+  "help.none": "No help topic has all of “{query}”.",
+  "help.about": "Help: {topic}",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */

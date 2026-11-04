@@ -13,6 +13,7 @@ import { peerName } from "../../lib/core";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
+import { HelpLink } from "../../help/HelpLink";
 
 export default function PhoneAudioTile(props: { node: string }) {
   const [st, setSt] = createSignal<PhoneAudioStatus | null>(null);
@@ -77,7 +78,10 @@ export default function PhoneAudioTile(props: { node: string }) {
 
   return (
     <article class="tile">
-      <h2>{t("phoneAudio.title")}</h2>
+      <h2>
+        {t("phoneAudio.title")}
+        <HelpLink topic="audio" />
+      </h2>
       <p class="muted small">{t("phoneAudio.hint")}</p>
       <Show when={mine()}>
         <div class="phone-audio stack">

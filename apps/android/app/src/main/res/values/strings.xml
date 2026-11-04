@@ -722,4 +722,13 @@
     <string name="setup_widget_how">To add it, touch and hold an empty spot on your home screen, choose Widgets, then my-domain.</string>
     <string name="setup_tiles_title">Quick Settings tiles</string>
     <string name="setup_tiles_for">“Send clipboard” and “Lock computer” in Quick Settings. Android doesn’t tell apps whether they’re added: swipe down twice, tap the pencil (Edit) and drag them in.</string>
+
+    <!-- Help (ui/HelpScreen.kt; the topics are the repo’s docs/help, copied into the assets). -->
+    <string name="help_title">Help</string>
+    <string name="help_settings_hint">What each feature does, what it needs, and what it can’t do.</string>
+    <string name="help_hint">What each feature does, what it needs, and what it can’t do. Search, or pick a topic.</string>
+    <string name="help_search">Search help</string>
+    <string name="help_none">No help topic has all of “%1$s”.</string>
+    <string name="help_missing">Help couldn’t be loaded in this build.</string>
+    <string name="help_open">Help</string>
 </resources>

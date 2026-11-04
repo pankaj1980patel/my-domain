@@ -48,8 +48,8 @@ private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 }
 
 /** Sign-in until ready; then tabs (Devices, Activity, Settings) plus the
- *  pushed Device, Developer, Automations and Transfers (from Activity)
- *  screens. */
+ *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
+ *  this phone and Help screens. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -83,6 +83,14 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var automations by rememberSaveable { mutableStateOf(false) }
     var transfers by rememberSaveable { mutableStateOf(false) }
     var setup by rememberSaveable { mutableStateOf(false) }
+    // Help: open (the topic list) and the topic shown, if any. Shown over
+    // whichever screen opened it, which comes back on Back.
+    var help by rememberSaveable { mutableStateOf(false) }
+    var helpTopic by rememberSaveable { mutableStateOf<String?>(null) }
+    val openHelp = { topic: String? ->
+        helpTopic = topic
+        help = true
+    }
 
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
@@ -100,6 +108,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations = false
             transfers = false
             setup = false
+            help = false
             tab = Tab.Settings
             Core.showSettings = false
         }
@@ -112,14 +121,17 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations = false
             transfers = false
             setup = false
+            help = false
             tab = Tab.Devices
             device = node
             Core.showDevice = null
         }
     }
 
-    BackHandler(enabled = device != null || developer || automations || transfers || setup || tab != Tab.Devices) {
+    BackHandler(enabled = help || device != null || developer || automations || transfers || setup || tab != Tab.Devices) {
         when {
+            help && helpTopic != null -> helpTopic = null
+            help -> help = false
             device != null -> device = null
             developer -> developer = false
             automations -> automations = false
@@ -133,7 +145,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            if (device == null && !developer && !automations && !transfers && !setup) {
+            if (!help && device == null && !developer && !automations && !transfers && !setup) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
@@ -155,10 +167,11 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(inner)) {
             when {
+                help -> HelpScreen(helpTopic, onTopic = { helpTopic = it }, onBack = { help = false })
                 device != null -> DeviceScreen(device!!, onBack = { device = null })
                 developer -> DeveloperScreen(onBack = { developer = false })
                 automations -> AutomationsScreen(onBack = { automations = false })
-                setup -> SetupScreen(onBack = { setup = false })
+                setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
                 transfers -> TransfersScreen(onBack = { transfers = false }, onOpenDevice = { device = it })
                 tab == Tab.Devices -> HomeScreen(onOpen = { device = it }, onSetup = { setup = true })
                 tab == Tab.Activity -> ActivityScreen(onTransfers = { transfers = true })
@@ -167,6 +180,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onDeveloper = { developer = true },
                     onAutomations = { automations = true },
                     onSetup = { setup = true },
+                    onHelp = { openHelp(null) },
                 )
             }
         }

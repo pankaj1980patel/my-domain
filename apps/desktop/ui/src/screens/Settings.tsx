@@ -21,6 +21,7 @@ import { WebhookSetting } from "../components/WebhookSetting";
 import { CallsSetting } from "../components/CallsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { t, tRich, type Key } from "../i18n";
+import { HelpLink } from "../help/HelpLink";
 
 /** Which OS's location permission the "find my computer" hint explains. */
 const locationHintKey: Key = (() => {
@@ -161,7 +162,9 @@ export default function Settings(props: { onDeveloper: () => void }) {
               onChange={(e) => toggleShareLocation(e.currentTarget.checked)}
             />
           </label>
-          <p class="muted small">{t(locationHintKey)}</p>
+          <p class="muted small">
+            {t(locationHintKey)} <HelpLink topic="find" />
+          </p>
         </Show>
         <Show when={awayLock().can_lock}>
           <label class="switch-row">

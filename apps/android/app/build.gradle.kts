@@ -67,6 +67,9 @@ android {
     // by `generateUniffiBindings` below.
     sourceSets {
         getByName("main").java.srcDir("build/generated/uniffi/kotlin")
+        // The Help screen's topics, copied from the repo's docs/help by
+        // `copyHelp` below (assets/help/*.md).
+        getByName("main").assets.srcDir("build/generated/helpAssets")
     }
 }
 
@@ -139,7 +142,21 @@ tasks.whenTaskAdded {
     if (name == "compileDebugKotlin" || name == "compileReleaseKotlin") {
         dependsOn("generateUniffiBindings")
     }
+    // Anything that reads the assets (merge, lint) after the help copy.
+    if (name.endsWith("Assets") || name.startsWith("lint")) {
+        dependsOn("copyHelp")
+    }
 }
+
+// Help topics: one source for both apps, the repo's docs/help (Markdown
+// with front matter; see core/HelpMarkdown.kt). Copied into the generated
+// assets folder above on every build, so the phone and the desktop show the
+// same text and nothing is copied by hand.
+val copyHelp = tasks.register<Sync>("copyHelp") {
+    from(rootProject.file("../../docs/help")) { include("*.md") }
+    into(layout.buildDirectory.dir("generated/helpAssets/help"))
+}
+tasks.named("preBuild") { dependsOn(copyHelp) }
 
 // Generate the Kotlin API (package com.mydomain.android.ffi) from the built
 // arm64 library with UniFFI's library mode: the bindings always match the

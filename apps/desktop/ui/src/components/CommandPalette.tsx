@@ -2,7 +2,8 @@
 // opens a search box over everything you can do. For each paired device:
 // open its page, ring it, send it the clipboard or a file, and the actions it
 // lists in its status (the device page's buttons); this computer's own
-// actions; and the app's places (Settings and its sections).
+// actions; and the app's places (Settings and its sections, Help and each
+// of its topics).
 //
 // Actions that need more from you (a number to call, a lost-mode message)
 // open the device's page instead of running blind. Ones that can't run now
@@ -30,9 +31,10 @@ import {
 import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../lib/presets";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
+import { TOPICS } from "../help/topics";
 import { t, tn, type Key } from "../i18n";
 
-export type Place = "home" | "activity" | "transfers" | "settings";
+export type Place = "home" | "activity" | "transfers" | "settings" | "help";
 
 type Cmd = {
   /** Stable across openings: the recents list keeps these. */
@@ -280,6 +282,13 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
       section("shortcuts", "shortcuts.title"),
       section("key", "settings.deviceKey"),
       section("appearance", "settings.appearance"),
+      { id: "place.help", label: t("palette.help"), group, run: go("help") },
+      ...TOPICS.map((topic) => ({
+        id: `place.help.${topic.id}`,
+        label: t("palette.helpTopic", { topic: topic.title }),
+        group,
+        run: go("help", topic.id),
+      })),
     ];
   };
   const localCommands = (): Cmd[] => {

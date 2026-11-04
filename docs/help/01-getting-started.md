@@ -1,0 +1,32 @@
+---
+title: Getting started and pairing
+keywords: sign in, account, create account, pair, add device, device key, password, username, first time, setup, connect
+platforms: desktop, android
+---
+my-domain links your own phone and computers so they can send things to each other and do small jobs for each other: share the clipboard, send files, ring a lost phone, show notifications on the computer, and more.
+
+## Sign in on every device
+
+1. Install my-domain on your phone and on each computer.
+2. On the first one, choose **Create account** and pick a username and password.
+3. Fill in a **device key**, or tap **Generate** for one. Write it down somewhere safe.
+4. On every other device, choose **Sign in** with the same username, password **and the same device key**.
+
+There is no separate pairing step: devices signed in to the same account find each other on their own and show up under **Devices**.
+
+## The device key
+
+The device key is what encrypts everything your devices send each other. The server never sees it.
+
+- Every device must use the same key. A device with a different key can't read the others.
+- If you change it in Settings, change it on every device too.
+- If you lose it, sign in again everywhere with a new one.
+
+## Connected or not
+
+Each device shows whether it is connected right now: directly (same network, fastest), through the internet, or not connected. Things you send to a device that isn't connected wait and go when it comes back, where that makes sense (a ring or a message, not a live screen).
+
+## Next steps
+
+- On the phone, open **Settings → Set up this phone** to see which optional permissions each feature needs. See [Set up this phone](help:setup-phone).
+- If two devices don't see each other, see [Troubleshooting](help:troubleshooting).

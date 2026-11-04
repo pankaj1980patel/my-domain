@@ -1,5 +1,5 @@
 // App shell: sign in first, then a sidebar with Devices / Activity /
-// Transfers / Settings. A device opens its detail page; the Developer screen
+// Transfers / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
 import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
@@ -18,9 +18,11 @@ import Activity from "./screens/Activity";
 import Transfers from "./screens/Transfers";
 import Settings from "./screens/Settings";
 import Developer from "./screens/Developer";
+import Help from "./screens/Help";
+import { setHelpOpener } from "./help/HelpLink";
 import { t } from "./i18n";
 
-type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" };
+type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string };
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -34,12 +36,16 @@ export default function App() {
   // The command palette's places; a Settings section scrolls into view once
   // the page is drawn.
   const goPlace = (place: Place, section?: string) => {
+    // Help's "section" is a topic.
+    if (place === "help") return go({ name: "help", topic: section });
     go({ name: place });
     if (!section) return;
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ block: "start" })),
     );
   };
+  // A "?" next to a setting opens its Help topic.
+  setHelpOpener((topic) => go({ name: "help", topic }));
   // The tray's "Open" on a device jumps to that device's page.
   onMount(() => {
     const off = onOpenDevice((node) => go({ name: "device", node }));
@@ -81,6 +87,9 @@ export default function App() {
             <button class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`} onClick={() => go({ name: "settings" })}>
               {t("nav.settings")}
             </button>
+            <button class={`nav-item ${is("help") ? "active" : ""}`} onClick={() => go({ name: "help" })}>
+              {t("nav.help")}
+            </button>
             {/* Pop-ups held while a phone is on Do Not Disturb. */}
             <Show when={state.quietPhones.length > 0}>
               <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
@@ -106,6 +115,9 @@ export default function App() {
               </Match>
               <Match when={view().name === "settings"}>
                 <Settings onDeveloper={() => go({ name: "developer" })} />
+              </Match>
+              <Match when={view().name === "help" && view()}>
+                {(v) => <Help topic={(v() as { topic?: string }).topic} onTopic={(topic) => go({ name: "help", topic })} />}
               </Match>
               <Match when={view().name === "developer"}>
                 <Developer onBack={() => go({ name: "settings" })} />
