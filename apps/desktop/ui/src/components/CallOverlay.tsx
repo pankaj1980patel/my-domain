@@ -1,7 +1,8 @@
 // A phone call taken on this computer (calls.rs): the incoming-call dialog
 // (Answer / Decline) and, during a call, the in-call bar: who, how long,
 // where the audio is (and a picker to move it: phone, this computer, another
-// speaker or headset), Mute, Keypad, Hang up.
+// speaker or headset), Mute, Keypad, Hang up. On Windows the audio stays on
+// the phone, so there's no Mute and nowhere to move it.
 
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
@@ -80,13 +81,16 @@ export default function CallOverlay() {
               </span>
             </div>
             <div class="row call-actions">
-              <button
-                class="btn btn-soft"
-                aria-pressed={s()?.muted ?? false}
-                onClick={() => callDo(commands.callMute(!(s()?.muted ?? false)))}
-              >
-                {s()?.muted ? t("calls.unmute") : t("calls.mute")}
-              </button>
+              {/* Windows: the call's audio and microphone are the phone's. */}
+              <Show when={s()?.os !== "windows"}>
+                <button
+                  class="btn btn-soft"
+                  aria-pressed={s()?.muted ?? false}
+                  onClick={() => callDo(commands.callMute(!(s()?.muted ?? false)))}
+                >
+                  {s()?.muted ? t("calls.unmute") : t("calls.mute")}
+                </button>
+              </Show>
               <button
                 class="btn btn-soft"
                 aria-expanded={keypad()}
@@ -112,20 +116,23 @@ export default function CallOverlay() {
           </div>
           <Show when={picker()}>
             <div class="call-bar-panel" id="call-bar-audio">
-              <div class="row">
-                <Show
-                  when={s()?.audio === "mac"}
-                  fallback={
-                    <button class="btn btn-ghost btn-sm" onClick={() => callDo(commands.callAudioToMac())}>
-                      {t("calls.useMac")}
+              {/* Nowhere to move it when this computer can't carry call audio. */}
+              <Show when={s()?.mac_audio !== false}>
+                <div class="row">
+                  <Show
+                    when={s()?.audio === "mac"}
+                    fallback={
+                      <button class="btn btn-ghost btn-sm" onClick={() => callDo(commands.callAudioToMac())}>
+                        {t("calls.useMac")}
+                      </button>
+                    }
+                  >
+                    <button class="btn btn-ghost btn-sm" onClick={() => callDo(commands.callAudioToPhone())}>
+                      {t("calls.usePhone")}
                     </button>
-                  }
-                >
-                  <button class="btn btn-ghost btn-sm" onClick={() => callDo(commands.callAudioToPhone())}>
-                    {t("calls.usePhone")}
-                  </button>
-                </Show>
-              </div>
+                  </Show>
+                </div>
+              </Show>
               <Show when={s()}>{(st) => <CallAudioPicker id="call-bar-picker" value={st().target} onChange={moveAudio} />}</Show>
             </div>
           </Show>

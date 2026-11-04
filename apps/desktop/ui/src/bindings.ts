@@ -588,7 +588,10 @@ export type CallsStatus_Deserialize = {
 	target: AudioTarget_Deserialize,
 	/**  Where the audio goes when a call is answered here (Settings). */
 	answer: AudioTarget_Deserialize,
-	/**  This Mac can carry call audio (false once macOS refused it). */
+	/**
+	 *  This computer can carry call audio (false on Windows, and once macOS
+	 *  refused it).
+	 */
 	mac_audio: boolean,
 	/**
 	 *  Something keeps calls from working here, and what to do about it
@@ -624,7 +627,10 @@ export type CallsStatus_Serialize = {
 	target: AudioTarget_Serialize,
 	/**  Where the audio goes when a call is answered here (Settings). */
 	answer: AudioTarget_Serialize,
-	/**  This Mac can carry call audio (false once macOS refused it). */
+	/**
+	 *  This computer can carry call audio (false on Windows, and once macOS
+	 *  refused it).
+	 */
 	mac_audio: boolean,
 	/**
 	 *  Something keeps calls from working here, and what to do about it

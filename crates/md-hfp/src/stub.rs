@@ -1,11 +1,11 @@
-//! Not Linux: the same API as the Linux [`Hfp`], refusing everything, so
-//! code written against it type-checks on any machine.
+//! Neither Linux nor Windows: the same API as the Linux [`Hfp`], refusing
+//! everything, so code written against it type-checks on any machine.
 
 use std::sync::Arc;
 
 use crate::{Gateway, HfEvent, ScoPcm};
 
-const UNSUPPORTED: &str = "Bluetooth calls through BlueZ need Linux.";
+const UNSUPPORTED: &str = "Bluetooth calls need Linux or Windows.";
 
 /// See the Linux version (`linux/mod.rs`); this one never starts.
 pub struct Hfp {

@@ -21,6 +21,11 @@
 //    on the main thread, where its delegate calls arrive;
 //  - Linux: `linux`, the `md-hfp` crate (a BlueZ HFP profile over D-Bus,
 //    the AT dialogue, SCO sockets) on threads of its own;
+//  - Windows: `windows`, the same `md-hfp` API over a Winsock RFCOMM socket
+//    to the phone's Audio Gateway service: call control only, the audio
+//    stays on the phone (Windows opens SCO for kernel-mode drivers alone;
+//    its own hands-free role, Phone Link's, needs package identity and a
+//    restricted capability; see md-hfp's `windows/mod.rs`);
 //  - anything else: `none`, every command says "not available"
 //    (`available()` is false).
 //
@@ -44,15 +49,13 @@
 // and reports what happens by calling `feed(Ev::...)` (any thread):
 // Connected(bool) when the service-level link comes or goes, the phone's
 // indicators (Call, Setup, Held, Signal, Battery), Incoming / CallInfo for
-// the caller, Sco(bool) when the audio link opens or closes. A Windows
-// backend adds `#[cfg(target_os = "windows")] mod windows;` with the same
-// functions and one more line in the `use ... as backend` list below.
+// the caller, Sco(bool) when the audio link opens or closes. Another OS's
+// backend adds its `mod` with the same functions and one more line in the
+// `use ... as backend` list below.
 //
 // Call audio: the phone sends it over a SCO link. On macOS, when that link
-// opens, the
-
-// Mac shows it as a CoreAudio device named after the phone (input: the
-// caller's voice; output: what the caller hears). `audio` below bridges it
+// opens, the Mac shows it as a CoreAudio device named after the phone
+// (input: the caller's voice; output: what the caller hears). `audio` below bridges it
 // with a small pass-through (cpal, i.e. CoreAudio AudioUnits): the phone's
 // device -> the chosen output, the chosen input -> the phone's device
 // (zeroed while muted), resampled between the rates (SCO is 8/16 kHz).
@@ -78,6 +81,12 @@
 // bridges them to the chosen speaker and microphone with the same
 // resampling and device choice. Linux has no device-change listener here
 // (ALSA device probing during a call would fight the bridge's own devices).
+//
+// On Windows no app can hold the SCO link, so there is no bridge: the call
+// audio stays on the phone (`computer_audio_refused()` is always true there,
+// so every call targets the phone and Settings says why), and this computer
+// is the call's remote: ringing, caller, answer, decline, hang up, dial,
+// redial, keypad. Mute is the phone's own (no microphone here is in the call).
 
 #![cfg_attr(not(any(target_os = "macos", target_os = "linux")), allow(dead_code))]
 
@@ -92,8 +101,11 @@ use tauri::{AppHandle, Emitter, Manager};
 use linux as backend;
 #[cfg(target_os = "macos")]
 use mac as backend;
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 use none as backend;
+// `self::`: the module below, never a `windows` crate.
+#[cfg(target_os = "windows")]
+use self::windows as backend;
 
 const KEY_ON: &str = "calls";
 const KEY_DEVICE: &str = "calls_device";
@@ -103,7 +115,7 @@ const KEY_MAC_AUDIO: &str = "calls_mac_audio";
 /// The longest number `call_dial` accepts.
 const MAX_NUMBER: usize = 32;
 const NOT_AVAILABLE: &str =
-    "Calls on this computer aren\u{2019}t available here (macOS and Linux only).";
+    "Calls on this computer aren\u{2019}t available here (macOS, Linux and Windows only).";
 
 /// The app, for delegate callbacks (they carry no context).
 static APP: OnceLock<AppHandle> = OnceLock::new();
@@ -135,15 +147,19 @@ fn call_target() -> AudioTarget {
         .ok()
         .and_then(|t| t.clone())
         .unwrap_or_default();
-    if mac_audio_refused() {
-        // Nowhere else to put it: this Mac can't carry it.
+    if computer_audio_refused() {
+        // Nowhere else to put it: this computer can't carry it.
         return AudioTarget { phone: true, ..t };
     }
     t
 }
 
-/// macOS turned down carrying call audio here before.
-fn mac_audio_refused() -> bool {
+/// This computer can't carry call audio: never on Windows (no app may hold
+/// the SCO link there), or macOS turned it down here before.
+fn computer_audio_refused() -> bool {
+    if cfg!(target_os = "windows") {
+        return true;
+    }
     APP.get()
         .and_then(|app| {
             app.try_state::<CallsPrefs>()
@@ -247,7 +263,11 @@ impl CallsPrefs {
 
 /// Calls can work on this computer at all.
 pub fn available() -> bool {
-    cfg!(any(target_os = "macos", target_os = "linux"))
+    cfg!(any(
+        target_os = "macos",
+        target_os = "linux",
+        target_os = "windows"
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -684,9 +704,14 @@ fn audio_changed() {
     }
 }
 
-/// The tray's call items right now (empty with no call).
+/// The tray's call items right now (empty with no call). No "use this
+/// computer for audio" where it can't carry it (Windows, or macOS refused).
 pub fn tray_items() -> Vec<(&'static str, String)> {
-    MACHINE.lock().map(|m| tray_entries(&m)).unwrap_or_default()
+    let mut v = MACHINE.lock().map(|m| tray_entries(&m)).unwrap_or_default();
+    if computer_audio_refused() {
+        v.retain(|(id, _)| *id != "tomac");
+    }
+    v
 }
 
 /// A tray call item was chosen (main thread).
@@ -817,7 +842,8 @@ pub struct CallsStatus {
     pub target: AudioTarget,
     /// Where the audio goes when a call is answered here (Settings).
     pub answer: AudioTarget,
-    /// This Mac can carry call audio (false once macOS refused it).
+    /// This computer can carry call audio (false on Windows, and once macOS
+    /// refused it).
     pub mac_audio: bool,
     /// Something keeps calls from working here, and what to do about it
     /// (e.g. another program has the hands-free role on Linux).
@@ -862,7 +888,7 @@ fn status_of(app: &AppHandle) -> CallsStatus {
         battery: m.battery,
         audio: m.audio(),
         answer: p.answer,
-        mac_audio: !p.mac_audio_refused,
+        mac_audio: !(cfg!(target_os = "windows") || p.mac_audio_refused),
         problem: if p.on { backend::problem() } else { None },
         os: std::env::consts::OS.to_string(),
     }
@@ -1518,6 +1544,79 @@ mod mac {
 }
 
 // ---------------------------------------------------------------------------
+// md-hfp's events (Linux and Windows)
+// ---------------------------------------------------------------------------
+
+/// md-hfp's events (its dispatcher thread, in order) into the call state
+/// (Linux and Windows). `list_calls` asks the phone for its call list.
+#[cfg(any(target_os = "linux", target_os = "windows", test))]
+#[cfg_attr(not(any(target_os = "linux", target_os = "windows")), allow(dead_code))]
+fn md_hfp_event(ev: md_hfp::HfEvent, list_calls: impl Fn()) {
+    use md_hfp::{Event, HfEvent};
+    match ev {
+        HfEvent::At(e) => match e {
+            Event::Ready { .. } => feed(Ev::Connected(true)),
+            Event::Call(on) => feed(Ev::Call(on)),
+            Event::Setup(s) => {
+                feed(Ev::Setup(s));
+                if s == 1 {
+                    // The caller's name, when the phone lists it.
+                    list_calls();
+                }
+            }
+            Event::Held(h) => feed(Ev::Held(h)),
+            Event::Signal(s) => feed(Ev::Signal(s)),
+            Event::Battery(b) => feed(Ev::Battery(b)),
+            Event::Caller { number, name } => {
+                feed(Ev::Incoming(number.clone()));
+                if name.is_some() {
+                    feed(Ev::CallInfo {
+                        number: Some(number),
+                        name,
+                    });
+                }
+            }
+            Event::ListedCall(c) => {
+                // Only the ringing or current call's caller is shown.
+                if call_status_phase(c.status as i32) != Phase::Idle {
+                    feed(Ev::CallInfo {
+                        number: c.number,
+                        name: c.name,
+                    });
+                }
+            }
+            Event::Refused { command } => {
+                eprintln!("[calls] the phone refused {command}");
+            }
+            _ => {}
+        },
+        HfEvent::Disconnected => feed(Ev::Connected(false)),
+        HfEvent::Audio(a) => feed(Ev::Sco(a.is_some())),
+        HfEvent::ConnectFailed(why) => {
+            eprintln!("[calls] connect failed: {why}");
+            if let Some(app) = APP.get() {
+                crate::notify::post_always(
+                    app,
+                    "Couldn\u{2019}t connect to your phone for calls",
+                    &why,
+                );
+            }
+            feed(Ev::Connected(false));
+        }
+        HfEvent::Problem(p) => {
+            if let Some(p) = &p {
+                eprintln!("[calls] {p}");
+            }
+            if let Some(app) = APP.get() {
+                if let Ok(m) = MACHINE.lock().map(|m| m.clone()) {
+                    emit_state(app, &m);
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Linux: BlueZ through md-hfp (its own threads)
 // ---------------------------------------------------------------------------
 
@@ -1528,9 +1627,9 @@ mod mac {
 mod linux {
     use std::sync::{Arc, Mutex};
 
-    use md_hfp::{Event, HfEvent, Hfp};
+    use md_hfp::{HfEvent, Hfp};
 
-    use super::{call_status_phase, feed, CallDevice, Ev, Phase, MIC_MUTED};
+    use super::{feed, CallDevice, Ev, MIC_MUTED};
 
     const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this computer.";
 
@@ -1560,71 +1659,13 @@ mod linux {
         Ok(h)
     }
 
-    /// md-hfp's events (its dispatcher thread, in order) into the call state.
+    /// md-hfp's events into the call state.
     fn on_event(ev: HfEvent) {
-        match ev {
-            HfEvent::At(e) => match e {
-                Event::Ready { .. } => feed(Ev::Connected(true)),
-                Event::Call(on) => feed(Ev::Call(on)),
-                Event::Setup(s) => {
-                    feed(Ev::Setup(s));
-                    if s == 1 {
-                        // The caller's name, when the phone lists it.
-                        if let Some(h) = current() {
-                            let _ = h.list_calls();
-                        }
-                    }
-                }
-                Event::Held(h) => feed(Ev::Held(h)),
-                Event::Signal(s) => feed(Ev::Signal(s)),
-                Event::Battery(b) => feed(Ev::Battery(b)),
-                Event::Caller { number, name } => {
-                    feed(Ev::Incoming(number.clone()));
-                    if name.is_some() {
-                        feed(Ev::CallInfo {
-                            number: Some(number),
-                            name,
-                        });
-                    }
-                }
-                Event::ListedCall(c) => {
-                    // Only the ringing or current call's caller is shown.
-                    if call_status_phase(c.status as i32) != Phase::Idle {
-                        feed(Ev::CallInfo {
-                            number: c.number,
-                            name: c.name,
-                        });
-                    }
-                }
-                Event::Refused { command } => {
-                    eprintln!("[calls] the phone refused {command}");
-                }
-                _ => {}
-            },
-            HfEvent::Disconnected => feed(Ev::Connected(false)),
-            HfEvent::Audio(a) => feed(Ev::Sco(a.is_some())),
-            HfEvent::ConnectFailed(why) => {
-                eprintln!("[calls] connect failed: {why}");
-                if let Some(app) = super::APP.get() {
-                    crate::notify::post_always(
-                        app,
-                        "Couldn\u{2019}t connect to your phone for calls",
-                        &why,
-                    );
-                }
-                feed(Ev::Connected(false));
+        super::md_hfp_event(ev, || {
+            if let Some(h) = current() {
+                let _ = h.list_calls();
             }
-            HfEvent::Problem(p) => {
-                if let Some(p) = &p {
-                    eprintln!("[calls] {p}");
-                }
-                if let Some(app) = super::APP.get() {
-                    if let Ok(m) = super::MACHINE.lock().map(|m| m.clone()) {
-                        super::emit_state(app, &m);
-                    }
-                }
-            }
-        }
+        });
     }
 
     /// md-hfp blocks only briefly (its worker answers within seconds), so
@@ -1736,10 +1777,175 @@ mod linux {
 }
 
 // ---------------------------------------------------------------------------
+// Windows: md-hfp over a Winsock RFCOMM socket (call control only)
+// ---------------------------------------------------------------------------
+
+// Like `linux`, compiled into the macOS test build too (against md-hfp's
+// stub `Hfp`), so this glue is type-checked off Windows. The audio never
+// comes here (see the top of this file): `phone_end` is always None and
+// asking for the audio here says why.
+#[cfg(any(target_os = "windows", test))]
+#[cfg_attr(not(target_os = "windows"), allow(dead_code))]
+mod windows {
+    use std::sync::{Arc, Mutex};
+
+    use md_hfp::{HfEvent, Hfp};
+
+    use super::CallDevice;
+
+    const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this computer.";
+    /// The call's audio (and so its microphone) is on the phone.
+    const MUTE_ON_PHONE: &str = "Mute on your phone: the call\u{2019}s audio is there, Windows doesn\u{2019}t let apps carry it to this computer.";
+
+    /// The hands-free unit, started on first use.
+    static HFP: Mutex<Option<Arc<Hfp>>> = Mutex::new(None);
+    /// Why it couldn't start (Winsock didn't), for Settings.
+    static START_ERROR: Mutex<Option<String>> = Mutex::new(None);
+
+    fn current() -> Option<Arc<Hfp>> {
+        HFP.lock().ok()?.clone()
+    }
+
+    /// The running unit, starting it if need be.
+    fn hfp() -> Result<Arc<Hfp>, String> {
+        let mut g = HFP
+            .lock()
+            .map_err(|_| "Bluetooth calls stopped.".to_string())?;
+        if let Some(h) = g.as_ref() {
+            return Ok(h.clone());
+        }
+        let started = Hfp::start(on_event);
+        if let Ok(mut e) = START_ERROR.lock() {
+            *e = started.as_ref().err().cloned();
+        }
+        let h = Arc::new(started?);
+        *g = Some(h.clone());
+        Ok(h)
+    }
+
+    fn on_event(ev: HfEvent) {
+        super::md_hfp_event(ev, || {
+            if let Some(h) = current() {
+                let _ = h.list_calls();
+            }
+        });
+    }
+
+    /// md-hfp blocks only briefly (its worker answers within seconds; a
+    /// connect happens on a thread of its own), so calls run right here.
+    pub fn exec<T: Send + 'static>(
+        _app: &tauri::AppHandle,
+        f: impl FnOnce() -> Result<T, String> + Send + 'static,
+    ) -> Result<T, String> {
+        f()
+    }
+
+    pub fn run_later(_app: &tauri::AppHandle, f: impl FnOnce() + Send + 'static) {
+        std::thread::spawn(f);
+    }
+
+    pub fn gateways() -> Result<Vec<CallDevice>, String> {
+        Ok(hfp()?
+            .gateways()?
+            .into_iter()
+            .map(|g| CallDevice {
+                address: g.address,
+                name: g.name,
+                connected: g.connected,
+            })
+            .collect())
+    }
+
+    pub fn connect(addr: &str) -> Result<(), String> {
+        hfp()?.connect(addr)
+    }
+
+    pub fn disconnect() -> Result<(), String> {
+        match current() {
+            Some(h) => h.disconnect(),
+            None => Ok(()),
+        }
+    }
+
+    fn connected() -> Result<Arc<Hfp>, String> {
+        current().ok_or_else(|| NOT_CONNECTED.to_string())
+    }
+
+    /// The audio stays on the phone whatever `on_computer` says.
+    pub fn answer(on_computer: bool) -> Result<(), String> {
+        connected()?.answer(on_computer)
+    }
+
+    pub fn end_call() -> Result<(), String> {
+        connected()?.hang_up()
+    }
+
+    pub fn dial(number: &str) -> Result<(), String> {
+        connected()?.dial(number)
+    }
+
+    pub fn redial() -> Result<(), String> {
+        connected()?.redial()
+    }
+
+    pub fn dtmf(c: char) -> Result<(), String> {
+        connected()?.dtmf(c)
+    }
+
+    /// No microphone here is in the call: muting is the phone's.
+    pub fn set_muted(_on: bool) -> Result<(), String> {
+        connected()?;
+        Err(MUTE_ON_PHONE.into())
+    }
+
+    pub fn audio_to_phone() -> Result<(), String> {
+        connected()?.audio_to_phone()
+    }
+
+    /// Says why the audio can't come here (md-hfp's message).
+    pub fn audio_to_mac() -> Result<(), String> {
+        connected()?.audio_here()
+    }
+
+    pub fn connect_sco() -> Result<(), String> {
+        connected()?.connect_audio()
+    }
+
+    /// Nothing to bridge: no app gets the call audio on Windows.
+    pub fn phone_end() -> Option<super::audio::PhoneEnd> {
+        None
+    }
+
+    pub fn device_name() -> String {
+        current().map(|h| h.device_name()).unwrap_or_default()
+    }
+
+    pub fn known_name() -> String {
+        device_name()
+    }
+
+    pub fn cached_name(addr: Option<&str>) -> Option<String> {
+        current()?.cached_name(addr?)
+    }
+
+    /// Why calls can't work here right now: Windows' own hands-free
+    /// (Phone Link's Calls) has the phone, and how to free it.
+    pub fn problem() -> Option<String> {
+        match current() {
+            Some(h) => h.problem(),
+            None => START_ERROR.lock().ok()?.clone(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // No backend on this OS: everything says "not available"
 // ---------------------------------------------------------------------------
 
-#[cfg(any(not(any(target_os = "macos", target_os = "linux")), test))]
+#[cfg(any(
+    not(any(target_os = "macos", target_os = "linux", target_os = "windows")),
+    test
+))]
 #[allow(dead_code)]
 mod none {
     use super::{CallDevice, NOT_AVAILABLE};

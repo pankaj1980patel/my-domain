@@ -1,6 +1,6 @@
 [package]
 name = "md-hfp"
-description = "Phone calls over Bluetooth on Linux: an HFP hands-free (HF) unit for a paired phone (AT engine, BlueZ profile over D-Bus, SCO audio)."
+description = "Phone calls over Bluetooth on Linux and Windows: an HFP hands-free (HF) unit for a paired phone (AT engine; BlueZ profile over D-Bus and SCO audio on Linux; Winsock RFCOMM, call control only, on Windows)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -15,6 +15,15 @@ publish = false
 zbus = "5"
 # The SCO (audio) sockets: AF_BLUETOOTH has no std or socket2 support.
 libc = "0.2"
+
+# Windows: Winsock RFCOMM (AF_BTH) to the phone's Audio Gateway service and
+# the paired-device list (bluetoothapis). The same `windows` md-geo uses.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61.3", features = [
+    "Win32_Foundation",
+    "Win32_Devices_Bluetooth",
+    "Win32_Networking_WinSock",
+] }
 
 [lints]
 workspace = true

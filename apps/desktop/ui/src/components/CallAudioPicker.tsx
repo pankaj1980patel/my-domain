@@ -22,9 +22,11 @@ export function CallAudioPicker(props: { value: AudioTarget; onChange: (t: Audio
     const i = props.value.input;
     return i && !list.includes(i) ? [i, ...list] : list;
   };
-  // macOS refused call audio here before: the phone is the only choice.
+  // Windows never lets apps carry call audio, and macOS refused it here
+  // before: the phone is the only choice.
   if (callStatus()?.mac_audio === false) {
-    return <p class="call-audio-picker small muted">{t("calls.macAudioRefused")}</p>;
+    const why = callStatus()?.os === "windows" ? "calls.windowsAudio" : "calls.macAudioRefused";
+    return <p class="call-audio-picker small muted">{t(why)}</p>;
   }
   return (
     <div class="call-audio-picker stack">

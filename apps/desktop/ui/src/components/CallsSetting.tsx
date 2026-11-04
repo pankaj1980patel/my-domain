@@ -1,8 +1,9 @@
 // "Calls on this computer" (calls.rs): off by default; pick a phone already
 // paired with this computer, connect, choose where answered audio goes, and
-// a dial pad. On macOS and Linux only; elsewhere it says it isn't
-// available. A standing problem (Linux: another program has the hands-free
-// role) shows with what to do about it.
+// a dial pad. On macOS, Linux and Windows (call control only there: the
+// audio stays on the phone); elsewhere it says it isn't available. A
+// standing problem (Linux: another program has the hands-free role;
+// Windows: Phone Link's Calls has the phone) shows with what to do about it.
 
 import { createSignal, For, onMount, Show } from "solid-js";
 import { commands, type CallDevice } from "../bindings";
@@ -65,7 +66,7 @@ export function CallsSetting() {
     <article class="tile" id="settings-calls">
       <h2>{t("calls.title")}</h2>
       <Show when={s()?.available} fallback={<p class="muted small">{t("calls.unavailable")}</p>}>
-        <p class="muted small">{t(mac() ? "calls.hintMac" : "calls.hint")}</p>
+        <p class="muted small">{t(mac() ? "calls.hintMac" : s()?.os === "windows" ? "calls.hintWindows" : "calls.hint")}</p>
         <label class="switch-row">
           <span>{t("calls.switch")}</span>
           <input
