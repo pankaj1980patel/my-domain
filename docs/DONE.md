@@ -355,6 +355,16 @@ Built by three agents in parallel (worktrees), merged and built here.
   `components/ScheduleList.tsx`; `local_actions` command): lock, mute,
   unmute, play/pause, stop keeping awake; an action this computer can't do
   now is an error, not a silent "Done".
+- **Automations** (desktop `automations.rs`, Settings "Automations",
+  presets shared in `ui/src/lib/presets.ts`): when a device connects,
+  disconnects for a minute, drops below N%, starts/stops charging, or this
+  computer wakes → a preset on any device, or just a notification. Fires on
+  the crossing only, at most once a minute, through the schedule run path.
+  9 unit tests on the edge detection.
+- **Home-screen widget** (phone `HomeWidget.kt`): the computer's name,
+  connected or not, battery; Send clipboard, Lock, Ring (shared with the
+  Quick Settings tiles via `QuickActions`); redrawn on status/link events,
+  at most every 3 s.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
