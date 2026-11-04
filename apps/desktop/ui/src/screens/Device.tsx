@@ -6,8 +6,10 @@ import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
 import {
   cancelFile,
+  clearChat,
   clearClipHistory,
   connect,
+  disconnect,
   copyText,
   loadClipHistory,
   notificationAction,
@@ -16,6 +18,7 @@ import {
   peerName,
   pickAndSendFile,
   pullClipboard,
+  reconnect,
   requestApps,
   requestStatus,
   revealFile,
@@ -31,6 +34,7 @@ import {
   type DeviceStatus,
   type PhoneNotification,
   type Radio,
+  type WifiNetwork,
   type Transfer,
 } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
@@ -86,6 +90,24 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 {t("device.connect")}
               </button>
             </Show>
+            <Show when={s() === "direct" || s() === "relay"}>
+              <div class="row">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  title={t("device.reconnectHint")}
+                  onClick={() => reconnect(props.node).catch((e) => toast(friendlyError(e), "error"))}
+                >
+                  {t("device.reconnect")}
+                </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  title={t("device.disconnectHint")}
+                  onClick={() => disconnect(props.node).catch((e) => toast(friendlyError(e), "error"))}
+                >
+                  {t("device.disconnect")}
+                </button>
+              </div>
+            </Show>
           </header>
 
           <div class="tiles">
@@ -132,7 +154,14 @@ function ChatTile(props: { node: string }) {
 
   return (
     <article class="tile tile-wide">
-      <h2>{t("chat.title")}</h2>
+      <div class="tile-head">
+        <h2>{t("chat.title")}</h2>
+        <Show when={thread().length > 0}>
+          <button class="btn btn-ghost btn-sm" title={t("chat.clearHint")} onClick={() => clearChat(props.node)}>
+            {t("chat.clear")}
+          </button>
+        </Show>
+      </div>
       <div class="thread" ref={list}>
         <Show when={thread().length > 0} fallback={<p class="muted small center">{t("chat.empty")}</p>}>
           <For each={thread()}>
@@ -783,6 +812,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
       <Show when={has("key")}>
         <KeyRow node={props.node} />
       </Show>
+      <Show when={has("wifi")}>
+        <WifiList node={props.node} st={props.st} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -835,6 +867,105 @@ function RadioRow(props: { node: string; st: DeviceStatus }) {
       <p class="muted small">
         {props.st.radioDirect.length > 0 ? t("control.radioDirectHint") : t("control.radioPanelHint")}
       </p>
+    </div>
+  );
+}
+
+/** The phone's nearby Wi-Fi networks: scan, join one (a password for a
+ *  new secured network), leave or rejoin the current one. */
+function WifiList(props: { node: string; st: DeviceStatus }) {
+  const [asking, setAsking] = createSignal<string | null>(null);
+  const [password, setPassword] = createSignal("");
+  const wifi = (args: Record<string, unknown>) =>
+    runAction(props.node, "wifi", args).catch((e) => toast(friendlyError(e), "error"));
+  const join = (n: WifiNetwork) => {
+    if (n.secure && !n.saved) {
+      setPassword("");
+      setAsking(n.ssid);
+    } else {
+      wifi({ op: "connect", ssid: n.ssid });
+      toast(t("wifi.joining", { ssid: n.ssid }));
+    }
+  };
+  const sendPassword = (e: Event) => {
+    e.preventDefault();
+    const ssid = asking();
+    if (!ssid || password().length < 8) return;
+    wifi({ op: "connect", ssid, password: password() });
+    toast(t("wifi.joining", { ssid }));
+    setAsking(null);
+  };
+  return (
+    <div class="stack">
+      <div class="row">
+        <span class="small muted grow">
+          {props.st.wifiSsid ? t("wifi.on", { ssid: props.st.wifiSsid }) : t("wifi.title")}
+        </span>
+        <button class="btn btn-ghost btn-sm" onClick={() => wifi({ op: "scan" })}>
+          {props.st.wifiNetworks ? t("wifi.rescan") : t("wifi.scan")}
+        </button>
+        <Show when={props.st.wifiSsid}>
+          <button class="btn btn-ghost btn-sm" onClick={() => wifi({ op: "disconnect" })}>
+            {t("wifi.disconnect")}
+          </button>
+        </Show>
+        <Show when={!props.st.wifiSsid && props.st.radios.wifi}>
+          <button class="btn btn-ghost btn-sm" onClick={() => wifi({ op: "reconnect" })}>
+            {t("wifi.reconnect")}
+          </button>
+        </Show>
+      </div>
+      <Show when={props.st.wifiScanNeeds}>
+        <p class="muted small">
+          {props.st.wifiScanNeeds === "location" ? t("wifi.needsLocation") : t("wifi.needsPermission")}
+        </p>
+      </Show>
+      <Show when={props.st.wifiNetworks}>
+        {(nets) => (
+          <ul class="wifi-list">
+            <For each={nets()} fallback={<li class="muted small">{t("wifi.none")}</li>}>
+              {(n) => (
+                <li class="row">
+                  <span class="grow">
+                    {n.ssid}
+                    <span class="muted small">
+                      {" "}
+                      {"▂▄▆█".slice(0, Math.max(1, n.signal))}
+                      {n.secure ? " 🔒" : ""}
+                      {n.current ? ` · ${t("wifi.connected")}` : n.saved ? ` · ${t("wifi.saved")}` : ""}
+                    </span>
+                  </span>
+                  <Show when={!n.current}>
+                    <button class="btn btn-ghost btn-sm" onClick={() => join(n)}>
+                      {t("wifi.join")}
+                    </button>
+                  </Show>
+                </li>
+              )}
+            </For>
+          </ul>
+        )}
+      </Show>
+      <Show when={asking()}>
+        {(ssid) => (
+          <form class="row" onSubmit={sendPassword}>
+            <input
+              class="grow"
+              type="password"
+              placeholder={t("wifi.password", { ssid: ssid() })}
+              aria-label={t("wifi.password", { ssid: ssid() })}
+              value={password()}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+            />
+            <button class="btn btn-soft btn-sm" type="submit" disabled={password().length < 8}>
+              {t("wifi.join")}
+            </button>
+            <button class="btn btn-ghost btn-sm" type="button" onClick={() => setAsking(null)}>
+              {t("wifi.cancel")}
+            </button>
+          </form>
+        )}
+      </Show>
     </div>
   );
 }

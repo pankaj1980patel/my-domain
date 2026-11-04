@@ -21,6 +21,30 @@ impl<P: Platform> Engine<P> {
         std::thread::spawn(move || run_connect_ladder(ctx, server_url, token, node_id));
         Ok(())
     }
+
+    /// Close the link to `node_id` now (the "Disconnect" button). Nothing is
+    /// blocked: it connects again when either side has something to send.
+    pub fn disconnect(&self, node_id: &str) -> crate::Result<()> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        transport::close_link(&self.ctx, node_id);
+        Ok(())
+    }
+
+    /// Close the link to `node_id` and connect afresh (the "Reconnect"
+    /// button: for a link that looks up but carries nothing).
+    pub fn reconnect(&self, node_id: &str) -> crate::Result<()> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        if self.ctx.p2p_conns.lock().contains_key(node_id) {
+            super::messaging::reconnect(&self.ctx, node_id);
+            Ok(())
+        } else {
+            self.connect(node_id)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

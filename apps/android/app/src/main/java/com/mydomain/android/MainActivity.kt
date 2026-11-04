@@ -21,6 +21,8 @@ import com.mydomain.android.ui.MdTheme
 
 data class DevCredentials(val server: String, val user: String, val pass: String, val key: String)
 
+private const val ASK_WIFI_SCAN = 1002
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,6 +52,7 @@ class MainActivity : ComponentActivity() {
         // works even when the phone is locked (Compose only runs on screen).
         devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
         if (savedInstanceState == null) takeShare(intent)
+        askWifiScan(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -58,6 +61,15 @@ class MainActivity : ComponentActivity() {
         // The service started before the answer; start Bluetooth now that
         // it's allowed (does nothing if it's already running or still denied).
         if (requestCode == 1001) BleLink.start(applicationContext)
+        if (requestCode == ASK_WIFI_SCAN) Controls.onChange()
+    }
+
+    /** From the "allow Wi-Fi scanning" notification (WifiNetworks): ask for
+     *  the location permission Android wants before it shows scan results. */
+    private fun askWifiScan(intent: Intent?) {
+        if (intent?.getBooleanExtra(WifiNetworks.EXTRA_ASK, false) != true) return
+        intent.removeExtra(WifiNetworks.EXTRA_ASK)
+        runCatching { ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), ASK_WIFI_SCAN) }
     }
 
     /** Files, text or a link shared from another app (share sheet): the UI
@@ -96,6 +108,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
+        askWifiScan(intent)
         takeShare(intent)
     }
 

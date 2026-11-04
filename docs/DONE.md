@@ -271,6 +271,32 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## Disconnect / Reconnect, Clear chat, the phone's Wi-Fi networks (2026-11-04)
+
+- `Engine::disconnect` (close the link now; nothing is blocked, the next
+  send connects again) and `Engine::reconnect` (close and connect afresh;
+  just connect when there's no link). Desktop commands `disconnect`,
+  `reconnect`; FFI; mdctl `disconnect <node>`, `reconnect <node>`. Tests
+  `tests/link_buttons.rs`. Tried live against the phone from mdctl: both
+  dropped the link; Reconnect brought it straight back over QUIC.
+- Device page, both apps: Reconnect and Disconnect next to the status
+  while connected (Connect when not, as before); Clear on the chat (this
+  device's copy only; chat lives only in the apps' memory).
+- The phone's Wi-Fi networks (`WifiNetworks.kt`, action `wifi`): `scan`
+  (results in the status as `wifi_networks`: up to 20, one per name,
+  strongest first, with signal, secured, saved, current), `connect`
+  (a saved network, or a new one with its password), `disconnect`,
+  `reconnect`. Possible because the app targets Android 9. Android shows
+  scan results only with the location permission and Location on: the
+  status says which is missing (`wifi_scan_needs`) and the phone posts a
+  notification that fixes it with a tap; the location is never read.
+  Desktop: a Wi-Fi section in the device's controls (Show networks, Join,
+  a password box for a new secured network, Leave network, Rejoin).
+  Tried: the scan asked for the permission as designed; the list itself
+  waits for the permission and Location on the phone.
+- Android builds for the phone now use `-Prust.targets=arm64` (CI still
+  builds all four), to save disk.
+
 ## Targeting Android 9 on purpose; radios tried live (2026-11-03)
 
 The app now targets SDK 28 (compileSdk stays 35, so newer APIs are still

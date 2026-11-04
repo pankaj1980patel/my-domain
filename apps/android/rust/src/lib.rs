@@ -550,6 +550,16 @@ impl MdEngine {
         Ok(self.inner.connect(&node_id)?)
     }
 
+    /// Close the link now; it comes back when either side sends something.
+    pub fn disconnect(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.disconnect(&node_id)?)
+    }
+
+    /// Close the link and connect afresh.
+    pub fn reconnect(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.reconnect(&node_id)?)
+    }
+
     /// Quality of every live link (RTT and loss, rated by the core).
     pub fn link_stats(&self) -> Vec<LinkQuality> {
         self.inner

@@ -164,9 +164,9 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Wi-Fi status | On/off, SSID, signal, IP | `wifi.read` | A D | S | 🟡 (on, connected, signal; SSID on Linux, rarely on Android/macOS; no IP) |
-| Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | ⬜ |
+| Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | 🟡 (2026-11-04: Android; list on the desktop; needs the location permission and Location on) |
 | Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | ✅ (2026-11-03: directly, as the app targets Android 9; tried on Android 16) |
-| Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | ⬜ |
+| Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | 🟡 (2026-11-04: Android, direct as the app targets Android 9; not tried live yet) |
 | Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | ⬜ |
 | Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | 🟡 (2026-11-03: state in the status; opens the tethering settings) |
 | Bluetooth status | On/off, paired and connected devices | `bluetooth.read` | A D | S | 🟡 (on/off only) |

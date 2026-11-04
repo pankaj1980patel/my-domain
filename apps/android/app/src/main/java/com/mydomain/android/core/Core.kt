@@ -552,6 +552,22 @@ object Core {
         call { it.connect(node) }
     }
 
+    /** Close the link now; it comes back when either side sends something. */
+    suspend fun disconnect(node: String) {
+        call { it.disconnect(node) }
+    }
+
+    /** Close the link and connect afresh (for a link that's up but stuck). */
+    suspend fun reconnect(node: String) {
+        onMain { progress[node] = "quic" }
+        call { it.reconnect(node) }
+    }
+
+    /** Forget the chat with [node], on this phone only. */
+    fun clearChat(node: String) {
+        messages.removeAll { it.node == node }
+    }
+
     /** Ask a device for its clipboard; NetService applies the reply. */
     suspend fun pullClipboard(node: String) {
         val myId = me?.nodeId ?: ""

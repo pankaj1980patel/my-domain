@@ -366,4 +366,10 @@
     <string name="helper_on">On: your computers can switch the radios and press keys.</string>
     <string name="helper_off">Off: radio switches open on this phone for you to tap.</string>
     <string name="helper_open">Open Accessibility settings</string>
+    <string name="reconnect">Reconnect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="chat_clear">Clear chat</string>
+    <string name="wifi_scan_title">Allow Wi-Fi scanning</string>
+    <string name="wifi_scan_permission">To list nearby Wi-Fi networks for your computer, Android needs my-domain to have location access. Tap to allow it. my-domain never reads your location.</string>
+    <string name="wifi_scan_location">To list nearby Wi-Fi networks, Android needs Location switched on. Tap to open Location settings.</string>
 </resources>

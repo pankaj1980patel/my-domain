@@ -78,8 +78,29 @@ export type DeviceStatus = {
   radios: Partial<Record<Radio, boolean>>;
   /** Radios it switches with no tap on it (Accessibility or Shizuku). */
   radioDirect: Radio[];
+  /** Its Wi-Fi network now, if connected. */
+  wifiSsid?: string;
+  /** Nearby Wi-Fi networks from its last scan (none until asked). */
+  wifiNetworks?: WifiNetwork[];
+  /** What stops it scanning: "permission" or "location". */
+  wifiScanNeeds?: string;
   ts: number;
 };
+
+export type WifiNetwork = { ssid: string; signal: number; secure: boolean; saved: boolean; current: boolean };
+
+function wifiNetworksOf(v: unknown): WifiNetwork[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v
+    .filter((n): n is Record<string, unknown> => !!n && typeof n === "object" && typeof n.ssid === "string")
+    .map((n) => ({
+      ssid: n.ssid as string,
+      signal: typeof n.signal === "number" ? n.signal : 0,
+      secure: n.secure === true,
+      saved: n.saved === true,
+      current: n.current === true,
+    }));
+}
 
 export const RADIOS = ["wifi", "bluetooth", "data", "hotspot", "airplane"] as const;
 export type Radio = (typeof RADIOS)[number];
@@ -328,6 +349,9 @@ export async function startEvents() {
         muted: typeof status?.muted === "boolean" ? status.muted : undefined,
         ringer: typeof status?.ringer === "string" ? status.ringer : undefined,
         radios: radiosOf(status),
+        wifiSsid: typeof (status?.wifi as { ssid?: unknown })?.ssid === "string" ? (status.wifi as { ssid: string }).ssid : undefined,
+        wifiNetworks: wifiNetworksOf(status?.wifi_networks),
+        wifiScanNeeds: typeof status?.wifi_scan_needs === "string" ? status.wifi_scan_needs : undefined,
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],
@@ -476,6 +500,22 @@ export async function sendMessage(node: string, text: string): Promise<string> {
 export async function connect(node: string) {
   setState("progress", node, "quic");
   await unwrap(commands.connect(node));
+}
+
+/** Close the link now; it comes back when either side sends something. */
+export async function disconnect(node: string) {
+  await unwrap(commands.disconnect(node));
+}
+
+/** Close the link and connect afresh (for a link that's up but stuck). */
+export async function reconnect(node: string) {
+  setState("progress", node, "quic");
+  await unwrap(commands.reconnect(node));
+}
+
+/** Forget the chat with a device, on this computer only. */
+export function clearChat(node: string) {
+  setState("messages", (list) => list.filter((m) => m.node !== node));
 }
 
 export async function setClipSync(on: boolean) {

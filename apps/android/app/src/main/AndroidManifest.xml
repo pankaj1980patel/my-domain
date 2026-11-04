@@ -34,6 +34,11 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <!-- Switch Wi-Fi (targeting Android 9 allows it; Radios.kt). -->
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <!-- Android shows Wi-Fi scan results only to apps with this
+         (WifiNetworks.kt); asked for when you first list networks, and the
+         location itself is never read. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <application
         android:allowBackup="true"

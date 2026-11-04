@@ -636,6 +636,20 @@ fn connect(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
     engine.connect(&node_id)
 }
 
+/// Close the link to a device now (it comes back when needed).
+#[tauri::command]
+#[specta::specta]
+fn disconnect(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.disconnect(&node_id)
+}
+
+/// Close the link to a device and connect afresh.
+#[tauri::command]
+#[specta::specta]
+fn reconnect(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.reconnect(&node_id)
+}
+
 #[tauri::command]
 #[specta::specta]
 fn firewall_check(engine: State<Eng>) -> Result<FirewallStatus, CoreError> {
@@ -1107,6 +1121,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         share_call_notification,
         share_call_history,
         connect,
+        disconnect,
+        reconnect,
         firewall_check,
         fcm_selftest,
         report_firewall,

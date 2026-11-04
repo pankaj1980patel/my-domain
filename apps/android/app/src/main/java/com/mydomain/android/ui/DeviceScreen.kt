@@ -94,6 +94,17 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                             scope.launch { try { Core.connect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
                         })
                     }
+                    // Connected: drop it, or drop it and connect afresh.
+                    if (s == LinkState.Direct || s == LinkState.Relay) {
+                        Column(horizontalAlignment = Alignment.End) {
+                            GhostButton(stringResource(R.string.reconnect), {
+                                scope.launch { try { Core.reconnect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
+                            }, small = true)
+                            GhostButton(stringResource(R.string.disconnect), {
+                                scope.launch { try { Core.disconnect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
+                            }, small = true)
+                        }
+                    }
                 }
             }
             item { ChatTile(node) }
@@ -136,6 +147,11 @@ private fun ChatTile(node: String) {
                         Text(stringResource(R.string.chat_sends_when_connected), color = T.onPrimary, style = MaterialTheme.typography.labelMedium)
                     }
                 }
+            }
+        }
+        if (thread.isNotEmpty()) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                GhostButton(stringResource(R.string.chat_clear), { Core.clearChat(node) }, small = true)
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {

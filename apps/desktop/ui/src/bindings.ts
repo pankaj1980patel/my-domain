@@ -34,6 +34,10 @@ export const commands = {
 	shareCallNotification: (caller: string, number: string | null, state: string) => __TAURI_INVOKE<void>("share_call_notification", { caller, number, state }),
 	shareCallHistory: (entriesJson: string) => __TAURI_INVOKE<void>("share_call_history", { entriesJson }),
 	connect: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("connect", { nodeId })),
+	/**  Close the link to a device now (it comes back when needed). */
+	disconnect: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("disconnect", { nodeId })),
+	/**  Close the link to a device and connect afresh. */
+	reconnect: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("reconnect", { nodeId })),
 	firewallCheck: () => typedError<FirewallStatus, string>(__TAURI_INVOKE("firewall_check")),
 	/**
 	 *  Round-trip FCM self-test: pushes a ping to our own token via the server. The

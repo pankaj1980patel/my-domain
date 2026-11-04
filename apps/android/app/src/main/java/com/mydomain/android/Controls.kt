@@ -26,6 +26,8 @@ import org.json.JSONObject
  *   keep_awake {minutes}                 keep the screen on (0 = stop)
  *   radio      {what, on}                Wi-Fi, Bluetooth, airplane, data,
  *                                        hotspot (see Radios)
+ *   wifi       {op, ssid?, password?}    scan, connect, disconnect, reconnect
+ *                                        (see WifiNetworks)
  *   key        {key}                     back, home, recents, notifications,
  *                                        quick_settings, lock (needs PhoneHelper)
  *
@@ -65,6 +67,7 @@ object Controls {
         if (hasPhone) put("dial")
         put("keep_awake")
         put("radio")
+        put("wifi")
         // Phone keys, with the Accessibility service on.
         if (PhoneHelper.instance != null) put("key")
         // Computers can see this screen (Android asks each time).
@@ -75,6 +78,7 @@ object Controls {
         val am = ctx.getSystemService(AudioManager::class.java)
         val o = JSONObject()
         Radios.state(ctx, o)
+        WifiNetworks.state(o)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
         if (am != null) {
@@ -138,6 +142,7 @@ object Controls {
                 "keep_awake" -> DeviceActions.keepAwake(ctx, args.optInt("minutes", 0))
                 "radio" -> args.has("on") && Radios.set(ctx, fromName, args.optString("what"), args.optBoolean("on"))
                 "key" -> PhoneHelper.instance?.press(args.optString("key")) == true
+                "wifi" -> WifiNetworks.run(ctx, args)
                 else -> false
             }
         }.onFailure { Log.w(TAG, "action $name failed", it) }.getOrDefault(false)

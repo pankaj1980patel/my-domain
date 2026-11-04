@@ -21,6 +21,7 @@
 //! `MD_DEV_PASS`, `MD_DEV_KEY` (scripts/lab/test-creds.env).
 //!
 //! Commands: `identity`, `peers`, `links`, `refresh`, `connect <node>`,
+//! `disconnect <node>`, `reconnect <node>`,
 //! `send <node> <text...>`, `status <node>`, `ring <node>`,
 //! `open <node> <url> [app package]`, `search <node> youtube|spotify|web <text...>`,
 //! `action <node> <name> [json]`,
@@ -451,6 +452,14 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         "connect" => {
             engine.connect(&resolve(engine, &arg(words.next())?)?)?;
             Ok(json!("connecting"))
+        }
+        "disconnect" => {
+            engine.disconnect(&resolve(engine, &arg(words.next())?)?)?;
+            Ok(json!("disconnected"))
+        }
+        "reconnect" => {
+            engine.reconnect(&resolve(engine, &arg(words.next())?)?)?;
+            Ok(json!("reconnecting"))
         }
         "send" => {
             let to = resolve(engine, &arg(words.next())?)?;
