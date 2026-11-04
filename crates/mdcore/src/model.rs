@@ -177,6 +177,12 @@ pub enum WsFrame {
     },
     #[serde(rename = "msg")]
     Msg { nonce: String, ciphertext: String },
+    /// Relay only: the sender closed its relayed link to us on purpose (idle
+    /// in the background, or Disconnect). Nothing tells us otherwise: the
+    /// relay socket stays up on our side, so without this we'd stay "live"
+    /// on a route that leads nowhere and every send would vanish into it.
+    #[serde(rename = "bye")]
+    Bye,
 }
 
 #[cfg(test)]

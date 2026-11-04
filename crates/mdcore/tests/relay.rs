@@ -302,7 +302,9 @@ fn the_relay_route_comes_back_after_a_direct_link_dies() {
     b.engine.set_background(false);
     // 4. Reconnected (the relay, or b may upgrade to QUIC again first), and
     // a's sends go through. Before the fix a stayed "live" on a relay route
-    // with no queue, and every send failed.
+    // with no queue, and every send failed. (And when b re-routed a through
+    // the relay and closed that as idle too, a stayed "live" on it, skipped
+    // this connect, and the send went to an offline peer; now b says `Bye`.)
     a.engine.connect(&b.node_id()).unwrap();
     let deadline = std::time::Instant::now() + WAIT;
     loop {
@@ -353,6 +355,13 @@ fn in_the_background_an_unused_relay_socket_is_closed() {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
+    // b is told (a `Bye` through the relay), so it doesn't stay "live" on a
+    // route a no longer listens on, sending into the void.
+    let dropped = b.sink.wait_until(WAIT, |e| match e {
+        mdcore::CoreEvent::PeerDisconnected { node_id } if *node_id == a.node_id() => Some(()),
+        _ => None,
+    });
+    assert!(dropped.is_some(), "b still thinks a's relay link is up");
 
     // A send brings it all back.
     a.engine.send(&b.node_id(), "back again").unwrap();

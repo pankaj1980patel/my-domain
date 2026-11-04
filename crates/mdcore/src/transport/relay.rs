@@ -16,6 +16,8 @@
 //! through the relay (proof it's connected). Each side answers the FIRST
 //! `Hello` it gets from a peer with its own, so both sides confirm even if
 //! one joined after the other's first `Hello` was dropped as "offline".
+//! Closing a relayed link on purpose sends a `Bye`, so the other side
+//! doesn't stay "live" on a route its peer no longer listens on.
 
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
@@ -263,11 +265,67 @@ pub fn add_relay_link<P: Platform>(ctx: &NetCtx<P>, peer: &str) -> bool {
     true
 }
 
-/// Stop routing `peer` through the relay (its link was closed on purpose).
+/// Stop routing `peer` through the relay (its link was closed on purpose),
+/// and tell it so with a `Bye`. Otherwise its side stays "live" on a route
+/// that no longer leads anywhere (our socket may close next, as idle): its
+/// connect requests are skipped as already connected, and what it sends is
+/// lost until its resend timer gives up on the link.
 pub fn forget_peer<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
-    if let Some(r) = ctx.relay.lock().as_mut() {
-        r.peers.remove(peer);
+    // One lock at a time (other paths take them in the other order).
+    let routed = {
+        let mut relay = ctx.relay.lock();
+        let Some(r) = relay.as_mut() else {
+            return;
+        };
+        // A new link must greet afresh (see `on_hello`).
+        r.confirmed.remove(peer);
+        r.peers.remove(peer).map(|id| (id, r.tx.clone()))
+    };
+    let Some((conn_id, tx)) = routed else {
+        return;
+    };
+    // Only while the relay is still its link (not a direct one since).
+    if ctx
+        .ws_conns
+        .lock()
+        .get(peer)
+        .is_some_and(|(c, _)| *c == conn_id)
+    {
+        let bye = serde_json::to_string(&WsFrame::Bye).unwrap_or_default();
+        let _ = tx.send(json!({"to": peer, "data": bye}).to_string());
     }
+}
+
+/// The peer closed its relayed link to us (`forget_peer`): drop our side
+/// too, so the next connect or send starts a fresh link (and wakes it)
+/// instead of sending into the void. A direct link is left alone.
+fn on_bye<P: Platform>(ctx: &NetCtx<P>, from: &str) {
+    let Some(conn_id) = ctx
+        .relay
+        .lock()
+        .as_ref()
+        .and_then(|r| r.peers.get(from).copied())
+    else {
+        return;
+    };
+    let ours = {
+        let mut conns = ctx.ws_conns.lock();
+        let ours = conns.get(from).is_some_and(|(c, _)| *c == conn_id);
+        if ours {
+            conns.remove(from);
+        }
+        ours
+    };
+    if !ours {
+        return;
+    }
+    if let Some(r) = ctx.relay.lock().as_mut() {
+        if r.peers.get(from) == Some(&conn_id) {
+            r.peers.remove(from);
+            r.confirmed.remove(from);
+        }
+    }
+    drop_live(ctx, from);
 }
 
 /// Send our `Hello` to `peer` through the relay.
@@ -369,6 +427,7 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
     };
     match serde_json::from_str::<WsFrame>(data) {
         Ok(WsFrame::Hello { .. }) => on_hello(ctx, from),
+        Ok(WsFrame::Bye) => on_bye(ctx, from),
         Ok(WsFrame::Msg { nonce, ciphertext }) => {
             // A message from a device we have no way back to (its hello, or
             // the push that set this up, got lost): route it now, or our

@@ -92,6 +92,7 @@ impl<P: Platform> Engine<P> {
                 handle_incoming(ctx, &env, Some(&peer), String::new(), "BLE");
                 return;
             }
+            WsFrame::Bye => return, // relay only
         };
         self.route_ble(id, &peer);
     }
