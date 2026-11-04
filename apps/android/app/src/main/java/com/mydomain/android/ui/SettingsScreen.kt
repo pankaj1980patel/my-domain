@@ -113,9 +113,29 @@ fun PhotosTile() {
             Muted(stringResource(R.string.settings_backup_hint))
         }
         var alerts by remember { mutableStateOf(Core.batteryAlerts()?.enabled ?: true) }
+        var charged by remember { mutableIntStateOf(Core.batteryAlerts()?.charged?.toInt() ?: 0) }
+        val low = { Core.batteryAlerts()?.low?.toInt() ?: 15 }
         SwitchRow(stringResource(R.string.settings_battery_alerts), alerts) { on ->
             alerts = on
-            scope.launch { runCatching { Core.setBatteryAlerts(on, Core.batteryAlerts()?.low?.toInt() ?: 15) } }
+            scope.launch { runCatching { Core.setBatteryAlerts(on, low(), charged) } }
+        }
+        if (alerts) {
+            Muted(stringResource(R.string.settings_battery_charged))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(0, 80, 90, 100).forEach { pct ->
+                    val label = if (pct == 0) stringResource(R.string.settings_battery_charged_off)
+                    else stringResource(R.string.settings_battery_charged_pct, pct)
+                    val pick: () -> Unit = {
+                        charged = pct
+                        scope.launch {
+                            try { Core.setBatteryAlerts(true, low(), pct) } catch (e: Exception) { toast(friendlyError(e)) }
+                        }
+                    }
+                    if (pct == charged) PrimaryButton(label, pick, Modifier.weight(1f))
+                    else SoftButton(label, pick, Modifier.weight(1f))
+                }
+            }
+            Muted(stringResource(R.string.settings_battery_charged_hint))
         }
     }
 }

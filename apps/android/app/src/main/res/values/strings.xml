@@ -288,6 +288,9 @@
     <string name="battery_full_body">The battery is full.</string>
     <string name="act_battery_low">%1$s battery low (%2$d%%)</string>
     <string name="act_battery_full">%1$s is fully charged</string>
+    <string name="battery_charged_title">%1$s is charged to %2$d%%</string>
+    <string name="battery_charged_body">You can unplug it now.</string>
+    <string name="act_battery_charged">%1$s is charged to %2$d%%</string>
     <string name="settings_photos">Photos</string>
     <string name="settings_photos_hint">Your computers can see your recent photos and videos, and back up new ones.</string>
     <string name="settings_allow_photos">Allow photo access</string>
@@ -302,6 +305,10 @@
     <string name="backup_status_charging">Waiting for the charger. %1$d waiting.</string>
     <string name="backup_status_retry">Trying again soon: %1$s</string>
     <string name="settings_battery_alerts">Tell my devices when the battery is low or full</string>
+    <string name="settings_battery_charged">Tell my other devices when charged to:</string>
+    <string name="settings_battery_charged_off">Off</string>
+    <string name="settings_battery_charged_pct">%1$d%%</string>
+    <string name="settings_battery_charged_hint">Once per charge, instead of when it\'s full.</string>
     <string name="touchpad_title">Touchpad &amp; keyboard</string>
     <string name="touchpad_body">Use your phone as this computer\'s touchpad and keyboard.</string>
     <string name="touchpad_needs_accessibility">On the Mac, allow my-domain under System Settings &gt; Privacy &amp; Security &gt; Accessibility first.</string>

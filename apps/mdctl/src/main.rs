@@ -32,7 +32,8 @@
 //! `text <node> clipboard|notify <text...>`,
 //! `gallery <node> [offset] [limit] [thumbs]` (a phone's newest photos;
 //! `thumbs` also sends their thumbnails), `gallery-get <node> <id> [name]`, `awake <node> <minutes>`,
-//! `battery-alerts on|off [low]`,
+//! `battery-alerts on|off [low] [charged]` (`charged`: off or 50-100, the
+//! level that, reached while charging, tells the others once),
 //! touchpad and keyboard for a computer: `move <node> <dx> <dy> [times]`
 //! (`times` small moves in a row, batched like a finger drag),
 //! `click <node> left|right|middle`, `scroll <node> <dx> <dy>`,
@@ -574,7 +575,18 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
                 Some(l) => l.parse::<u8>().map_err(|_| "low: 1-99".to_string())?,
                 None => engine.battery_alerts().low,
             };
-            let s = mdcore::model::BatteryAlertSettings { enabled, low };
+            let charged = match words.next() {
+                Some("off") => 0,
+                Some(c) => c
+                    .parse::<u8>()
+                    .map_err(|_| "charged: off or 50-100".to_string())?,
+                None => engine.battery_alerts().charged,
+            };
+            let s = mdcore::model::BatteryAlertSettings {
+                enabled,
+                low,
+                charged,
+            };
             engine.set_battery_alerts(s.clone())?;
             Ok(json!(s))
         }

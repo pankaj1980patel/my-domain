@@ -148,10 +148,10 @@ export const commands = {
 	downloadGalleryItem: (nodeId: string, id: string, name: string) => typedError<string, string>(__TAURI_INVOKE("download_gallery_item", { nodeId, id, name })),
 	/**
 	 *  Whether this computer tells your other devices when its battery is low
-	 *  or full, and the low level.
+	 *  or charged, the low level and the charged level (0 = when full).
 	 */
-	batteryAlerts: () => __TAURI_INVOKE<BatteryAlertSettings>("battery_alerts"),
-	setBatteryAlerts: (settings: BatteryAlertSettings) => typedError<null, string>(__TAURI_INVOKE("set_battery_alerts", { settings })),
+	batteryAlerts: () => __TAURI_INVOKE<BatteryAlertSettings_Serialize>("battery_alerts"),
+	setBatteryAlerts: (settings: BatteryAlertSettings_Deserialize) => typedError<null, string>(__TAURI_INVOKE("set_battery_alerts", { settings })),
 	/**
 	 *  Keep a device from sleeping for `minutes` (0 = stop), if its status
 	 *  lists "keep_awake".
@@ -230,11 +230,43 @@ export type AwayLock = {
 /**
  *  Battery alerts this device sends your other devices
  *  (`Engine::set_battery_alerts`): once when it drops to `low` percent
- *  while not charging, once when charging reaches 100%.
+ *  while not charging, once per charge when charging reaches `charged`
+ *  percent (0 = off: then once when it reaches 100%).
  */
-export type BatteryAlertSettings = {
+export type BatteryAlertSettings = BatteryAlertSettings_Serialize | BatteryAlertSettings_Deserialize;
+
+/**
+ *  Battery alerts this device sends your other devices
+ *  (`Engine::set_battery_alerts`): once when it drops to `low` percent
+ *  while not charging, once per charge when charging reaches `charged`
+ *  percent (0 = off: then once when it reaches 100%).
+ */
+export type BatteryAlertSettings_Deserialize = {
 	enabled: boolean,
 	low: number,
+	/**
+	 *  Tell the others when charging reaches this level (50-100; the apps
+	 *  offer 80, 90 and 100), or 0 for off. Missing in settings saved
+	 *  before it existed, so it defaults to off.
+	 */
+	charged?: number,
+};
+
+/**
+ *  Battery alerts this device sends your other devices
+ *  (`Engine::set_battery_alerts`): once when it drops to `low` percent
+ *  while not charging, once per charge when charging reaches `charged`
+ *  percent (0 = off: then once when it reaches 100%).
+ */
+export type BatteryAlertSettings_Serialize = {
+	enabled: boolean,
+	low: number,
+	/**
+	 *  Tell the others when charging reaches this level (50-100; the apps
+	 *  offer 80, 90 and 100), or 0 for off. Missing in settings saved
+	 *  before it existed, so it defaults to off.
+	 */
+	charged: number,
 };
 
 /**

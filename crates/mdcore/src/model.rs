@@ -350,12 +350,18 @@ pub struct BackupStatus {
 
 /// Battery alerts this device sends your other devices
 /// (`Engine::set_battery_alerts`): once when it drops to `low` percent
-/// while not charging, once when charging reaches 100%.
+/// while not charging, once per charge when charging reaches `charged`
+/// percent (0 = off: then once when it reaches 100%).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct BatteryAlertSettings {
     pub enabled: bool,
     pub low: u8,
+    /// Tell the others when charging reaches this level (50-100; the apps
+    /// offer 80, 90 and 100), or 0 for off. Missing in settings saved
+    /// before it existed, so it defaults to off.
+    #[serde(default)]
+    pub charged: u8,
 }
 
 impl Default for BatteryAlertSettings {
@@ -363,6 +369,7 @@ impl Default for BatteryAlertSettings {
         BatteryAlertSettings {
             enabled: true,
             low: 15,
+            charged: 0,
         }
     }
 }

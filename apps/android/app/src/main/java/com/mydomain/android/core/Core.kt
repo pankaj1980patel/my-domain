@@ -424,8 +424,11 @@ object Core {
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
             "battery_alert" -> {
                 val who = peerName(o.optString("from"))
-                if (o.optString("alert") == "low") addActivity(str(R.string.act_battery_low, who, o.optInt("level")), Tone.Warn)
-                else addActivity(str(R.string.act_battery_full, who), Tone.Ok)
+                when (o.optString("alert")) {
+                    "low" -> addActivity(str(R.string.act_battery_low, who, o.optInt("level")), Tone.Warn)
+                    "charged" -> addActivity(str(R.string.act_battery_charged, who, o.optInt("level")), Tone.Ok)
+                    else -> addActivity(str(R.string.act_battery_full, who), Tone.Ok)
+                }
             }
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
@@ -739,11 +742,11 @@ object Core {
     }
 
     /** Whether this phone tells your other devices when its battery is low
-     *  ([low] percent) or full. */
+     *  ([low] percent) or charged ([charged] percent, 0 = when full). */
     fun batteryAlerts(): com.mydomain.android.ffi.BatteryAlertConfig? = runCatching { engine()?.batteryAlerts() }.getOrNull()
 
-    suspend fun setBatteryAlerts(enabled: Boolean, low: Int = 15) =
-        call { it.setBatteryAlerts(enabled, low.coerceIn(1, 99).toUByte()) }
+    suspend fun setBatteryAlerts(enabled: Boolean, low: Int = 15, charged: Int = 0) =
+        call { it.setBatteryAlerts(enabled, low.coerceIn(1, 99).toUByte(), charged.coerceIn(0, 100).toUByte()) }
 
     /** Keep [node] awake for [minutes] (0 = stop), if it lists "keep_awake". */
     suspend fun keepAwake(node: String, minutes: Int): String =

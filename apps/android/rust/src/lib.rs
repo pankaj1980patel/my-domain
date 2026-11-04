@@ -250,6 +250,9 @@ pub struct BatteryAlertConfig {
     pub enabled: bool,
     /// Percent, 1-99.
     pub low: u8,
+    /// Tell them when charging reaches this percent (80, 90 or 100), or 0
+    /// for off.
+    pub charged: u8,
 }
 
 /// A known device of ours.
@@ -931,14 +934,20 @@ impl MdEngine {
         BatteryAlertConfig {
             enabled: s.enabled,
             low: s.low,
+            charged: s.charged,
         }
     }
 
-    /// Turn the alerts off or on, and set the low level (1-99%).
-    pub fn set_battery_alerts(&self, enabled: bool, low: u8) -> MdResult<()> {
+    /// Turn the alerts off or on, and set the low level (1-99%) and the
+    /// charged level (0 = off, or 50-100%).
+    pub fn set_battery_alerts(&self, enabled: bool, low: u8, charged: u8) -> MdResult<()> {
         Ok(self
             .inner
-            .set_battery_alerts(mdcore::model::BatteryAlertSettings { enabled, low })?)
+            .set_battery_alerts(mdcore::model::BatteryAlertSettings {
+                enabled,
+                low,
+                charged,
+            })?)
     }
 
     /// Keep a device awake for `minutes` (0 = stop), if its status lists

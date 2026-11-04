@@ -2,7 +2,7 @@
 // Developer screen.
 
 import { createSignal, For, onMount, Show } from "solid-js";
-import { commands, type AwayLock } from "../bindings";
+import { commands, type AwayLock, type BatteryAlertSettings_Serialize as BatteryAlertSettings } from "../bindings";
 import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
@@ -22,6 +22,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [shareLocation, setShareLocation] = createSignal(false);
   const [canLocate, setCanLocate] = createSignal(false);
   const [awayLock, setAwayLock] = createSignal<AwayLock>({ on: false, minutes: 5, can_lock: false });
+  const [battery, setBattery] = createSignal<BatteryAlertSettings>({ enabled: true, low: 15, charged: 0 });
   onMount(async () => {
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
@@ -30,6 +31,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
     setShareLocation(await commands.shareLocation());
     setCanLocate(await commands.locationAvailable());
     setAwayLock(await commands.awayLock());
+    setBattery(await commands.batteryAlerts());
   });
   const toggleNotifs = async (on: boolean) => {
     await commands.setNotificationsEnabled(on);
@@ -54,6 +56,15 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const changeAwayLock = async (on: boolean, minutes: number) => {
     await commands.setAwayLock(on, minutes);
     setAwayLock({ ...awayLock(), on, minutes });
+  };
+  const changeBattery = async (change: Partial<BatteryAlertSettings>) => {
+    const next = { ...battery(), ...change };
+    try {
+      await unwrap(commands.setBatteryAlerts(next));
+      setBattery(next);
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
   };
 
   const tapVersion = () => {
@@ -148,6 +159,33 @@ export default function Settings(props: { onDeveloper: () => void }) {
           </Show>
           <p class="muted small">{t("settings.awayLockHint")}</p>
         </Show>
+        <label class="switch-row">
+          <span>{t("settings.batteryAlerts")}</span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={battery().enabled}
+            onChange={(e) => changeBattery({ enabled: e.currentTarget.checked })}
+          />
+        </label>
+        <Show when={battery().enabled}>
+          <label class="row small">
+            <span class="muted">{t("settings.batteryCharged")}</span>
+            <select
+              aria-label={t("settings.batteryCharged")}
+              onChange={(e) => changeBattery({ charged: Number(e.currentTarget.value) })}
+            >
+              <For each={[0, 80, 90, 100]}>
+                {(pct) => (
+                  <option value={String(pct)} selected={pct === battery().charged}>
+                    {pct === 0 ? t("settings.batteryChargedOff") : t("settings.batteryChargedPct", { n: pct })}
+                  </option>
+                )}
+              </For>
+            </select>
+          </label>
+        </Show>
+        <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
         <ShortcutSetting />
       </article>
 

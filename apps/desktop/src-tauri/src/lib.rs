@@ -361,16 +361,19 @@ impl EventSink for TauriSink {
                     (self.app.clone(), from.clone(), alert.clone(), *level);
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
-                    let (title, body) = if alert == "low" {
-                        (
+                    let (title, body) = match alert.as_str() {
+                        "low" => (
                             format!("{device}: battery low"),
                             format!("{level}% left. Time to charge it."),
-                        )
-                    } else {
-                        (
+                        ),
+                        "charged" => (
+                            format!("{device} is charged to {level}%"),
+                            "You can unplug it now.".to_string(),
+                        ),
+                        _ => (
                             format!("{device} is charged"),
                             "The battery is full.".to_string(),
-                        )
+                        ),
                     };
                     notify::post(&app, &title, &body);
                 });
@@ -1043,7 +1046,7 @@ fn download_gallery_item(
 }
 
 /// Whether this computer tells your other devices when its battery is low
-/// or full, and the low level.
+/// or charged, the low level and the charged level (0 = when full).
 #[tauri::command]
 #[specta::specta]
 fn battery_alerts(engine: State<Eng>) -> mdcore::model::BatteryAlertSettings {

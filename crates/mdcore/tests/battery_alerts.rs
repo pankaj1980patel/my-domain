@@ -92,6 +92,41 @@ fn other_devices_hear_low_and_full_once_each() {
 }
 
 #[test]
+fn charged_to_the_chosen_level_arrives_once() {
+    let phone = TestNode::start("charged-phone");
+    let pc = TestNode::start("charged-pc");
+    TestNode::pair(&phone, &pc);
+    assert!(phone
+        .engine
+        .set_battery_alerts(BatteryAlertSettings {
+            charged: 40,
+            ..BatteryAlertSettings::default()
+        })
+        .is_err());
+    let s = BatteryAlertSettings {
+        charged: 80,
+        ..BatteryAlertSettings::default()
+    };
+    phone.engine.set_battery_alerts(s.clone()).unwrap();
+    assert_eq!(phone.engine.battery_alerts(), s);
+
+    // Not charging past 80: nothing.
+    phone.engine.set_device_status(&status(85, false));
+    phone.engine.set_device_status(&status(60, false));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(alerts(&pc).is_empty());
+
+    // Charging up through 80 and on to full: one alert, at 80.
+    for level in [70, 79, 80, 81, 80, 90, 100, 100] {
+        phone.engine.set_device_status(&status(level, true));
+    }
+    let got = wait_alerts(&pc, 1);
+    assert_eq!(got[0], (phone.node_id(), "charged".to_string(), 80));
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(alerts(&pc).len(), 1, "once per charge");
+}
+
+#[test]
 fn alerts_can_be_turned_off_or_moved_and_survive_a_restart() {
     let (store, secrets) = (Arc::default(), Arc::default());
     let laptop = || MockPlatform {
@@ -107,14 +142,16 @@ fn alerts_can_be_turned_off_or_moved_and_survive_a_restart() {
         .engine
         .set_battery_alerts(BatteryAlertSettings {
             enabled: true,
-            low: 0
+            low: 0,
+            ..BatteryAlertSettings::default()
         })
         .is_err());
     assert!(lap
         .engine
         .set_battery_alerts(BatteryAlertSettings {
             enabled: true,
-            low: 100
+            low: 100,
+            ..BatteryAlertSettings::default()
         })
         .is_err());
 
@@ -123,6 +160,7 @@ fn alerts_can_be_turned_off_or_moved_and_survive_a_restart() {
         .set_battery_alerts(BatteryAlertSettings {
             enabled: false,
             low: 15,
+            ..BatteryAlertSettings::default()
         })
         .unwrap();
     lap.engine.set_device_status(&status(40, false));
@@ -135,6 +173,7 @@ fn alerts_can_be_turned_off_or_moved_and_survive_a_restart() {
         .set_battery_alerts(BatteryAlertSettings {
             enabled: true,
             low: 30,
+            ..BatteryAlertSettings::default()
         })
         .unwrap();
     lap.engine.set_device_status(&status(40, false));
@@ -149,7 +188,8 @@ fn alerts_can_be_turned_off_or_moved_and_survive_a_restart() {
         lap.engine.battery_alerts(),
         BatteryAlertSettings {
             enabled: true,
-            low: 30
+            low: 30,
+            ..BatteryAlertSettings::default()
         }
     );
     lap.engine.set_device_status(&status(28, false));

@@ -1,7 +1,7 @@
 //! Battery alerts: your other devices hear when this one's battery runs low
 //! or has finished charging.
 //!
-//!   battery_alert { from, kind: "low" | "full", level }   device → all
+//!   battery_alert { from, kind: "low" | "full" | "charged", level }   device → all
 //!
 //! Worked out from the status the host pushes (`Engine::set_device_status`,
 //! `{"battery": 0-100, "charging": bool}`), so the phone and laptops get it
@@ -11,6 +11,12 @@
 //!   again once charging, or 5 points above the threshold.
 //! - "full": charging and at 100%. Armed again once it's down to 97% or
 //!   less (so unplugging and plugging back in at 100% stays quiet).
+//! - "charged": charging and at or above the chosen level (`charged`, e.g.
+//!   80%; off by default). Sent instead of "full", once per charge: armed
+//!   again once it's 5 points below the level (not on unplugging, so a
+//!   phone that holds its charge at the level, flickering between charging
+//!   and not, stays quiet). At 100% it goes out as "full", which older
+//!   versions show; they drop a "charged" they don't know.
 //!
 //! Which alerts have gone out is kept (`kv`), so a restart doesn't repeat
 //! one. Sent like a chat message (held until each device is reachable, a
@@ -34,10 +40,13 @@ const ARMED_KEY: &str = "battery_alerts_armed";
 const LOW_REARM: u8 = 5;
 /// "full" is armed again at or below this.
 const FULL_REARM: u8 = 97;
+/// Points below the chosen level before "charged" is armed again.
+const CHARGED_REARM: u8 = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 struct Armed {
     low: bool,
+    /// The charge alert ("full" or "charged"): one per charge either way.
     full: bool,
 }
 
@@ -72,18 +81,27 @@ fn step(
 ) -> (Option<&'static str>, Armed) {
     let mut next = armed;
     let mut alert = None;
+    // The charge alert: "full" at 100% unless a lower level was chosen.
+    let (target, kind, rearm) = match s.charged {
+        1..=99 => (
+            s.charged,
+            "charged",
+            s.charged.saturating_sub(CHARGED_REARM),
+        ),
+        _ => (100, "full", FULL_REARM),
+    };
     if charging || level >= s.low.saturating_add(LOW_REARM) {
         next.low = true;
     }
-    if level <= FULL_REARM {
+    if level <= rearm {
         next.full = true;
     }
     if !charging && level <= s.low && next.low {
         next.low = false;
         alert = Some("low");
-    } else if charging && level >= 100 && next.full {
+    } else if charging && level >= target && next.full {
         next.full = false;
-        alert = Some("full");
+        alert = Some(kind);
     }
     (alert, next)
 }
@@ -109,10 +127,15 @@ pub fn settings<P: Platform>(ctx: &NetCtx<P>) -> BatteryAlertSettings {
     st.settings.clone()
 }
 
-/// Change the settings; `low` must be 1-99.
+/// Change the settings; `low` must be 1-99, `charged` 0 (off) or 50-100.
 pub fn set_settings<P: Platform>(ctx: &NetCtx<P>, s: BatteryAlertSettings) -> crate::Result<()> {
     if !(1..=99).contains(&s.low) {
         return Err("the low-battery level must be 1 to 99%".to_string().into());
+    }
+    if s.charged != 0 && !(50..=100).contains(&s.charged) {
+        return Err("the charged level must be 50 to 100%, or off"
+            .to_string()
+            .into());
     }
     let mut st = ctx.extras.battery.state.lock();
     load(ctx, &mut st);
@@ -167,7 +190,7 @@ impl<P: Platform> ControlHandler<P> for BatteryHandler {
         let Some(level) = msg.json("level").as_u64().filter(|l| *l <= 100) else {
             return;
         };
-        if from.is_empty() || !matches!(kind.as_str(), "low" | "full") {
+        if from.is_empty() || !matches!(kind.as_str(), "low" | "full" | "charged") {
             return;
         }
         ctx.sink.emit(CoreEvent::BatteryAlert {
@@ -184,11 +207,23 @@ mod tests {
 
     /// Feed readings in order; the alerts that came out.
     fn run(readings: &[(u8, bool)]) -> Vec<&'static str> {
-        let s = BatteryAlertSettings::default();
+        run_with(&BatteryAlertSettings::default(), readings)
+    }
+
+    /// The same, with the charge alert at `charged` percent.
+    fn run_charged(charged: u8, readings: &[(u8, bool)]) -> Vec<&'static str> {
+        let s = BatteryAlertSettings {
+            charged,
+            ..BatteryAlertSettings::default()
+        };
+        run_with(&s, readings)
+    }
+
+    fn run_with(s: &BatteryAlertSettings, readings: &[(u8, bool)]) -> Vec<&'static str> {
         let mut armed = Armed::default();
         let mut out = Vec::new();
         for &(level, charging) in readings {
-            let (alert, next) = step(&s, armed, level, charging);
+            let (alert, next) = step(s, armed, level, charging);
             armed = next;
             out.extend(alert);
         }
@@ -240,5 +275,65 @@ mod tests {
         );
         // Unplugged at 100 isn't "finished charging".
         assert!(run(&[(100, false)]).is_empty());
+    }
+
+    #[test]
+    fn charged_once_per_charge_at_the_chosen_level() {
+        // Crossing 80 while charging: once, and not "full" on top.
+        assert_eq!(
+            run_charged(
+                80,
+                &[(70, true), (79, true), (80, true), (85, true), (100, true)]
+            ),
+            ["charged"]
+        );
+        // Jumping past the level still counts.
+        assert_eq!(run_charged(90, &[(85, true), (93, true)]), ["charged"]);
+        // At the level but not charging: nothing.
+        assert!(run_charged(80, &[(70, false), (85, false), (90, false)]).is_empty());
+        // Unplugged and plugged back in near the level (or a phone holding
+        // its charge there, flickering): quiet.
+        assert_eq!(
+            run_charged(
+                80,
+                &[(80, true), (80, false), (78, false), (80, true), (81, true)]
+            ),
+            ["charged"]
+        );
+        // Down 5 points below the level and charged again: a new charge.
+        assert_eq!(
+            run_charged(80, &[(80, true), (75, false), (76, true), (80, true)]),
+            ["charged", "charged"]
+        );
+        // Low still works alongside.
+        assert_eq!(
+            run_charged(80, &[(15, false), (50, true), (80, true)]),
+            ["low", "charged"]
+        );
+    }
+
+    #[test]
+    fn settings_saved_before_charged_existed_still_load() {
+        let s = serde_json::from_str::<BatteryAlertSettings>(r#"{"enabled":false,"low":20}"#);
+        assert_eq!(
+            s.ok(),
+            Some(BatteryAlertSettings {
+                enabled: false,
+                low: 20,
+                charged: 0
+            })
+        );
+    }
+
+    #[test]
+    fn charged_at_100_goes_out_as_full() {
+        assert_eq!(
+            run_charged(100, &[(99, true), (100, true), (100, true)]),
+            ["full"]
+        );
+        assert_eq!(
+            run_charged(100, &[(100, true), (97, false), (100, true)]),
+            ["full", "full"]
+        );
     }
 }

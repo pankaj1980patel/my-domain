@@ -223,8 +223,9 @@ pub enum CoreEvent {
     },
     /// Where this device's photo backup stands (sent when it changes).
     BackupState(crate::model::BackupStatus),
-    /// Another device's battery is low (`alert` "low") or finished charging
-    /// ("full"), at `level` percent.
+    /// Another device's battery is low (`alert` "low"), finished charging
+    /// ("full") or reached the level chosen for it ("charged"), at `level`
+    /// percent.
     BatteryAlert {
         from: String,
         alert: String,

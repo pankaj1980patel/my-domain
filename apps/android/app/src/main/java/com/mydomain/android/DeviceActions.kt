@@ -231,14 +231,19 @@ object DeviceActions {
         runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
     }
 
-    /** Another device's battery is low ([alert] "low") or full ("full"). */
+    /** Another device's battery is low ([alert] "low"), full ("full") or
+     *  charged to the level chosen on it ("charged", at [level]). */
     fun batteryAlert(ctx: Context, fromName: String, alert: String, level: Int) {
         val app = ctx.applicationContext
-        val low = alert == "low"
+        val (title, body) = when (alert) {
+            "low" -> app.getString(R.string.battery_low_title, fromName) to app.getString(R.string.battery_low_body, level)
+            "charged" -> app.getString(R.string.battery_charged_title, fromName, level) to app.getString(R.string.battery_charged_body)
+            else -> app.getString(R.string.battery_full_title, fromName) to app.getString(R.string.battery_full_body)
+        }
         val n = NotificationCompat.Builder(app, CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_lock_idle_low_battery)
-            .setContentTitle(app.getString(if (low) R.string.battery_low_title else R.string.battery_full_title, fromName))
-            .setContentText(if (low) app.getString(R.string.battery_low_body, level) else app.getString(R.string.battery_full_body))
+            .setContentTitle(title)
+            .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .build()

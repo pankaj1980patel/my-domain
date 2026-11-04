@@ -123,7 +123,7 @@ impl<P: Platform> Engine<P> {
     // --- battery alerts ---
 
     /// Whether this device tells the others when its battery is low (at or
-    /// below `low` percent) or full.
+    /// below `low` percent) or charged (to `charged` percent, or full).
     pub fn battery_alerts(&self) -> BatteryAlertSettings {
         crate::features::battery::settings(&self.ctx)
     }
