@@ -365,6 +365,12 @@ Built by three agents in parallel (worktrees), merged and built here.
   connected or not, battery; Send clipboard, Lock, Ring (shared with the
   Quick Settings tiles via `QuickActions`); redrawn on status/link events,
   at most every 3 s.
+- **Lost mode** (phone `LostMode.kt`, desktop `LostModeTile.tsx`; action
+  `lost {on, message, contact}`, status `lost: true`): your message and a
+  "Call owner" button (dialer only) over the lock screen without unlocking
+  it; one ring; a location only if sharing is already on; survives a
+  restart; stopped from the computer or "I found it" after unlocking.
+  Wipe is not built (excluded).
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
