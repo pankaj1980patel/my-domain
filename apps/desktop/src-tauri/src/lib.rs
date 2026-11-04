@@ -32,6 +32,7 @@ mod screen_share;
 mod shortcut;
 mod sysinfo;
 mod tray;
+mod webhooks;
 mod wifi_share;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
@@ -132,6 +133,65 @@ fn keyring_entry(key: &str) -> Option<keyring::Entry> {
         .ok()
 }
 
+/// Debug builds' secrets file (see `DesktopPlatform::dev_secrets`); `None`
+/// in release builds, which use the OS secure store.
+fn dev_secrets_file(app: &AppHandle) -> Option<FileKv> {
+    if !cfg!(debug_assertions) {
+        return None;
+    }
+    let dir = app.path().app_config_dir().ok()?;
+    let name = match test_suffix() {
+        Some(suffix) => format!("dev-secrets-{suffix}.json"),
+        None => "dev-secrets.json".to_string(),
+    };
+    Some(FileKv::new(dir.join(name)))
+}
+
+/// A secret, from the debug builds' file (`dev`) or the OS secure store.
+fn read_secret(dev: Option<&FileKv>, key: &str) -> Option<String> {
+    if let Some(file) = dev {
+        return file.get(key);
+    }
+    keyring_entry(key)?.get_password().ok()
+}
+
+/// Keep (or, with `None`, forget) a secret where `read_secret` finds it.
+fn write_secret(dev: Option<&FileKv>, key: &str, value: Option<&str>) {
+    if let Some(file) = dev {
+        let result = match value {
+            Some(v) => file.set(key, v).and_then(|()| owner_only(file.path())),
+            None => file.remove(key),
+        };
+        if let Err(e) = result {
+            eprintln!("[secrets] {key}: {e}");
+        }
+        return;
+    }
+    let Some(entry) = keyring_entry(key) else {
+        return;
+    };
+    let result = match value {
+        Some(v) => entry.set_password(v),
+        None => match entry.delete_credential() {
+            Err(keyring::Error::NoEntry) => Ok(()),
+            other => other,
+        },
+    };
+    if let Err(e) = result {
+        eprintln!("[secrets] {key}: {e}");
+    }
+}
+
+/// One of the app's own secrets (the webhook token), kept where the core's
+/// are: the OS secure store, or the debug builds' file.
+pub(crate) fn app_secret(app: &AppHandle, key: &str) -> Option<String> {
+    read_secret(dev_secrets_file(app).as_ref(), key)
+}
+
+pub(crate) fn set_app_secret(app: &AppHandle, key: &str, value: Option<&str>) {
+    write_secret(dev_secrets_file(app).as_ref(), key, value)
+}
+
 /// Optional test suffix (`TEST=foo npm run tauri dev`) so several instances on
 /// one machine register as distinct devices instead of clobbering the same
 /// machine-uid row. Trimmed; empty/unset => no suffix.
@@ -183,36 +243,11 @@ impl Platform for DesktopPlatform {
     }
 
     fn secret_get(&self, key: &str) -> Option<String> {
-        if let Some(file) = &self.dev_secrets {
-            return file.get(key);
-        }
-        keyring_entry(key)?.get_password().ok()
+        read_secret(self.dev_secrets.as_ref(), key)
     }
 
     fn secret_set(&self, key: &str, value: Option<&str>) {
-        if let Some(file) = &self.dev_secrets {
-            let result = match value {
-                Some(v) => file.set(key, v).and_then(|()| owner_only(file.path())),
-                None => file.remove(key),
-            };
-            if let Err(e) = result {
-                eprintln!("[secrets] {key}: {e}");
-            }
-            return;
-        }
-        let Some(entry) = keyring_entry(key) else {
-            return;
-        };
-        let result = match value {
-            Some(v) => entry.set_password(v),
-            None => match entry.delete_credential() {
-                Err(keyring::Error::NoEntry) => Ok(()),
-                other => other,
-            },
-        };
-        if let Err(e) = result {
-            eprintln!("[secrets] {key}: {e}");
-        }
+        write_secret(self.dev_secrets.as_ref(), key, value)
     }
 
     fn kv_set(&self, key: &str, value: &str) {
@@ -265,11 +300,12 @@ impl EventSink for TauriSink {
             // Which of your devices are phones: lock when they go away,
             // where the copy shortcut sends, and the tray's phone actions.
             // Automations watch battery and charging, and the battery graph
-            // keeps a sample.
+            // keeps a sample; webhooks list their actions.
             CoreEvent::DeviceStatus { from, status } => {
                 away_lock::on_status(&self.app, from, status);
                 automations::on_status(&self.app, from, status);
                 battery_log::on_status(&self.app, from, status);
+                webhooks::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
             }
@@ -1303,6 +1339,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         commands_run::update_shell_command,
         commands_run::delete_shell_command,
         commands_run::test_shell_command,
+        webhooks::webhook_settings,
+        webhooks::set_webhooks_enabled,
+        webhooks::set_webhook_port,
+        webhooks::new_webhook_token,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1346,20 +1386,12 @@ pub fn run() {
             app.manage(automations::Automations::load(&handle));
             app.manage(battery_log::BatteryLog::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
+            app.manage(webhooks::Webhooks::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
                 kv: handle.path().app_config_dir().ok().map(FileKv::in_dir),
-                dev_secrets: cfg!(debug_assertions)
-                    .then(|| handle.path().app_config_dir().ok())
-                    .flatten()
-                    .map(|dir| {
-                        let name = match test_suffix() {
-                            Some(suffix) => format!("dev-secrets-{suffix}.json"),
-                            None => "dev-secrets.json".to_string(),
-                        };
-                        FileKv::new(dir.join(name))
-                    }),
+                dev_secrets: dev_secrets_file(&handle),
                 clipboard: DesktopClipboard::new(),
                 fcm_token: fcm_token.clone(),
             };
@@ -1398,6 +1430,8 @@ pub fn run() {
             schedule::spawn(handle.clone());
             automations::spawn(handle.clone());
             battery_log::spawn(handle.clone());
+            // Off by default: listens only once switched on in Settings.
+            webhooks::spawn(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

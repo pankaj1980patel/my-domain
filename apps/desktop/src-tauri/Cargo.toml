@@ -72,6 +72,13 @@ enigo = "0.6"
 # to work in a multi-threaded process on Unix.
 chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 
+# Webhooks (see `webhooks.rs`): a tiny HTTP server on 127.0.0.1 with a
+# random bearer token. All three already in Cargo.lock (httparse via
+# tungstenite, base64 via mdcore, getrandom via tauri): no new crates.
+httparse = "1"
+base64 = "0.22"
+getrandom = "0.3"
+
 # Find my computer: where this Mac is, from CoreLocation (see `location.rs`).
 # Same versions Tauri already pulls in.
 [target.'cfg(target_os = "macos")'.dependencies]

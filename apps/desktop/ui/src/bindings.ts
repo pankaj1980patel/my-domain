@@ -253,6 +253,17 @@ export const commands = {
 	 *  to finish, up to the time limit.
 	 */
 	testShellCommand: (id: string) => typedError<RunOutcome_Serialize, string>(__TAURI_INVOKE("test_shell_command", { id })),
+	/**
+	 *  The webhook settings: on or off, the port, the token, and whether it's
+	 *  listening.
+	 */
+	webhookSettings: () => __TAURI_INVOKE<WebhookSettings_Serialize>("webhook_settings"),
+	/**  Turn webhooks on (making a token the first time) or off. */
+	setWebhooksEnabled: (on: boolean) => __TAURI_INVOKE<WebhookSettings_Serialize>("set_webhooks_enabled", { on }),
+	/**  Listen on another port (1024–65535). */
+	setWebhookPort: (port: number) => typedError<WebhookSettings_Serialize, string>(__TAURI_INVOKE("set_webhook_port", { port })),
+	/**  Replace the token: tools using the old one stop working. */
+	newWebhookToken: () => typedError<WebhookSettings_Serialize, string>(__TAURI_INVOKE("new_webhook_token")),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -835,6 +846,33 @@ export type Trigger_Serialize = {
 	node: string,
 	/**  For "battery_below": the percent (1–99). */
 	level: number | null,
+};
+
+/**  What Settings shows. */
+export type WebhookSettings = WebhookSettings_Serialize | WebhookSettings_Deserialize;
+
+/**  What Settings shows. */
+export type WebhookSettings_Deserialize = {
+	enabled: boolean,
+	port: number,
+	/**  The bearer token ("" until it's first switched on). */
+	token: string,
+	/**  Listening now. */
+	running: boolean,
+	/**  Why it isn't listening, e.g. the port is taken. */
+	error?: string | null,
+};
+
+/**  What Settings shows. */
+export type WebhookSettings_Serialize = {
+	enabled: boolean,
+	port: number,
+	/**  The bearer token ("" until it's first switched on). */
+	token: string,
+	/**  Listening now. */
+	running: boolean,
+	/**  Why it isn't listening, e.g. the port is taken. */
+	error: string | null,
 };
 
 /* Tauri Specta runtime */

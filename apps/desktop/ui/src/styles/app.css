@@ -1536,3 +1536,52 @@ input[type="checkbox"][role="switch"]:checked::after {
 .battery-chart-guess {
   margin: 0;
 }
+
+/* --- webhooks (components/WebhookSetting.tsx, in Settings) --- */
+
+.webhook-port input {
+  flex: 0 0 auto;
+  width: 7em;
+  padding: 4px 8px;
+}
+.webhook-token,
+.webhook-code {
+  display: block;
+  margin: 0;
+  padding: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.webhook-code {
+  white-space: pre-wrap;
+}
+.webhook-error {
+  margin: 0;
+  padding: var(--s-2);
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-radius: var(--r-sm);
+}
+.webhook-confirm {
+  padding: var(--s-3);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+  border-radius: var(--r-md);
+}
+.webhook-confirm p {
+  margin: 0;
+}
+.webhook-api {
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  padding-left: 1.2em;
+}
+.webhook-api code {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}

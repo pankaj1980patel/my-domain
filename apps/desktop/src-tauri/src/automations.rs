@@ -557,6 +557,49 @@ fn name_of(app: &AppHandle, node: &str) -> String {
     }
 }
 
+/// The automation `which` names: its id, else its label (any case). One
+/// that's switched off doesn't count.
+pub fn pick<'a>(list: &'a [Automation], which: &str) -> Result<&'a Automation, String> {
+    let which = which.trim();
+    let found: Vec<&Automation> = match list.iter().find(|a| a.id == which) {
+        Some(a) => vec![a],
+        None => list
+            .iter()
+            .filter(|a| !a.label.is_empty() && a.label.eq_ignore_ascii_case(which))
+            .collect(),
+    };
+    match found.as_slice() {
+        [] => Err(format!(
+            "there\u{2019}s no automation called \u{201c}{which}\u{201d}"
+        )),
+        [a] if !a.enabled => Err(format!("\u{201c}{which}\u{201d} is switched off")),
+        [a] => Ok(a),
+        _ => Err(format!(
+            "more than one automation is called \u{201c}{which}\u{201d}; use its id"
+        )),
+    }
+}
+
+/// Do what an automation does now, without waiting for what starts it (a
+/// webhook's `/v1/automation`). Returns what it did ("Lock this computer")
+/// and how it went (`schedule::run_action`'s transport).
+pub(crate) fn run_now(app: &AppHandle, which: &str) -> Result<(String, String), String> {
+    let state = app.try_state::<Automations>().ok_or("not started yet")?;
+    let a = pick(&state.list(), which)?.clone();
+    let what = if a.label.is_empty() {
+        a.action.clone()
+    } else {
+        a.label.clone()
+    };
+    if a.action == NOTIFY {
+        crate::notify::post(app, &what, "A webhook ran this automation.");
+        return Ok((what, "here".into()));
+    }
+    let via =
+        crate::schedule::run_action(app, &a.node, &a.action, &a.args).map_err(|e| e.to_string())?;
+    Ok((what, via))
+}
+
 /// Your automations.
 #[tauri::command]
 #[specta::specta]
@@ -776,5 +819,31 @@ mod tests {
         assert!(checked(a.clone()).is_ok());
         a.action = "Bad Name".into();
         assert!(checked(a).is_err());
+    }
+
+    #[test]
+    fn a_webhook_picks_one_by_id_or_label() {
+        let mut a = rule("connects");
+        let mut b = rule("wakes");
+        b.id = "b".into();
+        b.label = "Ring my phone".into();
+        let mut off = rule("wakes");
+        off.id = "c".into();
+        off.label = "Off one".into();
+        off.enabled = false;
+        let list = vec![a.clone(), b.clone(), off];
+        assert_eq!(pick(&list, "b").unwrap().id, "b");
+        assert_eq!(pick(&list, " ring MY phone ").unwrap().id, "b");
+        assert!(pick(&list, "Off one").unwrap_err().contains("switched off"));
+        assert!(pick(&list, "nothing")
+            .unwrap_err()
+            .contains("no automation"));
+        // Two with one label: the id decides.
+        a.label = b.label.clone();
+        let list = vec![a, b];
+        assert!(pick(&list, "ring my phone")
+            .unwrap_err()
+            .contains("more than one"));
+        assert_eq!(pick(&list, "a").unwrap().id, "a");
     }
 }

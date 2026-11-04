@@ -4298,10 +4298,13 @@ name = "my-domain"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "base64 0.22.1",
  "chrono",
  "enigo",
  "fcm_receiver_rs",
  "gethostname 0.5.0",
+ "getrandom 0.3.4",
+ "httparse",
  "if-addrs 0.13.4",
  "keyring",
  "machine-uid",

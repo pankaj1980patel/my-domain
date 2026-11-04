@@ -17,6 +17,7 @@ import { ScheduleList } from "../components/ScheduleList";
 import { AutomationList } from "../components/AutomationList";
 import { LOCAL_PRESETS } from "../lib/presets";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
+import { WebhookSetting } from "../components/WebhookSetting";
 import { t, tRich } from "../i18n";
 
 export default function Settings(props: { onDeveloper: () => void }) {
@@ -224,6 +225,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
           {(me) => <AutomationList me={me().node} localActions={me().actions} />}
         </Show>
       </article>
+
+      <WebhookSetting />
 
       <article class="tile">
         <h2>{t("settings.deviceKey")}</h2>
