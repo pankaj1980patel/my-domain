@@ -39,6 +39,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      # The desktop's FCM receiver (fcm_receiver_rs -> ece -> openssl) needs
+      # OpenSSL; Windows has none, so take it from the runner's vcpkg.
+      - run: vcpkg install openssl:x64-windows-static-md
+      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -p my-domain -p md-hfp -p md-geo --all-targets --locked
       - run: cargo test -p md-hfp -p md-geo -p my-domain --locked
