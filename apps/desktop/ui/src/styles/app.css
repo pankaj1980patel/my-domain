@@ -1283,4 +1283,61 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .info-row .progress {
   grid-column: 1 / -1;
+/* --- scheduled actions (screens/device/ScheduleTile.tsx) ---------------------- */
+
+.schedule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.schedule-row {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.schedule-off > :not(:first-child),
+.schedule-off strong {
+  opacity: 0.6;
+}
+.row input.schedule-time {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 4px 8px;
+  color-scheme: dark light;
+}
+.schedule-select {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+}
+.schedule-days {
+  gap: var(--s-1);
+}
+.schedule-day {
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  padding: 2px 10px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), border-color var(--fast) var(--ease);
+}
+.schedule-day:hover {
+  border-color: var(--accent);
+}
+.schedule-day-on {
+  color: var(--accent-fg);
+  background: var(--accent-bg);
+  border-color: var(--accent);
 }

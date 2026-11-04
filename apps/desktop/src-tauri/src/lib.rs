@@ -23,6 +23,7 @@ mod fcm;
 mod location;
 mod notify;
 mod remote_input;
+mod schedule;
 mod screen_share;
 mod shortcut;
 mod sysinfo;
@@ -1221,6 +1222,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         shortcut::send_shortcut,
         shortcut::set_send_shortcut,
         shortcut::set_send_shortcut_keys,
+        schedule::list_schedules,
+        schedule::add_schedule,
+        schedule::update_schedule,
+        schedule::delete_schedule,
+        schedule::run_schedule_now,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1259,6 +1265,7 @@ pub fn run() {
             app.manage(notify::Prefs::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
+            app.manage(schedule::Schedules::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -1308,6 +1315,7 @@ pub fn run() {
             device::spawn_status_reporter(handle.clone());
             device::spawn_now_playing(handle.clone());
             away_lock::spawn(handle.clone());
+            schedule::spawn(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

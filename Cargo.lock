@@ -4298,6 +4298,7 @@ name = "my-domain"
 version = "0.1.0"
 dependencies = [
  "arboard",
+ "chrono",
  "enigo",
  "fcm_receiver_rs",
  "gethostname 0.5.0",

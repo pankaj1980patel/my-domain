@@ -67,6 +67,11 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 # Accessibility permission.
 enigo = "0.6"
 
+# Scheduled actions: the local time and weekday, time zone and DST included
+# (see `schedule.rs`). Already in Cargo.lock; `time`'s local offset refuses
+# to work in a multi-threaded process on Unix.
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
 # Find my computer: where this Mac is, from CoreLocation (see `location.rs`).
 # Same versions Tauri already pulls in.
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -44,6 +44,7 @@ import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
 import DropToSend from "./device/DropToSend";
 import InfoTile from "./device/InfoTile";
+import ScheduleTile from "./device/ScheduleTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -123,6 +124,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <BrowseTile node={props.node} />
             <ControlTile node={props.node} />
             <InfoTile node={props.node} />
+            <ScheduleTile node={props.node} />
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />
             </Show>

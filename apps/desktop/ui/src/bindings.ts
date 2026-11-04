@@ -189,6 +189,19 @@ export const commands = {
 	setSendShortcut: (on: boolean) => __TAURI_INVOKE<ShortcutSettings_Serialize>("set_send_shortcut", { on }),
 	/**  Use other keys ("CmdOrCtrl+Shift+Y"); refused if they aren't a shortcut. */
 	setSendShortcutKeys: (keys: string) => typedError<ShortcutSettings_Serialize, string>(__TAURI_INVOKE("set_send_shortcut_keys", { keys })),
+	/**  Your scheduled actions. */
+	listSchedules: () => __TAURI_INVOKE<Schedule_Serialize[]>("list_schedules"),
+	/**  Schedule an action on a device. */
+	addSchedule: (schedule: NewSchedule) => typedError<Schedule_Serialize, string>(__TAURI_INVOKE("add_schedule", { schedule })),
+	/**  Change a schedule (its time, days, on/off…). */
+	updateSchedule: (schedule: Schedule_Deserialize) => typedError<Schedule_Serialize, string>(__TAURI_INVOKE("update_schedule", { schedule })),
+	/**  Remove a schedule. */
+	deleteSchedule: (id: string) => __TAURI_INVOKE<void>("delete_schedule", { id }),
+	/**
+	 *  Run a schedule's action now (it still runs at its time too). Returns
+	 *  the transport, "queued" or "here".
+	 */
+	runScheduleNow: (id: string) => typedError<string, string>(__TAURI_INVOKE("run_schedule_now", { id })),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -373,6 +386,17 @@ export type NatKind =
  */
 "symmetric";
 
+/**  A new schedule, from the UI. */
+export type NewSchedule = {
+	node: string,
+	action: string,
+	args: string,
+	label: string,
+	time: string,
+	days: number[],
+	enabled: boolean,
+};
+
 /**
  *  A known peer device. Deserializable too: the peer list is cached on the
  *  device (see engine/background.rs `spawn_peer_cache`).
@@ -452,6 +476,49 @@ export type Quality = "excellent" | "good" | "weak" |
 export type SavedSession = {
 	server_url: string,
 	username: string,
+};
+
+/**  One scheduled action. */
+export type Schedule = Schedule_Serialize | Schedule_Deserialize;
+
+/**  One scheduled action. */
+export type Schedule_Deserialize = {
+	id: string,
+	/**  The device it runs on. */
+	node: string,
+	/**  An action the device lists in its status (`actions`), or "ring". */
+	action: string,
+	/**  The action's arguments, as JSON text ("" for none). */
+	args?: string,
+	/**  What it does, for people ("Set the ringer to normal"). */
+	label?: string,
+	/**  Local time, "HH:MM". */
+	time: string,
+	/**  1 = Monday … 7 = Sunday; empty = once. */
+	days?: number[],
+	enabled: boolean,
+	/**  The last time it ran, as local "YYYY-MM-DDTHH:MM" (its slot). */
+	last_run?: string | null,
+};
+
+/**  One scheduled action. */
+export type Schedule_Serialize = {
+	id: string,
+	/**  The device it runs on. */
+	node: string,
+	/**  An action the device lists in its status (`actions`), or "ring". */
+	action: string,
+	/**  The action's arguments, as JSON text ("" for none). */
+	args: string,
+	/**  What it does, for people ("Set the ringer to normal"). */
+	label: string,
+	/**  Local time, "HH:MM". */
+	time: string,
+	/**  1 = Monday … 7 = Sunday; empty = once. */
+	days: number[],
+	enabled: boolean,
+	/**  The last time it ran, as local "YYYY-MM-DDTHH:MM" (its slot). */
+	last_run: string | null,
 };
 
 export type SessionInfo = SessionInfo_Serialize | SessionInfo_Deserialize;

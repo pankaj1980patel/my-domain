@@ -220,7 +220,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Triggers | Battery low, call ringing, arrived home, Wi-Fi joined, device online/offline | `automation` | A D | varies | ⬜ |
 | Actions | Any feature above, as a step | per-action flag | A D | varies | ⬜ |
 | Scenes | e.g. *Meeting*: phone on DND, desktop media paused | `automation` | A D | varies | ⬜ |
-| Scheduled actions | Run at a set time | `automation` | A D | — | ⬜ |
+| Scheduled actions | Run at a set time | `automation` | A D | — | 🟡 (2026-11-04, desktop only: a Schedules tile on a device's page; runs while the app is open, a time missed asleep or off is skipped; not tried live yet) |
 | Run command | Run a predefined shell script on the desktop (Owner only) | `desktop.exec` | D | — | ⬜ |
 | Webhooks | Trigger actions from outside, e.g. Home Assistant | `automation` | A D | — | ⬜ |
 
