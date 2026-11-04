@@ -80,7 +80,7 @@
     <string name="clipboard_from_this_phone">This phone</string>
     <string name="clipboard_recent_hint">Kept on this phone until the app closes.</string>
     <string name="clip_history_title">Clipboard history</string>
-    <string name="clip_history_empty">Text you send to %1$s's clipboard, or it sends to yours, is kept here, the last 200.</string>
+    <string name="clip_history_empty">Text you send to %1$s’s clipboard, or it sends to yours, is kept here, the last 200.</string>
     <string name="clip_history_clear">Clear</string>
     <string name="clip_history_cleared">Clipboard history cleared</string>
     <string name="clip_history_search">Search clips</string>
@@ -91,7 +91,7 @@
     <string name="clip_history_copy">Copy</string>
     <string name="clip_history_copied">Copied to your clipboard</string>
     <string name="clip_history_send_again">Send again</string>
-    <string name="clip_history_sent">Sent. It's on %1$s's clipboard.</string>
+    <string name="clip_history_sent">Sent. It’s on %1$s’s clipboard.</string>
     <string name="clip_history_queued">Will send when %1$s is reachable</string>
     <string name="clip_history_showing">Showing %1$d of %2$d</string>
     <string name="clip_history_more">Show more</string>
@@ -125,7 +125,7 @@
     <string name="settings_clip_sync">Keep clipboards in sync with my devices</string>
     <string name="settings_share_codes">Send verification codes to my computers</string>
     <string name="settings_clip_history">Keep a clipboard history</string>
-    <string name="settings_clip_history_hint">Text sent between your devices as clipboard is kept on this phone (the last 200), on each device's screen. Turning this off forgets it all.</string>
+    <string name="settings_clip_history_hint">Text sent between your devices as clipboard is kept on this phone (the last 200), on each device’s screen. Turning this off forgets it all.</string>
     <string name="settings_share_codes_hint">When a code arrives in a notification, it\'s copied on your computers so you can paste it there.</string>
     <string name="settings_device_key">Device key</string>
     <string name="settings_key_hint">All your devices must use the same key. Changing it here means changing it on every device.</string>
