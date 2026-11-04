@@ -148,6 +148,8 @@ impl Player {
                 let (mods, key) = shortcut(*fingers, *dir);
                 press_combo(enigo, mods, key)
             }
+            // Touches for a phone's screen: nothing to do on a computer.
+            InputEvent::Tap { .. } | InputEvent::Swipe { .. } => Ok(()),
         }
     }
 }

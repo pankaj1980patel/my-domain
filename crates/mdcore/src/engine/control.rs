@@ -137,6 +137,20 @@ impl<P: Platform> Engine<P> {
         crate::features::screen::send_frame(&self.ctx, jpeg)
     }
 
+    /// `screen_frame`, to those of `nodes` watching only: a phone shares
+    /// its screen with the computers its owner chose.
+    pub fn screen_frame_to(&self, jpeg: &[u8], nodes: &[String]) -> crate::Result<usize> {
+        crate::features::screen::send_frame_to(&self.ctx, jpeg, Some(nodes))
+    }
+
+    /// Tell computer `node` this device shares its screen with it (`on`;
+    /// it starts watching, `CoreEvent::ScreenOffer` there), or stopped.
+    /// Only to a computer whose status says `"screen_view": true` (older
+    /// ones would show it as a chat message). Over a live link only.
+    pub fn screen_offer(&self, node_id: &str, on: bool) -> crate::Result<()> {
+        crate::features::screen::offer(&self.ctx, node_id, on)
+    }
+
     // --- Do Not Disturb ---
 
     /// This device's Do Not Disturb state, as the host reads it from the

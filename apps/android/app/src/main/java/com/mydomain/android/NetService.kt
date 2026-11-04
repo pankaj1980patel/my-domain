@@ -342,6 +342,8 @@ class NetService : Service() {
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)
                         "screen_watch" -> ScreenShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        // Taps and swipes on a computer's picture of this screen.
+                        "input" -> ScreenShare.onInput(this@NetService, o.optString("from"), o.optJSONArray("events"))
                         "peer_connected", "peer_disconnected", "peers_updated" -> PhoneAutomations.linksChanged()
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }

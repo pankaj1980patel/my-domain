@@ -91,6 +91,12 @@ export type DeviceStatus = {
   locationSharing: boolean;
   /** Its Accessibility helper is on (phone keys, no-tap radios). */
   helper?: boolean;
+  /** A phone that can share its screen from the phone and take taps and
+   *  swipes on it (`screen_send`). */
+  screenSend?: boolean;
+  /** Its owner allows control from the computers it shares its screen
+   *  with now (`screen_control`, phones). */
+  screenControl?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -257,6 +263,9 @@ type State = {
   transfers: Record<string, Transfer>;
   /** node_id -> the nickname, icon and colour you gave it here. */
   labels: Record<string, DeviceLabel>;
+  /** node_id -> when a phone offered to share its screen with this
+   *  computer (`screen-offer`); its screen tile starts watching and clears it. */
+  screenOffers: Record<string, number>;
   devLog: DevEvent[];
 };
 
@@ -278,6 +287,7 @@ export const [state, setState] = createStore<State>({
   quietPhones: [],
   transfers: {},
   labels: {},
+  screenOffers: {},
   devLog: [],
 });
 
@@ -448,6 +458,16 @@ export async function startEvents() {
       toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
     }),
     on<null>("clip-history-changed", () => setClipTick((x) => x + 1)),
+    // A phone shares its screen with this computer (the backend brings
+    // its page up); its screen tile watches. A stop is the tile's to show.
+    on<{ from: string; on: boolean }>("screen-offer", ({ from, on: sharing }) => {
+      if (sharing) {
+        setState("screenOffers", from, now());
+        addActivity({ icon: "", tone: "info", node: from, text: t("phoneScreen.offered", { name: peerName(from) }) });
+      } else {
+        setState("screenOffers", from, undefined!);
+      }
+    }),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
@@ -472,6 +492,8 @@ export async function startEvents() {
         wifiScanNeeds: typeof status?.wifi_scan_needs === "string" ? status.wifi_scan_needs : undefined,
         locationSharing: status?.location_sharing === true,
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
+        screenSend: status?.screen_send === true,
+        screenControl: status?.screen_control === true,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,

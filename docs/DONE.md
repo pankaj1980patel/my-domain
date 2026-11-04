@@ -607,6 +607,50 @@ Found on the way: after the phone's app restarted (a reinstall), mdctl
 still counted its old link as live and sent into it ("queued" only showed
 on the next status); see Known issues.
 
+## Phone screen: share from the phone, control from the computer (2026-11-05)
+
+The phone's screen on the computer, finished both ways round.
+
+- Format and transport: the same JPEG snapshots over `features::screen`
+  (base64 in an encrypted control message, live link only, never queued,
+  never written to disk). Not H.264: the desktop already shows JPEG, WebKitGTK
+  has no WebCodecs, and the control channel carries whole messages, not a
+  stream.
+- Share from the phone: "Share this screen with <computer>" on the
+  computer's page (shown when its status says `screen_view: true`) opens
+  Android's own prompt; once capturing, the phone sends the new
+  `screen_offer {from, on}` (`Engine::screen_offer`, FFI `screen_offer`)
+  and the computer (`CoreEvent::ScreenOffer`, "screen-offer") comes forward
+  on the phone's page and starts watching. Older computers never get it
+  (they'd show it as chat): gated on `screen_view`.
+- A share is for the computers you chose: frames go only to them
+  (`Engine::screen_frame_to`, FFI `screen_frame_to`); another computer
+  asking meanwhile gets a notification on the phone to let it in.
+- The sharing notification says "Sharing your screen with <names>", with
+  Stop and Allow control / View only (view only at each start). It stops
+  on Stop (either side), when the computers stop watching or their watch
+  runs out (link lost: 25 s + 5 s), when the screen goes off or the phone
+  locks (the lock screen is never sent), and tells the computer
+  (`screen_offer` off).
+- Control: new input events `tap {x, y}` and `swipe {x, y, x2, y2, ms}`
+  (same spots as `point`, `clean` keeps them on the screen and swipes at
+  most 3 s). The desktop's "Phone screen" tile has a Control switch (needs
+  the phone's helper on and Allow control on there: status `helper`,
+  `screen_control`, polled every 4 s while showing); a click is a tap, a
+  held click a long press, a drag a swipe (`phone_screen::touch`, command
+  `phone_touch`), and Back / Home / Recent apps go by the `key` action.
+  The phone plays them with its Accessibility helper (now
+  `canPerformGestures`), mapping through the letterbox when it's turned
+  (`ScreenTouch`). Older phones drop the new event kinds one by one.
+- Desktop tile: canvas, fitted to the tile, Full screen (fills the
+  window; Esc leaves), Stop.
+
+Checks: core tests (offer round trip, frames only to the chosen computer,
+offer needs a link, tap/swipe arrive and unknown kinds are dropped without
+chat), desktop unit tests for `touch`, Kotlin unit test for `ScreenTouch`,
+clippy, UI build. Not tried on the phone yet (no Gradle build in this
+change).
+
 ## Point & click on the computer's screen (2026-11-03)
 
 With the computer's screen showing behind the full-screen pad, "Point &

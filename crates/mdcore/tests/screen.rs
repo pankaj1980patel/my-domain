@@ -110,3 +110,132 @@ fn snapshots_too_big_or_without_a_link_are_refused() {
         Err(CoreError::PeerNotFound)
     ));
 }
+
+#[test]
+fn a_phone_shares_its_screen_with_the_computer_it_chose() {
+    let (phone, pc) = linked("screen-offer");
+    let other = TestNode::start("screen-offer-other");
+    TestNode::pair(&phone, &other);
+    other.engine.connect(&phone.node_id()).unwrap();
+    assert!(other
+        .wait_connected(&phone, Duration::from_secs(10))
+        .is_some());
+
+    // The phone offers; the computer hears it (and not as chat).
+    phone.engine.screen_offer(&pc.node_id(), true).unwrap();
+    let who = phone.node_id();
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::ScreenOffer { from, on: true } if *from == who => Some(()),
+            _ => None,
+        })
+        .expect("no offer");
+    assert!(
+        !pc.sink
+            .all()
+            .iter()
+            .any(|e| matches!(e, CoreEvent::MessageReceived(_))),
+        "the offer showed as chat"
+    );
+
+    // Both computers watch; frames go only to the one the phone chose.
+    pc.engine.screen_watch(&phone.node_id(), true).unwrap();
+    other.engine.screen_watch(&phone.node_id(), true).unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    while phone.engine.screen_watchers().len() < 2 && std::time::Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(phone.engine.screen_watchers().len(), 2, "both watch");
+    let chosen = [pc.node_id()];
+    assert_eq!(
+        phone.engine.screen_frame_to(b"\xff\xd8a", &chosen).unwrap(),
+        1
+    );
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::ScreenFrame { from, .. } if *from == who => Some(()),
+            _ => None,
+        })
+        .expect("no frame for the chosen computer");
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        !other
+            .sink
+            .all()
+            .iter()
+            .any(|e| matches!(e, CoreEvent::ScreenFrame { .. })),
+        "a computer the phone didn't choose saw its screen"
+    );
+    assert_eq!(
+        phone
+            .engine
+            .screen_frame_to(b"\xff\xd8a", &["nobody".to_string()])
+            .unwrap(),
+        0
+    );
+
+    // Stopping is news too.
+    phone.engine.screen_offer(&pc.node_id(), false).unwrap();
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::ScreenOffer { from, on: false } if *from == who => Some(()),
+            _ => None,
+        })
+        .expect("no stop");
+}
+
+#[test]
+fn an_offer_needs_a_known_linked_computer() {
+    let phone = TestNode::start("screen-offer-nolink-phone");
+    let pc = TestNode::start("screen-offer-nolink-pc");
+    TestNode::pair(&phone, &pc);
+    assert!(matches!(
+        phone.engine.screen_offer("nobody", true),
+        Err(CoreError::PeerNotFound)
+    ));
+    assert!(matches!(
+        phone.engine.screen_offer(&pc.node_id(), true),
+        Err(CoreError::NoLink(_))
+    ));
+}
+
+#[test]
+fn touches_for_the_phone_arrive_and_unknown_kinds_are_dropped_one_by_one() {
+    use mdcore::model::InputEvent;
+    let (phone, pc) = linked("screen-touch");
+    // From a newer computer: a tap, a swipe, and a kind nobody knows yet.
+    // The phone plays what it knows; nothing shows as chat.
+    let raw = serde_json::json!({
+        "type": "input", "from": pc.node_id(),
+        "events": [
+            {"kind": "tap", "x": 5000, "y": 12000},
+            {"kind": "hologram", "z": 1},
+            {"kind": "swipe", "x": 1, "y": 2, "x2": 3, "y2": 4, "ms": 250},
+        ],
+    })
+    .to_string();
+    pc.engine.send(&phone.node_id(), &raw).unwrap();
+    let got = phone
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Input { events, .. } => Some(events.clone()),
+            _ => None,
+        })
+        .expect("no touches");
+    assert_eq!(
+        got,
+        [
+            InputEvent::Tap { x: 5000, y: 10_000 },
+            InputEvent::Swipe {
+                x: 1,
+                y: 2,
+                x2: 3,
+                y2: 4,
+                ms: 250
+            },
+        ]
+    );
+    phone
+        .sink
+        .assert_no_message(&raw, Duration::from_millis(300));
+}

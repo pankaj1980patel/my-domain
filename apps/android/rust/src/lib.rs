@@ -1020,6 +1020,21 @@ impl MdEngine {
         Ok(u32::try_from(sent).unwrap_or(u32::MAX))
     }
 
+    /// `screen_frame`, only to those of `nodes` watching: the computers
+    /// you chose to share this screen with.
+    pub fn screen_frame_to(&self, jpeg: Vec<u8>, nodes: Vec<String>) -> MdResult<u32> {
+        let sent = self.inner.screen_frame_to(&jpeg, &nodes)?;
+        Ok(u32::try_from(sent).unwrap_or(u32::MAX))
+    }
+
+    /// Tell a computer this phone shares its screen with it (`on`: it
+    /// starts watching), or stopped. Only to a computer whose status says
+    /// `screen_view` (older ones would show it as chat). Fails when there's
+    /// no link.
+    pub fn screen_offer(&self, node_id: String, on: bool) -> MdResult<()> {
+        Ok(self.inner.screen_offer(&node_id, on)?)
+    }
+
     /// Send a picture copied on this phone (a PNG or JPEG file) to a
     /// device's clipboard. Returns the transfer id.
     pub fn send_clipboard_image(&self, node_id: String, path: String) -> MdResult<String> {

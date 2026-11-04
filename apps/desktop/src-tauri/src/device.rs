@@ -99,6 +99,9 @@ fn actions(app: &AppHandle, status: &mut serde_json::Value) -> Vec<&'static str>
             status["screen_needs"] = why.into();
         }
     }
+    // A phone may share its screen with this computer from the phone
+    // (`screen_offer`, which older versions would show as chat).
+    status["screen_view"] = true.into();
     // Where this computer is: listed where it can tell (the switch in
     // Settings decides whether it shares; see location.rs).
     if crate::location::available() {

@@ -324,6 +324,12 @@ export const commands = {
 	 */
 	screenWatch: (nodeId: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("screen_watch", { nodeId, on })),
 	/**
+	 *  A press on a phone's picture (see `touch`), sent for the phone to play.
+	 *  It does only while it shares its screen with this computer and its
+	 *  owner allows control from here (its status says `screen_control`).
+	 */
+	phoneTouch: (nodeId: string, x: number, y: number, x2: number, y2: number, ms: number) => typedError<null, string>(__TAURI_INVOKE("phone_touch", { nodeId, x, y, x2, y2, ms })),
+	/**
 	 *  Control another computer from this one (its screen tile): `events_json`
 	 *  is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
 	 *  "click", "button"}`, `{"kind": "scroll", "dx", "dy"}`, `{"kind": "text",

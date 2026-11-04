@@ -29,6 +29,7 @@ mod fcm;
 mod location;
 mod notif_history;
 mod notify;
+mod phone_screen;
 mod quiet;
 mod remote_input;
 mod schedule;
@@ -335,6 +336,11 @@ impl EventSink for TauriSink {
             CoreEvent::ScreenWatch { from, on } => {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || screen_share::on_watch(&app, &from, on));
+            }
+            // A phone shares its screen with this computer: bring its page up.
+            CoreEvent::ScreenOffer { from, on } => {
+                let (app, from, on) = (self.app.clone(), from.clone(), *on);
+                std::thread::spawn(move || phone_screen::on_offer(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
             // OS notifications for what arrives while the window is in the
@@ -1434,6 +1440,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         screen_allowed,
         set_screen_allowed,
         screen_watch,
+        phone_screen::phone_touch,
         send_input,
         send_clipboard_image,
         shortcut::send_clipboard,

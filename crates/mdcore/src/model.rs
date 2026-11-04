@@ -452,6 +452,25 @@ pub enum InputEvent {
         x: u16,
         y: u16,
     },
+    /// A tap on a phone's screen, at a spot in ten-thousandths of its width
+    /// and height (as `Point`): from a computer showing the phone's screen.
+    /// The phone plays it with its Accessibility helper, only while it
+    /// shares its screen with that computer and its owner allows control.
+    /// Older devices drop it (an event kind they don't know).
+    Tap {
+        x: u16,
+        y: u16,
+    },
+    /// A drag on a phone's screen from (`x`, `y`) to (`x2`, `y2`) over `ms`
+    /// milliseconds (same spots as `Tap`); the same spot held long is a
+    /// long press. Played like `Tap`.
+    Swipe {
+        x: u16,
+        y: u16,
+        x2: u16,
+        y2: u16,
+        ms: u16,
+    },
 }
 
 impl MouseButton {

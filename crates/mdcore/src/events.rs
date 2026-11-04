@@ -259,6 +259,10 @@ pub enum CoreEvent {
         seq: u64,
         jpeg: String,
     },
+    /// A phone started (`on`) sharing its screen with this computer, its
+    /// owner's choice: watch it (`Engine::screen_watch`) to see it. Or it
+    /// stopped (`!on`).
+    ScreenOffer { from: String, on: bool },
 }
 
 impl CoreEvent {
@@ -308,6 +312,7 @@ impl CoreEvent {
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
+            CoreEvent::ScreenOffer { .. } => "screen-offer",
         }
     }
 
@@ -433,6 +438,42 @@ mod tests {
                 "dnd-changed",
                 json!({"kind": "dnd", "from": "phone", "on": true})
             )
+        );
+    }
+
+    #[test]
+    fn screen_offers_and_phone_touches_keep_their_shape() {
+        use crate::model::InputEvent;
+        let ev = CoreEvent::ScreenOffer {
+            from: "phone".into(),
+            on: true,
+        };
+        assert_eq!(
+            (ev.name(), ev.ui_payload()),
+            ("screen-offer", json!({"from": "phone", "on": true}))
+        );
+        // Android reads "screen_offer" (it never gets one, but the tag is
+        // what NetService would match).
+        assert_eq!(ev.to_json()["kind"], "screen_offer");
+        let ev = CoreEvent::Input {
+            from: "pc".into(),
+            events: vec![
+                InputEvent::Tap { x: 5000, y: 100 },
+                InputEvent::Swipe {
+                    x: 1,
+                    y: 2,
+                    x2: 3,
+                    y2: 4,
+                    ms: 300,
+                },
+            ],
+        };
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "input", "from": "pc", "events": [
+                {"kind": "tap", "x": 5000, "y": 100},
+                {"kind": "swipe", "x": 1, "y": 2, "x2": 3, "y2": 4, "ms": 300},
+            ]})
         );
     }
 

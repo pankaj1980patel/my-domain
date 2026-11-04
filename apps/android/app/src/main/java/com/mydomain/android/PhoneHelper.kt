@@ -25,6 +25,8 @@ import android.view.accessibility.AccessibilityNodeInfo
  *    panel stays open for you, as without the service.
  *  - Keys ([press]): Back, Home, recent apps, notifications, Quick
  *    Settings, lock the screen.
+ *  - Taps and swipes ([touch]): from a computer you share this screen
+ *    with, only while you allow control in the sharing notification.
  *
  * It reads screens only while doing one of these, and only Settings'.
  */
@@ -99,6 +101,26 @@ class PhoneHelper : AccessibilityService() {
             else -> return false
         }
         return performGlobalAction(action)
+    }
+
+    /** Touch the screen at ([x], [y]) and move to ([x2], [y2]) over [ms]
+     *  milliseconds, in screen pixels: a tap, a long press (held still) or
+     *  a swipe. Only for a computer you share this screen with and allowed
+     *  control (ScreenShare.onInput). Played on the main thread, in the
+     *  order they came; false if it couldn't be built. */
+    fun touch(x: Float, y: Float, x2: Float, y2: Float, ms: Long): Boolean {
+        val gesture = runCatching {
+            val path = android.graphics.Path().apply {
+                moveTo(x, y)
+                lineTo(x2, y2)
+            }
+            val stroke = android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, ms.coerceIn(1, 3_000))
+            android.accessibilityservice.GestureDescription.Builder().addStroke(stroke).build()
+        }.onFailure { Log.w(TAG, "touch: $it") }.getOrNull() ?: return false
+        main.post {
+            if (!runCatching { dispatchGesture(gesture, null, null) }.getOrDefault(false)) Log.w(TAG, "touch not played")
+        }
+        return true
     }
 
     companion object {

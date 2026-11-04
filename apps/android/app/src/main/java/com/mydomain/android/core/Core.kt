@@ -99,6 +99,9 @@ data class DeviceStatus(
     val lastRun: LastRun? = null,
     /** It’s in Do Not Disturb (phones; null: it didn’t say). */
     val dnd: Boolean? = null,
+    /** A computer this phone may share its screen with from here
+     *  (`screen_view`; older ones would show the offer as chat). */
+    val screenView: Boolean = false,
     val seenAt: Long = System.currentTimeMillis(),
 )
 
@@ -464,6 +467,7 @@ object Core {
                     muted = if (st.has("muted")) st.optBoolean("muted") else null,
                     batteryTemp = if (st.has("battery_temp")) st.optInt("battery_temp") else null,
                     batteryHealth = st.optString("battery_health").ifEmpty { null },
+                    screenView = st.optBoolean("screen_view", false),
                     wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
                     wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
                     ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },

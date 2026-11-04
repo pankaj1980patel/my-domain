@@ -138,6 +138,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
                 item { TouchpadTile(node, st) }
             }
+            // A computer that can show this phone's screen (it says screen_view).
+            if (Core.deviceStatus[node]?.screenView == true) item { ShareScreenTile(node, name) }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
             if (ClipLog.enabled) item { ClipHistoryTile(node, name) }

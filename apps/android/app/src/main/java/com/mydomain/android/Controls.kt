@@ -97,6 +97,10 @@ object Controls {
         LostMode.state(ctx, o)
         DndWatch.state(ctx, o)
         o.put("helper", PhoneHelper.instance != null)
+        // It can share its screen from here (screen_offer) and take taps
+        // and swipes on it; control is allowed now (the share's own switch).
+        o.put("screen_send", true)
+        o.put("screen_control", ScreenShareService.current?.controlAllowed == true)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
         if (am != null) {

@@ -13,6 +13,14 @@
 //! `{"kind": "point", "x", "y"}` (the pointer to a spot on the screen, in
 //! ten-thousandths of its width and height).
 //!
+//! The other way round, a computer showing a phone's screen (see
+//! `features::screen`) sends `{"kind": "tap", "x", "y"}` and `{"kind":
+//! "swipe", "x", "y", "x2", "y2", "ms"}` (same spots as `point`) for the
+//! phone to play with its Accessibility helper, while the phone shares its
+//! screen with that computer and its owner allows control there. A device
+//! drops event kinds it doesn't know (older versions: these), one by one,
+//! never the whole message, and never shows them as chat.
+//!
 //! - Only over a live link, never queued: a click or a key pressed minutes
 //!   late, when a link finally came up, would do something you didn't mean.
 //!   With no link, the send fails and the connect ladder starts, so the next
@@ -48,6 +56,8 @@ pub const MAX_EVENTS: usize = 64;
 pub const MAX_TEXT: usize = 500;
 /// `InputEvent::Point` coordinates go from 0 to this (the far edge).
 pub const POINT_SCALE: u16 = 10_000;
+/// Longest `InputEvent::Swipe`, in milliseconds (a long press included).
+pub const MAX_SWIPE_MS: u16 = 3_000;
 /// Largest move or scroll in one event, in pixels either way.
 pub const MAX_STEP: i32 = 4000;
 /// The batching thread stops after this long with nothing to send.
@@ -117,7 +127,9 @@ pub fn set_allowed<P: Platform>(ctx: &NetCtx<P>, on: bool) {
 
 /// Events made safe to play back: at most `MAX_EVENTS`, moves and scrolls
 /// within `MAX_STEP`, text without control characters and at most
-/// `MAX_TEXT` long, gestures with three or four fingers; empty ones dropped.
+/// `MAX_TEXT` long, gestures with three or four fingers, spots on the
+/// screen within it and swipes at most `MAX_SWIPE_MS` long; empty ones
+/// dropped.
 pub fn clean(events: Vec<InputEvent>) -> Vec<InputEvent> {
     events
         .into_iter()
@@ -146,6 +158,17 @@ pub fn clean(events: Vec<InputEvent>) -> Vec<InputEvent> {
             InputEvent::Point { x, y } => Some(InputEvent::Point {
                 x: x.min(POINT_SCALE),
                 y: y.min(POINT_SCALE),
+            }),
+            InputEvent::Tap { x, y } => Some(InputEvent::Tap {
+                x: x.min(POINT_SCALE),
+                y: y.min(POINT_SCALE),
+            }),
+            InputEvent::Swipe { x, y, x2, y2, ms } => Some(InputEvent::Swipe {
+                x: x.min(POINT_SCALE),
+                y: y.min(POINT_SCALE),
+                x2: x2.min(POINT_SCALE),
+                y2: y2.min(POINT_SCALE),
+                ms: ms.clamp(1, MAX_SWIPE_MS),
             }),
             other => Some(other),
         })
@@ -397,6 +420,64 @@ mod tests {
         );
         assert_eq!(InputKey::parse("esc"), Some(InputKey::Esc));
         assert_eq!(InputKey::parse("Esc"), None);
+    }
+
+    #[test]
+    fn taps_and_swipes_stay_on_the_screen() {
+        assert_eq!(
+            clean(vec![
+                InputEvent::Tap { x: 65_000, y: 20 },
+                InputEvent::Swipe {
+                    x: 1,
+                    y: 2,
+                    x2: 40_000,
+                    y2: 9_999,
+                    ms: 0,
+                },
+                InputEvent::Swipe {
+                    x: 5,
+                    y: 5,
+                    x2: 5,
+                    y2: 5,
+                    ms: 60_000,
+                },
+            ]),
+            [
+                InputEvent::Tap {
+                    x: POINT_SCALE,
+                    y: 20
+                },
+                InputEvent::Swipe {
+                    x: 1,
+                    y: 2,
+                    x2: POINT_SCALE,
+                    y2: 9_999,
+                    ms: 1
+                },
+                InputEvent::Swipe {
+                    x: 5,
+                    y: 5,
+                    x2: 5,
+                    y2: 5,
+                    ms: MAX_SWIPE_MS
+                },
+            ]
+        );
+        assert_eq!(
+            serde_json::to_value(InputEvent::Swipe {
+                x: 1,
+                y: 2,
+                x2: 3,
+                y2: 4,
+                ms: 250
+            })
+            .unwrap_or_default(),
+            json!({"kind": "swipe", "x": 1, "y": 2, "x2": 3, "y2": 4, "ms": 250})
+        );
+        assert_eq!(
+            serde_json::from_value::<InputEvent>(json!({"kind": "tap", "x": 7, "y": 8})).ok(),
+            Some(InputEvent::Tap { x: 7, y: 8 })
+        );
     }
 
     #[test]

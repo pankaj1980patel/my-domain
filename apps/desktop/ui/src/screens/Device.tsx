@@ -27,6 +27,7 @@ import {
   sendMessage,
   setClipSync,
   shareNotification,
+  setState,
   state,
   toggleApp,
   RADIOS,
@@ -408,30 +409,48 @@ function ClipboardTile(props: { node: string }) {
   );
 }
 
-/** See the device's screen: watched while "Show" is on (renewed before the
- *  25 s watch runs out); snapshots arrive as `screen-frame` events. A phone
- *  asks its owner first, every time. */
+/** See the device's screen: watched while it shows (renewed before the 25 s
+ *  watch runs out); snapshots arrive as `screen-frame` events and are
+ *  drawn on a canvas (never kept). A phone asks its owner first, every time
+ *  (Android's own prompt), or offers its screen itself (`screen-offer`:
+ *  then this starts by itself). On a computer that takes input, clicks,
+ *  scrolls and typing go to it; on a phone, with Control on here and
+ *  "Allow control" on at the phone, presses become taps and swipes. */
 function ScreenTile(props: { node: string }) {
   const [watching, setWatching] = createSignal(false);
-  const [frame, setFrame] = createSignal<string>();
+  const [hasFrame, setHasFrame] = createSignal(false);
+  const [full, setFull] = createSignal(false);
+  const [control, setControl] = createSignal(false);
+  let canvas: HTMLCanvasElement | undefined;
   let renew: ReturnType<typeof setInterval> | undefined;
-  let unlisten: (() => void) | undefined;
+  let poll: ReturnType<typeof setInterval> | undefined;
+  let unlisten: (() => void)[] = [];
 
+  const st = () => state.status[props.node];
+  const isPhone = () => st()?.platform === "android";
   // A computer that takes input: clicks, scrolls and typing on the picture
   // go to it.
-  const controls = () => state.status[props.node]?.actions.includes("input") ?? false;
+  const controls = () => !isPhone() && (st()?.actions.includes("input") ?? false);
+  // A phone that takes taps: its helper is on and its owner allows control
+  // from here (while it shares); and Control is on here.
+  const phoneCanControl = () => isPhone() && !!st()?.screenSend && !!st()?.helper && !!st()?.screenControl;
+  const phoneControl = () => phoneCanControl() && control();
+  createEffect(() => {
+    if (!phoneCanControl()) setControl(false);
+  });
+
   const send = (events: object[]) =>
     commands.sendInput(props.node, JSON.stringify(events)).then((r) => {
       if (r.status === "error") toast(friendlyError(r.error), "error");
     });
+  const spot = (v: number, size: number) => Math.max(0, Math.min(10000, Math.round((v / Math.max(1, size)) * 10000)));
   const clickAt = (e: MouseEvent, button: "left" | "right") => {
     if (!controls()) return;
     e.preventDefault();
-    const img = e.currentTarget as HTMLImageElement;
-    img.focus();
-    const spot = (v: number, size: number) => Math.max(0, Math.min(10000, Math.round((v / size) * 10000)));
+    const el = e.currentTarget as HTMLCanvasElement;
+    el.focus();
     send([
-      { kind: "point", x: spot(e.offsetX, img.clientWidth), y: spot(e.offsetY, img.clientHeight) },
+      { kind: "point", x: spot(e.offsetX, el.clientWidth), y: spot(e.offsetY, el.clientHeight) },
       { kind: "click", button },
     ]);
   };
@@ -453,6 +472,49 @@ function ScreenTile(props: { node: string }) {
     e.preventDefault();
   };
 
+  // A phone: where a press went down; it becomes a tap, long press or
+  // swipe when it comes up (the backend decides which).
+  let press: { x: number; y: number; at: number } | undefined;
+  const pressDown = (e: PointerEvent) => {
+    if (!phoneControl() || e.button !== 0) return;
+    e.preventDefault();
+    const el = e.currentTarget as HTMLCanvasElement;
+    el.setPointerCapture(e.pointerId);
+    press = { x: spot(e.offsetX, el.clientWidth), y: spot(e.offsetY, el.clientHeight), at: performance.now() };
+  };
+  const pressUp = (e: PointerEvent) => {
+    const p = press;
+    press = undefined;
+    if (!p || !phoneControl()) return;
+    const el = e.currentTarget as HTMLCanvasElement;
+    const ms = Math.round(performance.now() - p.at);
+    commands
+      .phoneTouch(props.node, p.x, p.y, spot(e.offsetX, el.clientWidth), spot(e.offsetY, el.clientHeight), ms)
+      .then((r) => {
+        if (r.status === "error") toast(friendlyError(r.error), "error");
+      });
+  };
+  const phoneKey = (key: "back" | "home" | "recents") =>
+    runAction(props.node, "key", { key }).catch((err) => toast(friendlyError(err), "error"));
+
+  // Draw each snapshot as it comes; a newer one replaces it before it's
+  // drawn if pictures arrive faster than they decode.
+  let latest = 0;
+  const draw = (jpeg: string) => {
+    const n = ++latest;
+    const img = new Image();
+    img.onload = () => {
+      if (n !== latest || !canvas) return;
+      if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) {
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+      }
+      canvas.getContext("2d")?.drawImage(img, 0, 0);
+      setHasFrame(true);
+    };
+    img.src = `data:image/jpeg;base64,${jpeg}`;
+  };
+
   const watch = async (on: boolean) => {
     const r = await commands.screenWatch(props.node, on);
     if (r.status === "error") throw new Error(r.error);
@@ -460,50 +522,149 @@ function ScreenTile(props: { node: string }) {
   const stop = () => {
     if (renew) clearInterval(renew);
     renew = undefined;
-    unlisten?.();
-    unlisten = undefined;
+    if (poll) clearInterval(poll);
+    poll = undefined;
+    unlisten.forEach((f) => f());
+    unlisten = [];
     if (watching()) watch(false).catch(() => {});
     setWatching(false);
-    setFrame(undefined);
+    setHasFrame(false);
+    setFull(false);
+    setControl(false);
+    latest++;
   };
   const start = async () => {
+    if (watching()) return;
     try {
-      unlisten = await listen<{ from: string; jpeg: string }>("screen-frame", (e) => {
-        if (e.payload.from === props.node) setFrame(`data:image/jpeg;base64,${e.payload.jpeg}`);
-      });
+      unlisten.push(
+        await listen<{ from: string; jpeg: string }>("screen-frame", (e) => {
+          if (e.payload.from === props.node) draw(e.payload.jpeg);
+        }),
+        // The phone stopped sharing (its Stop, its screen went off, ...).
+        await listen<{ from: string; on: boolean }>("screen-offer", (e) => {
+          if (e.payload.from === props.node && !e.payload.on && watching()) {
+            stop();
+            toast(t("phoneScreen.stopped", { name: peerName(props.node) }), "info");
+          }
+        }),
+      );
       await watch(true);
       setWatching(true);
       renew = setInterval(() => watch(true).catch(() => {}), 10_000);
+      // A phone's status says whether its owner allows control now (it
+      // isn't pushed): ask again every few seconds while it shows.
+      if (isPhone()) {
+        requestStatus(props.node).catch(() => {});
+        poll = setInterval(() => requestStatus(props.node).catch(() => {}), 4_000);
+      }
     } catch (err) {
       stop();
       toast(friendlyError(err), "error");
     }
   };
-  onCleanup(stop);
+  // The phone offered its screen (now, or just before this page opened):
+  // watch it, once per offer.
+  createEffect(() => {
+    const at = state.screenOffers[props.node];
+    if (!at) return;
+    setState("screenOffers", props.node, undefined!);
+    if (Date.now() - at < 60_000) start();
+  });
+  const leaveFull = (e: KeyboardEvent) => {
+    if (e.key === "Escape" && full()) setFull(false);
+  };
+  window.addEventListener("keydown", leaveFull);
+  onCleanup(() => {
+    window.removeEventListener("keydown", leaveFull);
+    stop();
+  });
 
+  const title = () => (isPhone() ? t("phoneScreen.title") : t("screen.title"));
   return (
     <article class="tile">
-      <h2>{t("screen.title")}</h2>
-      <p class="muted small">{t("screen.hint")}</p>
-      <Show when={watching() && frame()} fallback={<Show when={watching()}><p class="muted small">{t("screen.waiting")}</p></Show>}>
-        <img
-          class="screen-view"
-          classList={{ "screen-control": controls() }}
-          src={frame()}
-          alt={t("screen.alt")}
-          tabIndex={controls() ? 0 : undefined}
-          onClick={(e) => clickAt(e, "left")}
-          onContextMenu={(e) => clickAt(e, "right")}
-          onWheel={wheel}
-          onKeyDown={keyDown}
-        />
+      <h2>{title()}</h2>
+      <p class="muted small">{isPhone() ? t("phoneScreen.hint") : t("screen.hint")}</p>
+      <Show when={watching()}>
+        <div class="screen-stage" classList={{ "screen-stage-full": full() }}>
+          <Show when={full()}>
+            <div class="screen-stage-bar">
+              <strong>{title()}</strong>
+              <span class="grow" />
+              <button class="btn btn-ghost btn-sm" onClick={() => setFull(false)}>
+                {t("phoneScreen.exitFull")}
+              </button>
+              <button class="btn btn-ghost btn-sm" onClick={stop}>
+                {t("screen.stop")}
+              </button>
+            </div>
+          </Show>
+          <Show when={!hasFrame()}>
+            <p class="muted small">{isPhone() ? t("phoneScreen.waiting") : t("screen.waiting")}</p>
+          </Show>
+          <canvas
+            ref={canvas}
+            class="screen-view"
+            classList={{ "screen-control": controls() || phoneControl(), "screen-hidden": !hasFrame() }}
+            role="img"
+            aria-label={t("screen.alt")}
+            tabIndex={controls() ? 0 : undefined}
+            onClick={(e) => clickAt(e, "left")}
+            onContextMenu={(e) => clickAt(e, "right")}
+            onWheel={wheel}
+            onKeyDown={keyDown}
+            onPointerDown={pressDown}
+            onPointerUp={pressUp}
+            onPointerCancel={() => (press = undefined)}
+          />
+          <Show when={phoneControl()}>
+            <div class="row screen-keys">
+              <button class="btn btn-ghost btn-sm" onClick={() => phoneKey("back")}>
+                {t("phoneScreen.back")}
+              </button>
+              <button class="btn btn-ghost btn-sm" onClick={() => phoneKey("home")}>
+                {t("phoneScreen.home")}
+              </button>
+              <button class="btn btn-ghost btn-sm" onClick={() => phoneKey("recents")}>
+                {t("phoneScreen.recents")}
+              </button>
+            </div>
+          </Show>
+        </div>
         <Show when={controls()}>
           <p class="muted small">{t("screen.controlHint")}</p>
         </Show>
+        <Show when={isPhone() && st()?.screenSend}>
+          <label class="switch-row">
+            <span>{t("phoneScreen.control")}</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={control()}
+              disabled={!phoneCanControl()}
+              onChange={(e) => setControl(e.currentTarget.checked)}
+            />
+          </label>
+          <p class="muted small">
+            {!st()?.helper
+              ? t("phoneScreen.controlNeedsHelper")
+              : !st()?.screenControl
+                ? t("phoneScreen.controlNeedsAllow")
+                : control()
+                  ? t("phoneScreen.controlOn")
+                  : t("phoneScreen.controlOff")}
+          </p>
+        </Show>
       </Show>
-      <button class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"} onClick={() => (watching() ? stop() : start())}>
-        {watching() ? t("screen.stop") : t("screen.show")}
-      </button>
+      <div class="row">
+        <Show when={watching()}>
+          <button class="btn btn-ghost btn-sm" onClick={() => setFull(true)}>
+            {t("phoneScreen.full")}
+          </button>
+        </Show>
+        <button class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"} onClick={() => (watching() ? stop() : start())}>
+          {watching() ? t("screen.stop") : isPhone() ? t("phoneScreen.ask") : t("screen.show")}
+        </button>
+      </div>
     </article>
   );
 }
