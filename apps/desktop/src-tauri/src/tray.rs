@@ -16,6 +16,9 @@
 // "Recent clips" lists the last few clips received as clipboard (kept by
 // `clip_history`); choosing one puts it on this computer's clipboard. It's
 // rebuilt (through `refresh`) whenever the clipboard history changes.
+//
+// During a call taken on this Mac (`calls`), the menu starts with Answer /
+// Decline, or Hang up and "Use phone / this Mac for audio".
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -301,9 +304,17 @@ fn phone_entry(
 }
 
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
-    let mut menu = MenuBuilder::new(app)
-        .text(ID_OPEN_APP, LABEL_OPEN_APP)
-        .separator();
+    let mut menu = MenuBuilder::new(app);
+    // A call on this Mac (calls.rs): answer / decline, or hang up and move
+    // the audio, at the top while it lasts.
+    let call = crate::calls::tray_items();
+    for (id, label) in &call {
+        menu = menu.text(format!("call:{id}"), label);
+    }
+    if !call.is_empty() {
+        menu = menu.separator();
+    }
+    let mut menu = menu.text(ID_OPEN_APP, LABEL_OPEN_APP).separator();
     let devices = devices(app);
     if devices.is_empty() {
         let none = MenuItemBuilder::with_id(ID_NONE, LABEL_NO_DEVICES)
@@ -384,6 +395,8 @@ fn on_menu(app: &AppHandle, id: &str) {
             Some(("folder", node)) => send_folder(app, node),
             Some(("clip", node)) => send_clipboard(app, node),
             Some(("rclip", id)) => copy_clip(app, id),
+            // Menu events arrive on the main thread, where IOBluetooth lives.
+            Some(("call", what)) => crate::calls::tray_action(app, what),
             Some(("locate", node)) => locate(app, node),
             Some(("map", node)) => show_on_map(app, node),
             Some(("open", node)) => {

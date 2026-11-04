@@ -328,9 +328,105 @@ export const commands = {
 	 *  Returns "sent", or "queued" when it goes once the device is reachable.
 	 */
 	sendClipboard: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard", { nodeId })),
+	/**  The calls switch, phone, link and call right now. */
+	callsStatus: () => __TAURI_INVOKE<CallsStatus_Serialize>("calls_status"),
+	/**  Paired phones that offer the Hands-Free Audio Gateway service. */
+	callsDevices: () => typedError<CallDevice[], string>(__TAURI_INVOKE("calls_devices")),
+	/**  Turn "Calls on this Mac" on or off (off disconnects). */
+	callsSetEnabled: (on: boolean) => typedError<CallsStatus_Serialize, string>(__TAURI_INVOKE("calls_set_enabled", { on })),
+	/**  Pick the phone (its Bluetooth address), or none. */
+	callsSetDevice: (address: string | null) => typedError<CallsStatus_Serialize, string>(__TAURI_INVOKE("calls_set_device", { address })),
+	/**
+	 *  Where the audio goes when a call is answered here: the phone, or this
+	 *  Mac's default or chosen devices.
+	 */
+	callsSetAnswerAudio: (target: AudioTarget_Deserialize) => __TAURI_INVOKE<CallsStatus_Serialize>("calls_set_answer_audio", { target }),
+	/**  This Mac's audio outputs and inputs (the phone's own device left out). */
+	callsAudioDevices: () => __TAURI_INVOKE<AudioDevices_Serialize>("calls_audio_devices"),
+	/**  Connect to the chosen phone as its hands-free (the delegate says when). */
+	callsConnect: () => typedError<null, string>(__TAURI_INVOKE("calls_connect")),
+	/**  Drop the hands-free link to the phone. */
+	callsDisconnect: () => typedError<null, string>(__TAURI_INVOKE("calls_disconnect")),
+	/**  Answer the ringing call (audio where Settings says). */
+	callAnswer: () => typedError<null, string>(__TAURI_INVOKE("call_answer")),
+	/**  Turn down the ringing call. */
+	callDecline: () => typedError<null, string>(__TAURI_INVOKE("call_decline")),
+	/**  End the call. */
+	callHangUp: () => typedError<null, string>(__TAURI_INVOKE("call_hang_up")),
+	/**  Call a number through the phone. */
+	callDial: (number: string) => typedError<null, string>(__TAURI_INVOKE("call_dial", { number })),
+	/**  Call the last number again (the phone remembers it). */
+	callRedial: () => typedError<null, string>(__TAURI_INVOKE("call_redial")),
+	/**  One keypad tone during the call. */
+	callDtmf: (digit: string) => typedError<null, string>(__TAURI_INVOKE("call_dtmf", { digit })),
+	/**  Mute or unmute this Mac's microphone for the call. */
+	callMute: (on: boolean) => typedError<null, string>(__TAURI_INVOKE("call_mute", { on })),
+	/**
+	 *  Move this call's audio: to the phone, or to this Mac on the given
+	 *  output and input (`None`: the system default).
+	 */
+	callSetAudio: (target: AudioTarget_Deserialize) => typedError<null, string>(__TAURI_INVOKE("call_set_audio", { target })),
+	/**  Move the call audio to the phone (the controls here keep working). */
+	callAudioToPhone: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_phone")),
+	/**  Bring the call audio to this Mac (on the devices last chosen). */
+	callAudioToMac: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_mac")),
 };
 
 /* Types */
+/**  The audio devices on this Mac (by name), for the pickers. */
+export type AudioDevices = AudioDevices_Serialize | AudioDevices_Deserialize;
+
+/**  The audio devices on this Mac (by name), for the pickers. */
+export type AudioDevices_Deserialize = {
+	outputs: string[],
+	inputs: string[],
+	default_output?: string | null,
+	default_input?: string | null,
+};
+
+/**  The audio devices on this Mac (by name), for the pickers. */
+export type AudioDevices_Serialize = {
+	outputs: string[],
+	inputs: string[],
+	default_output: string | null,
+	default_input: string | null,
+};
+
+/**  Where the call's audio is. */
+export type AudioRoute = 
+/**  No call. */
+"none" | 
+/**  This Mac's speaker and microphone (the SCO link is open). */
+"mac" | 
+/**  The phone's own earpiece or speaker. */
+"phone";
+
+/**
+ *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  and input (`None`: the system's default one).
+ */
+export type AudioTarget = AudioTarget_Serialize | AudioTarget_Deserialize;
+
+/**
+ *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  and input (`None`: the system's default one).
+ */
+export type AudioTarget_Deserialize = {
+	phone: boolean,
+	output?: string | null,
+	input?: string | null,
+};
+
+/**
+ *  Where a call's audio goes: the phone, or this Mac with a chosen output
+ *  and input (`None`: the system's default one).
+ */
+export type AudioTarget_Serialize = {
+	phone: boolean,
+	output: string | null,
+	input: string | null,
+};
+
 /**  One automation. */
 export type Automation = Automation_Serialize | Automation_Deserialize;
 
@@ -426,6 +522,71 @@ export type BatterySample = {
 	/**  Percent, 0-100. */
 	level: number,
 	charging: boolean,
+};
+
+/**  A paired phone that can take the Mac as its hands-free. */
+export type CallDevice = {
+	address: string,
+	name: string,
+	/**  Connected over Bluetooth at all (by anything) right now. */
+	connected: boolean,
+};
+
+/**  Everything the Settings tile and the in-call bar show. */
+export type CallsStatus = CallsStatus_Serialize | CallsStatus_Deserialize;
+
+/**  Everything the Settings tile and the in-call bar show. */
+export type CallsStatus_Deserialize = {
+	available: boolean,
+	enabled: boolean,
+	device?: string | null,
+	device_name?: string | null,
+	/**  The hands-free link to the phone is up. */
+	connected: boolean,
+	phase: Phase,
+	number?: string | null,
+	name?: string | null,
+	/**  When the call became active (unix ms). */
+	since_ms?: number | null,
+	held: boolean,
+	muted: boolean,
+	signal?: number | null,
+	battery?: number | null,
+	audio: AudioRoute,
+	/**  The devices in use on this Mac while the audio's here. */
+	output?: string | null,
+	input?: string | null,
+	/**  Where this call's audio was asked to go. */
+	target: AudioTarget_Deserialize,
+	/**  Where the audio goes when a call is answered here (Settings). */
+	answer: AudioTarget_Deserialize,
+};
+
+/**  Everything the Settings tile and the in-call bar show. */
+export type CallsStatus_Serialize = {
+	available: boolean,
+	enabled: boolean,
+	device: string | null,
+	device_name: string | null,
+	/**  The hands-free link to the phone is up. */
+	connected: boolean,
+	phase: Phase,
+	number: string | null,
+	name: string | null,
+	/**  When the call became active (unix ms). */
+	since_ms: number | null,
+	held: boolean,
+	muted: boolean,
+	signal: number | null,
+	battery: number | null,
+	audio: AudioRoute,
+	/**  The devices in use on this Mac while the audio's here. */
+	output: string | null,
+	input: string | null,
+	/**  Where this call's audio was asked to go. */
+	target: AudioTarget_Serialize,
+	/**  Where the audio goes when a call is answered here (Settings). */
+	answer: AudioTarget_Serialize,
 };
 
 /**  Which way a clip went. */
@@ -809,6 +970,13 @@ export type Peer_Serialize = {
 	/**  Public `ip:port` the peer's router forwards to its QUIC port (UPnP). */
 	mapped_quic?: string,
 };
+
+/**  Where a call stands. */
+export type Phase = "idle" | 
+/**  Ringing here. */
+"incoming" | 
+/**  Dialling, or the other side is ringing. */
+"outgoing" | "active";
 
 export type Quality = "excellent" | "good" | "weak" | 
 /**  Not measured on this kind of link. */

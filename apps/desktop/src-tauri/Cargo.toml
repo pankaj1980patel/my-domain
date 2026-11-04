@@ -83,5 +83,9 @@ getrandom = "0.3"
 # Same versions Tauri already pulls in.
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
-objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate"] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate", "NSString", "NSValue", "NSArray"] }
 objc2-core-location = { version = "0.3.2", default-features = false, features = ["std", "CLLocation", "CLLocationManager"] }
+# Calls on this Mac (see `calls.rs`): the phone's call audio to and from
+# this Mac's speakers and microphones (CoreAudio). Already built: rodio
+# (via fcm_receiver_rs) pulls in this exact version, so no new crates.
+cpal = "0.16"

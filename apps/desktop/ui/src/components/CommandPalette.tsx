@@ -263,6 +263,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
       { id: "place.settings", label: t("palette.settings"), group, run: go("settings") },
       section("account", "settings.account"),
       section("device", "settings.thisDevice"),
+      section("calls", "calls.title"),
       section("commands", "commands.title"),
       section("schedules", "schedule.local.title"),
       section("automations", "automation.title"),

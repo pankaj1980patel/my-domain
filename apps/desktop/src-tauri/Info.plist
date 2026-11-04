@@ -3,9 +3,13 @@
 <!-- Merged into the app bundle's Info.plist by Tauri. -->
 <plist version="1.0">
 <dict>
-	<!-- md-ble: reach your phone over Bluetooth LE when there's no network. -->
+	<!-- md-ble: reach your phone over Bluetooth LE when there's no network;
+	     calls.rs: this Mac as your phone's hands-free for calls. -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>my-domain uses Bluetooth to reach your phone when there is no network between them.</string>
+	<string>my-domain uses Bluetooth to reach your phone when there is no network between them, and to take your phone's calls on this Mac when you turn that on.</string>
+	<!-- calls.rs: your voice to the phone during a call taken on this Mac. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>my-domain sends your voice to your phone during a call you take on this Mac.</string>
 	<!-- Now playing: asks Spotify or Music what they're playing (AppleScript). -->
 	<key>NSAppleEventsUsageDescription</key>
 	<string>my-domain shows your other devices what Spotify or Music is playing.</string>

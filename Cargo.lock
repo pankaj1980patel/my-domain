@@ -4300,6 +4300,7 @@ dependencies = [
  "arboard",
  "base64 0.22.1",
  "chrono",
+ "cpal",
  "enigo",
  "fcm_receiver_rs",
  "gethostname 0.5.0",

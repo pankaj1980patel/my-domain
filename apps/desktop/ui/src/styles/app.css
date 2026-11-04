@@ -1905,3 +1905,95 @@ input[type="checkbox"][role="switch"]:checked::after {
   border-radius: var(--r-full);
   background: var(--accent);
 }
+
+/* --- Calls on this Mac: incoming-call dialog, in-call bar, keypad --------- */
+.call-incoming {
+  position: fixed;
+  top: var(--s-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-4);
+  max-width: calc(100vw - 2 * var(--s-4));
+  padding: var(--s-4) var(--s-5);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-3);
+  backdrop-filter: blur(var(--glass-blur));
+  animation: rise var(--normal) var(--ease);
+}
+.call-incoming-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.call-incoming-text strong {
+  overflow-wrap: anywhere;
+}
+.call-actions {
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.call-decline {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.call-decline:hover:not(:disabled) {
+  box-shadow: 0 0 0 1px var(--danger);
+}
+.call-bar {
+  position: fixed;
+  bottom: var(--s-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 19;
+  width: min(640px, calc(100vw - 2 * var(--s-4)));
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-3);
+  backdrop-filter: blur(var(--glass-blur));
+  animation: rise var(--normal) var(--ease);
+}
+.call-bar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+.call-bar-who {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.call-bar-panel {
+  margin-top: var(--s-3);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--border);
+}
+.call-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  gap: var(--s-2);
+}
+.call-key {
+  height: 44px;
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+.call-subhead {
+  margin-top: var(--s-4);
+  font-size: 0.95rem;
+}
+.call-dial input {
+  max-width: 220px;
+}
+.call-audio-picker select {
+  max-width: 260px;
+}

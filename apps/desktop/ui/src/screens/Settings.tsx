@@ -18,6 +18,7 @@ import { AutomationList } from "../components/AutomationList";
 import { LOCAL_PRESETS } from "../lib/presets";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { WebhookSetting } from "../components/WebhookSetting";
+import { CallsSetting } from "../components/CallsSetting";
 import { t, tRich } from "../i18n";
 
 export default function Settings(props: { onDeveloper: () => void }) {
@@ -211,6 +212,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
         <ShortcutSetting />
       </article>
+
+      <CallsSetting />
 
       <ShellCommandsSetting />
 

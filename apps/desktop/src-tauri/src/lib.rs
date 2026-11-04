@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod automations;
 mod away_lock;
 mod battery_log;
+mod calls;
 mod clip_history;
 mod clip_image;
 mod commands_run;
@@ -1378,7 +1379,25 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         screen_watch,
         send_input,
         send_clipboard_image,
-        shortcut::send_clipboard
+        shortcut::send_clipboard,
+        calls::calls_status,
+        calls::calls_devices,
+        calls::calls_set_enabled,
+        calls::calls_set_device,
+        calls::calls_set_answer_audio,
+        calls::calls_audio_devices,
+        calls::calls_connect,
+        calls::calls_disconnect,
+        calls::call_answer,
+        calls::call_decline,
+        calls::call_hang_up,
+        calls::call_dial,
+        calls::call_redial,
+        calls::call_dtmf,
+        calls::call_mute,
+        calls::call_set_audio,
+        calls::call_audio_to_phone,
+        calls::call_audio_to_mac
     ])
 }
 
@@ -1418,6 +1437,7 @@ pub fn run() {
             app.manage(battery_log::BatteryLog::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
             app.manage(webhooks::Webhooks::load(&handle));
+            app.manage(calls::CallsPrefs::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -1464,6 +1484,9 @@ pub fn run() {
             battery_log::spawn(handle.clone());
             // Off by default: listens only once switched on in Settings.
             webhooks::spawn(handle.clone());
+            // Calls on this Mac: off by default; reconnects to the chosen
+            // phone when turned on (macOS only).
+            calls::init(&handle);
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

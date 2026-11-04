@@ -7,6 +7,7 @@ import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { Toasts } from "./components/ui";
 import CommandPalette, { type Place } from "./components/CommandPalette";
+import CallOverlay from "./components/CallOverlay";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
 import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
@@ -99,6 +100,7 @@ export default function App() {
           </main>
         </div>
         <CommandPalette onDevice={(node) => go({ name: "device", node })} onPlace={goPlace} />
+        <CallOverlay />
         </Show>
       </Show>
       <Show when={state.ringing}>
