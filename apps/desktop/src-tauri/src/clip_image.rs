@@ -24,6 +24,11 @@ fn with_clipboard<T>(
     }
 }
 
+/// The text on the clipboard, if any.
+pub fn copied_text() -> Option<String> {
+    with_clipboard(|cb| cb.get_text().map_err(|e| e.to_string())).ok()
+}
+
 /// The picture on the clipboard, saved as a PNG in a temporary folder.
 pub fn copied_to_png() -> Result<PathBuf, String> {
     let img = with_clipboard(|cb| {

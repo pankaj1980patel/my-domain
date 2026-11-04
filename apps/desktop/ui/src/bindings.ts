@@ -183,6 +183,12 @@ export const commands = {
 	 *  (2, 5 or 10 minutes).
 	 */
 	setAwayLock: (on: boolean, minutes: number) => __TAURI_INVOKE<void>("set_away_lock", { on, minutes }),
+	/**  The "send what I copy to my phone" shortcut: on or off, and its keys. */
+	sendShortcut: () => __TAURI_INVOKE<ShortcutSettings_Serialize>("send_shortcut"),
+	/**  Turn the shortcut on or off. */
+	setSendShortcut: (on: boolean) => __TAURI_INVOKE<ShortcutSettings_Serialize>("set_send_shortcut", { on }),
+	/**  Use other keys ("CmdOrCtrl+Shift+Y"); refused if they aren't a shortcut. */
+	setSendShortcutKeys: (keys: string) => typedError<ShortcutSettings_Serialize, string>(__TAURI_INVOKE("set_send_shortcut_keys", { keys })),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -437,6 +443,31 @@ export type SessionInfo_Serialize = {
 export type SharedFolder = {
 	name: string,
 	path: string,
+};
+
+/**  What Settings shows. */
+export type ShortcutSettings = ShortcutSettings_Serialize | ShortcutSettings_Deserialize;
+
+/**  What Settings shows. */
+export type ShortcutSettings_Deserialize = {
+	on: boolean,
+	/**  As stored, e.g. "CmdOrCtrl+Shift+Y". */
+	keys: string,
+	/**  For people, e.g. "Cmd+Shift+Y" on a Mac. */
+	label: string,
+	/**  Set when the OS wouldn't take the shortcut. */
+	problem?: string | null,
+};
+
+/**  What Settings shows. */
+export type ShortcutSettings_Serialize = {
+	on: boolean,
+	/**  As stored, e.g. "CmdOrCtrl+Shift+Y". */
+	keys: string,
+	/**  For people, e.g. "Cmd+Shift+Y" on a Mac. */
+	label: string,
+	/**  Set when the OS wouldn't take the shortcut. */
+	problem: string | null,
 };
 
 /**

@@ -24,6 +24,7 @@ mod location;
 mod notify;
 mod remote_input;
 mod screen_share;
+mod shortcut;
 mod sysinfo;
 mod tray;
 mod wifi_share;
@@ -252,9 +253,11 @@ impl EventSink for TauriSink {
             CoreEvent::PeersUpdated { .. }
             | CoreEvent::PeerConnected { .. }
             | CoreEvent::PeerDisconnected { .. } => tray::refresh(&self.app),
-            // Which of your devices are phones (lock when they go away).
+            // Which of your devices are phones: lock when they go away, and
+            // where the copy shortcut sends.
             CoreEvent::DeviceStatus { from, status } => {
-                away_lock::on_status(&self.app, from, status)
+                away_lock::on_status(&self.app, from, status);
+                shortcut::saw_status(&self.app, from, status);
             }
             CoreEvent::Ring { from } => {
                 let (app, from) = (self.app.clone(), from.clone());
@@ -1211,6 +1214,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         location_available,
         away_lock::away_lock,
         away_lock::set_away_lock,
+        shortcut::send_shortcut,
+        shortcut::set_send_shortcut,
+        shortcut::set_send_shortcut_keys,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1301,6 +1307,8 @@ pub fn run() {
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));
+            // Cmd/Ctrl+Shift+Y sends what you copied to your phone.
+            shortcut::init(&handle);
             // A missing tray isn't fatal: the window still works.
             if let Err(e) = tray::init(&handle) {
                 eprintln!("[tray] couldn't create the tray icon: {e}");

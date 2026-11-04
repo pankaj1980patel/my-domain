@@ -7,6 +7,7 @@ import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
+import { ShortcutSetting } from "../components/ShortcutSetting";
 import { t, tRich } from "../i18n";
 
 export default function Settings(props: { onDeveloper: () => void }) {
@@ -147,6 +148,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
           </Show>
           <p class="muted small">{t("settings.awayLockHint")}</p>
         </Show>
+        <ShortcutSetting />
       </article>
 
       <article class="tile">
