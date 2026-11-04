@@ -178,7 +178,8 @@ pub enum WsFrame {
         /// a new one knows we restarted and drops our old connection.
         #[serde(default, skip_serializing_if = "String::is_empty")]
         boot: String,
-        /// The binary media frame version this end reads (QUIC only; see
+        /// The binary media frame version this end reads (over QUIC, or the
+        /// relay when its server forwards binary frames; see
         /// `transport::media`), 0 for none. Older apps leave it out (and
         /// ignore it), so they keep getting media as JSON messages.
         #[serde(default, skip_serializing_if = "is_zero")]

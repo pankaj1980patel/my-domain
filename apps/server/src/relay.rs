@@ -3,12 +3,25 @@
 //!
 //! Protocol (JSON text frames):
 //!   client -> server, first frame:  {"auth": "<session token>", "node_id": "<id>"}
-//!   server -> client:               {"ok": true}            (or {"error": …} + close)
+//!   server -> client:               {"ok": true, "bin": 1}  (or {"error": …} + close)
 //!   client -> server:               {"to": "<node_id>", "data": "<opaque>"}
 //!   server -> client:               {"from": "<node_id>", "data": "<opaque>"}
 //!   server -> client (target gone): {"error": "offline", "to": "<node_id>"}
 //!
-//! `data` is never parsed here. It carries the same end-to-end-encrypted
+//! Binary frames (`"bin": 1` in the welcome says this server forwards them;
+//! an older one closes the socket on one, so clients send them only after
+//! seeing it):
+//!   client -> server: [version u8 = 1][to_len u8][to: node id, UTF-8][opaque payload]
+//!   server -> client: [version u8 = 1][from_len u8][from: node id][the same payload]
+//! Same rules as text: forwarded only to a device of the SAME user, `from`
+//! is the sender's authenticated node id (never what it claims), charged to
+//! the same per-account budget, `{"error":"offline"}` (text) when the target
+//! isn't connected. At most `MAX_BIN_FRAME` bytes; a bigger one, another
+//! version, or a malformed one is dropped (counted in `dropped`). Clients
+//! use them for screen and audio records (sealed end to end, see mdcore's
+//! `transport::media`); a client that never sends one sees no change.
+//!
+//! `data` (and a binary payload) is never parsed here. It carries the same end-to-end-encrypted
 //! frames the peer-to-peer links carry, so the server only ever sees
 //! ciphertext. Frames are forwarded only between devices of the SAME user.
 //!
@@ -37,11 +50,47 @@ use crate::auth::verify_token;
 /// wrapping overhead).
 const MAX_FRAME: usize = 5 * 1024 * 1024;
 const AUTH_TIMEOUT: Duration = Duration::from_secs(10);
+/// The binary frame version this server forwards (said as `"bin"` in the
+/// welcome).
+const BIN_VERSION: u8 = 1;
+/// Largest binary frame: a screen snapshot (at most 600 KB) and its
+/// framing, with room to spare. Clients send bigger ones as text.
+pub const MAX_BIN_FRAME: usize = 1024 * 1024;
+
+/// What goes out on a device's socket.
+#[derive(Debug)]
+enum Out {
+    Text(String),
+    Bin(Vec<u8>),
+}
+
+/// Split a client's binary frame into (target node id, payload): `None` for
+/// another version or a malformed one.
+fn parse_bin(frame: &[u8]) -> Option<(&str, &[u8])> {
+    let (&ver, rest) = frame.split_first()?;
+    let (&n, rest) = rest.split_first()?;
+    if ver != BIN_VERSION || n == 0 || rest.len() < usize::from(n) {
+        return None;
+    }
+    let (to, payload) = rest.split_at(usize::from(n));
+    Some((std::str::from_utf8(to).ok()?, payload))
+}
+
+/// The frame forwarded to the target: `[version][from_len][from][payload]`.
+/// `None` if `from` doesn't fit a length byte.
+fn bin_out(from: &str, payload: &[u8]) -> Option<Vec<u8>> {
+    let n = u8::try_from(from.len()).ok().filter(|n| *n > 0)?;
+    let mut out = Vec::with_capacity(2 + from.len() + payload.len());
+    out.extend_from_slice(&[BIN_VERSION, n]);
+    out.extend_from_slice(from.as_bytes());
+    out.extend_from_slice(payload);
+    Some(out)
+}
 
 type Key = (String, String); // (user_id, node_id)
 /// Connected devices: (user, node) -> (connection id, outgoing queue, when
 /// we last heard from it in ms since `RelayState::epoch`).
-type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<String>, Arc<AtomicU64>)>>>;
+type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<Out>, Arc<AtomicU64>)>>>;
 
 /// Clients ping every 20 s. A socket silent for longer than this belongs to
 /// a device that went to sleep (a phone with the screen off) or vanished:
@@ -82,6 +131,8 @@ pub struct Stats {
     frames: AtomicU64,
     bytes: AtomicU64,
     throttled: AtomicU64,
+    /// Binary frames dropped: too big, another version, or malformed.
+    dropped: AtomicU64,
 }
 
 #[derive(Clone)]
@@ -142,7 +193,7 @@ impl RelayState {
             .get(&(user_id.to_string(), to.to_string()))
             .filter(|(_, _, heard)| now.saturating_sub(heard.load(Ordering::Relaxed)) <= fresh)
             .map(|(_, q, _)| q.clone());
-        target.is_some_and(|q| q.send(frame).is_ok())
+        target.is_some_and(|q| q.send(Out::Text(frame)).is_ok())
     }
 
     /// Charge `n` bytes to `user`; how long to pause before forwarding.
@@ -177,6 +228,7 @@ async fn stats(State(s): State<RelayState>) -> Json<Value> {
         "frames": s.stats.frames.load(Ordering::Relaxed),
         "bytes": s.stats.bytes.load(Ordering::Relaxed),
         "throttled": s.stats.throttled.load(Ordering::Relaxed),
+        "dropped": s.stats.dropped.load(Ordering::Relaxed),
     }))
 }
 
@@ -190,7 +242,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     };
     let key: Key = (user_id.clone(), node_id.clone());
     let my_id = s.next_id.fetch_add(1, Ordering::Relaxed);
-    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let (tx, mut rx) = mpsc::unbounded_channel::<Out>();
     let heard = Arc::new(AtomicU64::new(s.now_ms()));
     // A reconnecting device replaces its old connection.
     s.conns
@@ -198,7 +250,9 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
         .unwrap()
         .insert(key.clone(), (my_id, tx, Arc::clone(&heard)));
     if socket
-        .send(Message::Text(json!({"ok": true}).to_string()))
+        .send(Message::Text(
+            json!({"ok": true, "bin": BIN_VERSION}).to_string(),
+        ))
         .await
         .is_err()
     {
@@ -213,42 +267,65 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
         tokio::select! {
             incoming = socket.recv() => {
                 heard.store(s.now_ms(), Ordering::Relaxed);
-                let Some(Ok(Message::Text(text))) = incoming else {
-                    match incoming {
-                        Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => continue,
-                        _ => break, // closed, error, or binary (unsupported)
+                let (len, to, out) = match incoming {
+                    Some(Ok(Message::Text(text))) => {
+                        // Charged before parsing, as everything read is.
+                        throttle(&s, &user_id, text.len()).await;
+                        let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
+                        let (Some(to), Some(data)) = (v["to"].as_str(), v.get("data")) else { continue };
+                        let out = json!({"from": node_id, "data": data}).to_string();
+                        (text.len(), to.to_string(), Out::Text(out))
                     }
+                    Some(Ok(Message::Binary(frame))) => {
+                        throttle(&s, &user_id, frame.len()).await;
+                        let parsed = (frame.len() <= MAX_BIN_FRAME)
+                            .then(|| parse_bin(&frame))
+                            .flatten()
+                            .and_then(|(to, payload)| Some((to.to_string(), bin_out(&node_id, payload)?)));
+                        let Some((to, out)) = parsed else {
+                            s.stats.dropped.fetch_add(1, Ordering::Relaxed);
+                            continue;
+                        };
+                        (frame.len(), to, Out::Bin(out))
+                    }
+                    Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => continue,
+                    _ => break, // closed or error
                 };
-                // Fair use: over budget -> pause reading this socket (TCP
-                // backpressure slows the sender); never drop the frame.
-                let wait = s.charge(&user_id, text.len());
-                if !wait.is_zero() {
-                    s.stats.throttled.fetch_add(1, Ordering::Relaxed);
-                    tokio::time::sleep(wait).await;
-                }
-                let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
-                let (Some(to), Some(data)) = (v["to"].as_str(), v.get("data")) else { continue };
+                // Same account only: the target is looked up under the
+                // sender's own user id.
                 let target = s.conns.lock().unwrap()
-                    .get(&(user_id.clone(), to.to_string()))
+                    .get(&(user_id.clone(), to.clone()))
                     .map(|(_, q, _)| q.clone());
-                let out = json!({"from": node_id, "data": data}).to_string();
                 let delivered = target.map(|q| q.send(out).is_ok()).unwrap_or(false);
                 if delivered {
                     s.stats.frames.fetch_add(1, Ordering::Relaxed);
-                    s.stats.bytes.fetch_add(text.len() as u64, Ordering::Relaxed);
-                }
-                if !delivered {
+                    s.stats.bytes.fetch_add(len as u64, Ordering::Relaxed);
+                } else {
                     let reply = json!({"error": "offline", "to": to}).to_string();
                     if socket.send(Message::Text(reply)).await.is_err() { break; }
                 }
             }
             Some(out) = rx.recv() => {
-                if socket.send(Message::Text(out)).await.is_err() { break; }
+                let msg = match out {
+                    Out::Text(t) => Message::Text(t),
+                    Out::Bin(b) => Message::Binary(b),
+                };
+                if socket.send(msg).await.is_err() { break; }
             }
         }
     }
     remove_if_ours(&s, &key, my_id);
     tracing::info!(user = %user_id, node = %node_id, "relay: disconnected");
+}
+
+/// Fair use: over budget -> pause reading this socket (TCP backpressure
+/// slows the sender); never drop the frame.
+async fn throttle(s: &RelayState, user: &str, n: usize) {
+    let wait = s.charge(user, n);
+    if !wait.is_zero() {
+        s.stats.throttled.fetch_add(1, Ordering::Relaxed);
+        tokio::time::sleep(wait).await;
+    }
 }
 
 async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String, String)> {
@@ -462,6 +539,112 @@ mod tests {
             assert!(Instant::now() < deadline, "never fresh again");
             std::thread::sleep(Duration::from_millis(20));
         }
+    }
+
+    fn bin(to: &str, payload: &[u8]) -> M {
+        let mut f = vec![1, to.len() as u8];
+        f.extend_from_slice(to.as_bytes());
+        f.extend_from_slice(payload);
+        M::Binary(f)
+    }
+
+    fn next_bin(ws: &mut Client) -> Vec<u8> {
+        loop {
+            if let M::Binary(b) = ws.read().unwrap() {
+                return b;
+            }
+        }
+    }
+
+    /// Two of alice's devices, past the welcome.
+    fn pair_of(port: u16) -> (Client, Client) {
+        let mut laptop = client(port, &tok("alice"), "laptop");
+        assert_eq!(next_json(&mut laptop), json!({"ok": true, "bin": 1}));
+        let mut phone = client(port, &tok("alice"), "phone");
+        next_json(&mut phone);
+        (laptop, phone)
+    }
+
+    #[test]
+    fn forwards_binary_frames_with_the_senders_own_id() {
+        let port = start();
+        let (mut laptop, mut phone) = pair_of(port);
+        let payload: Vec<u8> = (0..70_000u32).map(|i| (i % 256) as u8).collect();
+        laptop.send(bin("phone", &payload)).unwrap();
+        let got = next_bin(&mut phone);
+        assert_eq!(&got[..8], b"\x01\x06laptop");
+        assert_eq!(&got[8..], &payload[..]);
+        // And back, mixed with text: both kinds keep working on one socket.
+        phone.send(bin("laptop", b"pong")).unwrap();
+        phone
+            .send(M::Text(json!({"to": "laptop", "data": "t"}).to_string()))
+            .unwrap();
+        assert_eq!(next_bin(&mut laptop), b"\x01\x05phonepong");
+        assert_eq!(next_json(&mut laptop)["data"], "t");
+        assert_eq!(get_stats(port)["frames"], 3);
+    }
+
+    #[test]
+    fn never_forwards_binary_to_another_users_device() {
+        let port = start();
+        let mut alice = client(port, &tok("alice"), "a-laptop");
+        next_json(&mut alice);
+        let mut bob = client(port, &tok("bob"), "b-phone");
+        next_json(&mut bob);
+        alice.send(bin("b-phone", b"secret")).unwrap();
+        assert_eq!(
+            next_json(&mut alice),
+            json!({"error": "offline", "to": "b-phone"})
+        );
+        // Bob got nothing: the next thing he sees is his own reply.
+        bob.send(M::Text(json!({"to": "nobody", "data": "x"}).to_string()))
+            .unwrap();
+        assert_eq!(next_json(&mut bob)["error"], "offline");
+    }
+
+    #[test]
+    fn oversized_or_malformed_binary_is_dropped_and_the_socket_lives() {
+        let port = start();
+        let (mut laptop, mut phone) = pair_of(port);
+        laptop
+            .send(bin("phone", &vec![0u8; MAX_BIN_FRAME]))
+            .unwrap(); // header + payload > the cap
+        laptop
+            .send(M::Binary(vec![2, 5, b'p', b'h', b'o', b'n', b'e']))
+            .unwrap(); // version 2
+        laptop.send(M::Binary(vec![1, 9, b'p'])).unwrap(); // short id
+        laptop.send(M::Binary(vec![1, 0, 1, 2])).unwrap(); // empty id
+        laptop.send(M::Binary(vec![1, 2, 0xff, 0xfe, 0])).unwrap(); // not UTF-8
+        laptop.send(M::Binary(vec![])).unwrap();
+        // Still connected, and the next good frame is the first one through.
+        laptop.send(bin("phone", b"ok")).unwrap();
+        assert_eq!(next_bin(&mut phone), b"\x01\x06laptopok");
+        let st = get_stats(port);
+        assert_eq!(st["dropped"], 6);
+        assert_eq!(st["frames"], 1);
+        // Exactly at the cap still goes.
+        let pad = MAX_BIN_FRAME - 2 - "phone".len();
+        laptop.send(bin("phone", &vec![7u8; pad])).unwrap();
+        assert_eq!(next_bin(&mut phone).len(), 2 + "laptop".len() + pad);
+    }
+
+    #[test]
+    fn binary_frames_share_the_accounts_budget() {
+        let port = start_with(RelayState::with_rate(SECRET.into(), 2000.0));
+        let (mut laptop, mut phone) = pair_of(port);
+        let started = Instant::now();
+        for _ in 0..10 {
+            laptop.send(bin("phone", &[1u8; 3000])).unwrap();
+        }
+        for _ in 0..10 {
+            assert_eq!(next_bin(&mut phone).len(), 8 + 3000);
+        }
+        assert!(
+            started.elapsed() >= Duration::from_secs(5),
+            "{:?}",
+            started.elapsed()
+        );
+        assert!(get_stats(port)["throttled"].as_u64().unwrap() > 0);
     }
 
     #[test]

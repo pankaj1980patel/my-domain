@@ -19,18 +19,21 @@
 //!   [`AAD`] authenticated so a record can never pass for an envelope. Media
 //!   is never sent in the clear.
 //! - Who sent it is the QUIC connection's peer (its device key proven in
-//!   the handshake), as for every message over that link.
-//! - Over QUIC only. Audio goes as an unreliable DATAGRAM when the record
+//!   the handshake), as for every message over that link; over the relay,
+//!   the device the server says it came from (one of the same account's).
+//! - Over QUIC, audio goes as an unreliable DATAGRAM when the record
 //!   fits one (late audio is noise anyway), otherwise, like every screen
 //!   frame, on a long-lived unidirectional stream of its own kind
 //!   (`[magic "MDM1"]` then `[u32 length][record]` repeated): ordered and
 //!   reliable, and audio never waits behind a picture. A lane that's full
 //!   (the link is slower than the frames) drops the frame: a stale frame is
 //!   worth nothing.
-//! - Only to a peer whose QUIC `Hello` said `bin_media` (this version or
-//!   later): an older app gets the JSON messages, as before. The relay, the
-//!   WebRTC and Bluetooth links always carry the JSON messages (the relay
-//!   server forwards text frames only).
+//! - Over the relay, as a binary WebSocket frame (`transport::relay`), when
+//!   the server says it forwards them (`"bin": 1`) and the peer's relayed
+//!   `Hello` said `bin_media`; a full queue drops the frame, as above.
+//! - Only to a peer whose `Hello` said `bin_media` (this version or later):
+//!   an older app, or an older relay server, gets the JSON messages, as
+//!   before. WebRTC and Bluetooth links always carry the JSON messages.
 //! - The receiver checks a binary frame exactly as the JSON one and emits
 //!   the same `CoreEvent::ScreenFrame` / `CoreEvent::AudioFrame`, so the
 //!   apps don't know which way it came.
@@ -41,7 +44,7 @@ use crate::crypto::{open, seal};
 use crate::engine::NetCtx;
 use crate::platform::Platform;
 
-/// The record version this build writes and reads (said in the QUIC `Hello`).
+/// The record version this build writes and reads (said in the `Hello`).
 pub const VERSION: u8 = 1;
 /// Authenticated with every record, never sent.
 const AAD: &[u8] = b"mydomain media v1";
@@ -182,8 +185,8 @@ pub(crate) enum Sent {
     Yes,
     /// The link is slower than the frames: this one is dropped.
     Dropped,
-    /// No binary path to the peer (an older app, not QUIC, no key): send
-    /// the JSON message instead.
+    /// No binary path to the peer (an older app or server, not QUIC or
+    /// relay, no key): send the JSON message instead.
     NotBinary,
 }
 
@@ -195,7 +198,9 @@ pub(crate) fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, h: &Header, payload
     let Some(route) = ctx.ws_conns.lock().get(node).map(|(id, _)| *id) else {
         return Sent::NotBinary;
     };
-    if !ctx.quic.reads_media(node, route) {
+    let quic = ctx.quic.reads_media(node, route);
+    // (Checked before sealing: most peers take JSON.)
+    if !quic && !super::relay::reads_media(ctx, node, route) {
         return Sent::NotBinary;
     }
     let Some(key) = *ctx.key.lock() else {
@@ -204,14 +209,19 @@ pub(crate) fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, h: &Header, payload
     let Some(record) = encode(&key, h, payload) else {
         return Sent::NotBinary;
     };
-    let sent = ctx.quic.send_media(node, route, h.format.kind(), record);
+    let sent = if quic {
+        ctx.quic.send_media(node, route, h.format.kind(), record)
+    } else {
+        super::relay::send_media(ctx, node, route, &record)
+    };
     if sent == Sent::Yes {
         super::note_use(&ctx.p2p_conns, node);
     }
     sent
 }
 
-/// A record arrived from `from` (the QUIC link's peer): open it and hand
+/// A record arrived from `from` (the QUIC link's peer, or the relay's
+/// sender): open it and hand
 /// the frame to its feature, which checks it as it checks the JSON one.
 /// One that doesn't open is dropped quietly (counted, never shown).
 pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8]) {

@@ -114,8 +114,9 @@ pub struct CoreConfig {
     /// stop waking the radio. A send re-opens a link on demand, and a push
     /// reaches a device with none. `None`: never close idle links.
     pub idle_close_after: Option<std::time::Duration>,
-    /// Send screen and audio frames as binary records over QUIC to peers
-    /// that read them (`transport::media`), and say this end reads them.
+    /// Send screen and audio frames as binary records over QUIC (and the
+    /// relay, when its server forwards binary frames) to peers that read
+    /// them (`transport::media`), and say this end reads them.
     /// On by default; off behaves like an app from before (tests use it to
     /// play an older peer).
     pub bin_media: bool,

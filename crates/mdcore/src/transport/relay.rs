@@ -18,6 +18,14 @@
 //! one joined after the other's first `Hello` was dropped as "offline".
 //! Closing a relayed link on purpose sends a `Bye`, so the other side
 //! doesn't stay "live" on a route its peer no longer listens on.
+//!
+//! Binary media: a server that forwards binary frames says `"bin": 1` in its
+//! welcome (an older one closes the socket on one, so we never send one to
+//! it). Then our relayed `Hello` says `bin_media`, and to a peer whose
+//! relayed `Hello` said it too, screen and audio records
+//! (`transport::media`) go as binary frames `[1][to_len][to][record]`
+//! (arriving as `[1][from_len][from][record]`, `from` set by the server)
+//! instead of base64 JSON messages. Everything else stays JSON.
 
 use std::collections::{HashMap, HashSet};
 use std::io::ErrorKind;
@@ -37,6 +45,14 @@ use super::{drop_live, handle_incoming, mark_live, TransportKind};
 static RELAY_CONN_SEQ: AtomicU64 = AtomicU64::new(4_000_000);
 /// Queued on a relay connection's own channel: close it.
 const CLOSE: &str = "\0close";
+/// The binary relay frame version we write and read.
+const BIN_VERSION: u8 = 1;
+/// The server's cap on a binary frame (apps/server `MAX_BIN_FRAME`): a
+/// record that won't fit goes as JSON.
+const BIN_MAX: usize = 1024 * 1024;
+/// Binary frames waiting for the socket. Full (the relay is slower than the
+/// frames): a frame is dropped, as a stale frame is worth nothing.
+const BIN_QUEUE: usize = 64;
 
 /// This engine's relay connection, if open.
 pub struct RelayConn {
@@ -50,6 +66,12 @@ pub struct RelayConn {
     /// Opened, or last given a peer to route: an idle socket is closed
     /// only a while after this (`close_if_unused`).
     used_at: Instant,
+    /// The server forwards binary frames (its welcome said `"bin": 1`).
+    bin: bool,
+    /// Binary media records to send, already framed.
+    bin_tx: tokio::sync::mpsc::Sender<Vec<u8>>,
+    /// Peers whose relayed `Hello` said they read binary media.
+    bin_peers: HashSet<String>,
 }
 
 /// The relay URL for a registry base URL: `http://h` -> `ws://h/relay`,
@@ -149,15 +171,18 @@ fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result
         json!({"auth": token, "node_id": me}).to_string(),
     ))
     .map_err(|e| e.to_string())?;
-    match ws.read() {
-        Ok(WsMessage::Text(t)) if parse(&t)["ok"] == true => {}
+    let bin = match ws.read() {
+        Ok(WsMessage::Text(t)) if parse(&t)["ok"] == true => {
+            parse(&t)["bin"].as_u64() >= Some(u64::from(BIN_VERSION))
+        }
         Ok(WsMessage::Text(t)) => return Err(format!("relay refused: {t}")),
         other => return Err(format!("relay auth failed: {other:?}")),
-    }
+    };
     let _ = raw.set_read_timeout(Some(Duration::from_millis(100)));
 
     let id = RELAY_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    let (bin_tx, bin_rx) = tokio::sync::mpsc::channel::<Vec<u8>>(BIN_QUEUE);
     {
         let mut slot = ctx.relay.lock();
         if slot.is_some() {
@@ -169,10 +194,13 @@ fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result
             peers: HashMap::new(),
             confirmed: HashSet::new(),
             used_at: Instant::now(),
+            bin,
+            bin_tx,
+            bin_peers: HashSet::new(),
         });
     }
     let ctx = ctx.clone();
-    std::thread::spawn(move || relay_loop(ws, rx, ctx, id));
+    std::thread::spawn(move || relay_loop(ws, rx, bin_rx, ctx, id));
     Ok(())
 }
 
@@ -279,6 +307,7 @@ pub fn forget_peer<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
         };
         // A new link must greet afresh (see `on_hello`).
         r.confirmed.remove(peer);
+        r.bin_peers.remove(peer);
         r.peers.remove(peer).map(|id| (id, r.tx.clone()))
     };
     let Some((conn_id, tx)) = routed else {
@@ -323,26 +352,100 @@ fn on_bye<P: Platform>(ctx: &NetCtx<P>, from: &str) {
         if r.peers.get(from) == Some(&conn_id) {
             r.peers.remove(from);
             r.confirmed.remove(from);
+            r.bin_peers.remove(from);
         }
     }
     drop_live(ctx, from);
 }
 
-/// Send our `Hello` to `peer` through the relay.
+/// Send our `Hello` to `peer` through the relay. It says `bin_media` when
+/// we read binary media and our server forwards it (older peers ignore it).
 pub fn send_hello<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
+    let Some((tx, bin)) = ctx.relay.lock().as_ref().map(|r| (r.tx.clone(), r.bin)) else {
+        return;
+    };
     let hello = {
         let id = ctx.identity.lock();
         serde_json::to_string(&WsFrame::Hello {
             node_id: id.node_id.clone(),
             name: id.name.clone(),
             boot: String::new(),
-            bin_media: 0,
+            bin_media: if bin && ctx.config.bin_media {
+                super::media::VERSION
+            } else {
+                0
+            },
         })
         .unwrap_or_default()
     };
-    if let Some(r) = ctx.relay.lock().as_ref() {
-        let _ = r.tx.send(json!({"to": peer, "data": hello}).to_string());
+    let _ = tx.send(json!({"to": peer, "data": hello}).to_string());
+}
+
+/// The binary queue for `peer`, if `route` (its link's id) is its relayed
+/// route, the server forwards binary frames and the peer reads them.
+fn media_lane<P: Platform>(
+    ctx: &NetCtx<P>,
+    peer: &str,
+    route: u64,
+) -> Option<tokio::sync::mpsc::Sender<Vec<u8>>> {
+    ctx.relay.lock().as_ref().and_then(|r| {
+        (r.bin && r.peers.get(peer) == Some(&route) && r.bin_peers.contains(peer))
+            .then(|| r.bin_tx.clone())
+    })
+}
+
+/// Whether `peer`'s relayed route `route` takes binary media records.
+pub(crate) fn reads_media<P: Platform>(ctx: &NetCtx<P>, peer: &str, route: u64) -> bool {
+    media_lane(ctx, peer, route).is_some()
+}
+
+/// Send a media record to `peer` as a binary relay frame, if `route` (its
+/// link's id) is its relayed route, the server forwards binary frames and
+/// the peer's `Hello` said it reads them.
+pub(crate) fn send_media<P: Platform>(
+    ctx: &NetCtx<P>,
+    peer: &str,
+    route: u64,
+    record: &[u8],
+) -> super::media::Sent {
+    use super::media::Sent;
+    let Some(tx) = media_lane(ctx, peer, route) else {
+        return Sent::NotBinary;
+    };
+    let Some(frame) = bin_frame(peer, record) else {
+        return Sent::NotBinary;
+    };
+    match tx.try_send(frame) {
+        Ok(()) => Sent::Yes,
+        Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => Sent::Dropped,
+        Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => Sent::NotBinary,
     }
+}
+
+/// `[version][to_len][to][record]`; `None` if it can't be one (an id
+/// longer than 255 bytes, or bigger than the server takes).
+fn bin_frame(to: &str, record: &[u8]) -> Option<Vec<u8>> {
+    let n = u8::try_from(to.len()).ok().filter(|n| *n > 0)?;
+    let len = 2 + to.len() + record.len();
+    if len > BIN_MAX {
+        return None;
+    }
+    let mut f = Vec::with_capacity(len);
+    f.extend_from_slice(&[BIN_VERSION, n]);
+    f.extend_from_slice(to.as_bytes());
+    f.extend_from_slice(record);
+    Some(f)
+}
+
+/// A binary frame from the server: `(from, record)`.
+fn parse_bin(f: &[u8]) -> Option<(&str, &[u8])> {
+    let (&ver, rest) = f.split_first()?;
+    let (&n, rest) = rest.split_first()?;
+    if ver != BIN_VERSION || n == 0 || rest.len() < usize::from(n) {
+        return None;
+    }
+    let (from, record) = rest.split_at(usize::from(n));
+    Some((std::str::from_utf8(from).ok()?, record))
 }
 
 type RelaySocket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<TcpStream>>;
@@ -350,6 +453,7 @@ type RelaySocket = tungstenite::WebSocket<tungstenite::stream::MaybeTlsStream<Tc
 fn relay_loop<P: Platform>(
     mut ws: RelaySocket,
     mut rx: tokio::sync::mpsc::UnboundedReceiver<String>,
+    mut bin_rx: tokio::sync::mpsc::Receiver<Vec<u8>>,
     ctx: NetCtx<P>,
     my_id: u64,
 ) {
@@ -357,6 +461,13 @@ fn relay_loop<P: Platform>(
     loop {
         match ws.read() {
             Ok(WsMessage::Text(t)) => on_server_frame(&ctx, &parse(&t)),
+            // A media record from a device of ours (the server says which).
+            // It opens only with our key; one that doesn't is dropped.
+            Ok(WsMessage::Binary(b)) => {
+                if let Some((from, record)) = parse_bin(&b) {
+                    super::media::on_record(&ctx, from, record);
+                }
+            }
             Ok(WsMessage::Close(_)) => break,
             Ok(_) => {}
             Err(tungstenite::Error::Io(e))
@@ -374,6 +485,11 @@ fn relay_loop<P: Platform>(
             if ws.send(WsMessage::Text(out)).is_err() {
                 dead = true;
                 break;
+            }
+        }
+        while let (false, Ok(frame)) = (dead, bin_rx.try_recv()) {
+            if ws.send(WsMessage::Binary(frame)).is_err() {
+                dead = true;
             }
         }
         // Keep idle proxies/NATs from dropping the connection.
@@ -427,7 +543,18 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
         return;
     };
     match serde_json::from_str::<WsFrame>(data) {
-        Ok(WsFrame::Hello { .. }) => on_hello(ctx, from),
+        Ok(WsFrame::Hello { bin_media, .. }) => {
+            if let Some(r) = ctx.relay.lock().as_mut() {
+                // Every Hello says it afresh (the peer may have restarted
+                // as an older app).
+                if bin_media >= super::media::VERSION {
+                    r.bin_peers.insert(from.to_string());
+                } else {
+                    r.bin_peers.remove(from);
+                }
+            }
+            on_hello(ctx, from)
+        }
         Ok(WsFrame::Bye) => on_bye(ctx, from),
         Ok(WsFrame::Msg { nonce, ciphertext }) => {
             // A message from a device we have no way back to (its hello, or
@@ -509,6 +636,26 @@ fn parse(text: &str) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn binary_frames_round_trip_and_bad_ones_are_refused() {
+        let f = bin_frame("phone", b"record").unwrap();
+        assert_eq!(f, b"\x01\x05phonerecord");
+        // What the server forwards has the same shape, with `from`.
+        assert_eq!(parse_bin(&f), Some(("phone", &b"record"[..])));
+        assert_eq!(parse_bin(b"\x02\x05phonerecord"), None, "another version");
+        assert_eq!(parse_bin(b"\x01\x09ph"), None, "short");
+        assert_eq!(parse_bin(b"\x01\x00x"), None, "no id");
+        assert_eq!(parse_bin(b"\x01\x01\xff"), None, "not UTF-8");
+        assert_eq!(parse_bin(b""), None);
+        assert!(bin_frame(&"x".repeat(256), b"r").is_none(), "id too long");
+        assert!(bin_frame("", b"r").is_none());
+        assert!(bin_frame("p", &vec![0; BIN_MAX - 3]).is_some());
+        assert!(
+            bin_frame("p", &vec![0; BIN_MAX - 2]).is_none(),
+            "over the cap"
+        );
+    }
 
     #[test]
     fn relay_url_follows_the_server_scheme() {
