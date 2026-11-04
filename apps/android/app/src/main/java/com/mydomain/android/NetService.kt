@@ -107,6 +107,9 @@ class NetService : Service() {
         // and each time the screen turns on, until it's turned off.
         LostMode.watchScreen(this)
         LostMode.show(this, Core.visible || PhoneHelper.instance != null)
+        // Automations watch the links, the battery and Wi-Fi from here on
+        // (before the battery watch, whose first value only sets where things stand).
+        PhoneAutomations.start(this)
         watchBattery()
         // Your computers hear when this phone goes into Do Not Disturb.
         DndWatch.start(this)
@@ -138,6 +141,7 @@ class NetService : Service() {
         val st = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val charging = st == BatteryManager.BATTERY_STATUS_CHARGING || st == BatteryManager.BATTERY_STATUS_FULL
         battery = pct to charging
+        PhoneAutomations.onBattery(pct, charging)
         // Tenths of a degree; whole degrees are plenty (and change less).
         val temp = intent.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE)
         batteryTemp = if (temp == Int.MIN_VALUE) null else Math.round(temp / 10f)
@@ -338,6 +342,7 @@ class NetService : Service() {
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)
                         "screen_watch" -> ScreenShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        "peer_connected", "peer_disconnected", "peers_updated" -> PhoneAutomations.linksChanged()
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {
@@ -483,6 +488,7 @@ class NetService : Service() {
         BleLink.stop()
         PhotoBackup.stop()
         DndWatch.stop(this)
+        PhoneAutomations.stop(this)
         LostMode.unwatchScreen(this)
     }
 

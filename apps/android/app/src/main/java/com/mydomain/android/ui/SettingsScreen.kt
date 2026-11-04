@@ -252,7 +252,7 @@ private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
 /** Account, this device, and preferences. Tap the version 7 times for the
  *  Developer screen. */
 @Composable
-fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
+fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit, onAutomations: () -> Unit = {}) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var taps by remember { mutableIntStateOf(0) }
@@ -283,6 +283,11 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
             )
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
             ShareCodesSwitch()
+        }
+
+        Tile(title = stringResource(R.string.automations_title)) {
+            Muted(stringResource(R.string.automations_settings_hint))
+            SoftButton(stringResource(R.string.automations_open), onAutomations)
         }
 
         PhotosTile()

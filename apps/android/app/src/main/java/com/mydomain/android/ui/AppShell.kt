@@ -79,6 +79,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var tab by rememberSaveable { mutableStateOf(Tab.Devices) }
     var device by rememberSaveable { mutableStateOf<String?>(null) }
     var developer by rememberSaveable { mutableStateOf(false) }
+    var automations by rememberSaveable { mutableStateOf(false) }
 
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
@@ -93,15 +94,17 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         if (Core.showSettings) {
             device = null
             developer = false
+            automations = false
             tab = Tab.Settings
             Core.showSettings = false
         }
     }
 
-    BackHandler(enabled = device != null || developer || tab != Tab.Devices) {
+    BackHandler(enabled = device != null || developer || automations || tab != Tab.Devices) {
         when {
             device != null -> device = null
             developer -> developer = false
+            automations -> automations = false
             else -> tab = Tab.Devices
         }
     }
@@ -110,7 +113,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            if (device == null && !developer) {
+            if (device == null && !developer && !automations) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
@@ -134,9 +137,10 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             when {
                 device != null -> DeviceScreen(device!!, onBack = { device = null })
                 developer -> DeveloperScreen(onBack = { developer = false })
+                automations -> AutomationsScreen(onBack = { automations = false })
                 tab == Tab.Devices -> HomeScreen(onOpen = { device = it })
                 tab == Tab.Activity -> ActivityScreen()
-                else -> SettingsScreen(prefs, onDeveloper = { developer = true })
+                else -> SettingsScreen(prefs, onDeveloper = { developer = true }, onAutomations = { automations = true })
             }
         }
     }
