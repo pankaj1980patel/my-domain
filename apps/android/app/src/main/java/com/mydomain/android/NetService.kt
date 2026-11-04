@@ -391,7 +391,10 @@ class NetService : Service() {
                 val clip = clipboard.primaryClip
                 if (clip != null && clip.itemCount > 0) {
                     val text = clip.getItemAt(0).text?.toString()
-                    if (text != null && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
+                    // A copy marked sensitive (a password manager's, or the
+                    // automation-apps key from Settings) stays on this phone.
+                    val sensitive = clip.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
+                    if (text != null && !sensitive && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
                         currentLocalClip = text
                         // A copy made on this phone (not one we applied from
                         // a device, nor a recent value copied again).

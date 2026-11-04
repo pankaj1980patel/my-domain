@@ -310,6 +310,8 @@ fun SettingsScreen(
             SoftButton(stringResource(R.string.automations_open), onAutomations)
         }
 
+        AutomationAppsTile()
+
         PhotosTile()
         TouchpadSettingsTile()
         LocationSettingsTile()

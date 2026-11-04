@@ -2,6 +2,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Automation apps (Tasker, MacroDroid, Automate, ...): an app that asks
+         for this, and that you allow when Android asks, may use
+         AutomationAppsReceiver (AutomationAppsReceiver.kt). Off in
+         Settings until you switch it on. -->
+    <permission
+        android:name="com.mydomain.android.permission.AUTOMATE"
+        android:description="@string/automation_apps_permission_description"
+        android:label="@string/automation_apps_permission_label"
+        android:protectionLevel="dangerous" />
+
     <!-- LAN networking + multicast discovery -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -76,6 +86,20 @@
         <receiver
             android:name=".DeviceActionReceiver"
             android:exported="false" />
+
+        <!-- Automation apps ask my-domain to do things (AutomationAppsReceiver.kt).
+             No intent filters: a request names the class. Both refuse
+             everything until switched on in Settings. This one only takes
+             broadcasts from apps you've granted the permission... -->
+        <receiver
+            android:name=".AutomationAppsReceiver"
+            android:exported="true"
+            android:permission="com.mydomain.android.permission.AUTOMATE" />
+        <!-- ...and this one from apps with the key shown in Settings (Tasker
+             and the like, which can't ask for another app's permission). -->
+        <receiver
+            android:name=".AutomationAppsKeyReceiver"
+            android:exported="true" />
 
         <!-- The receiving-file notification's Cancel action. -->
         <receiver

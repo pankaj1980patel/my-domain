@@ -299,8 +299,9 @@ object PhoneAutomations {
         }
     }
 
-    /** Do what [a] says; the transport used, "queued", or "here". */
-    private suspend fun act(c: Context, a: Automation): String {
+    /** Do what [a] says; the transport used, "queued", or "here". Also
+     *  for an automation app asking to run one now (AutomationAppsReceiver). */
+    suspend fun act(c: Context, a: Automation): String {
         val args = runCatching { JSONObject(a.args) }.getOrDefault(JSONObject())
         return when {
             a.action == AutomationBook.NOTIFY -> "here"
@@ -342,7 +343,7 @@ object PhoneAutomations {
         runCatching { c.getSystemService(NotificationManager::class.java)?.notify(id, n) }
     }
 
-    private fun createChannel(c: Context) {
+    fun createChannel(c: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val ch = NotificationChannel(CHANNEL, c.getString(R.string.channel_automations), NotificationManager.IMPORTANCE_DEFAULT)
         runCatching { c.getSystemService(NotificationManager::class.java)?.createNotificationChannel(ch) }
