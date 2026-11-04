@@ -409,7 +409,7 @@ fn on_menu(app: &AppHandle, id: &str) {
 }
 
 /// Ring a device; off the main thread (engine send, notification).
-fn ring(app: &AppHandle, node: &str) {
+pub(crate) fn ring(app: &AppHandle, node: &str) {
     let (app, node) = (app.clone(), node.to_string());
     std::thread::spawn(move || {
         let Some(engine) = app.try_state::<Eng>() else {
@@ -463,7 +463,7 @@ fn copy_clip(app: &AppHandle, id: &str) {
 
 /// Ask a phone where it is (the `locate` action); the map opens when the
 /// answer arrives in its status (`on_status`).
-fn locate(app: &AppHandle, node: &str) {
+pub(crate) fn locate(app: &AppHandle, node: &str) {
     let (app, node) = (app.clone(), node.to_string());
     std::thread::spawn(move || {
         let Some(engine) = app.try_state::<Eng>() else {
@@ -524,7 +524,7 @@ fn now() -> u64 {
 }
 
 /// Pick a file with the native dialog, then send it.
-fn send_file(app: &AppHandle, node: &str) {
+pub(crate) fn send_file(app: &AppHandle, node: &str) {
     use tauri_plugin_dialog::DialogExt;
     let (handle, node) = (app.clone(), node.to_string());
     app.dialog().file().pick_file(move |file| {

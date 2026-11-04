@@ -229,12 +229,25 @@ export const commands = {
 	 *  (2, 5 or 10 minutes).
 	 */
 	setAwayLock: (on: boolean, minutes: number) => __TAURI_INVOKE<void>("set_away_lock", { on, minutes }),
-	/**  The "send what I copy to my phone" shortcut: on or off, and its keys. */
-	sendShortcut: () => __TAURI_INVOKE<ShortcutSettings_Serialize>("send_shortcut"),
-	/**  Turn the shortcut on or off. */
-	setSendShortcut: (on: boolean) => __TAURI_INVOKE<ShortcutSettings_Serialize>("set_send_shortcut", { on }),
-	/**  Use other keys ("CmdOrCtrl+Shift+Y"); refused if they aren't a shortcut. */
-	setSendShortcutKeys: (keys: string) => typedError<ShortcutSettings_Serialize, string>(__TAURI_INVOKE("set_send_shortcut_keys", { keys })),
+	/**  Your keyboard shortcuts. */
+	listShortcuts: () => __TAURI_INVOKE<ShortcutList_Serialize>("list_shortcuts"),
+	/**
+	 *  Whether `keys` can be the keys of binding `id` ("" for a new one): the
+	 *  keys as kept and for people, or why not.
+	 */
+	checkShortcutKeys: (keys: string, id: string) => typedError<CheckedKeys, string>(__TAURI_INVOKE("check_shortcut_keys", { keys, id })),
+	/**
+	 *  Add a binding (id "") or change one; registered at once. The list comes
+	 *  back, with a problem on it if the OS wouldn't take its keys.
+	 */
+	saveShortcut: (binding: Binding_Deserialize) => typedError<ShortcutList_Serialize, string>(__TAURI_INVOKE("save_shortcut", { binding })),
+	/**  Remove a binding. */
+	deleteShortcut: (id: string) => __TAURI_INVOKE<ShortcutList_Serialize>("delete_shortcut", { id }),
+	/**
+	 *  Take every shortcut off while Settings records new keys (so pressing
+	 *  one there is seen, not run), and put them back after.
+	 */
+	pauseShortcuts: (paused: boolean) => __TAURI_INVOKE<void>("pause_shortcuts", { paused }),
 	/**  Your scheduled actions. */
 	listSchedules: () => __TAURI_INVOKE<Schedule_Serialize[]>("list_schedules"),
 	/**  Schedule an action on a device. */
@@ -585,6 +598,45 @@ export type BatterySample = {
 	charging: boolean,
 };
 
+/**  One keyboard shortcut. */
+export type Binding = Binding_Serialize | Binding_Deserialize;
+
+/**  One keyboard shortcut. */
+export type Binding_Deserialize = {
+	/**  "" for a new one (an id is given when it's kept). */
+	id?: string,
+	/**  One of `ACTIONS`. */
+	action: string,
+	/**
+	 *  The device it acts on (node id); "" when it needs none, or for
+	 *  "send the clipboard" to your phone, whichever it is then.
+	 */
+	node?: string,
+	/**  The automation it runs (id), for "automation". */
+	automation?: string,
+	/**  "CmdOrCtrl+Shift+Y". */
+	keys: string,
+	enabled?: boolean,
+};
+
+/**  One keyboard shortcut. */
+export type Binding_Serialize = {
+	/**  "" for a new one (an id is given when it's kept). */
+	id: string,
+	/**  One of `ACTIONS`. */
+	action: string,
+	/**
+	 *  The device it acts on (node id); "" when it needs none, or for
+	 *  "send the clipboard" to your phone, whichever it is then.
+	 */
+	node: string,
+	/**  The automation it runs (id), for "automation". */
+	automation: string,
+	/**  "CmdOrCtrl+Shift+Y". */
+	keys: string,
+	enabled: boolean,
+};
+
 /**  A paired phone that can take this computer as its hands-free. */
 export type CallDevice = {
 	address: string,
@@ -672,6 +724,12 @@ export type CallsStatus_Serialize = {
 	problem: string | null,
 	/**  "macos", "linux", ... (the Settings wording differs a little). */
 	os: string,
+};
+
+/**  Keys that were checked: as kept, and for people. */
+export type CheckedKeys = {
+	keys: string,
+	label: string,
 };
 
 /**  Which way a clip went. */
@@ -1260,28 +1318,53 @@ export type ShellCommand = {
 	enabled: boolean,
 };
 
-/**  What Settings shows. */
-export type ShortcutSettings = ShortcutSettings_Serialize | ShortcutSettings_Deserialize;
+/**  Every binding, and whether shortcuts work here at all. */
+export type ShortcutList = ShortcutList_Serialize | ShortcutList_Deserialize;
 
-/**  What Settings shows. */
-export type ShortcutSettings_Deserialize = {
-	on: boolean,
-	/**  As stored, e.g. "CmdOrCtrl+Shift+Y". */
-	keys: string,
-	/**  For people, e.g. "Cmd+Shift+Y" on a Mac. */
+/**  Every binding, and whether shortcuts work here at all. */
+export type ShortcutList_Deserialize = {
+	bindings: ShortcutView_Deserialize[],
+	/**  Global shortcuts aren't available on this computer. */
+	unavailable: boolean,
+	/**  This is a Mac (Cmd is ⌘). */
+	mac: boolean,
+	/**  The id of the binding just added or changed ("" otherwise). */
+	saved: string,
+};
+
+/**  Every binding, and whether shortcuts work here at all. */
+export type ShortcutList_Serialize = {
+	bindings: ShortcutView_Serialize[],
+	/**  Global shortcuts aren't available on this computer. */
+	unavailable: boolean,
+	/**  This is a Mac (Cmd is ⌘). */
+	mac: boolean,
+	/**  The id of the binding just added or changed ("" otherwise). */
+	saved: string,
+};
+
+/**  One binding as Settings shows it. */
+export type ShortcutView = ShortcutView_Serialize | ShortcutView_Deserialize;
+
+/**  One binding as Settings shows it. */
+export type ShortcutView_Deserialize = {
+	binding: Binding_Deserialize,
+	/**  The keys for people ("⇧⌘Y" on a Mac, "Ctrl+Shift+Y" elsewhere). */
 	label: string,
-	/**  Set when the OS wouldn't take the shortcut. */
+	/**  What it does, in English (for messages; the UI says it itself). */
+	name: string,
+	/**  Why it isn't working (the OS wouldn't take the keys…). */
 	problem?: string | null,
 };
 
-/**  What Settings shows. */
-export type ShortcutSettings_Serialize = {
-	on: boolean,
-	/**  As stored, e.g. "CmdOrCtrl+Shift+Y". */
-	keys: string,
-	/**  For people, e.g. "Cmd+Shift+Y" on a Mac. */
+/**  One binding as Settings shows it. */
+export type ShortcutView_Serialize = {
+	binding: Binding_Serialize,
+	/**  The keys for people ("⇧⌘Y" on a Mac, "Ctrl+Shift+Y" elsewhere). */
 	label: string,
-	/**  Set when the OS wouldn't take the shortcut. */
+	/**  What it does, in English (for messages; the UI says it itself). */
+	name: string,
+	/**  Why it isn't working (the OS wouldn't take the keys…). */
 	problem: string | null,
 };
 

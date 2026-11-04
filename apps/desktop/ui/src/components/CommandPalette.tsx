@@ -9,6 +9,7 @@
 // show greyed with the reason. The last few run come first.
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
+import { listen } from "@tauri-apps/api/event";
 import { commands, type LocalActions } from "../bindings";
 import {
   peerName,
@@ -246,6 +247,13 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
     };
     window.addEventListener("keydown", onKey);
     onCleanup(() => window.removeEventListener("keydown", onKey));
+    // A keyboard shortcut (Settings) brings the window forward and opens it.
+    const off = listen("open-palette", () => {
+      if (!open()) show();
+    });
+    onCleanup(() => {
+      off.then((f) => f(), () => {});
+    });
   });
 
   const go = (place: Place, section?: string) => () => props.onPlace(place, section);
@@ -269,6 +277,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
       section("schedules", "schedule.local.title"),
       section("automations", "automation.title"),
       section("webhooks", "webhooks.title"),
+      section("shortcuts", "shortcuts.title"),
       section("key", "settings.deviceKey"),
       section("appearance", "settings.appearance"),
     ];

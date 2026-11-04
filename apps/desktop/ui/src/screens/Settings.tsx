@@ -219,8 +219,9 @@ export default function Settings(props: { onDeveloper: () => void }) {
           </label>
         </Show>
         <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
-        <ShortcutSetting />
       </article>
+
+      <ShortcutSetting me={local()?.node} />
 
       <CallsSetting />
 

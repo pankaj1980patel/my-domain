@@ -2237,3 +2237,57 @@ input[type="checkbox"][role="switch"]:checked::after {
 .phone-audio-stats {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+   Keyboard shortcuts: the list and the key recorder (ShortcutSetting).
+   --------------------------------------------------------------------------- */
+.shortcut-list {
+  display: grid;
+  gap: var(--s-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.shortcut-row {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.shortcut-off .shortcut-keys,
+.shortcut-off .grow {
+  opacity: 0.55;
+}
+.shortcut-keys {
+  flex: 0 0 auto;
+  min-width: 3.5em;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}
+.shortcut-row-actions {
+  justify-content: flex-end;
+}
+.shortcut-problem {
+  color: var(--danger);
+}
+.shortcut-form select {
+  min-width: 0;
+}
+.shortcut-recorder {
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+.shortcut-recording {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.shortcut-feedback {
+  margin: 0;
+  min-height: 1.4em;
+}

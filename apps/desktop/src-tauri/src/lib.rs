@@ -37,6 +37,7 @@ mod schedule;
 mod screen_share;
 mod send_to;
 mod shortcut;
+mod shortcuts;
 mod sysinfo;
 mod transfers;
 mod tray;
@@ -333,6 +334,7 @@ impl EventSink for TauriSink {
                 quiet::on_status(&self.app, from, status);
                 webhooks::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
+                shortcuts::on_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
             }
             CoreEvent::Ring { from } => {
@@ -1430,9 +1432,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         location_available,
         away_lock::away_lock,
         away_lock::set_away_lock,
-        shortcut::send_shortcut,
-        shortcut::set_send_shortcut,
-        shortcut::set_send_shortcut_keys,
+        shortcuts::list_shortcuts,
+        shortcuts::check_shortcut_keys,
+        shortcuts::save_shortcut,
+        shortcuts::delete_shortcut,
+        shortcuts::pause_shortcuts,
         schedule::list_schedules,
         schedule::add_schedule,
         schedule::update_schedule,
@@ -1601,8 +1605,10 @@ pub fn run() {
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));
-            // Cmd/Ctrl+Shift+Y sends what you copied to your phone.
+            // Keyboard shortcuts (Cmd/Ctrl+Shift+Y sends what you copied to
+            // your phone, out of the box).
             shortcut::init(&handle);
+            shortcuts::init(&handle);
             // "Send with my-domain" from Finder / Explorer / the file manager.
             send_to::init(&handle, send_paths);
             // A missing tray isn't fatal: the window still works.
