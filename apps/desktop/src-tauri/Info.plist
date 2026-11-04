@@ -18,5 +18,32 @@
 	<string>my-domain tells your own phone where this computer is, when you allow it in Settings.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>my-domain tells your own phone where this computer is, when you allow it in Settings.</string>
+	<!-- send_to.rs: "Send with my-domain" in Finder's Services menu (right-click
+	     a file or folder: Services, or Quick Actions). AppKit calls
+	     sendWithMyDomain:userData:error: on the provider the app registers.
+	     macOS lists it once the app is in /Applications and has been opened;
+	     if it doesn't show, log out and in, or run
+	     /System/Library/CoreServices/pbs -update -->
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Send with my-domain</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>sendWithMyDomain</string>
+			<key>NSPortName</key>
+			<string>my-domain</string>
+			<key>NSRequiredContext</key>
+			<dict/>
+			<key>NSSendFileTypes</key>
+			<array>
+				<string>public.item</string>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

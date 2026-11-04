@@ -370,6 +370,16 @@ export const commands = {
 	callAudioToPhone: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_phone")),
 	/**  Bring the call audio to this Mac (on the devices last chosen). */
 	callAudioToMac: () => typedError<null, string>(__TAURI_INVOKE("call_audio_to_mac")),
+	/**  The picker's paths (taken: asked again, it's `None` until more arrive). */
+	takeSendRequest: () => __TAURI_INVOKE<SendRequest_Serialize | null>("take_send_request"),
+	/**  Send the files and folders to a device; remembers it for next time. */
+	sendPaths: (nodeId: string, paths: string[]) => __TAURI_INVOKE<SendOutcome>("send_paths", { nodeId, paths }),
+	fileManagerMenu: () => __TAURI_INVOKE<FileManagerMenu>("file_manager_menu"),
+	/**
+	 *  Add or remove "Send with my-domain" in Explorer's Send to menu
+	 *  (Windows) or the file manager's menus (Linux).
+	 */
+	setFileManagerMenu: (on: boolean) => typedError<FileManagerMenu, string>(__TAURI_INVOKE("set_file_manager_menu", { on })),
 };
 
 /* Types */
@@ -695,6 +705,15 @@ export type DeviceLabel_Serialize = {
 	icon?: string,
 	/**  One of `COLORS`; none: the theme's default. */
 	color?: string,
+};
+
+/**  The "Send from the file manager" setting. */
+export type FileManagerMenu = {
+	/**  "macos", "windows" or "linux". */
+	os: string,
+	/**  Whether there's a switch (macOS's Services item is always there). */
+	switchable: boolean,
+	on: boolean,
 };
 
 export type FirewallStatus = {
@@ -1055,6 +1074,39 @@ export type Schedule_Serialize = {
 	enabled: boolean,
 	/**  The last time it ran, as local "YYYY-MM-DDTHH:MM" (its slot). */
 	last_run: string | null,
+};
+
+/**  One thing to send. */
+export type SendItem = {
+	path: string,
+	/**  Its last path component. */
+	name: string,
+	folder: boolean,
+};
+
+/**  How a send went. */
+export type SendOutcome = {
+	/**  Files on their way (a folder counts each file in it). */
+	files: number,
+	/**  The names that couldn't be sent, with why. */
+	failed: string[],
+};
+
+/**  What the "Send to…" picker shows. */
+export type SendRequest = SendRequest_Serialize | SendRequest_Deserialize;
+
+/**  What the "Send to…" picker shows. */
+export type SendRequest_Deserialize = {
+	items: SendItem[],
+	/**  The device chosen last time: offered first. */
+	last_device?: string | null,
+};
+
+/**  What the "Send to…" picker shows. */
+export type SendRequest_Serialize = {
+	items: SendItem[],
+	/**  The device chosen last time: offered first. */
+	last_device: string | null,
 };
 
 export type SessionInfo = SessionInfo_Serialize | SessionInfo_Deserialize;

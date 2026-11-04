@@ -33,6 +33,7 @@ mod quiet;
 mod remote_input;
 mod schedule;
 mod screen_share;
+mod send_to;
 mod shortcut;
 mod sysinfo;
 mod tray;
@@ -1397,7 +1398,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         calls::call_mute,
         calls::call_set_audio,
         calls::call_audio_to_phone,
-        calls::call_audio_to_mac
+        calls::call_audio_to_mac,
+        send_to::take_send_request,
+        send_to::send_paths,
+        send_to::file_manager_menu,
+        send_to::set_file_manager_menu
     ])
 }
 
@@ -1416,6 +1421,16 @@ pub fn run() {
     #[cfg(debug_assertions)]
     if let Err(e) = export_bindings(&commands) {
         eprintln!("[specta] failed to export TypeScript bindings: {e}");
+    }
+
+    // `--send <path>...` (Explorer's Send to, the Linux file managers, a
+    // terminal): hand the paths to my-domain if it's already running, else
+    // start and ask where to send them (see `send_to`).
+    let send_paths = send_to::from_command_line();
+    if let Some(paths) = &send_paths {
+        if send_to::hand_off(paths) {
+            return;
+        }
     }
 
     tauri::Builder::default()
@@ -1492,6 +1507,8 @@ pub fn run() {
             md_ble::central::start(EngineHandle(handle.clone()));
             // Cmd/Ctrl+Shift+Y sends what you copied to your phone.
             shortcut::init(&handle);
+            // "Send with my-domain" from Finder / Explorer / the file manager.
+            send_to::init(&handle, send_paths);
             // A missing tray isn't fatal: the window still works.
             if let Err(e) = tray::init(&handle) {
                 eprintln!("[tray] couldn't create the tray icon: {e}");
