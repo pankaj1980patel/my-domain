@@ -373,6 +373,7 @@ Built by three agents in parallel (worktrees), merged and built here.
   Wipe is not built (excluded).
 - **Notification history** (desktop `notif_history.rs`, `NotificationHistory.tsx`): the phone's notifications kept on the computer (newest 500, `notification-history.json`), searchable by words, filtered by app, grouped by day; mute an app to stop its pop-ups and history (`prefs.json` `muted_apps`). Dismissals made on the phone aren't reported yet (no `onNotificationRemoved` message).
 - **Battery history** (desktop `battery_log.rs`, `BatteryChart.tsx`; phone `core/BatteryLog.kt`, `ui/InfoTile.kt`): a 24-hour battery graph for each of your other devices (a sample every 5 min and on each charging change, kept 48 h in `battery_history.json`), charging stretches shaded, hover for time and %, and "About 6 h left" / "Full in about 40 min" from the last hour's trend.
+- **Webhooks** (desktop `webhooks.rs`, `components/WebhookSetting.tsx`): off by default; when on, Home Assistant, Shortcuts or a script on this computer can call `127.0.0.1:47821` with a bearer token: `GET /v1/devices`, `POST /v1/action`, `/v1/text`, `/v1/automation`. Host checked, any `Origin` refused, 10 wrong tokens a minute locks it out, a notification each run; actions go through the same checks as schedules.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
