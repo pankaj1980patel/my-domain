@@ -82,6 +82,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var developer by rememberSaveable { mutableStateOf(false) }
     var automations by rememberSaveable { mutableStateOf(false) }
     var transfers by rememberSaveable { mutableStateOf(false) }
+    var setup by rememberSaveable { mutableStateOf(false) }
 
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
@@ -98,6 +99,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             developer = false
             automations = false
             transfers = false
+            setup = false
             tab = Tab.Settings
             Core.showSettings = false
         }
@@ -109,18 +111,20 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             developer = false
             automations = false
             transfers = false
+            setup = false
             tab = Tab.Devices
             device = node
             Core.showDevice = null
         }
     }
 
-    BackHandler(enabled = device != null || developer || automations || transfers || tab != Tab.Devices) {
+    BackHandler(enabled = device != null || developer || automations || transfers || setup || tab != Tab.Devices) {
         when {
             device != null -> device = null
             developer -> developer = false
             automations -> automations = false
             transfers -> transfers = false
+            setup -> setup = false
             else -> tab = Tab.Devices
         }
     }
@@ -129,7 +133,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            if (device == null && !developer && !automations && !transfers) {
+            if (device == null && !developer && !automations && !transfers && !setup) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
@@ -154,10 +158,16 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 device != null -> DeviceScreen(device!!, onBack = { device = null })
                 developer -> DeveloperScreen(onBack = { developer = false })
                 automations -> AutomationsScreen(onBack = { automations = false })
+                setup -> SetupScreen(onBack = { setup = false })
                 transfers -> TransfersScreen(onBack = { transfers = false }, onOpenDevice = { device = it })
-                tab == Tab.Devices -> HomeScreen(onOpen = { device = it })
+                tab == Tab.Devices -> HomeScreen(onOpen = { device = it }, onSetup = { setup = true })
                 tab == Tab.Activity -> ActivityScreen(onTransfers = { transfers = true })
-                else -> SettingsScreen(prefs, onDeveloper = { developer = true }, onAutomations = { automations = true })
+                else -> SettingsScreen(
+                    prefs,
+                    onDeveloper = { developer = true },
+                    onAutomations = { automations = true },
+                    onSetup = { setup = true },
+                )
             }
         }
     }

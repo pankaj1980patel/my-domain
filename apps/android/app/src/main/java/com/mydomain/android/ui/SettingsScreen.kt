@@ -2,7 +2,6 @@ package com.mydomain.android.ui
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +33,7 @@ import com.mydomain.android.PhoneHelper
 import com.mydomain.android.PhoneLocation
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
+import com.mydomain.android.SetupState
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
@@ -230,15 +230,12 @@ fun ShizukuSettingsTile() {
             style = MaterialTheme.typography.bodyMedium,
         )
         when (state) {
-            Privileged.State.NOT_INSTALLED -> SoftButton(stringResource(R.string.shizuku_get), onClick = {
-                val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=${Privileged.SHIZUKU_PACKAGE}"))
-                val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://shizuku.rikka.app/download/"))
-                runCatching { ctx.startActivity(market) }.onFailure { runCatching { ctx.startActivity(web) } }
-            })
-            Privileged.State.NOT_RUNNING -> SoftButton(stringResource(R.string.shizuku_open), onClick = {
-                ctx.packageManager.getLaunchIntentForPackage(Privileged.SHIZUKU_PACKAGE)?.let { runCatching { ctx.startActivity(it) } }
-            })
-            Privileged.State.NOT_ALLOWED -> SoftButton(stringResource(R.string.shizuku_allow), onClick = { Privileged.ask() })
+            Privileged.State.NOT_INSTALLED ->
+                SoftButton(stringResource(R.string.shizuku_get), onClick = { SetupState.openShizuku(ctx) })
+            Privileged.State.NOT_RUNNING ->
+                SoftButton(stringResource(R.string.shizuku_open), onClick = { SetupState.openShizuku(ctx) })
+            Privileged.State.NOT_ALLOWED ->
+                SoftButton(stringResource(R.string.shizuku_allow), onClick = { SetupState.openShizuku(ctx) })
             Privileged.State.READY -> {}
         }
     }
@@ -262,7 +259,12 @@ private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
 /** Account, this device, and preferences. Tap the version 7 times for the
  *  Developer screen. */
 @Composable
-fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit, onAutomations: () -> Unit = {}) {
+fun SettingsScreen(
+    prefs: SharedPreferences,
+    onDeveloper: () -> Unit,
+    onAutomations: () -> Unit = {},
+    onSetup: () -> Unit = {},
+) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var taps by remember { mutableIntStateOf(0) }
@@ -277,6 +279,8 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit, onAutomati
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         PageHead(stringResource(R.string.settings_title))
+
+        SetupSettingsTile(onSetup)
 
         Tile(title = stringResource(R.string.settings_account)) {
             Text(

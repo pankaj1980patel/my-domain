@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 /** Your devices as cards, connected ones first. Pull down to refresh the list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpen: (String) -> Unit) {
+fun HomeScreen(onOpen: (String) -> Unit, onSetup: () -> Unit = {}) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     val pull = rememberPullToRefreshState()
@@ -72,6 +72,8 @@ fun HomeScreen(onOpen: (String) -> Unit) {
                     else pluralStringResource(R.plurals.home_subtitle_connected, Core.peers.size, online, Core.peers.size),
                 )
             }
+            // Once after sign-in: what this phone can turn on (SetupScreen).
+            item { SetupHomeCard(onSetup) }
             if (devices.isEmpty()) {
                 item {
                     EmptyState(
