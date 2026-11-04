@@ -673,6 +673,13 @@ export async function sendFile(node: string, path: string): Promise<string> {
   return id;
 }
 
+/** Send a whole folder (a path on this computer); the device recreates it
+ *  under its downloads. Each file inside shows up as its own transfer as
+ *  it starts; returns how many files there are. */
+export async function sendFolder(node: string, path: string): Promise<number> {
+  return unwrap(commands.sendFolder(node, path));
+}
+
 /** Choose a file in the system dialog and send it; false if none was chosen. */
 export async function pickAndSendFile(node: string): Promise<boolean> {
   const path = await commands.pickFile();

@@ -33,7 +33,9 @@ import java.util.concurrent.ConcurrentHashMap
  * file is then moved into the public Downloads/my-domain through MediaStore
  * (Android 10+). Older Android keeps it in the app folder and shares it
  * through a FileProvider (writing to the public folder there would need the
- * storage permission).
+ * storage permission). A file of a folder sent from another device comes
+ * in under a subfolder of [downloadDir] and keeps it: Downloads/my-domain/
+ * <folder>/... .
  */
 object FileActions {
     private const val TAG = "mydomain_files"
@@ -217,9 +219,12 @@ object FileActions {
             return null
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val uri = runCatching { toMediaStore(ctx, file, name, mime) }
+            val sub = subfolder(ctx, file)
+            val uri = runCatching { toMediaStore(ctx, file, name, mime, sub) }
                 .onFailure { Log.w(TAG, "MediaStore copy failed: $it") }.getOrNull()
             if (uri != null) {
+                // Its (app-private) subfolder stays: other files of the
+                // folder may be landing there right now.
                 file.delete()
                 return uri to mime
             }
@@ -228,13 +233,23 @@ object FileActions {
             .onFailure { Log.w(TAG, "can't share $file: $it") }.getOrNull()
     }
 
+    /** The subfolder of [downloadDir] that [file] is in ("Trip/day 1"), ""
+     *  for none. The core has already checked every part is a plain name. */
+    private fun subfolder(ctx: Context, file: File): String {
+        val root = downloadDir(ctx).canonicalFile
+        val dir = file.canonicalFile.parentFile ?: return ""
+        val rel = dir.relativeToOrNull(root)?.invariantSeparatorsPath ?: return ""
+        return if (rel.isEmpty() || rel.startsWith("..")) "" else rel
+    }
+
     @androidx.annotation.RequiresApi(Build.VERSION_CODES.Q)
-    private fun toMediaStore(ctx: Context, file: File, name: String, mime: String): Uri {
+    private fun toMediaStore(ctx: Context, file: File, name: String, mime: String, sub: String): Uri {
         val cr = ctx.contentResolver
+        val folder = if (sub.isEmpty()) SUBFOLDER else "$SUBFOLDER/$sub"
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, name)
             put(MediaStore.Downloads.MIME_TYPE, mime)
-            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$SUBFOLDER")
+            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$folder")
             put(MediaStore.Downloads.IS_PENDING, 1)
         }
         val uri = cr.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)

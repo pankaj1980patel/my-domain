@@ -26,7 +26,8 @@
 //! `open <node> <url> [app package]`, `search <node> youtube|spotify|web <text...>`,
 //! `action <node> <name> [json]`,
 //! `subscribe <node> <json pkgs>`, `notifact <node> <key> <index> [text]`,
-//! `sendfile <node> <path>`, `downloads <dir>`,
+//! `sendfile <node> <path>` (a file, or a folder: each file inside),
+//! `downloads <dir>`,
 //! `share <name> <dir>` (let other devices browse `dir` as `name`),
 //! `ls <node> [root] [path] [offset]`, `get <node> <root> <path>`,
 //! `text <node> clipboard|notify <text...>`,
@@ -513,7 +514,12 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         }
         "sendfile" => {
             let to = resolve(engine, &arg(words.next())?)?;
-            Ok(json!({ "id": engine.send_file(&to, &arg(words.next())?)? }))
+            let path = arg(words.next())?;
+            if std::path::Path::new(&path).is_dir() {
+                Ok(json!({ "files": engine.send_folder(&to, &path)? }))
+            } else {
+                Ok(json!({ "id": engine.send_file(&to, &path)? }))
+            }
         }
         "share" => {
             let name = arg(words.next())?;

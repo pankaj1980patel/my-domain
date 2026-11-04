@@ -203,6 +203,18 @@ impl<P: Platform> Engine<P> {
         crate::features::files::start(&self.ctx, node_id, std::path::Path::new(path))
     }
 
+    /// Send a whole folder: each file inside goes as its own transfer (with
+    /// the usual events), and the other device recreates the folder under
+    /// its downloads. Returns how many files it holds. See
+    /// `features::folders`.
+    pub fn send_folder(&self, node_id: &str, path: &str) -> crate::Result<u32> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        let n = crate::features::folders::start(&self.ctx, node_id, std::path::Path::new(path))?;
+        Ok(n as u32)
+    }
+
     /// Stop a transfer (either way); the other device is told.
     pub fn cancel_file(&self, id: &str) {
         crate::features::files::cancel(&self.ctx, id);

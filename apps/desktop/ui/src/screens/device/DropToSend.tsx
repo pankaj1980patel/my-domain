@@ -1,39 +1,46 @@
 // Files dragged from Finder / Explorer onto a device's page: an overlay
 // while they're over the window, and each dropped file is sent to that
-// device (it shows up in the Files tile like any other transfer).
+// device (it shows up in the Files tile like any other transfer). A dropped
+// folder goes whole: every file inside, recreated there as a folder.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 // Portal: the overlay lives on <body>, clear of the tiles' blur layers.
 import { Portal } from "solid-js/web";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { peerName, sendFile } from "../../lib/core";
+import { peerName, sendFile, sendFolder } from "../../lib/core";
 import { friendlyError, niceName } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t, tn } from "../../i18n";
 
-/** The core refuses anything that isn't a plain file with this. */
+/** The core refuses anything that isn't a plain file with this (a folder
+ *  is then sent as one). */
 const isNotAFile = (e: unknown) => String(e instanceof Error ? e.message : e).includes("not a file");
 
 export default function DropToSend(props: { node: string }) {
   const [over, setOver] = createSignal(false);
   const name = () => niceName(peerName(props.node));
 
-  /** Send each path; folders are skipped and counted. */
+  /** Send each path, a folder with everything in it; counts the files. */
   const sendAll = async (paths: string[]) => {
     let sent = 0;
-    let folders = 0;
     let failed: unknown = null;
     for (const p of paths) {
       try {
         await sendFile(props.node, p);
         sent++;
       } catch (e) {
-        if (isNotAFile(e)) folders++;
-        else failed ??= e;
+        if (!isNotAFile(e)) {
+          failed ??= e;
+          continue;
+        }
+        try {
+          sent += await sendFolder(props.node, p);
+        } catch (e2) {
+          failed ??= e2;
+        }
       }
     }
     if (sent) toast(tn("files.started", sent, { name: name() }), "ok");
-    if (folders) toast(t("drop.folders"), "info");
     if (failed) toast(friendlyError(failed), "error");
   };
 

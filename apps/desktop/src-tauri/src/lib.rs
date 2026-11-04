@@ -957,6 +957,15 @@ fn send_file(node_id: String, path: String, engine: State<Eng>) -> Result<String
     engine.send_file(&node_id, &path)
 }
 
+/// Send a whole folder to a device; it's recreated under the device's
+/// downloads. Returns how many files it holds; each one is a transfer with
+/// the usual `file-*` events.
+#[tauri::command]
+#[specta::specta]
+fn send_folder(node_id: String, path: String, engine: State<Eng>) -> Result<u32, CoreError> {
+    engine.send_folder(&node_id, &path)
+}
+
 /// Stop a transfer, either way.
 #[tauri::command]
 #[specta::specta]
@@ -1191,6 +1200,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         open_url_in_app,
         search_on,
         send_file,
+        send_folder,
         cancel_file,
         send_text,
         list_folder,

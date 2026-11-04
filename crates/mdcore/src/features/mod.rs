@@ -21,6 +21,7 @@ pub mod device;
 pub mod dnd;
 pub mod extras;
 pub mod files;
+pub mod folders;
 pub mod gallery;
 pub mod input;
 pub mod media;

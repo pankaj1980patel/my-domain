@@ -90,6 +90,12 @@ export const commands = {
 	 *  `file-progress`, then `file-sent` or `file-failed`.
 	 */
 	sendFile: (nodeId: string, path: string) => typedError<string, string>(__TAURI_INVOKE("send_file", { nodeId, path })),
+	/**
+	 *  Send a whole folder to a device; it's recreated under the device's
+	 *  downloads. Returns how many files it holds; each one is a transfer with
+	 *  the usual `file-*` events.
+	 */
+	sendFolder: (nodeId: string, path: string) => typedError<number, string>(__TAURI_INVOKE("send_folder", { nodeId, path })),
 	/**  Stop a transfer, either way. */
 	cancelFile: (id: string) => __TAURI_INVOKE<void>("cancel_file", { id }),
 	/**

@@ -2,6 +2,7 @@
 //! (QUIC, punched, WebRTC or the relay).
 //!
 //!   file_offer  { from, id, name, size, sha256 }   sender → receiver (reliable)
+//!               (+ folder? for a file of a folder, see `features::folders`)
 //!   file_accept { from, id, offset }               receiver → sender
 //!   file_chunk  { from, id, off, data }            sender → receiver (base64)
 //!   file_ack    { from, id, upto }                 receiver → sender
@@ -133,6 +134,8 @@ pub struct Files {
     /// Folders other devices may browse and download from (see
     /// `features::browse`): (name, path). Empty = nothing is shared.
     pub shared: Mutex<Vec<(String, PathBuf)>>,
+    /// Folders being sent, file by file (see `features::folders`).
+    pub(crate) folders: Mutex<Vec<super::folders::FolderSend>>,
 }
 
 /// How many finished transfers are remembered.
@@ -220,6 +223,21 @@ pub fn safe_name(name: &str) -> String {
     } else {
         clean
     }
+}
+
+/// The subfolder an offer's `folder` names (`Trip/day 1`), if it's safe
+/// to make under the downloads folder: relative, separated by `/`, every
+/// part a plain name (`safe_name` leaves it as it is), so no `..`, no
+/// absolute path, no drive letter.
+pub fn safe_folder(folder: &str) -> Option<PathBuf> {
+    if folder.is_empty() || folder.len() > 1024 {
+        return None;
+    }
+    let parts: Vec<&str> = folder.split('/').collect();
+    if parts.len() > 33 || parts.iter().any(|p| p.is_empty() || safe_name(p) != *p) {
+        return None;
+    }
+    Some(parts.iter().collect())
 }
 
 /// `dir/name` for `n == 0`, else `dir/name (n).ext`.
@@ -405,6 +423,7 @@ fn failed<P: Platform>(
     });
     if !incoming {
         super::backup::outgoing_ended(ctx, id, Some(why));
+        super::folders::outgoing_ended(ctx, id, Some(why));
     }
 }
 
@@ -659,7 +678,14 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     let Some(dir) = ctx.files.download_dir.lock().clone() else {
         return reject("this device can't receive files");
     };
-    let dest = super::backup::offer_dest(&dir, msg);
+    let mut dest = super::backup::offer_dest(&dir, msg);
+    // A file of a folder: into its subfolder (a backup has its own).
+    if let Some(folder) = msg.json("folder").as_str().filter(|_| dest == dir) {
+        let Some(sub) = safe_folder(folder) else {
+            return reject("the folder name isn't allowed");
+        };
+        dest = dir.join(sub);
+    }
     // A backup of a photo that's already here (the phone forgot it sent
     // it): done, without sending it again.
     if dest != dir && super::backup::already_there(&dest, &name, size, &sha) {
@@ -963,6 +989,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                         name: t.name,
                     });
                     super::backup::outgoing_ended(ctx, &id, None);
+                    super::folders::outgoing_ended(ctx, &id, None);
                 } else {
                     failed(ctx, &id, &from, &t.name, false, &msg.str("error"));
                 }
@@ -1027,6 +1054,35 @@ mod tests {
         assert_eq!(safe_name(".  .."), "file");
         assert_eq!(safe_name(". ."), "file");
         assert_eq!(safe_name("report. "), "report");
+    }
+
+    #[test]
+    fn folders_cannot_escape_the_downloads_folder() {
+        assert_eq!(safe_folder("Trip"), Some(PathBuf::from("Trip")));
+        assert_eq!(
+            safe_folder("Trip/day 1/raw"),
+            Some(PathBuf::from("Trip").join("day 1").join("raw"))
+        );
+        for bad in [
+            "",
+            "..",
+            "../etc",
+            "Trip/../..",
+            "Trip/./x",
+            "/etc",
+            "/",
+            "Trip/",
+            "Trip//x",
+            "C:/Windows",
+            "C:",
+            "Trip\\..\\..",
+            "..\\x",
+            ".ssh",
+            "a\u{0}b",
+        ] {
+            assert_eq!(safe_folder(bad), None, "{bad:?}");
+        }
+        assert_eq!(safe_folder(&["a"; 40].join("/")), None, "too deep");
     }
 
     #[test]
