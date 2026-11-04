@@ -6,8 +6,8 @@
 //    after a change (`SAVE_DELAY`) rather than on every notification;
 //  - the same notification again (same device and key: an update on the
 //    phone) replaces the older entry;
-//  - dismissed from here, it stays, marked dismissed (the phone doesn't say
-//    when one goes away by itself);
+//  - dismissed from here, or gone on the phone (swiped, opened, cancelled by
+//    its app: the phone says so), it stays, marked dismissed;
 //  - "Clear history" on the device's page forgets that device's entries.
 //
 // "Don't show notifications from {app}": a muted app's notifications get no
@@ -270,7 +270,8 @@ pub fn on_notification(
     true
 }
 
-/// `from`'s notification `key` was dismissed from here.
+/// `from`'s notification `key` was dismissed from here, or went away on
+/// `from`.
 pub fn on_dismissed(app: &AppHandle, from: &str, key: &str) {
     let Some(h) = app.try_state::<NotifHistory>() else {
         return;

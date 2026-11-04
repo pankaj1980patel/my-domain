@@ -86,7 +86,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Clipboard push | Auto-sync the clipboard to a peer | `clipboard.push` | A D | — | ✅ |
 | Clipboard pull | Fetch a peer's clipboard on demand | `clipboard.read` | A D | — | ✅ |
 | Clipboard history | Browse recent clipboard items across devices | `clipboard.read` | A D | — | ✅ (last 20, memory only) |
-| Notification mirror | Show a peer's notifications | `notifications.mirror` | A→D | P | ✅ (desktop OS notifications; 2026-11-04: history on the phone's page on the computer: the last 500 kept on disk, search, by day, app chips, Clear history; dismissed from the computer stays marked dismissed (the phone doesn't report its own removals yet); "Mute" an app: no pop-up, not kept, unmute in the list; not tried live yet) |
+| Notification mirror | Show a peer's notifications | `notifications.mirror` | A→D | P | ✅ (desktop OS notifications; 2026-11-04: history on the phone's page on the computer: the last 500 kept on disk, search, by day, app chips, Clear history; dismissed from the computer stays marked dismissed; one swiped, opened or cancelled on the phone leaves the computer's list and is marked dismissed too (`notif_removed`, only to computers that ask for it); "Mute" an app: no pop-up, not kept, unmute in the list; not tried live yet) |
 | App notification subscribe | Choose which apps' notifications to receive | `notifications.mirror` | A | P | ✅ |
 | Notification actions | Reply, dismiss, or tap an action on a mirrored notification | `notifications.control` | A | P | ✅ |
 | Send-to-device | Share sheet / context-menu target "Send to <device>" | `files.push` | A D | — | 🟡 (Android share sheet: files, text, links; no desktop context menu) |

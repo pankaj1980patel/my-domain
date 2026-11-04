@@ -433,6 +433,11 @@ impl EventSink for TauriSink {
                     notify::post(&app, &title, &body);
                 });
             }
+            // Gone on the phone: marked dismissed in the history before the
+            // window hears of it (it drops it from the active list).
+            CoreEvent::NotificationRemoved { from, key } => {
+                notif_history::on_dismissed(&self.app, from, key);
+            }
             // Kept in the history first (cheap, and before the window
             // hears of it); a muted app's get no further.
             CoreEvent::Notification {

@@ -6,7 +6,11 @@
 //!
 //!   apps_request   { from }                          consumer → producer
 //!   apps_list      { from, apps[], subscribed[] }    producer → consumer
-//!   subscribe_apps { from, apps[] }                  consumer → producer
+//!   subscribe_apps { from, apps[], removals? }       consumer → producer
+//!
+//! `removals: true` asks the producer to also say when a shared notification
+//! goes away there (`notif_removed`, see `features::notification`). Builds
+//! that don't send it never get one: to them it would be an unknown message.
 
 use serde_json::Value;
 
@@ -58,6 +62,13 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                             .collect()
                     })
                     .unwrap_or_default();
+                let mut removal_subs = ctx.removal_subs.lock();
+                if msg.json("removals").as_bool() == Some(true) {
+                    removal_subs.insert(from.clone());
+                } else {
+                    removal_subs.remove(&from);
+                }
+                drop(removal_subs);
                 ctx.subs.lock().insert(from, apps);
             }
             // Consumer: surface the producer's app list to the UI.

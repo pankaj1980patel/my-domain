@@ -398,6 +398,14 @@ export async function startEvents() {
         setHistoryTick((x) => x + 1);
       },
     ),
+    // Gone on the phone (the backend already marked it in the history).
+    on<{ from: string; key: string }>("notification-removed-event", ({ from, key }) => {
+      const node = state.peers.find((p) => p.node_id === from || p.name === from)?.node_id ?? from;
+      if (node && key && state.notifications[node]) {
+        setState("notifications", node, (list = []) => list.filter((x) => x.key !== key));
+      }
+      setHistoryTick((x) => x + 1);
+    }),
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),

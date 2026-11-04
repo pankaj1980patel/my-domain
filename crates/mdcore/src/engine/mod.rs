@@ -137,6 +137,10 @@ pub struct NetCtx<P: Platform> {
     pub extras: Arc<crate::features::extras::Extras>,
     /// App-notification subscriptions (subscriber node_id -> packages).
     pub subs: Subs,
+    /// Subscribers that asked to hear when a shared notification goes away
+    /// on this device (`removals: true` in their `subscribe_apps`). Older
+    /// builds don't ask, so they never get a `notif_removed` they don't know.
+    pub removal_subs: Arc<Mutex<std::collections::HashSet<String>>>,
     /// Peers whose QUIC dial failed recently: node_id -> when. Auto-QUIC
     /// skips them for a while (`transport::quic::ensure_link`), so an
     /// unreachable peer doesn't cost a connect timeout on every message.
@@ -207,6 +211,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             files: self.files.clone(),
             extras: self.extras.clone(),
             subs: self.subs.clone(),
+            removal_subs: self.removal_subs.clone(),
             quic_failed: self.quic_failed.clone(),
             manual_aliases: self.manual_aliases.clone(),
             decrypt_fail_last: self.decrypt_fail_last.clone(),
@@ -366,6 +371,7 @@ impl<P: Platform> Engine<P> {
             peer_keys: Arc::default(),
             ble_links: Arc::default(),
             subs: subs.clone(),
+            removal_subs: Arc::default(),
             quic_failed: Arc::default(),
             manual_aliases: Arc::default(),
             decrypt_fail_last: Arc::default(),

@@ -255,6 +255,8 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         Some("0|com.app|1|null|10".into()),
         r#"[{"title":"Reply","reply":true}]"#.into(),
     );
+    // And its removal (likewise a no-op without a subscriber).
+    phone.share_app_notification_removed("com.app".into(), "0|com.app|1|null|10".into());
 
     // And the phone asks the desktop's.
     phone.request_status(desktop.node_id()).unwrap();

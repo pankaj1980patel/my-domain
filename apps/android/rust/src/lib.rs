@@ -676,6 +676,13 @@ impl MdEngine {
         );
     }
 
+    /// Producer: notification `key` from package `pkg`, shared with
+    /// `share_app_notification_with`, went away here (swiped, opened, or
+    /// cancelled by its app). Its subscribers drop it too.
+    pub fn share_app_notification_removed(&self, pkg: String, key: String) {
+        self.inner.share_app_notification_removed(&pkg, &key);
+    }
+
     /// Press button `index` of notification `key` on `node_id` (with `text`
     /// for a reply button), or dismiss it with `index` -1. Returns the
     /// transport used, or "queued".

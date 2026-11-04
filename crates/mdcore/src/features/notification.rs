@@ -3,6 +3,10 @@
 //!
 //!   notification  { from, title, body, app?, key?, actions? }
 //!   notif_action  { from, key, index, text? }   (index -1: dismiss)
+//!   notif_removed { from, key }                 (gone on the sending device)
+//!
+//! `notif_removed` goes only to subscribers that asked for it
+//! (`subscribe_apps` with `removals: true`), so an older build never sees it.
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -14,10 +18,20 @@ pub struct NotificationHandler;
 
 impl<P: Platform> ControlHandler<P> for NotificationHandler {
     fn kinds(&self) -> &'static [&'static str] {
-        &["notification", "notif_action"]
+        &["notification", "notif_action", "notif_removed"]
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        if msg.kind() == "notif_removed" {
+            let key = msg.str("key");
+            if !key.is_empty() {
+                ctx.sink.emit(CoreEvent::NotificationRemoved {
+                    from: msg.sender(),
+                    key,
+                });
+            }
+            return;
+        }
         if msg.kind() == "notif_action" {
             let key = msg.str("key");
             if !key.is_empty() {

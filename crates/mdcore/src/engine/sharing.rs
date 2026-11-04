@@ -375,13 +375,17 @@ impl<P: Platform> Engine<P> {
         self.send_control(node_id, &m)
     }
 
-    /// Consumer: set the full enabled package set on a producer.
+    /// Consumer: set the full enabled package set on a producer. Also asks
+    /// to hear when a shared notification goes away there
+    /// (`CoreEvent::NotificationRemoved`).
     pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> crate::Result<()> {
         let me = self.ctx.identity.lock().node_id.clone();
         let apps: serde_json::Value =
             serde_json::from_str(apps_json).unwrap_or(serde_json::Value::Array(vec![]));
-        let m =
-            serde_json::json!({ "type": "subscribe_apps", "from": me, "apps": apps }).to_string();
+        let m = serde_json::json!({
+            "type": "subscribe_apps", "from": me, "apps": apps, "removals": true,
+        })
+        .to_string();
         self.send_control(node_id, &m)
     }
 
@@ -422,6 +426,30 @@ impl<P: Platform> Engine<P> {
                 m["actions"] = actions.clone();
             }
             let _ = self.send_control(&n, &m.to_string());
+        }
+    }
+
+    /// Producer: the notification `key` from package `pkg`, shared with
+    /// `share_app_notification_with`, went away here (swiped, opened, or
+    /// cancelled by its app). Tells the subscribers of `pkg` that asked to
+    /// hear it; they get `CoreEvent::NotificationRemoved`.
+    pub fn share_app_notification_removed(&self, pkg: &str, key: &str) {
+        if key.is_empty() {
+            return;
+        }
+        let me = self.ctx.identity.lock().node_id.clone();
+        let wanted = self.ctx.removal_subs.lock().clone();
+        let targets: Vec<String> = self
+            .ctx
+            .subs
+            .lock()
+            .iter()
+            .filter(|(n, pkgs)| wanted.contains(*n) && pkgs.iter().any(|p| p == pkg))
+            .map(|(n, _)| n.clone())
+            .collect();
+        let m = serde_json::json!({ "type": "notif_removed", "from": me, "key": key }).to_string();
+        for n in targets {
+            let _ = self.send_control(&n, &m);
         }
     }
 }

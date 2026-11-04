@@ -24,7 +24,8 @@ import org.json.JSONObject
  * devices, which copy it to their clipboard. The code is never logged.
  *
  * Forwarded notifications carry their key and buttons, so another device
- * can press one, reply, or dismiss it ([onAction]).
+ * can press one, reply, or dismiss it ([onAction]); when one goes away here
+ * the subscribed devices hear so ([onNotificationRemoved]).
  */
 class NotifListener : NotificationListenerService() {
 
@@ -66,7 +67,9 @@ class NotifListener : NotificationListenerService() {
 
         val label = appLabel(n.packageName)
         runCatching {
-            Core.engine()?.shareAppNotificationWith(n.packageName, label, title, text, n.key, actionsJson(n.notification))
+            val engine = Core.engine() ?: return@runCatching
+            engine.shareAppNotificationWith(n.packageName, label, title, text, n.key, actionsJson(n.notification))
+            synchronized(shared) { shared[n.key] = n.packageName }
         }
 
         Core.labLog("notification from ${n.packageName}")
@@ -74,6 +77,15 @@ class NotifListener : NotificationListenerService() {
             val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
             shareCode(listOf(title, text, big).joinToString("\n"), label)
         }
+    }
+
+    /** A notification went away here (swiped, opened, cancelled by its
+     *  app). Only one that was shared (it passed the filters above) is
+     *  reported; the core tells just the devices subscribed to its app. */
+    override fun onNotificationRemoved(sbn: StatusBarNotification?) {
+        val n = sbn ?: return
+        val pkg = synchronized(shared) { shared.remove(n.key) } ?: return
+        runCatching { Core.engine()?.shareAppNotificationRemoved(pkg, n.key) }
     }
 
     /** Send the verification code in [text], if any, unless the same code
@@ -174,6 +186,15 @@ class NotifListener : NotificationListenerService() {
 
         /** Codes sent recently -> when (memory only). */
         private val recent = HashMap<String, Long>()
+
+        /** Keys of the notifications shared, -> their package (memory only;
+         *  the oldest go first past [MAX_SHARED]), so a removal is reported
+         *  only for one that went out. */
+        private const val MAX_SHARED = 500
+        private val shared = object : LinkedHashMap<String, String>() {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?): Boolean =
+                size > MAX_SHARED
+        }
     }
 
     private fun appLabel(pkg: String): String = runCatching {

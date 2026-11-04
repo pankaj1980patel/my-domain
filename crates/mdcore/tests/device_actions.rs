@@ -262,6 +262,92 @@ fn a_notification_can_be_answered_from_another_device() {
 }
 
 #[test]
+fn a_notification_gone_on_the_phone_goes_away_on_the_computer() {
+    let (phone, pc) = pair("notif-removed");
+    pc.engine.send(&phone.node_id(), "hi").unwrap();
+    phone.sink.wait_for_message("hi");
+    pc.engine
+        .subscribe_apps(&phone.node_id(), r#"["com.messages"]"#)
+        .unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    phone.engine.share_app_notification_with(
+        "com.messages",
+        "Messages",
+        "Asha",
+        "Coming tonight?",
+        Some("0|com.messages|7"),
+        "[]",
+    );
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Notification { key: Some(_), .. } => Some(()),
+            _ => None,
+        })
+        .expect("no notification");
+    // An app the computer doesn't follow: nothing to say about it.
+    phone
+        .engine
+        .share_app_notification_removed("com.other", "0|com.other|1");
+    phone
+        .engine
+        .share_app_notification_removed("com.messages", "0|com.messages|7");
+    let got = pc
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::NotificationRemoved { from, key } => Some((from.clone(), key.clone())),
+            _ => None,
+        })
+        .expect("no removal");
+    assert_eq!(got, (phone.node_id(), "0|com.messages|7".to_string()));
+    std::thread::sleep(Duration::from_millis(300));
+    let removed: Vec<String> = pc
+        .sink
+        .all()
+        .into_iter()
+        .filter_map(|e| match e {
+            CoreEvent::NotificationRemoved { key, .. } => Some(key),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(removed, vec!["0|com.messages|7".to_string()]);
+}
+
+#[test]
+fn an_older_subscriber_is_never_told_of_removals() {
+    let (phone, pc) = pair("notif-removed-old");
+    // What an older build sends: no `removals`. To it `notif_removed` would
+    // be an unknown message (shown as chat), so it must not get one.
+    let old = format!(
+        r#"{{"type":"subscribe_apps","from":"{}","apps":["com.messages"]}}"#,
+        pc.node_id()
+    );
+    pc.engine.send(&phone.node_id(), &old).unwrap();
+    std::thread::sleep(Duration::from_millis(500));
+    phone.engine.share_app_notification_with(
+        "com.messages",
+        "Messages",
+        "Asha",
+        "Coming tonight?",
+        Some("0|com.messages|7"),
+        "[]",
+    );
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Notification { key: Some(_), .. } => Some(()),
+            _ => None,
+        })
+        .expect("no notification");
+    phone
+        .engine
+        .share_app_notification_removed("com.messages", "0|com.messages|7");
+    std::thread::sleep(Duration::from_millis(800));
+    assert!(!pc.sink.all().iter().any(|e| matches!(
+        e,
+        CoreEvent::NotificationRemoved { .. } | CoreEvent::MessageReceived(_)
+    )));
+}
+
+#[test]
 fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
     let (phone, pc) = pair("wake");
     assert!(!phone.engine.can_wake(&pc.node_id()));

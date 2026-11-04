@@ -86,6 +86,9 @@ pub enum CoreEvent {
         index: i64,
         text: Option<String>,
     },
+    /// A notification `from` shared (with `key`) went away there: swiped,
+    /// opened, or cancelled by its app.
+    NotificationRemoved { from: String, key: String },
     /// A peer shared an incoming/missed/ended call notification.
     CallNotification {
         from: String,
@@ -276,6 +279,7 @@ impl CoreEvent {
             CoreEvent::CodeCopied { .. } => "code-copied",
             CoreEvent::Notification { .. } => "notification-event",
             CoreEvent::NotificationAction { .. } => "notification-action-event",
+            CoreEvent::NotificationRemoved { .. } => "notification-removed-event",
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",
             CoreEvent::AppsList { .. } => "apps-list-event",
@@ -367,6 +371,20 @@ mod tests {
         assert_eq!(
             notification().ui_payload(),
             json!({"from": "phone", "title": "Hi", "body": "there", "app": null})
+        );
+    }
+
+    #[test]
+    fn notification_removed_keeps_its_shape() {
+        let ev = CoreEvent::NotificationRemoved {
+            from: "phone".into(),
+            key: "0|com.app|1|null|10".into(),
+        };
+        assert_eq!(ev.to_json()["kind"], "notification_removed");
+        assert_eq!(ev.name(), "notification-removed-event");
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"from": "phone", "key": "0|com.app|1|null|10"})
         );
     }
 
