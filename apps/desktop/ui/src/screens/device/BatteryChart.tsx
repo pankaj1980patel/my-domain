@@ -95,11 +95,32 @@ export default function BatteryChart(props: { node: string }) {
 
   const guess = createMemo(() => estimateText(estimate(samples(), now())));
 
+  /** The graph in words, for screen readers: where it started and is now,
+   *  its lowest and highest, whether it's charging, and the guess. */
+  const summary = createMemo(() => {
+    const list = shown().filter((s) => s.at >= start());
+    if (list.length < 2) return t("a11y.batteryNoTrend");
+    const levels = list.map((s) => s.level);
+    const last = list[list.length - 1];
+    return [
+      t("a11y.batterySummary", {
+        from: list[0].level,
+        to: last.level,
+        low: Math.min(...levels),
+        high: Math.max(...levels),
+      }),
+      last.charging ? t("a11y.batteryCharging") : "",
+      guess() ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  });
+
   return (
     <Show when={shown().length >= 2}>
       <div class="battery-chart">
         <div class="battery-chart-plot" onMouseMove={move} onMouseLeave={() => setHover(null)}>
-          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={t("info.batteryChart")}>
+          <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={summary()}>
             <For each={charging()}>
               {(c) => <rect class="battery-chart-charging" x={x(c.from)} y={0} width={x(c.to) - x(c.from)} height={H} />}
             </For>
@@ -119,7 +140,11 @@ export default function BatteryChart(props: { node: string }) {
           </svg>
           <Show when={picked()}>
             {(p) => (
-              <span class="battery-chart-tip small" style={{ left: `${Math.min(85, Math.max(15, (x(p().at) / W) * 100))}%` }}>
+              <span
+                class="battery-chart-tip small"
+                aria-hidden="true"
+                style={{ left: `${Math.min(85, Math.max(15, (x(p().at) / W) * 100))}%` }}
+              >
                 {t(p().charging ? "info.batteryTipCharging" : "info.batteryTip", {
                   time: new Date(p().at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
                   level: p().level,
@@ -128,7 +153,8 @@ export default function BatteryChart(props: { node: string }) {
             )}
           </Show>
         </div>
-        <div class="battery-chart-axis small muted">
+        <div class="battery-chart-axis small muted" aria-hidden="true">
+
           <span>{t("info.batteryDayAgo")}</span>
           <span>{t("info.batteryNow")}</span>
         </div>

@@ -29,14 +29,22 @@ export default function InfoTile(props: { node: string }) {
               <div class="info-row">
                 <dt class="small muted">{r().label}</dt>
                 <dd class="small">{r().value}</dd>
-                <Show when={r().pct !== undefined}>
-                  <div class="progress" role="presentation">
-                    <span style={{ width: `${r().pct}%` }} />
-                  </div>
+                {/* The bar repeats the value above (hidden from screen
+                    readers); the battery graph has its own summary. In a
+                    <dd> so the list stays valid. */}
+                <Show when={r().pct !== undefined || r().battery}>
+                  <dd class="info-extra">
+                    <Show when={r().pct !== undefined}>
+                      <div class="progress" aria-hidden="true">
+                        <span style={{ width: `${r().pct}%` }} />
+                      </div>
+                    </Show>
+                    <Show when={r().battery}>
+                      <BatteryChart node={props.node} />
+                    </Show>
+                  </dd>
                 </Show>
-                <Show when={r().battery}>
-                  <BatteryChart node={props.node} />
-                </Show>
+
               </div>
             )}
           </Index>

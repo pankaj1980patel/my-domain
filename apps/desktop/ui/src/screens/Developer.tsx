@@ -152,9 +152,15 @@ export default function Developer(props: { onBack: () => void }) {
             }
           }}
         >
-          <input placeholder="Name" value={name()} onInput={(e) => setName(e.currentTarget.value)} />
-          <input placeholder="IP address" value={ip()} onInput={(e) => setIp(e.currentTarget.value)} />
-          <input placeholder="QUIC port" value={port()} onInput={(e) => setPort(e.currentTarget.value)} inputmode="numeric" />
+          <input placeholder="Name" aria-label="Name" value={name()} onInput={(e) => setName(e.currentTarget.value)} />
+          <input placeholder="IP address" aria-label="IP address" value={ip()} onInput={(e) => setIp(e.currentTarget.value)} />
+          <input
+            placeholder="QUIC port"
+            aria-label="QUIC port"
+            value={port()}
+            onInput={(e) => setPort(e.currentTarget.value)}
+            inputmode="numeric"
+          />
           <button class="btn btn-soft" type="submit" disabled={!ip() || !port()}>
             Add
           </button>
@@ -164,7 +170,13 @@ export default function Developer(props: { onBack: () => void }) {
       <article class="tile">
         <h2>Event log</h2>
         <div class="row">
-          <input placeholder="Filter by event name" value={filter()} onInput={(e) => setFilter(e.currentTarget.value)} />
+          <input
+            placeholder="Filter by event name"
+            aria-label="Filter by event name"
+            value={filter()}
+            onInput={(e) => setFilter(e.currentTarget.value)}
+          />
+
           <button
             class="btn btn-ghost btn-sm"
             onClick={() => navigator.clipboard.writeText(JSON.stringify(state.devLog, null, 2)).then(() => toast("Copied", "ok"))}

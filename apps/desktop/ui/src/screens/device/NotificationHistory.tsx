@@ -164,7 +164,7 @@ export default function NotificationHistory(props: { node: string }) {
                               <button
                                 class="btn btn-ghost btn-sm"
                                 title={t("history.muteHint", { app: e.app })}
-                                aria-label={t("history.muteHint", { app: e.app })}
+                                aria-label={t("history.muteLabel", { app: e.app })}
                                 onClick={() => mute(e.app)}
                               >
                                 {t("history.mute")}

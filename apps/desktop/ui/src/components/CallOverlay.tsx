@@ -9,6 +9,50 @@ import { commands } from "../bindings";
 import { callDo, callStatus, duration, KEYPAD, watchCalls, type AudioTarget } from "../lib/calls";
 import { CallAudioPicker } from "./CallAudioPicker";
 import { t } from "../i18n";
+import { rememberFocus } from "../lib/a11y";
+
+/** The incoming-call box: Answer takes focus when it appears (it isn't
+ *  modal, so Tab can still leave it), and focus goes back where it was when
+ *  the call is answered, declined or missed. */
+function IncomingCall(props: { who: string; number?: string | null; showNumber: boolean }) {
+  let answer: HTMLButtonElement | undefined;
+  let root: HTMLDivElement | undefined;
+  const restore = rememberFocus();
+  onMount(() => requestAnimationFrame(() => answer?.focus()));
+  onCleanup(() => {
+    const at = document.activeElement;
+    if (!at || at === document.body || root?.contains(at)) restore();
+  });
+  return (
+    <div
+      ref={root}
+      class="call-incoming"
+      role="alertdialog"
+      aria-modal="false"
+      aria-labelledby="call-incoming-title"
+      aria-describedby="call-incoming-who"
+    >
+      <span class="ring-pulse" aria-hidden="true" />
+      <div class="call-incoming-text">
+        <span id="call-incoming-title" class="muted small">
+          {t("calls.incoming")}
+        </span>
+        <strong id="call-incoming-who">{props.who}</strong>
+        <Show when={props.showNumber}>
+          <span class="muted small">{props.number}</span>
+        </Show>
+      </div>
+      <div class="row call-actions">
+        <button class="btn call-decline" onClick={() => callDo(commands.callDecline())}>
+          {t("calls.decline")}
+        </button>
+        <button class="btn btn-primary call-answer" ref={answer} onClick={() => callDo(commands.callAnswer())}>
+          {t("calls.answer")}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function Keypad(props: { onKey: (k: string) => void; id: string }) {
   return (
@@ -46,27 +90,9 @@ export default function CallOverlay() {
   return (
     <>
       <Show when={phase() === "incoming"}>
-        <div class="call-incoming" role="alertdialog" aria-modal="false" aria-labelledby="call-incoming-title" aria-describedby="call-incoming-who">
-          <span class="ring-pulse" aria-hidden="true" />
-          <div class="call-incoming-text">
-            <span id="call-incoming-title" class="muted small">
-              {t("calls.incoming")}
-            </span>
-            <strong id="call-incoming-who">{who()}</strong>
-            <Show when={s()?.name && s()?.number}>
-              <span class="muted small">{s()?.number}</span>
-            </Show>
-          </div>
-          <div class="row call-actions">
-            <button class="btn call-decline" onClick={() => callDo(commands.callDecline())}>
-              {t("calls.decline")}
-            </button>
-            <button class="btn btn-primary call-answer" onClick={() => callDo(commands.callAnswer())} autofocus>
-              {t("calls.answer")}
-            </button>
-          </div>
-        </div>
+        <IncomingCall who={who()} number={s()?.number} showNumber={!!(s()?.name && s()?.number)} />
       </Show>
+
       <Show when={phase() === "active" || phase() === "outgoing"}>
         <section class="call-bar" aria-label={t("calls.bar")}>
           <div class="call-bar-main">

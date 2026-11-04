@@ -471,7 +471,12 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
               )}
             </For>
           </ul>
+          {/* How many match, said after typing (the list itself isn't live). */}
+          <p class="sr-only" role="status">
+            {shown().length ? tn("a11y.paletteCount", shown().length) : t("palette.none", { query: query() })}
+          </p>
           <p class="palette-hint muted small" aria-hidden="true">
+
             {t("palette.hint")}
           </p>
         </div>

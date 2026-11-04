@@ -13,6 +13,11 @@ export function Gate(props: { reason?: string; children: JSX.Element }) {
   return (
     <span class="gate" classList={{ "gate-off": !!props.reason }} title={props.reason}>
       {props.children}
+      {/* A disabled control can't take focus, so its tooltip never shows
+          from the keyboard: the reason is also read out next to it. */}
+      <Show when={props.reason}>
+        <span class="sr-only">{t("a11y.unavailable", { reason: props.reason ?? "" })}</span>
+      </Show>
     </span>
   );
 }
@@ -29,10 +34,18 @@ export function toast(text: string, tone: Toast["tone"] = "info") {
   setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 6000 : 3500);
 }
 
+/** Two live regions, always on the page so screen readers hear what's added:
+ *  errors interrupt (alert), everything else waits its turn (status). */
 export function Toasts() {
+  const of = (error: boolean) => toasts().filter((x) => (x.tone === "error") === error);
   return (
-    <div class="toasts" role="status" aria-live="polite">
-      <For each={toasts()}>{(t) => <div class={`toast toast-${t.tone}`}>{t.text}</div>}</For>
+    <div class="toasts">
+      <div class="toast-region" role="alert" aria-live="assertive" aria-relevant="additions">
+        <For each={of(true)}>{(x) => <div class={`toast toast-${x.tone}`}>{x.text}</div>}</For>
+      </div>
+      <div class="toast-region" role="status" aria-live="polite" aria-relevant="additions">
+        <For each={of(false)}>{(x) => <div class={`toast toast-${x.tone}`}>{x.text}</div>}</For>
+      </div>
     </div>
   );
 }
@@ -75,14 +88,33 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
   const s = () => linkStateOf(props.peer.node_id);
   const unread = () => state.messages.filter((m) => m.node === props.peer.node_id && m.dir === "in").length;
   return (
-    <article class="device-card" onClick={props.onOpen} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && props.onOpen()}>
+    // The name is the card's button (Tab, Enter and Space reach it); a click
+    // anywhere else on the card opens it too.
+    <article class="device-card" onClick={props.onOpen}>
       <DeviceAvatar node={props.peer.node_id} />
       <div class="device-main">
-        <h3>{peerName(props.peer.node_id)}</h3>
-        <StatusPill node={props.peer.node_id} />
+        <h2 class="device-card-name">
+          <button
+            type="button"
+            class="device-open"
+            aria-describedby={`device-card-state-${props.peer.node_id}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onOpen();
+            }}
+          >
+            {peerName(props.peer.node_id)}
+          </button>
+        </h2>
+        <span class="device-card-state" id={`device-card-state-${props.peer.node_id}`}>
+          <StatusPill node={props.peer.node_id} />
+          <Show when={unread() > 0}>
+            <span class="sr-only">, {tn("device.unread", unread())}</span>
+          </Show>
+        </span>
       </div>
       <Show when={unread() > 0}>
-        <span class="badge" aria-label={tn("device.unread", unread())}>
+        <span class="badge" aria-hidden="true">
           {unread()}
         </span>
       </Show>
@@ -107,7 +139,8 @@ export function Empty(props: { icon: string; title: string; children?: JSX.Eleme
       <div class="empty-icon" aria-hidden="true">
         {props.icon}
       </div>
-      <h3>{props.title}</h3>
+      <h2 class="empty-title">{props.title}</h2>
+
       <div class="empty-body">{props.children}</div>
     </div>
   );

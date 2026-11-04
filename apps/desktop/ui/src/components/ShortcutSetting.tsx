@@ -16,6 +16,7 @@ import { peerName, state, unwrap } from "../lib/core";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
+import { focusSoon } from "../lib/a11y";
 
 /** What a shortcut can do, what it needs, and how the form names it. */
 type Needs = "nothing" | "device" | "deviceOrPhone" | "automation";
@@ -121,21 +122,29 @@ export function ShortcutSetting(props: { me?: string }) {
 
   const patch = (p: Partial<Binding>) => setDraft((d) => (d ? { ...d, ...p } : d));
 
+  // Keyboard: the form takes focus when it opens (its first field), and
+  // "Add a shortcut" gets it back when the form closes.
+  let addButton: HTMLButtonElement | undefined;
+  let formEl: HTMLFormElement | undefined;
+  const focusForm = () => focusSoon(() => formEl?.querySelector<HTMLElement>("select, button"));
   const startAdd = () => {
     setDraft(blank());
     setLabel("");
     setFeedback("");
     setFeedbackBad(false);
+    focusForm();
   };
   const startEdit = (v: ShortcutView) => {
     setDraft({ ...v.binding });
     setLabel(v.label);
     setFeedback("");
     setFeedbackBad(false);
+    focusForm();
   };
   const cancel = () => {
     stopRecording();
     setDraft(null);
+    focusSoon(() => addButton);
   };
 
   const startRecording = () => {
@@ -228,6 +237,7 @@ export function ShortcutSetting(props: { me?: string }) {
     if (await save(b)) {
       stopRecording();
       setDraft(null);
+      focusSoon(() => addButton);
     }
   };
 
@@ -288,14 +298,29 @@ export function ShortcutSetting(props: { me?: string }) {
       <Show
         when={draft()}
         fallback={
-          <button class="btn btn-ghost" onClick={startAdd} disabled={list()?.unavailable}>
+          <button class="btn btn-ghost" ref={addButton} onClick={startAdd} disabled={list()?.unavailable}>
             {t("shortcuts.add")}
           </button>
         }
       >
         {(d) => (
-          <form class="stack shortcut-form" onSubmit={submit}>
-            <span class="small">{d().id ? t("shortcuts.editTitle") : t("shortcuts.addTitle")}</span>
+          <form
+            class="stack shortcut-form"
+            ref={formEl}
+            aria-labelledby="shortcut-form-title"
+            onSubmit={submit}
+            onKeyDown={(e) => {
+              // Esc cancels, except while recording (there it stops recording).
+              if (e.key === "Escape" && !recording()) {
+                e.preventDefault();
+                cancel();
+              }
+            }}
+          >
+            <span class="small" id="shortcut-form-title">
+              {d().id ? t("shortcuts.editTitle") : t("shortcuts.addTitle")}
+            </span>
+
             <label class="row small">
               <span class="muted">{t("shortcuts.actionLabel")}</span>
               <select class="grow" onChange={(e) => patch({ action: e.currentTarget.value })}>

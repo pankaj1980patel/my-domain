@@ -22,6 +22,8 @@ import { CallsSetting } from "../components/CallsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { t, tRich, type Key } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
+import { focusSoon } from "../lib/a11y";
+
 
 /** Which OS's location permission the "find my computer" hint explains. */
 const locationHintKey: Key = (() => {
@@ -36,6 +38,18 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [newKey, setNewKey] = createSignal("");
   const [pass, setPass] = createSignal("");
   const [showKey, setShowKey] = createSignal(false);
+  // The key form replaces its button: focus moves into it, and back to the
+  // button when it closes (it isn't lost to the page).
+  let keyButton: HTMLButtonElement | undefined;
+  let keyInput: HTMLInputElement | undefined;
+  const openKey = () => {
+    setShowKey(true);
+    focusSoon(() => keyInput);
+  };
+  const closeKey = () => {
+    setShowKey(false);
+    focusSoon(() => keyButton);
+  };
   const [notifs, setNotifs] = createSignal(true);
   const [followDnd, setFollowDnd] = createSignal(false);
   const [remoteInput, setRemoteInput] = createSignal(true);
@@ -263,7 +277,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <Show
           when={showKey()}
           fallback={
-            <button class="btn btn-ghost" onClick={() => setShowKey(true)}>
+            <button class="btn btn-ghost" ref={keyButton} onClick={openKey}>
               {t("settings.changeKey")}
             </button>
           }
@@ -275,7 +289,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
               try {
                 await unwrap(commands.updateEncryptionKey(newKey(), pass()));
                 toast(t("settings.keyChanged"), "ok");
-                setShowKey(false);
+                closeKey();
                 setNewKey("");
                 setPass("");
               } catch (err) {
@@ -283,13 +297,27 @@ export default function Settings(props: { onDeveloper: () => void }) {
               }
             }}
           >
-            <input type="password" placeholder={t("settings.newKey")} value={newKey()} onInput={(e) => setNewKey(e.currentTarget.value)} />
-            <input type="password" placeholder={t("settings.yourPassword")} value={pass()} onInput={(e) => setPass(e.currentTarget.value)} />
+            <input
+              type="password"
+              ref={keyInput}
+              placeholder={t("settings.newKey")}
+              aria-label={t("settings.newKey")}
+              value={newKey()}
+              onInput={(e) => setNewKey(e.currentTarget.value)}
+            />
+            <input
+              type="password"
+              placeholder={t("settings.yourPassword")}
+              aria-label={t("settings.yourPassword")}
+              autocomplete="current-password"
+              value={pass()}
+              onInput={(e) => setPass(e.currentTarget.value)}
+            />
             <div class="row">
               <button class="btn btn-primary" type="submit" disabled={!newKey() || !pass()}>
                 {t("settings.save")}
               </button>
-              <button class="btn btn-ghost" type="button" onClick={() => setShowKey(false)}>
+              <button class="btn btn-ghost" type="button" onClick={closeKey}>
                 {t("settings.cancel")}
               </button>
             </div>
@@ -303,9 +331,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <ThemePicker />
       </article>
 
-      <p class="version muted small" onClick={tapVersion}>
+      {/* A button (no look of one), so the 7 taps work from the keyboard too. */}
+      <button type="button" class="version muted small" onClick={tapVersion}>
         {t("settings.version", { version: "0.1.0" })}
-      </p>
+      </button>
+
     </section>
   );
 }

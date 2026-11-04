@@ -66,7 +66,13 @@ export default function SignIn(props: { onDone: () => void }) {
 
         <label class="field">
           <span>{t("signIn.username")}</span>
-          <input value={user()} onInput={(e) => setUser(e.currentTarget.value)} autocomplete="username" autofocus />
+          <input
+            value={user()}
+            onInput={(e) => setUser(e.currentTarget.value)}
+            autocomplete="username"
+            ref={(el) => requestAnimationFrame(() => el.focus())}
+            aria-invalid={!!error() && !user().trim()}
+          />
         </label>
         <label class="field">
           <span>{t("signIn.password")}</span>
@@ -75,19 +81,29 @@ export default function SignIn(props: { onDone: () => void }) {
             value={pass()}
             onInput={(e) => setPass(e.currentTarget.value)}
             autocomplete={create() ? "new-password" : "current-password"}
+            aria-invalid={!!error() && !pass()}
           />
         </label>
         <label class="field">
           <span>{t("signIn.deviceKey")}</span>
           <div class="field-row">
-            <input type="password" value={key()} onInput={(e) => setKey(e.currentTarget.value)} />
+            <input
+              type="password"
+              value={key()}
+              onInput={(e) => setKey(e.currentTarget.value)}
+              aria-describedby="signin-key-hint"
+              aria-invalid={!!error() && !key().trim()}
+            />
             <Show when={create()}>
               <button type="button" class="btn btn-ghost btn-sm" onClick={async () => setKey(await commands.generateKey())}>
                 {t("signIn.generate")}
               </button>
             </Show>
           </div>
-          <small class="muted">{t("signIn.keyHint")}</small>
+          <small class="muted" id="signin-key-hint">
+            {t("signIn.keyHint")}
+          </small>
+
         </label>
 
         <button type="button" class="link" onClick={() => setAdvanced(!advanced())} aria-expanded={advanced()}>

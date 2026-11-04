@@ -156,7 +156,16 @@ function ActiveRow(props: { e: Entry; clock: number }) {
           {t("transfers.cancel")}
         </button>
       </div>
-      <div class="progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct())}>
+      <div
+        class="progress"
+        role="progressbar"
+        aria-label={t("a11y.transferProgress", { name: props.e.name })}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct())}
+        aria-valuetext={total() ? `${t("a11y.percent", { pct: Math.round(pct()) })}, ${line()}` : line()}
+      >
+
         <span style={{ width: `${pct()}%` }} />
       </div>
       <p class="muted small xfer-line">

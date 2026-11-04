@@ -110,9 +110,22 @@ export function WebhookSetting() {
             <p class="muted small">{t("webhooks.portHint", { port: w().port })}</p>
 
             <strong class="small">{t("webhooks.token")}</strong>
-            <code class="webhook-token small">{showToken() ? w().token : "•".repeat(24)}</code>
+            <code class="webhook-token small">
+              <Show
+                when={showToken()}
+                fallback={
+                  <>
+                    <span aria-hidden="true">{"•".repeat(24)}</span>
+                    <span class="sr-only">{t("a11y.tokenHidden")}</span>
+                  </>
+                }
+              >
+                {w().token}
+              </Show>
+            </code>
             <div class="row">
-              <button class="btn btn-ghost btn-sm" onClick={() => setShowToken(!showToken())}>
+              <button class="btn btn-ghost btn-sm" aria-pressed={showToken()} onClick={() => setShowToken(!showToken())}>
+
                 {showToken() ? t("webhooks.hide") : t("webhooks.show")}
               </button>
               <button class="btn btn-ghost btn-sm" disabled={!w().token} onClick={() => copy(w().token)}>

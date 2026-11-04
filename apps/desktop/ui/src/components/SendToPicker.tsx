@@ -13,6 +13,7 @@ import { friendlyError } from "../lib/words";
 import { DeviceAvatar } from "./DeviceLabel";
 import { StatusPill, toast } from "./ui";
 import { t, tn } from "../i18n";
+import { rememberFocus, trapTab } from "../lib/a11y";
 
 /** Shown by name; the rest are counted. */
 const NAMED = 3;
@@ -22,11 +23,14 @@ export default function SendToPicker() {
   const [last, setLast] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
   let dialog: HTMLDivElement | undefined;
+  /** Where focus was before it opened; it goes back there on close. */
+  let restore: (() => void) | undefined;
 
   /** Pick up what arrived; more while it's open are added to the list. */
   const check = async () => {
     const req = await commands.takeSendRequest();
     if (!req) return;
+    if (!items().length) restore = rememberFocus();
     setLast(req.last_device);
     setItems((cur) => [...cur, ...req.items.filter((i) => !cur.some((c) => c.path === i.path))]);
     requestAnimationFrame(() => dialog?.querySelector<HTMLButtonElement>(".send-to-device")?.focus());
@@ -37,7 +41,11 @@ export default function SendToPicker() {
     onCleanup(() => off.then((f) => f()));
   });
 
-  const close = () => setItems([]);
+  const close = () => {
+    setItems([]);
+    restore?.();
+    restore = undefined;
+  };
 
   /** The chosen-last device, then the connected ones, then by name. */
   const devices = createMemo(() =>
@@ -86,7 +94,8 @@ export default function SendToPicker() {
               if (e.key === "Escape") {
                 e.preventDefault();
                 close();
-              }
+              } else trapTab(e, dialog);
+
             }}
           >
             <h2 id="send-to-title">{t("sendTo.title")}</h2>

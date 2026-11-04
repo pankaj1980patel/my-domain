@@ -3,7 +3,8 @@
 // nickname, icon and colour. Kept on this computer only (`device_labels.rs`);
 // names everywhere come from `peerName`, which prefers the nickname.
 
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, For, onMount, Show } from "solid-js";
+import { rememberFocus } from "../lib/a11y";
 import { peerLabel, setDeviceLabel, state } from "../lib/core";
 import { friendlyError, initial, niceName } from "../lib/words";
 import { toast } from "./ui";
@@ -104,13 +105,22 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
   const [icon, setIcon] = createSignal<string | null>(current?.icon ?? null);
   const [color, setColor] = createSignal<string | null>(current?.color ?? null);
   const [busy, setBusy] = createSignal(false);
+  // Opened from the page's Edit button: the nickname takes focus, and focus
+  // goes back to Edit when the form closes (saved, cancelled or Esc).
+  const restore = rememberFocus();
+  let nicknameInput: HTMLInputElement | undefined;
+  onMount(() => requestAnimationFrame(() => nicknameInput?.focus()));
+  const close = () => {
+    props.onClose();
+    restore();
+  };
 
   const save = async (n: string, i: string | null, c: string | null) => {
     setBusy(true);
     try {
       await setDeviceLabel(props.node, n, i, c);
       toast(t("label.saved"), "ok");
-      props.onClose();
+      close();
     } catch (e) {
       toast(friendlyError(e), "error");
     } finally {
@@ -121,13 +131,19 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
   return (
     <form
       class="label-form"
+      aria-labelledby="label-form-title"
       onSubmit={(e) => {
         e.preventDefault();
         void save(nickname(), icon(), color());
       }}
-      onKeyDown={(e) => e.key === "Escape" && props.onClose()}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close();
+        }
+      }}
     >
-      <h2>{t("label.title")}</h2>
+      <h2 id="label-form-title">{t("label.title")}</h2>
       <p class="muted small">{t("label.hint", { name: own() })}</p>
       <label class="field">
         <span>{t("label.nickname")}</span>
@@ -137,7 +153,7 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
           value={nickname()}
           placeholder={t("label.nicknamePlaceholder", { name: own() })}
           onInput={(e) => setNickname(e.currentTarget.value)}
-          autofocus
+          ref={nicknameInput}
         />
       </label>
       <fieldset class="label-choices">
@@ -147,6 +163,7 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
           class="label-choice"
           classList={{ on: icon() === null }}
           aria-pressed={icon() === null}
+          aria-label={t("label.none")}
           title={t("label.none")}
           onClick={() => setIcon(null)}
         >
@@ -198,7 +215,8 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
         <button type="submit" class="btn btn-primary btn-sm" disabled={busy()}>
           {t("label.save")}
         </button>
-        <button type="button" class="btn btn-ghost btn-sm" disabled={busy()} onClick={props.onClose}>
+        <button type="button" class="btn btn-ghost btn-sm" disabled={busy()} onClick={close}>
+
           {t("label.cancel")}
         </button>
         <Show when={current}>

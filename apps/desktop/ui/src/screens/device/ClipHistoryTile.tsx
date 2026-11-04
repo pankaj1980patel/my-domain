@@ -81,7 +81,9 @@ export default function ClipHistoryTile(props: { node: string }) {
                 <li class="clip-log-row">
                   <span
                     class="clip-log-dir"
+                    role="img"
                     classList={{ "clip-log-in": e.direction === "in" }}
+
                     title={e.direction === "in" ? t("clipHistory.from", { name: name() }) : t("clipHistory.to", { name: name() })}
                     aria-label={e.direction === "in" ? t("clipHistory.from", { name: name() }) : t("clipHistory.to", { name: name() })}
                   >

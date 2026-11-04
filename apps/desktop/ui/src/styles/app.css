@@ -95,15 +95,16 @@ input:not([type="checkbox"]) {
   font: inherit;
   color: var(--text);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-md);
   padding: 10px 12px;
   transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
 }
+/* Focus: a 2 px ring in --focus (3:1 or more on every theme), then the soft glow. */
 input:not([type="checkbox"]):focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), 0 0 0 4px var(--accent-bg);
 }
 input::placeholder {
   color: var(--text-3);
@@ -182,14 +183,17 @@ input[type="checkbox"][role="switch"]:checked::after {
   cursor: default;
 }
 /* Primary: the brand gradient, white label (kit .btn). */
+/* The gradient under a thin veil (--primary-scrim) so the white label keeps
+   4.5:1 over the gradient's lightest stop. Hover rings instead of brightening,
+   which would lose that contrast again. */
 .btn-primary {
-  background: var(--gradient);
+  background: linear-gradient(var(--primary-scrim), var(--primary-scrim)), var(--gradient);
   color: var(--on-primary);
   font-weight: var(--weight-strong);
   border-color: transparent;
 }
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  box-shadow: 0 0 0 2px var(--accent-ring);
 }
 /* Secondary: deep filled panel with a hairline (kit .btn.secondary). */
 .btn-soft {
@@ -1041,7 +1045,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   cursor: crosshair;
 }
 .screen-control:focus-visible {
-  outline: 2px solid var(--accent, #4c8dff);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 
@@ -1164,7 +1168,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   font-size: var(--text-sm);
   color: var(--text);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-md);
   padding: 4px 8px;
 }
@@ -1317,7 +1321,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   font: inherit;
   color: var(--text);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-md);
   padding: 6px 8px;
 }
@@ -1407,7 +1411,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   font: inherit;
   color: var(--text);
   background: var(--surface-2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--r-md);
   padding: 10px 12px;
   resize: vertical;
@@ -1415,8 +1419,8 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .lost-message:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-bg);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), 0 0 0 4px var(--accent-bg);
 }
 .lost-message::placeholder {
   color: var(--text-3);
@@ -1682,6 +1686,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   outline: none;
   box-shadow: none;
 }
+
 .palette-list {
   flex: 1;
   margin: 0;
@@ -2435,4 +2440,152 @@ p .help-link {
   flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------------------
+   Accessibility (docs/accessibility.md): screen-reader-only text, the skip
+   link, the sidebar's list, focus on cards and the version line, the info
+   rows' bars, edges of switches, and reduced motion.
+   --------------------------------------------------------------------------- */
+
+/* Read by screen readers, not drawn. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* "Skip to content": off screen until Tab reaches it. */
+.skip-link {
+  position: fixed;
+  top: var(--s-2);
+  left: var(--s-2);
+  z-index: 100;
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface-solid);
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
+}
+.content:focus {
+  outline: none;
+}
+
+/* The sidebar's places, as a list. */
+.nav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+@media (max-width: 720px) {
+  .nav-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+}
+
+/* A device card: its name is the button; the whole card shows its focus. */
+.device-card-name {
+  display: block;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.device-open {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.device-card-state {
+  display: block;
+}
+@supports selector(:has(a)) {
+  .device-open:focus-visible {
+    outline: none;
+  }
+  .device-card:has(.device-open:focus-visible) {
+    outline: 2px solid var(--focus);
+    outline-offset: 3px;
+  }
+}
+
+/* Empty states: an h2 under the page's h1, sized as before. */
+.empty-title {
+  display: block;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+/* Toasts: errors (alert) above the rest (status), stacked as before. */
+.toast-region {
+  display: grid;
+  gap: var(--s-2);
+}
+
+/* The version line is a button (7 presses open Developer) that looks as before. */
+button.version {
+  justify-self: center;
+  padding: var(--s-1) var(--s-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+}
+
+/* Info rows: the bar and the battery graph sit in their own <dd>. */
+.info-row .info-extra {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--s-1);
+  margin: 0;
+  text-align: left;
+}
+
+/* An off switch's track gets a 3:1 edge so the control can be seen. */
+input[type="checkbox"][role="switch"]:not(:checked) {
+  box-shadow: inset 0 0 0 1px var(--control-border);
+}
+
+/* A scrollable chat thread takes focus (to scroll it from the keyboard). */
+.thread:focus-visible {
+  outline-offset: -2px;
+}
+
+/* Reduced motion: no pulses, slides or animated bars, everywhere. The tokens
+   already zero --fast and --normal; this catches fixed durations too. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

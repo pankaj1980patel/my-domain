@@ -2,7 +2,7 @@
 // Transfers / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
-import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
 import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
@@ -20,7 +20,8 @@ import Settings from "./screens/Settings";
 import Developer from "./screens/Developer";
 import Help from "./screens/Help";
 import { setHelpOpener } from "./help/HelpLink";
-import { t } from "./i18n";
+import { t, tn, type Key } from "./i18n";
+import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 
 type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string };
@@ -33,7 +34,40 @@ export default function App() {
     resume().then(setSignedIn, () => setSignedIn(false));
   });
   const [view, setView] = createSignal<View>({ name: "home" });
+  let main: HTMLElement | undefined;
   const go = (v: View) => setView(v);
+  // A new screen: the window title names it, and focus moves to its content
+  // when it was in the sidebar or got lost with the old screen (keyboard and
+  // screen reader users land on the new page, not back at the top).
+  const titles: Record<View["name"], Key> = {
+    home: "nav.devices",
+    device: "nav.devices",
+    activity: "nav.activity",
+    transfers: "nav.transfers",
+    settings: "nav.settings",
+    developer: "nav.settings",
+    help: "nav.help",
+  };
+  createEffect(
+    on(
+      () => view().name,
+      (name) => {
+        document.title = `${t(titles[name])} · ${t("app.name")}`;
+        const at = document.activeElement;
+        if (!at || at === document.body || at.closest(".sidebar") || !at.isConnected) {
+          requestAnimationFrame(() => {
+            const now = document.activeElement;
+            if (!now || now === document.body || now.closest(".sidebar")) main?.focus({ preventScroll: true });
+          });
+        }
+      },
+      { defer: true },
+    ),
+  );
+  const skip = (e: MouseEvent) => {
+    e.preventDefault();
+    main?.focus();
+  };
   // The command palette's places; a Settings section scrolls into view once
   // the page is drawn.
   const goPlace = (place: Place, section?: string) => {
@@ -61,36 +95,77 @@ export default function App() {
     <>
       <Show when={signedIn() !== null}>
         <Show when={signedIn()} fallback={<SignIn onDone={() => setSignedIn(true)} />}>
+        <a class="skip-link" href="#main" onClick={skip}>
+          {t("a11y.skip")}
+        </a>
         <div class="shell">
           <nav class="sidebar" aria-label={t("nav.label")}>
             <div class="brand">
               <img src={logoSrc()} alt="" />
-              <span class="brand-text" aria-label={t("app.name")}>
+              <span class="brand-text">
                 <Wordmark />
                 <Tagline />
               </span>
             </div>
-            <button class={`nav-item ${is("home") ? "active" : ""}`} onClick={() => go({ name: "home" })}>
-              {t("nav.devices")}
-              <Show when={connected() > 0}>
-                <span class="nav-count">{connected()}</span>
-              </Show>
-            </button>
-            <button class={`nav-item ${is("activity") ? "active" : ""}`} onClick={() => go({ name: "activity" })}>
-              {t("nav.activity")}
-            </button>
-            <button class={`nav-item ${is("transfers") ? "active" : ""}`} onClick={() => go({ name: "transfers" })}>
-              {t("nav.transfers")}
-              <Show when={activeTransfers() > 0}>
-                <span class="nav-count">{activeTransfers()}</span>
-              </Show>
-            </button>
-            <button class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`} onClick={() => go({ name: "settings" })}>
-              {t("nav.settings")}
-            </button>
-            <button class={`nav-item ${is("help") ? "active" : ""}`} onClick={() => go({ name: "help" })}>
-              {t("nav.help")}
-            </button>
+            <ul class="nav-list">
+              <li>
+                <button
+                  class={`nav-item ${is("home") ? "active" : ""}`}
+                  aria-current={is("home") ? "page" : undefined}
+                  onClick={() => go({ name: "home" })}
+                >
+                  {t("nav.devices")}
+                  <Show when={connected() > 0}>
+                    <span class="nav-count" aria-hidden="true">
+                      {connected()}
+                    </span>
+                    <span class="sr-only">, {tn("a11y.devicesConnected", connected())}</span>
+                  </Show>
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("activity") ? "active" : ""}`}
+                  aria-current={is("activity") ? "page" : undefined}
+                  onClick={() => go({ name: "activity" })}
+                >
+                  {t("nav.activity")}
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("transfers") ? "active" : ""}`}
+                  aria-current={is("transfers") ? "page" : undefined}
+                  onClick={() => go({ name: "transfers" })}
+                >
+                  {t("nav.transfers")}
+                  <Show when={activeTransfers() > 0}>
+                    <span class="nav-count" aria-hidden="true">
+                      {activeTransfers()}
+                    </span>
+                    <span class="sr-only">, {tn("a11y.transfersActive", activeTransfers())}</span>
+                  </Show>
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`}
+                  aria-current={is("settings") || is("developer") ? "page" : undefined}
+                  onClick={() => go({ name: "settings" })}
+                >
+                  {t("nav.settings")}
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("help") ? "active" : ""}`}
+                  aria-current={is("help") ? "page" : undefined}
+                  onClick={() => go({ name: "help" })}
+                >
+                  {t("nav.help")}
+                </button>
+              </li>
+            </ul>
             {/* Pop-ups held while a phone is on Do Not Disturb. */}
             <Show when={state.quietPhones.length > 0}>
               <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
@@ -118,7 +193,7 @@ export default function App() {
             </Show>
             <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
           </nav>
-          <main class="content">
+          <main class="content" id="main" tabIndex={-1} ref={main}>
             <Switch>
               <Match when={view().name === "home"}>
                 <Home onOpen={(node) => go({ name: "device", node })} />
@@ -149,19 +224,38 @@ export default function App() {
         <SendToPicker />
         </Show>
       </Show>
-      <Show when={state.ringing}>
-        {(r) => (
-          // Another device is looking for this one: any click silences it.
-          <div class="ring-banner" role="alertdialog" aria-live="assertive" onClick={dismissRing}>
-            <span class="ring-pulse" aria-hidden="true" />
-            <strong>{t("ring.title", { name: peerName(r().from) })}</strong>
-            <button class="btn btn-primary" onClick={dismissRing} autofocus>
-              {t("ring.stop")}
-            </button>
-          </div>
-        )}
-      </Show>
+      <Show when={state.ringing}>{(r) => <RingBanner from={r().from} />}</Show>
       <Toasts />
     </>
+  );
+}
+
+/** Another device is looking for this one: any click silences it. Stop takes
+ *  focus while it shows; focus goes back where it was after. */
+function RingBanner(props: { from: string }) {
+  let stop: HTMLButtonElement | undefined;
+  let root: HTMLDivElement | undefined;
+  const restore = rememberFocus();
+  onMount(() => requestAnimationFrame(() => stop?.focus()));
+  onCleanup(() => {
+    const at = document.activeElement;
+    if (!at || at === document.body || root?.contains(at)) restore();
+  });
+  return (
+    <div
+      ref={root}
+      class="ring-banner"
+      role="alertdialog"
+      aria-modal="false"
+      aria-labelledby="ring-banner-title"
+      onClick={dismissRing}
+      onKeyDown={(e) => e.key === "Escape" && dismissRing()}
+    >
+      <span class="ring-pulse" aria-hidden="true" />
+      <strong id="ring-banner-title">{t("ring.title", { name: peerName(props.from) })}</strong>
+      <button class="btn btn-primary" ref={stop} onClick={dismissRing}>
+        {t("ring.stop")}
+      </button>
+    </div>
   );
 }

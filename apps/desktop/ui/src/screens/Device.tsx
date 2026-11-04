@@ -43,6 +43,7 @@ import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
 import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
+import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
 import DropToSend from "./device/DropToSend";
@@ -76,10 +77,12 @@ export default function Device(props: { node: string; onBack: () => void }) {
       when={peer()}
       fallback={
         <section class="page">
+          <h1 class="sr-only">{t("nav.devices")}</h1>
           <button class="link" onClick={props.onBack}>
             {t("device.back")}
           </button>
           <p class="muted">{t("device.gone")}</p>
+
         </section>
       }
     >
@@ -210,7 +213,7 @@ function ChatTile(props: { node: string }) {
           </button>
         </Show>
       </div>
-      <div class="thread" ref={list}>
+      <div class="thread" ref={list} role="log" aria-label={t("a11y.chatLog", { name: peerName(props.node) })} tabIndex={0}>
         <Show when={thread().length > 0} fallback={<p class="muted small center">{t("chat.empty")}</p>}>
           <For each={thread()}>
             {(m) => (
@@ -431,6 +434,22 @@ function ScreenTile(props: { node: string }) {
   const [full, setFull] = createSignal(false);
   const [control, setControl] = createSignal(false);
   let canvas: HTMLCanvasElement | undefined;
+  // Full screen covers the page: Tab stays inside it, the Exit button takes
+  // focus, and focus goes back to "Full screen" (or Show/Stop) after.
+  let stage: HTMLDivElement | undefined;
+  let exitFullButton: HTMLButtonElement | undefined;
+  let toggleButton: HTMLButtonElement | undefined;
+  let restoreFull: (() => void) | undefined;
+  const enterFull = () => {
+    restoreFull = rememberFocus();
+    setFull(true);
+    focusSoon(() => exitFullButton);
+  };
+  const exitFull = () => {
+    setFull(false);
+    restoreFull?.();
+    restoreFull = undefined;
+  };
   let renew: ReturnType<typeof setInterval> | undefined;
   let poll: ReturnType<typeof setInterval> | undefined;
   let unlisten: (() => void)[] = [];
@@ -536,9 +555,12 @@ function ScreenTile(props: { node: string }) {
     unlisten.forEach((f) => f());
     unlisten = [];
     if (watching()) watch(false).catch(() => {});
+    const wasFull = full();
     setWatching(false);
     setHasFrame(false);
     setFull(false);
+    restoreFull = undefined;
+    if (wasFull) focusSoon(() => toggleButton);
     setControl(false);
     latest++;
   };
@@ -580,7 +602,7 @@ function ScreenTile(props: { node: string }) {
     if (Date.now() - at < 60_000) start();
   });
   const leaveFull = (e: KeyboardEvent) => {
-    if (e.key === "Escape" && full()) setFull(false);
+    if (e.key === "Escape" && full()) exitFull();
   };
   window.addEventListener("keydown", leaveFull);
   onCleanup(() => {
@@ -594,12 +616,20 @@ function ScreenTile(props: { node: string }) {
       <h2>{title()}</h2>
       <p class="muted small">{isPhone() ? t("phoneScreen.hint") : t("screen.hint")}</p>
       <Show when={watching()}>
-        <div class="screen-stage" classList={{ "screen-stage-full": full() }}>
+        <div
+          class="screen-stage"
+          classList={{ "screen-stage-full": full() }}
+          ref={stage}
+          role={full() ? "dialog" : undefined}
+          aria-modal={full() ? "true" : undefined}
+          aria-label={full() ? title() : undefined}
+          onKeyDown={(e) => full() && trapTab(e, stage)}
+        >
           <Show when={full()}>
             <div class="screen-stage-bar">
               <strong>{title()}</strong>
               <span class="grow" />
-              <button class="btn btn-ghost btn-sm" onClick={() => setFull(false)}>
+              <button class="btn btn-ghost btn-sm" ref={exitFullButton} onClick={exitFull}>
                 {t("phoneScreen.exitFull")}
               </button>
               <button class="btn btn-ghost btn-sm" onClick={stop}>
@@ -614,8 +644,11 @@ function ScreenTile(props: { node: string }) {
             ref={canvas}
             class="screen-view"
             classList={{ "screen-control": controls() || phoneControl(), "screen-hidden": !hasFrame() }}
-            role="img"
-            aria-label={t("screen.alt")}
+            // Taking input, it passes keys through to the other computer
+            // (application); otherwise it's a picture with a name.
+            role={controls() ? "application" : "img"}
+            aria-label={t(controls() ? "a11y.screenOf" : "a11y.screenView", { name: peerName(props.node) })}
+            aria-describedby={controls() ? `screen-hint-${props.node}` : undefined}
             tabIndex={controls() ? 0 : undefined}
             onClick={(e) => clickAt(e, "left")}
             onContextMenu={(e) => clickAt(e, "right")}
@@ -640,7 +673,9 @@ function ScreenTile(props: { node: string }) {
           </Show>
         </div>
         <Show when={controls()}>
-          <p class="muted small">{t("screen.controlHint")}</p>
+          <p class="muted small" id={`screen-hint-${props.node}`}>
+            {t("screen.controlHint")}
+          </p>
         </Show>
         <Show when={isPhone() && st()?.screenSend}>
           <label class="switch-row">
@@ -666,11 +701,15 @@ function ScreenTile(props: { node: string }) {
       </Show>
       <div class="row">
         <Show when={watching()}>
-          <button class="btn btn-ghost btn-sm" onClick={() => setFull(true)}>
+          <button class="btn btn-ghost btn-sm" onClick={enterFull}>
             {t("phoneScreen.full")}
           </button>
         </Show>
-        <button class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"} onClick={() => (watching() ? stop() : start())}>
+        <button
+          ref={toggleButton}
+          class={watching() ? "btn btn-ghost btn-sm" : "btn btn-soft btn-block"}
+          onClick={() => (watching() ? stop() : start())}
+        >
           {watching() ? t("screen.stop") : isPhone() ? t("phoneScreen.ask") : t("screen.show")}
         </button>
       </div>
@@ -924,7 +963,15 @@ function TransferRow(props: { x: Transfer; device: string }) {
         </Show>
       </div>
       <Show when={active()}>
-        <div class="progress">
+        <div
+          class="progress"
+          role="progressbar"
+          aria-label={t("a11y.transferProgress", { name: props.x.name })}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct())}
+          aria-valuetext={line()}
+        >
           <span style={{ width: `${pct()}%` }} />
         </div>
       </Show>
@@ -1190,11 +1237,19 @@ function WifiList(props: { node: string; st: DeviceStatus }) {
                     {n.ssid}
                     <span class="muted small">
                       {" "}
-                      {"▂▄▆█".slice(0, Math.max(1, n.signal))}
-                      {n.secure ? " 🔒" : ""}
+                      {/* Bars and a padlock to see; words to hear. */}
+                      <span aria-hidden="true">
+                        {"▂▄▆█".slice(0, Math.max(1, n.signal))}
+                        {n.secure ? " 🔒" : ""}
+                      </span>
+                      <span class="sr-only">
+                        {t("a11y.wifiSignal", { n: Math.max(1, Math.min(4, n.signal)) })}
+                        {n.secure ? `, ${t("a11y.wifiSecure")}` : ""}
+                      </span>
                       {n.current ? ` · ${t("wifi.connected")}` : n.saved ? ` · ${t("wifi.saved")}` : ""}
                     </span>
                   </span>
+
                   <Show when={!n.current}>
                     <button class="btn btn-ghost btn-sm" onClick={() => join(n)}>
                       {t("wifi.join")}
