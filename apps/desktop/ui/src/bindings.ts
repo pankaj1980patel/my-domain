@@ -121,6 +121,15 @@ export const commands = {
 	sendFolder: (nodeId: string, path: string) => typedError<number, string>(__TAURI_INVOKE("send_folder", { nodeId, path })),
 	/**  Stop a transfer, either way. */
 	cancelFile: (id: string) => __TAURI_INVOKE<void>("cancel_file", { id }),
+	/**  Every transfer: those under way first, then the newest finished ones. */
+	transferList: () => __TAURI_INVOKE<TransferEntry_Serialize[]>("transfer_list"),
+	/**  Forget the finished and failed transfers. */
+	transferClearFinished: () => __TAURI_INVOKE<void>("transfer_clear_finished"),
+	/**
+	 *  Show a transfer's file in Finder / Explorer: where a received one was
+	 *  saved, or the file a sent one came from. Only paths this list recorded.
+	 */
+	transferReveal: (id: string) => typedError<null, string>(__TAURI_INVOKE("transfer_reveal", { id })),
 	/**
 	 *  Send text to a device: onto its clipboard (`mode` "clipboard") or shown
 	 *  as a notification ("notify"). It gets a `text-shared` event.
@@ -1172,6 +1181,68 @@ export type ShortcutSettings_Serialize = {
  *  to stay compatible with the existing frontend / Kotlin JSON.
  */
 export type Source = "registry" | "lan" | "manual";
+
+/**  One transfer, either way. */
+export type TransferEntry = TransferEntry_Serialize | TransferEntry_Deserialize;
+
+/**  One transfer, either way. */
+export type TransferEntry_Deserialize = {
+	id: string,
+	/**  The other device. */
+	node_id: string,
+	name: string,
+	/**  To this computer. */
+	incoming: boolean,
+	state: TransferState,
+	/**  Bytes confirmed so far, of `total` (0 while not yet known). */
+	done: number | null,
+	total: number | null,
+	/**  It carried on from a partial file: the bytes it resumed at. */
+	resumed_from?: number | null,
+	/**  Received: where it was saved. Sent: the file it came from. */
+	path?: string | null,
+	/**  Why it failed (the core's words). */
+	reason?: string | null,
+	/**  When it was first seen and when it ended, in ms since 1970. */
+	started: number | null,
+	ended?: number | null,
+	/**  `path` is still there (filled in when listed). */
+	exists?: boolean,
+};
+
+/**  One transfer, either way. */
+export type TransferEntry_Serialize = {
+	id: string,
+	/**  The other device. */
+	node_id: string,
+	name: string,
+	/**  To this computer. */
+	incoming: boolean,
+	state: TransferState,
+	/**  Bytes confirmed so far, of `total` (0 while not yet known). */
+	done: number | null,
+	total: number | null,
+	/**  It carried on from a partial file: the bytes it resumed at. */
+	resumed_from: number | null,
+	/**  Received: where it was saved. Sent: the file it came from. */
+	path: string | null,
+	/**  Why it failed (the core's words). */
+	reason: string | null,
+	/**  When it was first seen and when it ended, in ms since 1970. */
+	started: number | null,
+	ended: number | null,
+	/**  `path` is still there (filled in when listed). */
+	exists: boolean,
+};
+
+/**  Where a transfer is. */
+export type TransferState = 
+/**  Offered or moving. */
+"active" | 
+/**  Sent (the other device confirmed it) or saved here. */
+"done" | 
+/**  Stopped for good: cancelled (either side) or an error; see `reason`. */
+"failed";
 
 /**  Which transport a live P2P link is using. Serializes lowercase for the UI. */
 export type TransportKind = "punch" | "webrtc" | "quic" | "relay" | 

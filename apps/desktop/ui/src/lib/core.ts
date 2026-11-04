@@ -217,6 +217,12 @@ export type Transfer = {
   /** Where a received file was saved. */
   path?: string;
   ts: number;
+  /** Measured speed in bytes a second (smoothed), while it moves. */
+  rate?: number;
+  /** When `done` last moved (ms), for `rate`. */
+  movedAt?: number;
+  /** It carried on from a partial file: the bytes it resumed at. */
+  resumedFrom?: number;
 };
 
 /** Raw event log for the Developer screen. */
@@ -502,12 +508,24 @@ export async function startEvents() {
     ),
     // Files. A transfer may be first seen by any of these (a fast progress
     // event can beat sendFile's reply), so each one creates it if missing.
-    on<{ id: string; node_id: string; name: string; done: number; total: number; incoming: boolean }>(
+    on<{ id: string; node_id: string; name: string; done: number; total: number; incoming: boolean; resumed?: boolean }>(
       "file-progress",
-      ({ id, node_id, name, done, total, incoming }) => {
+      ({ id, node_id, name, done, total, incoming, resumed }) => {
         const cur = state.transfers[id];
         if (cur && (cur.state === "sent" || cur.state === "saved" || cur.state === "failed")) return;
+        // Speed: smoothed over the moves seen (not counting a resumed start).
+        const at = now();
+        let rate = cur?.rate;
+        if (cur?.movedAt && done > cur.done && at > cur.movedAt) {
+          const inst = ((done - cur.done) * 1000) / (at - cur.movedAt);
+          rate = rate === undefined ? inst : rate * 0.7 + inst * 0.3;
+        }
+        const movedAt = !cur || done !== cur.done ? at : (cur.movedAt ?? at);
+        const resumedFrom = cur?.resumedFrom ?? (resumed ? done : undefined);
         setState("transfers", id, {
+          rate,
+          movedAt,
+          resumedFrom,
           id,
           node: node_id,
           name,

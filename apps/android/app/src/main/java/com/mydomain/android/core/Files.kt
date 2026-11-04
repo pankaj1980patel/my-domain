@@ -13,8 +13,6 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
-enum class TransferState { Active, Done, Failed }
-
 /**
  * One file transfer with a device, kept current by the core's `file_*`
  * events. [incoming]: to this phone. A received file gets its [uri] (the

@@ -36,6 +36,7 @@ mod screen_share;
 mod send_to;
 mod shortcut;
 mod sysinfo;
+mod transfers;
 mod tray;
 mod webhooks;
 mod wifi_share;
@@ -381,15 +382,50 @@ impl EventSink for TauriSink {
                     }
                 });
             }
+            // Every transfer is kept in the Transfers list (`transfers`),
+            // both ways, before the window hears of it.
+            CoreEvent::FileProgress {
+                id,
+                node_id,
+                name,
+                done,
+                total,
+                incoming,
+                resumed,
+            } => transfers::on_progress(
+                &self.app, id, node_id, name, *done, *total, *incoming, *resumed,
+            ),
+            CoreEvent::FileSent { id, node_id, name } => {
+                transfers::on_sent(&self.app, id, node_id, name);
+            }
+            CoreEvent::FileFailed {
+                id,
+                node_id,
+                name,
+                incoming,
+                reason,
+            } => transfers::on_failed(&self.app, id, node_id, name, *incoming, reason),
             // Photo backups arrive by themselves, often many: no notice each.
-            CoreEvent::FileReceived { path, .. } if is_backup(path) => {}
+            CoreEvent::FileReceived {
+                id,
+                from,
+                name,
+                path,
+                size,
+                ..
+            } if is_backup(path) => {
+                transfers::on_received(&self.app, id, from, name, path, *size);
+            }
             // A picture copied on another device: on this clipboard too.
             CoreEvent::FileReceived {
+                id,
                 from,
+                name,
                 path,
+                size,
                 clipboard: true,
-                ..
             } => {
+                transfers::on_received(&self.app, id, from, name, path, *size);
                 let (app, from, path) = (self.app.clone(), from.clone(), path.clone());
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
@@ -407,7 +443,15 @@ impl EventSink for TauriSink {
                     }
                 });
             }
-            CoreEvent::FileReceived { from, name, .. } => {
+            CoreEvent::FileReceived {
+                id,
+                from,
+                name,
+                path,
+                size,
+                ..
+            } => {
+                transfers::on_received(&self.app, id, from, name, path, *size);
                 let (app, from, name) = (self.app.clone(), from.clone(), name.clone());
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
@@ -1038,8 +1082,16 @@ fn run_action(
 /// `file-progress`, then `file-sent` or `file-failed`.
 #[tauri::command]
 #[specta::specta]
-fn send_file(node_id: String, path: String, engine: State<Eng>) -> Result<String, CoreError> {
-    engine.send_file(&node_id, &path)
+fn send_file(
+    node_id: String,
+    path: String,
+    app: AppHandle,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
+    let id = engine.send_file(&node_id, &path)?;
+    // Kept with the transfer, for "Show in Finder" and "Send again".
+    transfers::on_sending(&app, &id, &node_id, &path);
+    Ok(id)
 }
 
 /// Send a whole folder to a device; it's recreated under the device's
@@ -1317,6 +1369,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         send_file,
         send_folder,
         cancel_file,
+        transfers::transfer_list,
+        transfers::transfer_clear_finished,
+        transfers::transfer_reveal,
         send_text,
         list_folder,
         download_file,
@@ -1444,6 +1499,7 @@ pub fn run() {
             app.manage(quiet::Quiet::default());
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
+            app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));

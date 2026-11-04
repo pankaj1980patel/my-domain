@@ -48,7 +48,8 @@ private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 }
 
 /** Sign-in until ready; then tabs (Devices, Activity, Settings) plus the
- *  pushed Device and Developer screens. */
+ *  pushed Device, Developer, Automations and Transfers (from Activity)
+ *  screens. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -80,6 +81,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var device by rememberSaveable { mutableStateOf<String?>(null) }
     var developer by rememberSaveable { mutableStateOf(false) }
     var automations by rememberSaveable { mutableStateOf(false) }
+    var transfers by rememberSaveable { mutableStateOf(false) }
 
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
@@ -95,6 +97,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             device = null
             developer = false
             automations = false
+            transfers = false
             tab = Tab.Settings
             Core.showSettings = false
         }
@@ -105,17 +108,19 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         Core.showDevice?.let { node ->
             developer = false
             automations = false
+            transfers = false
             tab = Tab.Devices
             device = node
             Core.showDevice = null
         }
     }
 
-    BackHandler(enabled = device != null || developer || automations || tab != Tab.Devices) {
+    BackHandler(enabled = device != null || developer || automations || transfers || tab != Tab.Devices) {
         when {
             device != null -> device = null
             developer -> developer = false
             automations -> automations = false
+            transfers -> transfers = false
             else -> tab = Tab.Devices
         }
     }
@@ -124,7 +129,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            if (device == null && !developer && !automations) {
+            if (device == null && !developer && !automations && !transfers) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
@@ -149,8 +154,9 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 device != null -> DeviceScreen(device!!, onBack = { device = null })
                 developer -> DeveloperScreen(onBack = { developer = false })
                 automations -> AutomationsScreen(onBack = { automations = false })
+                transfers -> TransfersScreen(onBack = { transfers = false }, onOpenDevice = { device = it })
                 tab == Tab.Devices -> HomeScreen(onOpen = { device = it })
-                tab == Tab.Activity -> ActivityScreen()
+                tab == Tab.Activity -> ActivityScreen(onTransfers = { transfers = true })
                 else -> SettingsScreen(prefs, onDeveloper = { developer = true }, onAutomations = { automations = true })
             }
         }

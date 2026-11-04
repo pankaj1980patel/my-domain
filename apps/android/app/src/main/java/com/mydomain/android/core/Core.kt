@@ -234,6 +234,7 @@ object Core {
         BatteryLog.load(app)
         ClipLog.load(app)
         DeviceLabels.load(app)
+        TransferLog.load(app)
     }
 
     fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
@@ -534,13 +535,20 @@ object Core {
                 )
                 if (listings.size > 50) listings.keys.firstOrNull { it != req }?.let { listings.remove(it) }
             }
-            "file_progress" -> updateTransfer(o.optString("id"), { Transfer(it, node, o.optString("name"), o.optBoolean("incoming")) }) {
-                if (it.state != TransferState.Active) it
-                else it.copy(done = o.optLong("done"), total = o.optLong("total"))
+            "file_progress" -> {
+                updateTransfer(o.optString("id"), { Transfer(it, node, o.optString("name"), o.optBoolean("incoming")) }) {
+                    if (it.state != TransferState.Active) it
+                    else it.copy(done = o.optLong("done"), total = o.optLong("total"))
+                }
+                TransferLog.progress(
+                    o.optString("id"), node, o.optString("name"), o.optLong("done"), o.optLong("total"),
+                    o.optBoolean("incoming"), o.optBoolean("resumed"),
+                )
             }
             "file_received" -> {
                 val from = o.optString("from")
                 val name = o.optString("name")
+                TransferLog.received(o.optString("id"), from, name, o.optLong("size"))
                 updateTransfer(o.optString("id"), { Transfer(it, from, name, true) }) {
                     it.copy(state = TransferState.Done, done = o.optLong("size"), total = o.optLong("size"))
                 }
@@ -548,6 +556,7 @@ object Core {
             }
             "file_sent" -> {
                 val name = o.optString("name")
+                TransferLog.sent(o.optString("id"), node, name)
                 updateTransfer(o.optString("id"), { Transfer(it, node, name, false) }) {
                     it.copy(state = TransferState.Done, done = it.total)
                 }
@@ -557,6 +566,7 @@ object Core {
                 val name = o.optString("name")
                 val incoming = o.optBoolean("incoming")
                 val reason = o.optString("reason")
+                TransferLog.failed(o.optString("id"), node, name, incoming, reason)
                 updateTransfer(o.optString("id"), { Transfer(it, node, name, incoming) }) {
                     it.copy(state = TransferState.Failed, reason = reason)
                 }
@@ -594,6 +604,7 @@ object Core {
     fun fileSaved(id: String, uri: Uri, mime: String) = onMain {
         val i = transfers.indexOfFirst { it.id == id }
         if (i >= 0) transfers[i] = transfers[i].copy(uri = uri.toString(), mime = mime)
+        TransferLog.saved(id, uri.toString(), mime)
     }
 
     /** Files shared from another app; the UI asks which device gets them. */
@@ -734,6 +745,8 @@ object Core {
         }
         OutgoingFiles.track(id, file)
         val size = file.length()
+        // Kept with the transfer, for "Send again".
+        TransferLog.sending(id, node, file.name, uri.toString(), size)
         onMain {
             updateTransfer(id, { Transfer(it, node, file.name, false) }) {
                 if (it.total == 0L) it.copy(total = size) else it

@@ -2088,3 +2088,77 @@ input[type="checkbox"][role="switch"]:checked::after {
   white-space: nowrap;
   user-select: all;
 }
+
+/* --- transfers (every file in and out, one list) ----------------------------- */
+
+.xfer-section {
+  margin: var(--s-6) 0 var(--s-3);
+  font-size: 0.95rem;
+}
+.xfer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.xfer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+}
+.xfer + .xfer {
+  border-top: 1px solid var(--border);
+}
+.xfer-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+.xfer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.xfer-dir {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  font-weight: 600;
+}
+.xfer-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.xfer-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.xfer-actions {
+  flex-wrap: wrap;
+}
+.xfer-line {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+.xfer-resumed {
+  font-style: italic;
+}

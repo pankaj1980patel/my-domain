@@ -25,13 +25,28 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.Tone
+import com.mydomain.android.core.TransferLog
 import com.mydomain.android.core.timeAgo
 
-/** What happened, in plain sentences. */
+/** What happened, in plain sentences; the way to Transfers on top. */
 @Composable
-fun ActivityScreen() {
+fun ActivityScreen(onTransfers: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
         item { PageHead(stringResource(R.string.activity_title), stringResource(R.string.activity_subtitle)) }
+        item {
+            val active = TransferLog.list.count { !it.finished }
+            Tile(Modifier.padding(vertical = 8.dp), onClick = onTransfers) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (active > 0) stringResource(R.string.transfers_open_active, active)
+                        else stringResource(R.string.transfers_open),
+                        Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = T.text,
+                    )
+                    Text("›", style = MaterialTheme.typography.titleMedium, color = T.text3)
+                }
+                Muted(stringResource(R.string.transfers_subtitle))
+            }
+        }
         if (Core.activity.isEmpty()) {
             item { EmptyState(stringResource(R.string.activity_empty_title), stringResource(R.string.activity_empty_body)) }
         }

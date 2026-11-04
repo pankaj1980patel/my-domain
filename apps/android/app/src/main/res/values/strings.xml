@@ -57,6 +57,37 @@
     <string name="activity_empty_title">Nothing yet</string>
     <string name="activity_empty_body">Things your devices do show up here.</string>
 
+    <!-- Transfers: every file going to or coming from your devices -->
+    <string name="transfers_title">Transfers</string>
+    <string name="transfers_subtitle">Files and folders on their way to and from your devices.</string>
+    <string name="transfers_open">Transfers</string>
+    <string name="transfers_open_active">Transfers · %1$d under way</string>
+    <string name="transfers_active">Under way</string>
+    <string name="transfers_recent">Recent</string>
+    <string name="transfers_empty_title">No transfers yet</string>
+    <string name="transfers_empty_body">Files you send or receive show up here, with their progress.</string>
+    <string name="transfers_to">To %1$s</string>
+    <string name="transfers_from">From %1$s</string>
+    <string name="transfers_dir_sent">Sent</string>
+    <string name="transfers_dir_received">Received</string>
+    <string name="transfers_waiting">Waiting for %1$s…</string>
+    <string name="transfers_progress">%1$s of %2$s</string>
+    <string name="transfers_speed">%1$s/s</string>
+    <string name="transfers_eta">%1$s left</string>
+    <string name="transfers_secs">%1$d s</string>
+    <string name="transfers_mins">%1$d min</string>
+    <string name="transfers_hours">%1$d h %2$d min</string>
+    <string name="transfers_resumed">Resumed from %1$d%%</string>
+    <string name="transfers_done_sent">Sent, %1$s · %2$s</string>
+    <string name="transfers_done_saved">Saved, %1$s · %2$s</string>
+    <string name="transfers_failed">Didn’t finish: %1$s · %2$s</string>
+    <string name="transfers_cancelled">Cancelled · %1$s</string>
+    <string name="transfers_send_again">Send again</string>
+    <string name="transfers_sending_again">Sending %1$s to %2$s again</string>
+    <string name="transfers_source_gone">That file isn’t there any more</string>
+    <string name="transfers_show">Show in Files</string>
+    <string name="transfers_clear">Clear finished</string>
+
     <!-- Device -->
     <string name="device_not_found_title">Not in your list</string>
     <string name="device_not_found_body">This device isn\'t in your list any more.</string>

@@ -1,5 +1,6 @@
 // App shell: sign in first, then a sidebar with Devices / Activity /
-// Settings. A device opens its detail page; the Developer screen is hidden.
+// Transfers / Settings. A device opens its detail page; the Developer screen
+// is hidden.
 
 import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
@@ -14,11 +15,12 @@ import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
 import Device from "./screens/Device";
 import Activity from "./screens/Activity";
+import Transfers from "./screens/Transfers";
 import Settings from "./screens/Settings";
 import Developer from "./screens/Developer";
 import { t } from "./i18n";
 
-type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "settings" } | { name: "developer" };
+type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" };
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -45,6 +47,8 @@ export default function App() {
   });
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
   const connected = () => state.peers.filter((p) => state.links[p.node_id]).length;
+  const activeTransfers = () =>
+    Object.values(state.transfers).filter((x) => x.state === "waiting" || x.state === "sending" || x.state === "receiving").length;
 
   return (
     <>
@@ -68,6 +72,12 @@ export default function App() {
             <button class={`nav-item ${is("activity") ? "active" : ""}`} onClick={() => go({ name: "activity" })}>
               {t("nav.activity")}
             </button>
+            <button class={`nav-item ${is("transfers") ? "active" : ""}`} onClick={() => go({ name: "transfers" })}>
+              {t("nav.transfers")}
+              <Show when={activeTransfers() > 0}>
+                <span class="nav-count">{activeTransfers()}</span>
+              </Show>
+            </button>
             <button class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`} onClick={() => go({ name: "settings" })}>
               {t("nav.settings")}
             </button>
@@ -90,6 +100,9 @@ export default function App() {
               </Match>
               <Match when={view().name === "activity"}>
                 <Activity />
+              </Match>
+              <Match when={view().name === "transfers"}>
+                <Transfers />
               </Match>
               <Match when={view().name === "settings"}>
                 <Settings onDeveloper={() => go({ name: "developer" })} />

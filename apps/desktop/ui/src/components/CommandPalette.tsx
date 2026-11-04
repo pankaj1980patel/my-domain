@@ -31,7 +31,7 @@ import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, tn, type Key } from "../i18n";
 
-export type Place = "home" | "activity" | "settings";
+export type Place = "home" | "activity" | "transfers" | "settings";
 
 type Cmd = {
   /** Stable across openings: the recents list keeps these. */
@@ -260,6 +260,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
     return [
       { id: "place.home", label: t("palette.devices"), group, run: go("home") },
       { id: "place.activity", label: t("palette.activity"), group, run: go("activity") },
+      { id: "place.transfers", label: t("palette.transfers"), group, run: go("transfers") },
       { id: "place.settings", label: t("palette.settings"), group, run: go("settings") },
       section("account", "settings.account"),
       section("device", "settings.thisDevice"),
