@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mydomain.android.BuildConfig
+import com.mydomain.android.HomeWidget
 import com.mydomain.android.R
 import com.mydomain.android.ffi.DeviceIdentity
 import com.mydomain.android.ffi.MdEngine
@@ -210,6 +211,9 @@ object Core {
 
     fun engine(): MdEngine? = runningEngine()
 
+    /** Events that change what the home-screen widget shows. */
+    private val WIDGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "device_status")
+
     /** The app context, for strings built outside the screens (set by
      *  MainActivity and NetService, whichever starts first). */
     lateinit var app: Context
@@ -275,6 +279,7 @@ object Core {
             peers = p
             links.clear()
             p.forEach { peer -> peer.link?.let { links[peer.nodeId] = it } }
+            HomeWidget.refresh(app)
         }
     }
 
@@ -367,6 +372,7 @@ object Core {
             devLog.add(0, DevEvent(System.currentTimeMillis(), name, payloadJson))
             if (devLog.size > 500) devLog.removeRange(500, devLog.size)
             apply(o, peersNow)
+            if (kind in WIDGET_KINDS) HomeWidget.refresh(app)
         }
     }
 

@@ -448,6 +448,18 @@
     <string name="qs_clip_queued">Will copy to %1$s when it\'s reachable</string>
     <string name="qs_locked">Locking %1$s</string>
     <string name="qs_failed">Couldn\'t reach %1$s</string>
+    <!-- Home-screen widget (HomeWidget.kt) -->
+    <string name="widget_label">Your computer</string>
+    <string name="widget_description">Your computer at a glance: connected or not, its battery, and Send clipboard, Lock and Ring.</string>
+    <string name="widget_preview_name">Your computer</string>
+    <string name="widget_open_app">Open my-domain to connect</string>
+    <string name="widget_no_computer">Connect to your computer once</string>
+    <string name="widget_connected">Connected</string>
+    <string name="widget_not_connected">Not connected</string>
+    <string name="widget_battery">%1$s · %2$d%%</string>
+    <string name="widget_clip">Send clipboard</string>
+    <string name="widget_lock">Lock</string>
+    <string name="widget_ring">Ring</string>
     <!-- Commands a computer lets your devices run (CommandsTile) -->
     <string name="run_title">Commands</string>
     <string name="run_hint">Set up on %1$s, in my-domain\'s Settings there. It shows a notification each time one runs.</string>

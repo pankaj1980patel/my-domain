@@ -43,7 +43,7 @@ object QuickTarget {
  *  invisible screen that reads it, sends it and closes). */
 class ClipTileService : TileService() {
     override fun onClick() {
-        val open = Intent(this, ClipSendActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val open = QuickActions.clipIntent(this)
         // The app targets Android 9, so the Intent form is allowed.
         @Suppress("DEPRECATION")
         startActivityAndCollapse(open)
@@ -52,16 +52,40 @@ class ClipTileService : TileService() {
 
 /** Tile: lock your computer. */
 class LockTileService : TileService() {
-    override fun onClick() {
-        val app = applicationContext
+    override fun onClick() = QuickActions.lock(applicationContext)
+}
+
+/** The one-tap actions on the computer, shared by the tiles and the
+ *  home-screen widget ([HomeWidget]). Each says how it went in a toast. */
+object QuickActions {
+    /** Opens [ClipSendActivity], which reads the clipboard and sends it. */
+    fun clipIntent(ctx: Context): Intent =
+        Intent(ctx, ClipSendActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    fun lock(ctx: Context) = onComputer(ctx) { app, node ->
+        runCatching { Core.runAction(node, "lock") }
+            .fold({ app.getString(R.string.qs_locked, QuickTarget.name(node)) }, { app.getString(R.string.qs_failed, QuickTarget.name(node)) })
+    }
+
+    fun ring(ctx: Context) = onComputer(ctx) { app, node ->
+        val name = QuickTarget.name(node)
+        runCatching { Core.ring(node) }.fold(
+            { if (it == "queued") app.getString(R.string.find_ring_queued, name) else app.getString(R.string.find_ringing, name) },
+            { app.getString(R.string.qs_failed, name) },
+        )
+    }
+
+    /** Runs [act] on the computer off the main thread and toasts what it
+     *  returns; says so if there's no computer or the app isn't running. */
+    private fun onComputer(ctx: Context, act: suspend (Context, String) -> String) {
+        val app = ctx.applicationContext
         val node = QuickTarget.computer(app)
         if (node == null || Core.engine() == null) {
-            Toast.makeText(app, getString(R.string.qs_no_computer), Toast.LENGTH_SHORT).show()
+            Toast.makeText(app, app.getString(R.string.qs_no_computer), Toast.LENGTH_SHORT).show()
             return
         }
         CoroutineScope(Dispatchers.IO).launch {
-            val msg = runCatching { Core.runAction(node, "lock") }
-                .fold({ getString(R.string.qs_locked, QuickTarget.name(node)) }, { getString(R.string.qs_failed, QuickTarget.name(node)) })
+            val msg = act(app, node)
             withContext(Dispatchers.Main) { Toast.makeText(app, msg, Toast.LENGTH_SHORT).show() }
         }
     }

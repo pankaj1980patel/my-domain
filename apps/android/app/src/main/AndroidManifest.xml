@@ -171,6 +171,21 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Home-screen widget (HomeWidget.kt): the computer, with the same actions. -->
+        <receiver
+            android:name=".HomeWidget"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+        <receiver
+            android:name=".HomeWidgetActionReceiver"
+            android:exported="false" />
         <activity
             android:name=".ClipSendActivity"
             android:excludeFromRecents="true"

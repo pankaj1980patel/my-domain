@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widget (HomeWidget.kt): the Cosmic Blue theme's colours
+         from ui/Theme.kt, since a widget can't use the Compose theme. -->
+    <color name="widget_bg">#E60B1630</color>
+    <color name="widget_border">#FF203454</color>
+    <color name="widget_button">#FF152744</color>
+    <color name="widget_button_border">#FF2A456A</color>
+    <color name="widget_text">#FFF4F8FF</color>
+    <color name="widget_text_muted">#FF94A3B8</color>
+    <color name="widget_accent">#FF22C7F2</color>
+    <color name="widget_ok">#FF34D399</color>
+</resources>
