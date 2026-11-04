@@ -204,7 +204,7 @@ fn send_copied(app: &AppHandle) {
         return;
     };
     let Some(phone) = find_phone(app, &engine) else {
-        crate::notify::post_urgent(
+        crate::notify::post_always(
             app,
             "No phone to send to",
             "Sign in to my-domain on your Android phone with the same account.",
@@ -239,18 +239,18 @@ pub fn send_clipboard_to(app: &AppHandle, engine: &Eng, phone: &str) {
     let name = crate::notify::device_name(app, phone);
     match clipboard_to(app, engine, phone) {
         Ok(Some(true)) => {
-            crate::notify::post(app, &format!("Sent to {name}"), "It's on its clipboard.")
+            crate::notify::post_always(app, &format!("Sent to {name}"), "It's on its clipboard.")
         }
-        Ok(Some(false)) => crate::notify::post(
+        Ok(Some(false)) => crate::notify::post_always(
             app,
             &format!("Will send when {name} is reachable"),
             "It goes as soon as your phone is back.",
         ),
         Ok(None) => {
-            crate::notify::post_urgent(app, "Nothing to send", "Copy some text or a picture first.")
+            crate::notify::post_always(app, "Nothing to send", "Copy some text or a picture first.")
         }
         Err(e) => {
-            crate::notify::post_urgent(app, &format!("Couldn't send to {name}"), &e.to_string())
+            crate::notify::post_always(app, &format!("Couldn't send to {name}"), &e.to_string())
         }
     }
 }

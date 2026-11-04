@@ -7,10 +7,22 @@
 // shared from the phone. All of it can be turned off in Settings ("Show
 // notifications"), kept in `<app config dir>/prefs.json`, on by default.
 //
-// "Follow my phone's Do Not Disturb" (off by default, same file): while one
-// of your devices reports Do Not Disturb (mdcore `features::dnd`), pop-ups
-// are held instead of shown, and when it ends one pop-up says how many came.
-// A ring still shows. The OS's own Do Not Disturb is never touched.
+// "Stay quiet while my phone is on Do Not Disturb" (off by default, same
+// file, key `follow_dnd`): while one of your phones is on Do Not Disturb (see
+// `quiet`: a live link and a fresh word from it), pop-ups are held instead
+// of shown, and when it ends one pop-up says how many came. What they're
+// about still lands in its history (notifications, chat, clipboard).
+//
+// Two ways to post, and every caller picks one:
+//  - `post` / `post_if_away`: everyday notices (mirrored phone
+//    notifications, messages, clipboard and text, files, battery, automation,
+//    schedule and webhook runs) are held while quiet;
+//  - `post_always`: safety and consent, and what you just did yourself (a
+//    ring, find-my, lost mode, location shared, someone watching this
+//    screen, a lock because the phone went away, a permission this needs,
+//    the answer to a tray or shortcut action) always show.
+// Only "Show notifications" turned off stops those. The OS's own Do Not
+// Disturb is never touched.
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, Once};
@@ -27,7 +39,7 @@ const DND_KEY: &str = "follow_dnd";
 /// Most pop-ups held during Do Not Disturb (only the count is shown).
 const MAX_HELD: usize = 200;
 
-/// The "Show notifications" and "Follow my phone's Do Not Disturb"
+/// The "Show notifications" and "Stay quiet while my phone is on Do Not Disturb"
 /// preferences, read once at startup, and the pop-ups held meanwhile.
 pub struct Prefs {
     kv: Option<FileKv>,
@@ -81,13 +93,41 @@ impl Prefs {
     }
 }
 
-/// Post an OS notification, unless they're turned off; held instead while
-/// a device of yours is in Do Not Disturb and this computer follows it.
+/// How a pop-up takes "quiet".
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kind {
+    /// Held while a phone of yours is on Do Not Disturb (switch on).
+    Everyday,
+    /// Safety and consent: always shown.
+    Always,
+}
+
+/// Hold this one instead of showing it?
+pub fn holds(kind: Kind, follow_dnd: bool, phone_quiet: bool) -> bool {
+    kind == Kind::Everyday && follow_dnd && phone_quiet
+}
+
+/// Post an everyday OS notification, unless they're turned off; held
+/// instead while a phone of yours is on Do Not Disturb and this computer
+/// stays quiet with it.
 pub fn post(app: &AppHandle, title: &str, body: &str) {
+    post_as(app, Kind::Everyday, title, body);
+}
+
+/// Post one even while quiet (safety, consent, a permission this needs, the
+/// answer to something you just did): only "Show notifications" turned off
+/// stops it.
+pub fn post_always(app: &AppHandle, title: &str, body: &str) {
+    post_as(app, Kind::Always, title, body);
+}
+
+fn post_as(app: &AppHandle, kind: Kind, title: &str, body: &str) {
     let Some(prefs) = app.try_state::<Prefs>() else {
         return;
     };
-    if prefs.follow_dnd() && dnd_now(app) {
+    // The phones are looked at only for a pop-up that could be held.
+    let quiet = kind == Kind::Everyday && prefs.follow_dnd() && dnd_now(app);
+    if holds(kind, prefs.follow_dnd(), quiet) {
         if let Ok(mut held) = prefs.held.lock() {
             if held.len() < MAX_HELD {
                 held.push(title.to_string());
@@ -95,13 +135,7 @@ pub fn post(app: &AppHandle, title: &str, body: &str) {
         }
         return;
     }
-    post_urgent(app, title, body);
-}
-
-/// Post one even during Do Not Disturb (a ring, or why something you just
-/// tried can't work): only "Show notifications" turned off stops it.
-pub fn post_urgent(app: &AppHandle, title: &str, body: &str) {
-    if !app.try_state::<Prefs>().is_some_and(|p| p.enabled()) {
+    if !prefs.enabled() {
         return;
     }
     if !permitted(app) {
@@ -112,13 +146,12 @@ pub fn post_urgent(app: &AppHandle, title: &str, body: &str) {
     }
 }
 
-/// One of your devices is in Do Not Disturb now.
+/// One of your phones is on Do Not Disturb now (see `quiet`).
 fn dnd_now(app: &AppHandle) -> bool {
-    app.try_state::<Eng>()
-        .is_some_and(|e| !e.dnd_active().is_empty())
+    !crate::quiet::phones(app).is_empty()
 }
 
-/// A device went into or out of Do Not Disturb (or the setting changed):
+/// A phone went into or out of Do Not Disturb (or the setting changed):
 /// once none is in it any more, say how many pop-ups were held.
 pub fn dnd_changed(app: &AppHandle) {
     let Some(prefs) = app.try_state::<Prefs>() else {
@@ -132,7 +165,7 @@ pub fn dnd_changed(app: &AppHandle) {
         Err(_) => return,
     };
     if let Some(body) = held_summary(&held) {
-        post_urgent(app, "While Do Not Disturb was on", &body);
+        post_always(app, "While Do Not Disturb was on", &body);
     }
 }
 
@@ -216,7 +249,18 @@ pub(crate) fn nice_name(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{held_summary, nice_name};
+    use super::{held_summary, holds, nice_name, Kind};
+
+    #[test]
+    fn only_everyday_pop_ups_are_held_and_only_while_quiet() {
+        // Quiet, switch on: everyday held, safety shown.
+        assert!(holds(Kind::Everyday, true, true));
+        assert!(!holds(Kind::Always, true, true));
+        // Switch off, or no phone quiet: nothing held.
+        assert!(!holds(Kind::Everyday, false, true));
+        assert!(!holds(Kind::Everyday, true, false));
+        assert!(!holds(Kind::Always, false, false));
+    }
 
     #[test]
     fn held_pop_ups_are_summed_up() {

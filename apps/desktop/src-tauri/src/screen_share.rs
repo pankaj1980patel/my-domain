@@ -60,13 +60,13 @@ pub fn on_watch(app: &AppHandle, from: &str, on: bool) {
     }
     let who = crate::notify::device_name(app, from);
     match ready() {
-        Ok(()) => crate::notify::post(
+        Ok(()) => crate::notify::post_always(
             app,
             &format!("{who} is watching this screen"),
             "Turn it off in my-domain's settings.",
         ),
         Err(why) => {
-            crate::notify::post(app, &format!("{who} can't see this screen"), needs(why));
+            crate::notify::post_always(app, &format!("{who} can't see this screen"), needs(why));
             return;
         }
     }

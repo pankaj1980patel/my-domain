@@ -40,6 +40,7 @@ const LABEL_SEND: &str = "Send a file…";
 const LABEL_SEND_FOLDER: &str = "Send a folder…";
 const LABEL_OPEN: &str = "Open";
 const LABEL_QUIT: &str = "Quit";
+const TOOLTIP_QUIET: &str = "my-domain \u{b7} Quiet: your phone is on Do Not Disturb";
 const LABEL_NO_DEVICES: &str = "No devices yet";
 const CONNECTED_SUFFIX: &str = " · connected";
 const NOT_CONNECTED_SUFFIX: &str = " · not connected";
@@ -138,6 +139,20 @@ pub fn refresh(app: &AppHandle) {
     });
 }
 
+/// The tooltip says when pop-ups are held because a phone is on Do Not
+/// Disturb (`quiet`).
+pub fn set_quiet(app: &AppHandle, on: bool) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            let tip = if on { TOOLTIP_QUIET } else { "my-domain" };
+            if let Err(e) = tray.set_tooltip(Some(tip)) {
+                eprintln!("[tray] couldn't update the tooltip: {e}");
+            }
+        }
+    });
+}
+
 /// Bring the main window forward.
 pub fn show_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -186,8 +201,8 @@ pub fn on_status(app: &AppHandle, from: &str, status: &serde_json::Value) {
         std::thread::spawn(move || {
             let name = notify::device_name(&app, &from);
             match crate::open_map(place.lat, place.lon, app.clone()) {
-                Ok(()) => notify::post(&app, &format!("Found {name}"), "It's on the map."),
-                Err(e) => notify::post(
+                Ok(()) => notify::post_always(&app, &format!("Found {name}"), "It's on the map."),
+                Err(e) => notify::post_always(
                     &app,
                     &format!("Couldn't show {name} on a map"),
                     &e.to_string(),
@@ -390,13 +405,15 @@ fn ring(app: &AppHandle, node: &str) {
         let name = notify::device_name(&app, &node);
         let connected = engine.links().iter().any(|(id, _)| *id == node);
         match engine.ring(&node) {
-            Ok(_) if connected => notify::post(&app, "my-domain", &format!("Ringing {name}")),
-            Ok(_) => notify::post(
+            Ok(_) if connected => {
+                notify::post_always(&app, "my-domain", &format!("Ringing {name}"))
+            }
+            Ok(_) => notify::post_always(
                 &app,
                 "my-domain",
                 &format!("Will ring when {name} is reachable"),
             ),
-            Err(e) => notify::post(&app, "my-domain", &format!("Couldn't ring {name}: {e}")),
+            Err(e) => notify::post_always(&app, "my-domain", &format!("Couldn't ring {name}: {e}")),
         }
     });
 }
@@ -426,7 +443,7 @@ fn copy_clip(app: &AppHandle, id: &str) {
             return;
         };
         if let Err(e) = engine.copy_to_clipboard(&text) {
-            notify::post(&app, "Couldn't copy the clip", &e.to_string());
+            notify::post_always(&app, "Couldn't copy the clip", &e.to_string());
         }
     });
 }
@@ -450,17 +467,17 @@ fn locate(app: &AppHandle, node: &str) {
             );
         }
         match engine.run_action(&node, "locate", "") {
-            Ok(how) if how == "queued" => notify::post(
+            Ok(how) if how == "queued" => notify::post_always(
                 &app,
                 "my-domain",
                 &format!("Will ask where {name} is when it's reachable"),
             ),
-            Ok(_) => notify::post(&app, "my-domain", &format!("Asking where {name} is")),
+            Ok(_) => notify::post_always(&app, "my-domain", &format!("Asking where {name} is")),
             Err(e) => {
                 if let Ok(mut asked) = ASKED.lock() {
                     asked.remove(&node);
                 }
-                notify::post(&app, "my-domain", &format!("Couldn't locate {name}: {e}"));
+                notify::post_always(&app, "my-domain", &format!("Couldn't locate {name}: {e}"));
             }
         }
     });
@@ -473,7 +490,7 @@ fn show_on_map(app: &AppHandle, node: &str) {
     };
     if let Err(e) = crate::open_map(place.lat, place.lon, app.clone()) {
         let name = notify::device_name(app, node);
-        notify::post(
+        notify::post_always(
             app,
             &format!("Couldn't show {name} on a map"),
             &e.to_string(),
@@ -514,7 +531,7 @@ fn send_file(app: &AppHandle, node: &str) {
                 Ok(_) => format!("Sending {file} to {name}"),
                 Err(e) => format!("Couldn't send {file} to {name}: {e}"),
             };
-            notify::post(&handle, "my-domain", &body);
+            notify::post_always(&handle, "my-domain", &body);
         });
     });
 }
@@ -542,7 +559,7 @@ fn send_folder(app: &AppHandle, node: &str) {
                 Ok(n) => format!("Sending {n} files to {name}"),
                 Err(e) => format!("Couldn't send {folder} to {name}: {e}"),
             };
-            notify::post(&handle, "my-domain", &body);
+            notify::post_always(&handle, "my-domain", &body);
         });
     });
 }

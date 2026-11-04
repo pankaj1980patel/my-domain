@@ -69,6 +69,13 @@ export default function App() {
             <button class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`} onClick={() => go({ name: "settings" })}>
               {t("nav.settings")}
             </button>
+            {/* Pop-ups held while a phone is on Do Not Disturb. */}
+            <Show when={state.quietPhones.length > 0}>
+              <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
+                <span class="quiet-dot" aria-hidden="true" />
+                {t("quiet.on")}
+              </div>
+            </Show>
             <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
           </nav>
           <main class="content">

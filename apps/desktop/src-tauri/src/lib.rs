@@ -28,6 +28,7 @@ mod fcm;
 mod location;
 mod notif_history;
 mod notify;
+mod quiet;
 mod remote_input;
 mod schedule;
 mod screen_share;
@@ -298,6 +299,7 @@ impl EventSink for TauriSink {
             | CoreEvent::PeerDisconnected { .. } => {
                 tray::refresh(&self.app);
                 automations::on_link(&self.app);
+                quiet::on_link(&self.app);
             }
             // Which of your devices are phones: lock when they go away,
             // where the copy shortcut sends, and the tray's phone actions.
@@ -307,6 +309,7 @@ impl EventSink for TauriSink {
                 away_lock::on_status(&self.app, from, status);
                 automations::on_status(&self.app, from, status);
                 battery_log::on_status(&self.app, from, status);
+                quiet::on_status(&self.app, from, status);
                 webhooks::on_status(&self.app, from, status);
                 shortcut::saw_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
@@ -330,10 +333,7 @@ impl EventSink for TauriSink {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || screen_share::on_watch(&app, &from, on));
             }
-            CoreEvent::Dnd { .. } => {
-                let app = self.app.clone();
-                std::thread::spawn(move || notify::dnd_changed(&app));
-            }
+            CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
             CoreEvent::MessageReceived(m) if m.ok => {
@@ -896,7 +896,8 @@ fn follow_phone_dnd(prefs: State<notify::Prefs>) -> bool {
 #[specta::specta]
 fn set_follow_phone_dnd(on: bool, app: AppHandle, prefs: State<notify::Prefs>) {
     prefs.set_follow_dnd(on);
-    // Turned off mid-DND: say what was held.
+    // The indicator follows; turned off mid-DND: say what was held.
+    quiet::changed(&app);
     notify::dnd_changed(&app);
 }
 
@@ -922,11 +923,13 @@ fn location_available() -> bool {
     location::available()
 }
 
-/// Your devices in Do Not Disturb right now (node ids).
+/// Your phones on Do Not Disturb right now (node ids; a live link and a
+/// fresh word from each, see `quiet`), whether or not this computer stays
+/// quiet with them.
 #[tauri::command]
 #[specta::specta]
-fn dnd_devices(engine: State<Eng>) -> Vec<String> {
-    engine.dnd_active()
+fn dnd_devices(app: AppHandle) -> Vec<String> {
+    quiet::phones(&app)
 }
 
 // --- the phone as touchpad and keyboard ---
@@ -1367,6 +1370,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         device_labels::get_device_labels,
         device_labels::set_device_label,
         dnd_devices,
+        quiet::phone_quiet,
         remote_input_allowed,
         set_remote_input_allowed,
         screen_allowed,
@@ -1403,6 +1407,7 @@ pub fn run() {
             let handle = app.handle().clone();
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
+            app.manage(quiet::Quiet::default());
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
@@ -1453,6 +1458,7 @@ pub fn run() {
             device::spawn_status_reporter(handle.clone());
             device::spawn_now_playing(handle.clone());
             away_lock::spawn(handle.clone());
+            quiet::spawn(handle.clone());
             schedule::spawn(handle.clone());
             automations::spawn(handle.clone());
             battery_log::spawn(handle.clone());

@@ -194,7 +194,7 @@ pub fn on_action(app: &AppHandle, from: &str, name: &str, args: &serde_json::Val
         }
         "slides" => {
             if let Err(why) = slides::press(args["key"].as_str().unwrap_or_default()) {
-                crate::notify::post(app, "my-domain can't change slides", why);
+                crate::notify::post_always(app, "my-domain can't change slides", why);
             }
         }
         "locate" => {
@@ -210,7 +210,7 @@ pub fn on_action(app: &AppHandle, from: &str, name: &str, args: &serde_json::Val
             let secs = minutes.min(u64::from(mdcore::engine::MAX_AWAKE_MINUTES)) * 60;
             if let Err(why) = awake::keep(secs) {
                 eprintln!("[device] keep awake: {why}");
-                crate::notify::post(app, "my-domain can't keep this computer awake", &why);
+                crate::notify::post_always(app, "my-domain can't keep this computer awake", &why);
             }
         }
         _ => return,
@@ -845,7 +845,7 @@ pub fn on_ring(app: &AppHandle, from: &str) {
     let name = crate::notify::device_name(app, from);
     // Asked for on purpose: shown even while pop-ups are held for Do Not
     // Disturb.
-    crate::notify::post_urgent(
+    crate::notify::post_always(
         app,
         "my-domain",
         &format!("{name} is looking for this computer"),

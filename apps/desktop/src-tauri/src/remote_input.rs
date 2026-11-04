@@ -234,7 +234,7 @@ fn tell_once(app: &AppHandle, why: &str) {
         "display" => "Your phone's touchpad needs an X11 session (or XWayland) on this computer.",
         _ => "Your phone's touchpad couldn't control this computer.",
     };
-    crate::notify::post_urgent(app, "my-domain can't use your phone as a touchpad", body);
+    crate::notify::post_always(app, "my-domain can't use your phone as a touchpad", body);
 }
 
 #[cfg(test)]

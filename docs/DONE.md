@@ -238,12 +238,25 @@ Tried live (phone with the new APK, mdctl on the Mac as the computer with
     `ACTION_INTERRUPTION_FILTER_CHANGED` (plus the notification listener's
     `onInterruptionFilterChanged`). Reading needs no permission; nothing
     asks for notification-policy access, and the OS state is never changed.
-  - Desktop: Settings switch "Follow my phone's Do Not Disturb" (off by
+  - Desktop: Settings switch "Stay quiet while my phone is on Do Not Disturb" (off by
     default). While on and a device is in DND, my-domain's pop-ups are held;
     when DND ends one pop-up says how many came ("3 notifications: Asha,
     Files, Mom"). A ring and "can't use your phone as a touchpad" still
     show. Commands `follow_phone_dnd`, `set_follow_phone_dnd`,
     `dnd_devices`.
+  - Quiet when my phone is quiet (2026-11-04): the phone's status carries
+    `dnd: true|false` too (a change pushes a fresh status). Desktop
+    `quiet.rs` keeps each phone's last word (status or `CoreEvent::Dnd`):
+    a phone counts only with a live link and a word under 30 min old (a
+    quiet live phone is asked again at 20 min). `notify::post` (everyday:
+    mirrored notifications, messages, clipboard/text, files, battery,
+    automation/schedule/webhook runs) is held; `notify::post_always`
+    (ring, find-my, location shared, screen watched, away lock, permission
+    notices, tray/shortcut answers) always shows. Sidebar badge "Quiet:
+    your phone is on Do Not Disturb", tray tooltip, `phone-quiet` event,
+    `phone_quiet` command; "Do Not Disturb: On/Off" in InfoTile (desktop
+    and Android). Tests in `quiet::tests` and
+    `only_everyday_pop_ups_are_held_and_only_while_quiet`.
   - mdctl: `dnd on|off`, `dnd-active`.
   - Tests: `the_computer_hears_when_the_phone_goes_into_and_out_of_dnd`,
     `a_restarted_phone_does_not_repeat_its_state`, desktop

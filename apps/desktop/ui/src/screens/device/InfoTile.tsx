@@ -1,5 +1,5 @@
 // What another device last said about itself: battery, storage, memory,
-// processor and how long it has been on. Each row is shown only when its
+// processor, how long it has been on and whether it's on Do Not Disturb. Each row is shown only when its
 // field is in the status (phones send no processor use; older versions
 // send no uptime), and the tile only when there's something to show. Under
 // the battery bar, its last 24 hours (BatteryChart).
@@ -75,6 +75,7 @@ function rowsOf(st: DeviceStatus | undefined): Row[] {
     const secs = st.uptimeS + Math.max(0, Math.round((Date.now() - st.ts) / 1000));
     rows.push({ label: t("info.uptime"), value: uptimeText(secs) });
   }
+  if (st.dnd !== undefined) rows.push({ label: t("info.dnd"), value: st.dnd ? t("info.dndOn") : t("info.dndOff") });
   return rows;
 }
 

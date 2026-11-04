@@ -288,8 +288,17 @@ export const commands = {
 	 *  blank clears its label). Answers with every label.
 	 */
 	setDeviceLabel: (node: string, nickname: string | null, icon: string | null, color: string | null) => typedError<{ [key in string]: DeviceLabel_Serialize }, string>(__TAURI_INVOKE("set_device_label", { node, nickname, icon, color })),
-	/**  Your devices in Do Not Disturb right now (node ids). */
+	/**
+	 *  Your phones on Do Not Disturb right now (node ids; a live link and a
+	 *  fresh word from each, see `quiet`), whether or not this computer stays
+	 *  quiet with them.
+	 */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
+	/**
+	 *  The phones keeping this computer quiet right now (node ids; empty when
+	 *  "Stay quiet while my phone is on Do Not Disturb" is off or none is).
+	 */
+	phoneQuiet: () => __TAURI_INVOKE<string[]>("phone_quiet"),
 	/**  Whether your phone may move the pointer and type here. */
 	remoteInputAllowed: () => __TAURI_INVOKE<boolean>("remote_input_allowed"),
 	setRemoteInputAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_remote_input_allowed", { on }),

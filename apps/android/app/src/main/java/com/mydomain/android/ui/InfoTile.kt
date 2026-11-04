@@ -35,7 +35,7 @@ import com.mydomain.android.core.DeviceStatus
 
 /** It sent something [InfoTile] shows. */
 fun hasInfo(st: DeviceStatus): Boolean =
-    st.battery != null || (st.storageTotal ?: 0L) > 0L || (st.ramTotal ?: 0L) > 0L || st.cpu != null || st.uptimeS != null
+    st.battery != null || (st.storageTotal ?: 0L) > 0L || (st.ramTotal ?: 0L) > 0L || st.cpu != null || st.uptimeS != null || st.dnd != null
 
 /** What another device last said about itself: battery, storage, memory,
  *  processor and how long it has been on. A row per field it sent (phones
@@ -74,6 +74,9 @@ fun InfoTile(node: String, name: String, st: DeviceStatus) {
             // It answered at `seenAt`: count the time since then too.
             val secs = up + ((System.currentTimeMillis() - st.seenAt) / 1000).coerceAtLeast(0)
             InfoRow(stringResource(R.string.info_uptime), uptimeText(secs))
+        }
+        st.dnd?.let {
+            InfoRow(stringResource(R.string.info_dnd), stringResource(if (it) R.string.info_dnd_on else R.string.info_dnd_off))
         }
     }
 }

@@ -197,7 +197,7 @@ pub fn spawn(app: AppHandle) {
         std::thread::sleep(TICK);
         if tick(&app) {
             screen::lock();
-            crate::notify::post(
+            crate::notify::post_always(
                 &app,
                 "Locked because your phone went away",
                 "Turn this off under \u{201c}Lock this computer when my phone goes away\u{201d} in my-domain\u{2019}s Settings.",

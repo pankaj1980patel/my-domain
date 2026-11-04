@@ -97,6 +97,8 @@ data class DeviceStatus(
     val commands: List<RemoteCommand> = emptyList(),
     /** How the last command run there went. */
     val lastRun: LastRun? = null,
+    /** It’s in Do Not Disturb (phones; null: it didn’t say). */
+    val dnd: Boolean? = null,
     val seenAt: Long = System.currentTimeMillis(),
 )
 
@@ -477,6 +479,7 @@ object Core {
                     sharedFolders = if (st.has("shared_folders")) st.optInt("shared_folders") else null,
                     cpu = if (st.has("cpu")) st.optInt("cpu").coerceIn(0, 100) else null,
                     uptimeS = if (st.has("uptime_s")) st.optLong("uptime_s").coerceAtLeast(0) else null,
+                    dnd = if (st.has("dnd")) st.optBoolean("dnd") else null,
                     commands = st.optJSONArray("commands")?.let { arr ->
                         (0 until arr.length()).mapNotNull { i ->
                             arr.optJSONObject(i)?.takeIf { it.has("id") && it.has("name") }

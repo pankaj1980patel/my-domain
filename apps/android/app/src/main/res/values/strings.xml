@@ -443,6 +443,9 @@
     <string name="info_cpu">Processor</string>
     <string name="info_cpu_busy">%1$d%% in use</string>
     <string name="info_uptime">On for</string>
+    <string name="info_dnd">Do Not Disturb</string>
+    <string name="info_dnd_on">On</string>
+    <string name="info_dnd_off">Off</string>
     <plurals name="info_up_minutes">
         <item quantity="one">%1$d minute</item>
         <item quantity="other">%1$d minutes</item>

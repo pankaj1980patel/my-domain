@@ -101,6 +101,8 @@ export type DeviceStatus = {
   writeSettings?: boolean;
   /** Lost mode is on there (its message shows on its lock screen). */
   lost?: boolean;
+  /** It's on Do Not Disturb (phones; absent: it didn't say). */
+  dnd?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
   /** How many folders it lets you browse (absent: it can't be browsed). */
@@ -242,6 +244,9 @@ type State = {
   status: Record<string, DeviceStatus>;
   /** Set while another device is ringing this one (find my device). */
   ringing: { from: string } | null;
+  /** Your phones on Do Not Disturb that keep this computer's pop-ups held
+   *  ("Stay quiet while my phone is on Do Not Disturb"); empty: none. */
+  quietPhones: string[];
   /** transfer id -> file transfer (both ways) */
   transfers: Record<string, Transfer>;
   /** node_id -> the nickname, icon and colour you gave it here. */
@@ -264,6 +269,7 @@ export const [state, setState] = createStore<State>({
   clipHistory: [],
   status: {},
   ringing: null,
+  quietPhones: [],
   transfers: {},
   labels: {},
   devLog: [],
@@ -462,6 +468,7 @@ export async function startEvents() {
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
         location: locationOf(status?.location),
         lost: status?.lost === true,
+        dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
         brightness: typeof status?.brightness === "number" ? Math.round(status.brightness) : undefined,
         autoBrightness: typeof status?.auto_brightness === "boolean" ? status.auto_brightness : undefined,
         screenTimeoutS: typeof status?.screen_timeout_s === "number" ? Math.round(status.screen_timeout_s) : undefined,
@@ -480,6 +487,8 @@ export async function startEvents() {
         ts: now(),
       }),
     ),
+    // Pop-ups held while a phone is on Do Not Disturb (the sidebar says so).
+    on<string[]>("phone-quiet", (phones) => setState("quietPhones", Array.isArray(phones) ? phones : [])),
     // The backend brings the window forward and shows the OS notification;
     // the sound and the banner are here.
     on<{ from: string }>("ring-event", ({ from }) => {
@@ -600,6 +609,7 @@ export async function signIn(server: string, user: string, pass: string, key: st
 export async function resume(): Promise<boolean> {
   if (!(await commands.isReady())) return false;
   await startEvents();
+  commands.phoneQuiet().then((p) => setState("quietPhones", p), () => {});
   await loadAll();
   refreshDevices().catch(() => {});
   return true;

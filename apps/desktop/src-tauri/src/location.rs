@@ -87,7 +87,7 @@ pub fn extend(app: &AppHandle, status: &mut serde_json::Value) {
 pub fn locate(app: &AppHandle, done: impl FnOnce(&AppHandle) + Send + 'static) {
     let allowed = app.try_state::<LocationPref>().is_some_and(|p| p.allowed());
     if !allowed {
-        crate::notify::post(
+        crate::notify::post_always(
             app,
             "Your phone asked where this computer is",
             "Turn on \u{201c}Let my phone see where this computer is\u{201d} in my-domain\u{2019}s Settings to share it.",
@@ -106,7 +106,7 @@ pub fn locate(app: &AppHandle, done: impl FnOnce(&AppHandle) + Send + 'static) {
                         Some(serde_json::json!({ "lat": lat, "lon": lon, "acc": acc, "at": at }));
                 }
             }
-            crate::notify::post(
+            crate::notify::post_always(
                 &app,
                 "Location shared with your phone",
                 "You let your phone see where this computer is. Change it in my-domain\u{2019}s Settings.",
@@ -115,7 +115,7 @@ pub fn locate(app: &AppHandle, done: impl FnOnce(&AppHandle) + Send + 'static) {
         }
         Err(why) => {
             eprintln!("[location] {why}");
-            crate::notify::post(&app, "my-domain can't tell where this computer is", &why);
+            crate::notify::post_always(&app, "my-domain can't tell where this computer is", &why);
         }
     });
 }

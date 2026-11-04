@@ -382,7 +382,7 @@ pub fn on_run(
         return;
     }
     let device = who(app, from);
-    crate::notify::post_urgent(
+    crate::notify::post_always(
         app,
         &format!("{device} ran \u{201c}{}\u{201d}", c.name),
         "Change which commands your devices can run in my-domain\u{2019}s Settings.",

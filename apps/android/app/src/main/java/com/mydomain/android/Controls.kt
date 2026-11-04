@@ -95,6 +95,7 @@ object Controls {
         PhoneLocation.state(ctx, o)
         ScreenSettings.state(ctx, o)
         LostMode.state(ctx, o)
+        DndWatch.state(ctx, o)
         o.put("helper", PhoneHelper.instance != null)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
