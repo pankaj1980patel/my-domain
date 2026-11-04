@@ -88,6 +88,7 @@ private fun titleOf(item: SetupItem): Int = when (item) {
     SetupItem.LOCATION_SHARING -> R.string.setup_location_sharing_title
     SetupItem.LOCATION_PERMISSION -> R.string.setup_location_title
     SetupItem.PHOTOS -> R.string.setup_photos_title
+    SetupItem.MICROPHONE -> R.string.setup_microphone_title
     SetupItem.WRITE_SETTINGS -> R.string.setup_write_settings_title
     SetupItem.FULL_SCREEN -> R.string.setup_full_screen_title
     SetupItem.SHIZUKU -> R.string.setup_shizuku_title
@@ -105,6 +106,7 @@ private fun purposeOf(item: SetupItem): Int = when (item) {
     SetupItem.LOCATION_SHARING -> R.string.setup_location_sharing_for
     SetupItem.LOCATION_PERMISSION -> R.string.setup_location_for
     SetupItem.PHOTOS -> R.string.setup_photos_for
+    SetupItem.MICROPHONE -> R.string.setup_microphone_for
     SetupItem.WRITE_SETTINGS -> R.string.setup_write_settings_for
     SetupItem.FULL_SCREEN -> R.string.setup_full_screen_for
     SetupItem.SHIZUKU -> R.string.setup_shizuku_for

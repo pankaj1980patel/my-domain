@@ -25,6 +25,7 @@ enum class SetupItem(
     LOCATION_SHARING,
     LOCATION_PERMISSION,
     PHOTOS,
+    MICROPHONE(minSdk = 29),
     WRITE_SETTINGS,
     FULL_SCREEN(minSdk = 34),
     SHIZUKU,

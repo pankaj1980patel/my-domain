@@ -42,8 +42,8 @@ class SetupChecklistTest {
         // Not-needed and explain-only items are never read.
         assertFalse(SetupItem.NEARBY_DEVICES in asked)
         assertFalse(SetupItem.QUICK_TILES in asked)
-        // 13 items: 2 not needed, 1 explain-only -> 10 counted, 2 on.
-        assertEquals(2 to 10, SetupChecklist.count(rows))
+        // 14 items: 2 not needed, 1 explain-only -> 11 counted, 2 on.
+        assertEquals(2 to 11, SetupChecklist.count(rows))
     }
 
     @Test
@@ -68,7 +68,7 @@ class SetupChecklistTest {
     @Test
     fun everythingOnCountsAll() {
         val rows = SetupChecklist(35, 35).rows { true }
-        assertEquals(12 to 12, SetupChecklist.count(rows))
+        assertEquals(13 to 13, SetupChecklist.count(rows))
     }
 
     @Test

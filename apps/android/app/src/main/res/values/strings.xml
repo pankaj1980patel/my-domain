@@ -704,6 +704,8 @@
     <string name="setup_nearby_for">Reaches your computers over Bluetooth when you’re not on the same network.</string>
     <string name="setup_location_sharing_title">Share this phone’s location</string>
     <string name="setup_location_sharing_for">Find my phone: your computers can ask where it is. You get a notification each time.</string>
+    <string name="setup_microphone_title">Microphone permission</string>
+    <string name="setup_microphone_for">Phone audio on your computer: Android needs it to capture what this phone plays (never calls). It is only used while you share the audio.</string>
     <string name="setup_location_title">Location permission</string>
     <string name="setup_location_for">Needed for find my phone’s location and for listing Wi-Fi networks on your computers. Android’s Location switch must be on too.</string>
     <string name="setup_photos_title">Photos and videos</string>

@@ -45,6 +45,7 @@ object SetupState {
             SetupItem.LOCATION_SHARING -> PhoneLocation.allowed(ctx)
             SetupItem.LOCATION_PERMISSION -> granted(Manifest.permission.ACCESS_FINE_LOCATION)
             SetupItem.PHOTOS -> Gallery.canRead(ctx)
+            SetupItem.MICROPHONE -> granted(Manifest.permission.RECORD_AUDIO)
             SetupItem.WRITE_SETTINGS -> ScreenSettings.canWrite(ctx)
             SetupItem.FULL_SCREEN -> Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
                 ctx.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true
@@ -66,6 +67,7 @@ object SetupState {
             } else null
         SetupItem.LOCATION_PERMISSION -> arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
         SetupItem.PHOTOS -> Gallery.permissions()
+        SetupItem.MICROPHONE -> arrayOf(Manifest.permission.RECORD_AUDIO)
         else -> null
     }
 
@@ -127,7 +129,7 @@ object SetupState {
                 appNotifications,
                 appDetails(ctx),
             )
-            SetupItem.NEARBY_DEVICES, SetupItem.LOCATION_PERMISSION, SetupItem.PHOTOS -> listOf(appDetails(ctx))
+            SetupItem.NEARBY_DEVICES, SetupItem.LOCATION_PERMISSION, SetupItem.PHOTOS, SetupItem.MICROPHONE -> listOf(appDetails(ctx))
             SetupItem.LOCATION_SHARING, SetupItem.SHIZUKU, SetupItem.WIDGET, SetupItem.QUICK_TILES -> emptyList()
         }
     }
