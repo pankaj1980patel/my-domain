@@ -88,6 +88,16 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
+    // A notification asked for Settings (e.g. to allow location sharing).
+    LaunchedEffect(Core.showSettings) {
+        if (Core.showSettings) {
+            device = null
+            developer = false
+            tab = Tab.Settings
+            Core.showSettings = false
+        }
+    }
+
     BackHandler(enabled = device != null || developer || tab != Tab.Devices) {
         when {
             device != null -> device = null

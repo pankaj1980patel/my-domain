@@ -33,7 +33,7 @@ import org.json.JSONObject
  */
 object Radios {
     private const val TAG = "mydomain_radios"
-    val KINDS = listOf("wifi", "bluetooth", "airplane", "data", "hotspot")
+    val KINDS = listOf("wifi", "bluetooth", "airplane", "data", "hotspot", "location")
 
     private var receiver: BroadcastReceiver? = null
     /** False once this phone refused to switch Bluetooth directly. */
@@ -53,6 +53,7 @@ object Radios {
             addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
             addAction(Intent.ACTION_AIRPLANE_MODE_CHANGED)
             addAction(AP_STATE_CHANGED)
+            addAction(android.location.LocationManager.MODE_CHANGED_ACTION)
         }
         runCatching { ctx.applicationContext.registerReceiver(r, f) }
             .onSuccess { receiver = r }
@@ -69,6 +70,7 @@ object Radios {
                 ?.takeIf { it >= 0 }?.let { o.put("mobile_data", it == 1) }
         }
         hotspotOn(ctx)?.let { o.put("hotspot", it) }
+        isOn(ctx, "location")?.let { o.put("location_on", it) }
         // The ones that switch with no tap on the phone.
         val direct = when {
             PhoneHelper.instance != null -> KINDS
@@ -89,6 +91,11 @@ object Radios {
             "airplane" -> Settings.Global.getInt(app.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1
             "data" -> Settings.Global.getInt(app.contentResolver, "mobile_data", -1).takeIf { it >= 0 }?.let { it == 1 }
             "hotspot" -> hotspotOn(app)
+            "location" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                app.getSystemService(android.location.LocationManager::class.java)?.isLocationEnabled
+            } else {
+                null
+            }
             else -> null
         }
     }.getOrNull()
@@ -121,6 +128,7 @@ object Radios {
                 "bluetooth" -> R.string.radio_bluetooth
                 "airplane" -> R.string.radio_airplane
                 "data" -> R.string.radio_data
+                "location" -> R.string.radio_location
                 else -> R.string.radio_hotspot
             },
         )
@@ -170,6 +178,7 @@ object Radios {
             "wifi" -> listOfNotNull(if (q) Intent(Settings.Panel.ACTION_WIFI) else null, Intent(Settings.ACTION_WIFI_SETTINGS))
             "bluetooth" -> listOf(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
             "airplane" -> listOf(Intent(Settings.ACTION_AIRPLANE_MODE_SETTINGS))
+            "location" -> listOf(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
             "data" -> listOfNotNull(
                 if (q) Intent(Settings.Panel.ACTION_INTERNET_CONNECTIVITY) else null,
                 Intent(Settings.ACTION_DATA_ROAMING_SETTINGS),

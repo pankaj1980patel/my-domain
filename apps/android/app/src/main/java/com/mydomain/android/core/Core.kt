@@ -155,6 +155,8 @@ object Core {
     /** Files shared to the app from another app (share sheet), waiting for
      *  the user to pick a device. */
     var pendingShare by mutableStateOf<List<Uri>>(emptyList()); private set
+    /** Ask the UI to show the Settings tab (from a notification). */
+    var showSettings by mutableStateOf(false)
 
     /** Text or a link shared to the app from another app, waiting for the
      *  user to pick a device (files win if both came). */

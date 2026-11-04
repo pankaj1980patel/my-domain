@@ -815,6 +815,9 @@ function Controls(props: { node: string; st: DeviceStatus }) {
       <Show when={has("wifi")}>
         <WifiList node={props.node} st={props.st} />
       </Show>
+      <Show when={has("locate")}>
+        <LocateRow node={props.node} st={props.st} />
+      </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>
           <For each={ringers}>
@@ -867,6 +870,49 @@ function RadioRow(props: { node: string; st: DeviceStatus }) {
       <p class="muted small">
         {props.st.radioDirect.length > 0 ? t("control.radioDirectHint") : t("control.radioPanelHint")}
       </p>
+    </div>
+  );
+}
+
+/** Where the phone is (its owner allows it on the phone, and sees a
+ *  notification each time). */
+function LocateRow(props: { node: string; st: DeviceStatus }) {
+  const loc = () => props.st.location;
+  const ago = () => {
+    const l = loc();
+    if (!l) return "";
+    const mins = Math.max(0, Math.round((Date.now() / 1000 - l.at) / 60));
+    return mins < 1 ? t("locate.justNow") : t("locate.minsAgo", { mins });
+  };
+  const locate = () =>
+    runAction(props.node, "locate", {})
+      .then(() => toast(props.st.locationSharing ? t("locate.asking") : t("locate.askAllow")))
+      .catch((e) => toast(friendlyError(e), "error"));
+  return (
+    <div class="stack">
+      <div class="row">
+        <span class="small muted grow">
+          <Show when={loc()} fallback={props.st.locationSharing ? t("locate.title") : t("locate.off")}>
+            {(l) => t("locate.where", { lat: l().lat.toFixed(5), lon: l().lon.toFixed(5), acc: Math.round(l().acc), ago: ago() })}
+          </Show>
+        </span>
+        <button class="btn btn-ghost btn-sm" onClick={locate}>
+          {t("locate.locate")}
+        </button>
+        <Show when={loc()}>
+          {(l) => (
+            <button
+              class="btn btn-ghost btn-sm"
+              onClick={async () => {
+                const r = await commands.openMap(l().lat, l().lon);
+                if (r.status === "error") toast(friendlyError(r.error), "error");
+              }}
+            >
+              {t("locate.map")}
+            </button>
+          )}
+        </Show>
+      </div>
     </div>
   );
 }

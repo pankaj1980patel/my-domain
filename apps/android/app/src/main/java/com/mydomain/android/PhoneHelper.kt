@@ -138,6 +138,7 @@ class PhoneHelper : AccessibilityService() {
             "airplane" to listOf("airplane", "aeroplane", "flight"),
             "data" to listOf("mobile data", "cellular data", "mobile network"),
             "hotspot" to listOf("hotspot", "tethering"),
+            "location" to listOf("location"),
         )
 
         /** The switch for [what] in this window: a checkable node labelled
@@ -151,7 +152,7 @@ class PhoneHelper : AccessibilityService() {
             // "Bluetooth"), then its row's, then the page's first switch.
             switches.firstOrNull { says(ownText(it)) }?.let { return it }
             switches.firstOrNull { says(rowText(it)) }?.let { return it }
-            return if (what == "wifi" || what == "bluetooth") switches.firstOrNull() else null
+            return if (what == "wifi" || what == "bluetooth" || what == "location") switches.firstOrNull() else null
         }
 
         /** Settings, or a maker's own Settings app. */

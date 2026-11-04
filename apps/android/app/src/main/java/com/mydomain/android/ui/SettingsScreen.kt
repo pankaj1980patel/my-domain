@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.BuildConfig
 import com.mydomain.android.NotifListener
 import com.mydomain.android.PhoneHelper
+import com.mydomain.android.PhoneLocation
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
@@ -131,6 +132,21 @@ fun TouchpadSettingsTile() {
             prefs.edit().putBoolean(PREF_TOUCHPAD_SECURE, it).apply()
         }
         Muted(stringResource(R.string.settings_touchpad_secure_hint))
+    }
+}
+
+/** "Let my computers see where this phone is" (PhoneLocation): off until
+ *  you turn it on here. */
+@Composable
+fun LocationSettingsTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(PhoneLocation.allowed(ctx)) }
+    Tile(title = stringResource(R.string.location_title)) {
+        SwitchRow(stringResource(R.string.location_switch), on) {
+            on = it
+            PhoneLocation.setAllowed(ctx, it)
+        }
+        Muted(stringResource(R.string.location_hint))
     }
 }
 
@@ -251,6 +267,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit) {
 
         PhotosTile()
         TouchpadSettingsTile()
+        LocationSettingsTile()
         HelperSettingsTile()
         ShizukuSettingsTile()
 

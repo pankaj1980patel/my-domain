@@ -38,6 +38,11 @@ export const commands = {
 	disconnect: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("disconnect", { nodeId })),
 	/**  Close the link to a device and connect afresh. */
 	reconnect: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("reconnect", { nodeId })),
+	/**
+	 *  Open a map at a device's reported position (OpenStreetMap in the
+	 *  browser). Only coordinates come in, so the page can't open any link.
+	 */
+	openMap: (lat: number | null, lon: number | null) => typedError<null, string>(__TAURI_INVOKE("open_map", { lat, lon })),
 	firewallCheck: () => typedError<FirewallStatus, string>(__TAURI_INVOKE("firewall_check")),
 	/**
 	 *  Round-trip FCM self-test: pushes a ping to our own token via the server. The

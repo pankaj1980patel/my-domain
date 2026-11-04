@@ -89,6 +89,7 @@ object Privileged {
             "bluetooth" -> arrayOf("svc", "bluetooth", onOff)
             "data" -> arrayOf("svc", "data", onOff)
             "airplane" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) arrayOf("cmd", "connectivity", "airplane-mode", onOff) else null
+            "location" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) arrayOf("cmd", "location", "set-location-enabled", on.toString()) else null
             // A hotspot needs a network name and password: left to Settings.
             else -> null
         }

@@ -271,6 +271,28 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## Find this phone: its location, and Location on/off (2026-11-04)
+
+- `PhoneLocation.kt`, action `locate`: the phone puts `location {lat,
+  lon, acc, at}` in its status: the last known position at once, then a
+  fresh fix. The phone stays in charge:
+  - off until "Let my computers see where this phone is" is turned on in
+    its Settings ("Find this phone" tile); asked while off, it opens that
+    screen (or notifies) and shares nothing;
+  - a notification on the phone each time it's shared, naming who asked;
+  - Android's location permission and Location switch still apply (the
+    phone opens the prompt / settings when one is missing);
+  - only on request, never in the background.
+- Location on/off is a radio like the others (`location_on` in the
+  status; the Accessibility helper taps "Location", Shizuku runs
+  `cmd location set-location-enabled`).
+- Desktop: Location among the radio buttons; a "Where it is" row in the
+  device's controls (Locate, the position with accuracy and age, Open
+  map). Command `open_map(lat, lon)` opens OpenStreetMap; it takes only
+  coordinates, so the page can't open arbitrary links.
+- Tried: with sharing off, Locate from mdctl opened my-domain on the phone
+  and the status carried no position.
+
 ## Disconnect / Reconnect, Clear chat, the phone's Wi-Fi networks (2026-11-04)
 
 - `Engine::disconnect` (close the link now; nothing is blocked, the next

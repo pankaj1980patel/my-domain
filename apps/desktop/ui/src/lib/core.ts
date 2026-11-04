@@ -84,6 +84,10 @@ export type DeviceStatus = {
   wifiNetworks?: WifiNetwork[];
   /** What stops it scanning: "permission" or "location". */
   wifiScanNeeds?: string;
+  /** It lets your computers see where it is (its own switch). */
+  locationSharing: boolean;
+  /** Where it last said it was (after a Locate). */
+  location?: { lat: number; lon: number; acc: number; at: number };
   ts: number;
 };
 
@@ -102,7 +106,18 @@ function wifiNetworksOf(v: unknown): WifiNetwork[] | undefined {
     }));
 }
 
-export const RADIOS = ["wifi", "bluetooth", "data", "hotspot", "airplane"] as const;
+function locationOf(v: unknown): DeviceStatus["location"] {
+  const l = v as Record<string, unknown> | undefined;
+  if (!l || typeof l.lat !== "number" || typeof l.lon !== "number") return undefined;
+  return {
+    lat: l.lat,
+    lon: l.lon,
+    acc: typeof l.acc === "number" ? l.acc : 0,
+    at: typeof l.at === "number" ? l.at : 0,
+  };
+}
+
+export const RADIOS = ["wifi", "bluetooth", "data", "hotspot", "location", "airplane"] as const;
 export type Radio = (typeof RADIOS)[number];
 
 /** The radios in a device's status (Wi-Fi is an object, mobile data is
@@ -114,6 +129,7 @@ function radiosOf(status: Record<string, unknown>): Partial<Record<Radio, boolea
     bluetooth: status?.bluetooth,
     data: status?.mobile_data,
     hotspot: status?.hotspot,
+    location: status?.location_on,
     airplane: status?.airplane,
   };
   const out: Partial<Record<Radio, boolean>> = {};
@@ -352,6 +368,8 @@ export async function startEvents() {
         wifiSsid: typeof (status?.wifi as { ssid?: unknown })?.ssid === "string" ? (status.wifi as { ssid: string }).ssid : undefined,
         wifiNetworks: wifiNetworksOf(status?.wifi_networks),
         wifiScanNeeds: typeof status?.wifi_scan_needs === "string" ? status.wifi_scan_needs : undefined,
+        locationSharing: status?.location_sharing === true,
+        location: locationOf(status?.location),
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],

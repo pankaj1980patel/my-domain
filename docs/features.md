@@ -175,7 +175,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Airplane mode view | | `radio.read` | A | S | ✅ (2026-11-03, in the status; not tried live) |
 | Airplane mode toggle | | `radio.manage` | A | R | 🟡 (2026-11-03: opens the airplane mode settings) |
 | Mobile data view / toggle | Including data usage | `radio.read` / `.manage` | A | S / R | 🟡 (2026-11-03: on/off in the status, the toggle opens the internet panel; no data usage) |
-| NFC / location services / VPN | View, and toggle where possible | `radio.read` / `.manage` | A | S / R | ⬜ |
+| NFC / location services / VPN | View, and toggle where possible | `radio.read` / `.manage` | A | S / R | 🟡 (2026-11-04: Location on/off, by the Accessibility helper or Shizuku) |
 
 ### 3.9 Device state & settings
 | Feature | What it does | Flag | Target | Tier | Status |
@@ -197,7 +197,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Ring device | Full volume even when silent | `find.ring` | A D | P (DND access) | ✅ (phone: alarm stream at full volume; desktop: window + sound) |
-| Locate | Current GPS location on a map | `find.locate` | A | S (background location) | ⬜ |
+| Locate | Current GPS location on a map | `find.locate` | A | S (background location) | 🟡 (2026-11-04: on request, off until allowed on the phone, a notification each time; Open map on the desktop) |
 | Location history | Last known locations | `find.locate` | A | S | ⬜ |
 | Lost mode | Lock with a message and contact number | `find.lost` | A | P (Device admin) | ⬜ |
 | Remote wipe | Factory reset (Owner domain only) | `find.wipe` | A | P (Device admin) | ⬜ |

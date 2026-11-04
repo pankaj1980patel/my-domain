@@ -1064,6 +1064,23 @@ fn received_file(path: &str, dir: &DownloadDir) -> Result<std::path::PathBuf, Co
     }
 }
 
+/// Open a map at a device's reported position (OpenStreetMap in the
+/// browser). Only coordinates come in, so the page can't open any link.
+#[tauri::command]
+#[specta::specta]
+fn open_map(lat: f64, lon: f64, app: AppHandle) -> Result<(), CoreError> {
+    use tauri_plugin_opener::OpenerExt;
+    if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
+        return Err(CoreError::InvalidInput("not a position".into()));
+    }
+    let url = format!(
+        "https://www.openstreetmap.org/?mlat={lat:.6}&mlon={lon:.6}#map=17/{lat:.6}/{lon:.6}"
+    );
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| CoreError::Other(e.to_string()))
+}
+
 /// Show a received file in Finder / Explorer / the file manager.
 #[tauri::command]
 #[specta::specta]
@@ -1123,6 +1140,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         connect,
         disconnect,
         reconnect,
+        open_map,
         firewall_check,
         fcm_selftest,
         report_firewall,

@@ -53,6 +53,7 @@ class MainActivity : ComponentActivity() {
         devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
         if (savedInstanceState == null) takeShare(intent)
         askWifiScan(intent)
+        openSettings(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -74,6 +75,13 @@ class MainActivity : ComponentActivity() {
             }
             Controls.onChange()
         }
+    }
+
+    /** A notification asked for the Settings screen (location sharing). */
+    private fun openSettings(intent: Intent?) {
+        if (intent?.getBooleanExtra(PhoneLocation.EXTRA_OPEN_SETTINGS, false) != true) return
+        intent.removeExtra(PhoneLocation.EXTRA_OPEN_SETTINGS)
+        Core.showSettings = true
     }
 
     /** From the "allow Wi-Fi scanning" notification (WifiNetworks): ask for
@@ -120,6 +128,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
+        openSettings(intent)
         askWifiScan(intent)
         takeShare(intent)
     }

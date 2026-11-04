@@ -372,4 +372,14 @@
     <string name="wifi_scan_title">Allow Wi-Fi scanning</string>
     <string name="wifi_scan_permission">To list nearby Wi-Fi networks for your computer, Android needs my-domain to have location access. Tap to allow it. my-domain never reads your location.</string>
     <string name="wifi_scan_location">To list nearby Wi-Fi networks, Android needs Location switched on. Tap to open Location settings.</string>
+    <string name="radio_location">Location</string>
+    <string name="location_title">Find this phone</string>
+    <string name="location_switch">Let my computers see where this phone is</string>
+    <string name="location_hint">Only when one of your own computers asks, and you\'ll get a notification each time. Off: nothing is shared.</string>
+    <string name="location_ask_title">Where is this phone?</string>
+    <string name="location_ask_allow">%1$s asked where this phone is. Tap to choose whether your computers may see it.</string>
+    <string name="location_ask_permission">To share where this phone is, my-domain needs location access. Tap to allow it.</string>
+    <string name="location_ask_on">To share where this phone is, Location needs to be on. Tap to open Location settings.</string>
+    <string name="location_shared_title">Location shared with %1$s</string>
+    <string name="location_shared_body">You allowed your computers to see where this phone is. Tap to change that.</string>
 </resources>
