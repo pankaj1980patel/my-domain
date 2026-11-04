@@ -292,6 +292,11 @@ command; the screen-share prompt was on top). Desktop side: clippy only.
   coordinates, so the page can't open arbitrary links.
 - Tried: with sharing off, Locate from mdctl opened my-domain on the phone
   and the status carried no position.
+- Unavailable on the other device = disabled, with the reason on hover
+  (desktop `Gate`: the wrapper carries the tooltip, as WebKit shows none
+  on a disabled button): Locate while the phone's sharing is off; the
+  phone keys while its Accessibility helper is off (the status now says
+  `helper`, and `key` is always listed).
 
 ## Disconnect / Reconnect, Clear chat, the phone's Wi-Fi networks (2026-11-04)
 

@@ -86,6 +86,8 @@ export type DeviceStatus = {
   wifiScanNeeds?: string;
   /** It lets your computers see where it is (its own switch). */
   locationSharing: boolean;
+  /** Its Accessibility helper is on (phone keys, no-tap radios). */
+  helper?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
   ts: number;
@@ -369,6 +371,7 @@ export async function startEvents() {
         wifiNetworks: wifiNetworksOf(status?.wifi_networks),
         wifiScanNeeds: typeof status?.wifi_scan_needs === "string" ? status.wifi_scan_needs : undefined,
         locationSharing: status?.location_sharing === true,
+        helper: typeof status?.helper === "boolean" ? status.helper : undefined,
         location: locationOf(status?.location),
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))

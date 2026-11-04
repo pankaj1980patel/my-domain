@@ -1059,3 +1059,16 @@ input[type="checkbox"][role="switch"]:checked::after {
   max-height: 16rem;
   overflow-y: auto;
 }
+
+/* A control that's unavailable on the other device: greyed out; the
+   wrapper carries the tooltip (see Gate in Device.tsx). */
+.gate {
+  display: inline-flex;
+}
+.gate-off {
+  cursor: not-allowed;
+}
+.gate-off > * {
+  pointer-events: none;
+  opacity: 0.45;
+}

@@ -70,8 +70,9 @@ object Controls {
         put("radio")
         put("wifi")
         put("locate")
-        // Phone keys, with the Accessibility service on.
-        if (PhoneHelper.instance != null) put("key")
+        // Phone keys (they work with the Accessibility helper on; the
+        // status says whether it is, so computers can grey them out).
+        put("key")
         // Computers can see this screen (Android asks each time).
         put("screen")
     }
@@ -82,6 +83,7 @@ object Controls {
         Radios.state(ctx, o)
         WifiNetworks.state(o)
         PhoneLocation.state(ctx, o)
+        o.put("helper", PhoneHelper.instance != null)
         if (torchId != null) o.put("torch", torchOn)
         DeviceActions.awakeUntil.takeIf { it > System.currentTimeMillis() }?.let { o.put("awake_until", it / 1000) }
         if (am != null) {
