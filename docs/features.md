@@ -167,7 +167,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Wi-Fi scan | Nearby networks | `wifi.read` | A D | S (location) | 🟡 (2026-11-04: Android; list on the desktop; needs the location permission and Location on) |
 | Wi-Fi toggle | Turn Wi-Fi on/off | `wifi.manage` | A D | R (fallback: open settings panel) | ✅ (2026-11-03: directly, as the app targets Android 9; tried on Android 16) |
 | Connect to network | Pick an SSID and enter its password remotely | `wifi.manage` | A D | S (suggestion API) / R (direct) | 🟡 (2026-11-04: Android, direct as the app targets Android 9; not tried live yet) |
-| Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | ⬜ |
+| Share Wi-Fi credentials | Push saved credentials or a QR to another device | `wifi.manage` | A D | R | 🟡 (2026-11-04: computer → phone: the Mac reads its own network's password with your OK and the phone joins; not tried live) |
 | Hotspot toggle | Turn on tethering | `wifi.manage` | A | R | 🟡 (2026-11-03: state in the status; opens the tethering settings) |
 | Bluetooth status | On/off, paired and connected devices | `bluetooth.read` | A D | S | 🟡 (on/off only) |
 | Bluetooth toggle | | `bluetooth.manage` | A D | R on Android 13+ | ✅ (2026-11-03: the Accessibility helper taps the switch, tried on Android 16; directly where the phone allows old-target apps) |
@@ -182,11 +182,11 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 |---|---|---|---|---|---|
 | Battery | %, charging, temperature, health | `device.battery` | A D | — | ✅ (temperature and health on Android) |
 | Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage and RAM free/total; no CPU) |
-| Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | ⬜ |
+| Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | 🟡 (2026-11-04: phone, from the computer; needs "Modify system settings" on the phone; not tried live) |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
 | DND follows the phone | Computers hold my-domain's pop-ups while the phone is in Do Not Disturb (the OS state is only read, never changed) | `device.settings` | A→D | — | ✅ (2026-11-03; no permission needed; option on the computer, off by default; not tried live yet) |
 | Flashlight | On/off | `device.settings` | A | S | ✅ |
-| Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop only: macOS display sleep, Linux logind / screen locker) |
+| Lock screen | Lock now | `device.lock` | A D | P (Device admin) | 🟡 (desktop: macOS display sleep, Linux logind / screen locker; also when your phone goes away, opt-in; phone: Accessibility helper's Lock key) |
 | Wake / keep awake | Keep a device from sleeping for N minutes | `device.settings` | A D | S | ✅ (2026-11-03: 30 min / 1 hour / Let it sleep on the phone's page for a computer, tried on the Mac; macOS `caffeinate`, Linux `systemd-inhibit`, phone screen wake lock) |
 | Wake-on-LAN | Wake a sleeping computer from the phone | `device.power` | A→D | — | 🟡 (2026-11-03: the computer says its network card in its status, the phone remembers it and shows "Wake it"; same network only; waking not tried yet) |
 | Battery alerts | Tell the other devices once when the battery drops below a level (default 15%) or finishes charging | `device.battery` | A D | — | ✅ (2026-11-03; on/off switch on the phone, desktop command only) |
@@ -197,7 +197,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Ring device | Full volume even when silent | `find.ring` | A D | P (DND access) | ✅ (phone: alarm stream at full volume; desktop: window + sound) |
-| Locate | Current GPS location on a map | `find.locate` | A | S (background location) | 🟡 (2026-11-04: on request, off until allowed on the phone, a notification each time; Open map on the desktop) |
+| Locate | Current GPS location on a map | `find.locate` | A | S (background location) | 🟡 (2026-11-04: both ways: the phone (allowed on the phone, notification each time) and a Mac (allowed in its Settings); Open map) |
 | Location history | Last known locations | `find.locate` | A | S | ⬜ |
 | Lost mode | Lock with a message and contact number | `find.lost` | A | P (Device admin) | ⬜ |
 | Remote wipe | Factory reset (Owner domain only) | `find.wipe` | A | P (Device admin) | ⬜ |
@@ -208,9 +208,9 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | File push | Send files or folders (chunked, resumable) | `files.push` | A D | — | 🟡 (files, resumable; no folders) |
-| Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (folders each device shares; no screens yet) |
+| Browse files | Remote file explorer | `files.read` | A D | S / P (All files access) | 🟡 (2026-11-04: screens on both apps: folders, path, Load more, Download) |
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
-| Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-03: newest first, paged, 160 px thumbnails, download; desktop commands only, no grid screen yet) |
+| Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-04: desktop Photos tile: grid, newest first, paged, Download per item or selected; tried: listing from the phone) |
 | Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ✅ (2026-11-03: unmetered Wi-Fi, optionally only while charging, resumable, never twice; switch in the phone's Settings; remembered per computer, so a new computer gets the recent photos it lacks) |
 | Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | ⬜ |
 
