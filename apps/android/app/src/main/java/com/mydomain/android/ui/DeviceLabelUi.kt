@@ -1,10 +1,12 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,7 +37,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -135,7 +136,8 @@ fun DeviceAvatar(node: String, size: Dp = 44.dp) {
     val own = Core.peers.firstOrNull { it.nodeId == node }?.name.orEmpty()
     val accent = labelColor(label?.color)
     val shape = MaterialTheme.shapes.small
-    var m = Modifier.size(size).clip(shape).background(T.surface2, shape)
+    // Decorative: the device's name is always next to it.
+    var m = Modifier.size(size).clearAndSetSemantics {}.clip(shape).background(T.surface2, shape)
     if (accent != null) m = m.background(accent.copy(alpha = 0.18f), shape).border(BorderStroke(2.dp, accent), shape)
     Box(m, contentAlignment = Alignment.Center) {
         val icon = label?.icon
@@ -164,7 +166,7 @@ fun DeviceLabelEditor(node: String, onDone: () -> Unit) {
         if (nickname.isEmpty()) Muted(String.format(stringResource(R.string.label_nickname_blank), own))
 
         Text(stringResource(R.string.label_icon), style = MaterialTheme.typography.labelLarge, color = T.text2)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.selectableGroup().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Choice(icon == null, stringResource(R.string.label_none), { icon = null }) {
                 Text(initial(nickname.ifEmpty { own }), color = T.text, fontWeight = FontWeight.SemiBold)
             }
@@ -174,7 +176,7 @@ fun DeviceLabelEditor(node: String, onDone: () -> Unit) {
         }
 
         Text(stringResource(R.string.label_color), style = MaterialTheme.typography.labelLarge, color = T.text2)
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.selectableGroup().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Swatch(null, color == null, stringResource(R.string.label_none)) { color = null }
             DeviceLabels.COLORS.forEach { id ->
                 Swatch(labelColor(id), color == id, colorName(id)) { color = id }
@@ -199,15 +201,16 @@ fun DeviceLabelEditor(node: String, onDone: () -> Unit) {
     }
 }
 
-/** An icon choice: a square with a ring when chosen. */
+/** An icon choice: a square with a ring when chosen (48 dp: a full
+ *  touch target). */
 @Composable
 private fun Choice(on: Boolean, name: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     val shape = MaterialTheme.shapes.small
     Box(
-        Modifier.size(44.dp).clip(shape).background(T.surface2, shape)
-            .border(BorderStroke(if (on) 2.dp else 1.dp, if (on) T.accent else T.border), shape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = name; selected = on; role = Role.RadioButton },
+        Modifier.size(48.dp).clip(shape).background(T.surface2, shape)
+            .border(BorderStroke(if (on) 2.dp else 1.dp, if (on) T.accent else T.controlBorder), shape)
+            .selectable(selected = on, role = Role.RadioButton, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = name; selected = on; role = Role.RadioButton },
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -217,20 +220,20 @@ private fun Choice(on: Boolean, name: String, onClick: () -> Unit, content: @Com
 @Composable
 private fun Swatch(fill: Color?, on: Boolean, name: String, onClick: () -> Unit) {
     Box(
-        Modifier.size(40.dp).clip(CircleShape)
+        Modifier.size(48.dp).clip(CircleShape)
             .border(BorderStroke(2.dp, if (on) T.accent else Color.Transparent), CircleShape)
-            .clickable(onClick = onClick)
-            .semantics { contentDescription = name; selected = on; role = Role.RadioButton },
+            .selectable(selected = on, role = Role.RadioButton, onClick = onClick)
+            .clearAndSetSemantics { contentDescription = name; selected = on; role = Role.RadioButton },
         contentAlignment = Alignment.Center,
     ) {
-        val inner = Modifier.size(30.dp).clip(CircleShape).background(fill ?: T.surface2, CircleShape)
+        val inner = Modifier.size(36.dp).clip(CircleShape).background(fill ?: T.surface2, CircleShape)
             .border(BorderStroke(1.dp, T.borderStrong), CircleShape)
         if (fill != null) {
             Box(inner)
         } else {
             val slash = T.text3
             Box(inner) {
-                Canvas(Modifier.size(30.dp)) {
+                Canvas(Modifier.size(36.dp)) {
                     drawLine(slash, Offset(size.width * 0.25f, size.height * 0.75f), Offset(size.width * 0.75f, size.height * 0.25f), 2.dp.toPx(), StrokeCap.Round)
                 }
             }

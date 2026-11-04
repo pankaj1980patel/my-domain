@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -18,7 +19,7 @@ fun PhoneAudioTile(node: String, name: String) {
             Muted(stringResource(R.string.audio_tile_body, name))
             SoftButton(stringResource(R.string.audio_tile_start, name), { PhoneAudio.playOn(ctx, node) })
         } else {
-            Muted(stringResource(R.string.audio_tile_now, name))
+            Muted(stringResource(R.string.audio_tile_now, name), Modifier.announce())
             Muted(stringResource(R.string.audio_tile_hint))
             GhostButton(stringResource(R.string.audio_stop), { PhoneAudio.stopWith(node) })
         }

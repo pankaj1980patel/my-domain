@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import android.content.SharedPreferences
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -86,7 +88,10 @@ fun SignInScreen(prefs: SharedPreferences) {
             )
             Wordmark()
             Tagline()
-            Text(stringResource(if (create) R.string.signin_title_create else R.string.signin_title_welcome), style = MaterialTheme.typography.headlineSmall, color = T.text)
+            Text(
+                stringResource(if (create) R.string.signin_title_create else R.string.signin_title_welcome),
+                Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, color = T.text,
+            )
             Muted(stringResource(R.string.signin_tagline))
             Spacer(Modifier.height(4.dp))
 

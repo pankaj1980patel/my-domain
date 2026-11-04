@@ -1,5 +1,9 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -7,7 +11,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,7 +63,20 @@ import com.mydomain.android.core.initial
 import com.mydomain.android.core.linkLabel
 import com.mydomain.android.core.linkStateOf
 import com.mydomain.android.core.qualityLabel
+import android.provider.Settings
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import com.mydomain.android.ffi.PeerInfo
 
@@ -73,19 +89,57 @@ fun Tile(
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = T.surface,
-        border = BorderStroke(1.dp, T.border),
-        onClick = onClick ?: {},
-        enabled = onClick != null,
-    ) {
+    val body: @Composable () -> Unit = {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (title != null) Text(title, style = MaterialTheme.typography.titleMedium, color = T.text)
+            if (title != null) {
+                Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium, color = T.text)
+            }
             content()
         }
     }
+    // Only a tile you can tap is clickable: a disabled clickable Surface
+    // would merge every line in it into one node read as "disabled".
+    if (onClick != null) {
+        Surface(
+            onClick = onClick,
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = T.surface,
+            border = BorderStroke(1.dp, T.border),
+            content = body,
+        )
+    } else {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            color = T.surface,
+            border = BorderStroke(1.dp, T.border),
+            content = body,
+        )
+    }
+}
+
+/** Android's "Remove animations" (Settings.Global ANIMATOR_DURATION_SCALE
+ *  at 0): skip decorative motion such as the connecting pulse. */
+@Composable
+fun reducedMotion(): Boolean {
+    val ctx = LocalContext.current
+    return remember(ctx) {
+        runCatching { Settings.Global.getFloat(ctx.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
+            .getOrDefault(false)
+    }
+}
+
+/** A bar's name and value for TalkBack: "[label], 40 percent". */
+fun Modifier.progressInfo(label: String, fraction: Float): Modifier = semantics {
+    contentDescription = label
+    progressBarRangeInfo = ProgressBarRangeInfo(fraction.coerceIn(0f, 1f), 0f..1f)
+}
+
+/** A line that changes while the screen is open (a status, a result):
+ *  TalkBack reads it out when it changes. */
+fun Modifier.announce(urgent: Boolean = false): Modifier = semantics {
+    liveRegion = if (urgent) LiveRegionMode.Assertive else LiveRegionMode.Polite
 }
 
 @Composable
@@ -96,27 +150,54 @@ fun Muted(text: String, modifier: Modifier = Modifier, center: Boolean = false) 
     )
 }
 
-/** Primary action: the brand gradient with a white label (kit .btn). */
+/** "Selected" for TalkBack, on a button that shows the current choice. */
+private fun Modifier.selectedState(selected: Boolean?): Modifier =
+    if (selected == null) this else semantics { this.selected = selected }
+
+/** Primary action: the brand gradient with a white label (kit .btn).
+ *  [selected]: it is one of a row of choices (TalkBack says "selected"). */
 @Composable
-fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun PrimaryButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    selected: Boolean? = null,
+) {
     val shape = MaterialTheme.shapes.small
-    Button(
-        onClick,
-        modifier = modifier.height(44.dp).alpha(if (enabled) 1f else 0.5f).clip(shape).background(T.brush, shape),
-        enabled = enabled, shape = shape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = Color.Transparent, contentColor = T.onPrimary,
-            disabledContainerColor = Color.Transparent, disabledContentColor = T.onPrimary,
-        ),
-        elevation = null, contentPadding = PaddingValues(horizontal = 18.dp),
-    ) { Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold) }
+    // The gradient is drawn on the button's own modifier, so Material's
+    // 48 dp touch-target padding is put around the box instead (it would
+    // stretch the gradient). Heights are minimums so large text still fits.
+    Box(modifier.minimumInteractiveComponentSize(), contentAlignment = Alignment.Center, propagateMinConstraints = true) {
+        CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Button(
+                onClick,
+                // The scrim keeps the white label at 4.5:1 over the gradient's light stop.
+                modifier = Modifier.heightIn(min = 44.dp).selectedState(selected).alpha(if (enabled) 1f else 0.5f).clip(shape)
+                    .background(T.brush, shape).background(T.primaryScrim, shape),
+                enabled = enabled, shape = shape,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.Transparent, contentColor = T.onPrimary,
+                    disabledContainerColor = Color.Transparent, disabledContentColor = T.onPrimary,
+                ),
+                elevation = null, contentPadding = PaddingValues(horizontal = 18.dp),
+            ) { Text(text, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.ExtraBold) }
+        }
+    }
 }
 
 /** Secondary action: deep fill with a hairline (kit .btn.secondary). */
 @Composable
-fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun SoftButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    selected: Boolean? = null,
+) {
+    // Material keeps a 48 dp touch target around the 44 dp button.
     Button(
-        onClick, modifier = modifier.height(44.dp), enabled = enabled, shape = MaterialTheme.shapes.small,
+        onClick, modifier = modifier.heightIn(min = 44.dp).selectedState(selected), enabled = enabled, shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.buttonColors(containerColor = T.secondaryButton, contentColor = T.text),
         border = BorderStroke(1.dp, T.secondaryButtonBorder),
         elevation = null, contentPadding = PaddingValues(horizontal = 16.dp),
@@ -126,7 +207,9 @@ fun SoftButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
 @Composable
 fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, small: Boolean = false) {
     OutlinedButton(
-        onClick, modifier = modifier.height(if (small) 36.dp else 44.dp), shape = MaterialTheme.shapes.small,
+        // A minimum, so large text still fits; Material keeps a 48 dp touch
+        // target around it.
+        onClick, modifier = modifier.heightIn(min = if (small) 36.dp else 44.dp), shape = MaterialTheme.shapes.small,
         border = BorderStroke(1.dp, T.borderStrong),
         colors = ButtonDefaults.outlinedButtonColors(contentColor = T.text),
         contentPadding = PaddingValues(horizontal = if (small) 12.dp else 16.dp),
@@ -147,7 +230,7 @@ fun Field(
         shape = MaterialTheme.shapes.small,
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
         colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = T.accent, unfocusedBorderColor = T.border,
+            focusedBorderColor = T.accent, unfocusedBorderColor = T.controlBorder,
             focusedLabelColor = T.accentFg, unfocusedLabelColor = T.text3, cursorColor = T.accent,
             focusedContainerColor = T.surface2, unfocusedContainerColor = T.surface2,
             focusedTextColor = T.text, unfocusedTextColor = T.text,
@@ -155,18 +238,22 @@ fun Field(
     )
 }
 
+/** A label and its switch as one control: one TalkBack stop that reads
+ *  "[label], switch, on", and the whole row (48 dp at least) toggles. */
 @Composable
 fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(vertical = 4.dp),
+        Modifier.fillMaxWidth().heightIn(min = 48.dp)
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = T.text)
         Switch(
-            checked, onChange,
+            checked, onCheckedChange = null,
             colors = SwitchDefaults.colors(
                 checkedTrackColor = T.accent, checkedThumbColor = T.onPrimary, checkedBorderColor = T.accent,
-                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.borderStrong, uncheckedThumbColor = T.text2,
+                uncheckedTrackColor = T.surface2, uncheckedBorderColor = T.controlBorder, uncheckedThumbColor = T.text2,
             ),
         )
     }
@@ -175,7 +262,8 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun Avatar(name: String, size: Dp = 44.dp) {
     Box(
-        Modifier.size(size).background(T.surface2, MaterialTheme.shapes.small),
+        // Decorative: the name is always next to it.
+        Modifier.size(size).background(T.surface2, MaterialTheme.shapes.small).clearAndSetSemantics {},
         contentAlignment = Alignment.Center,
     ) {
         Text(initial(name), color = T.text, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
@@ -193,7 +281,7 @@ fun StatusPill(node: String) {
         LinkState.Connecting -> T.accent
         LinkState.Offline -> T.text3
     }
-    val pulse = if (s == LinkState.Connecting) {
+    val pulse = if (s == LinkState.Connecting && !reducedMotion()) {
         val tr = rememberInfiniteTransition(label = "pulse")
         val a by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "a")
         a
@@ -247,12 +335,17 @@ fun DeviceCard(peer: PeerInfo, onOpen: () -> Unit, onConnect: () -> Unit) {
             DeviceAvatar(peer.nodeId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(Core.peerName(peer.nodeId), style = MaterialTheme.typography.titleMedium, color = T.text)
+                Text(
+                    Core.peerName(peer.nodeId), Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.titleMedium, color = T.text,
+                )
                 StatusPill(peer.nodeId)
             }
             if (unread > 0) {
+                val unreadText = pluralStringResource(R.plurals.a11y_unread, unread, unread)
                 Box(
-                    Modifier.padding(start = 8.dp).background(T.accent, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp),
+                    Modifier.padding(start = 8.dp).background(T.accent, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)
+                        .clearAndSetSemantics { contentDescription = unreadText },
                 ) { Text("$unread", color = T.onAccent, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold) }
             }
             if (s == LinkState.Offline || s == LinkState.Failed) {
@@ -278,7 +371,7 @@ fun EmptyState(title: String, body: String, modifier: Modifier = Modifier) {
 @Composable
 fun ErrorText(text: String) {
     Text(
-        text, Modifier.fillMaxWidth().background(T.dangerSoft, MaterialTheme.shapes.extraSmall).padding(10.dp),
+        text, Modifier.fillMaxWidth().announce(urgent = true).background(T.dangerSoft, MaterialTheme.shapes.extraSmall).padding(10.dp),
         color = T.danger, style = MaterialTheme.typography.bodySmall,
     )
 }
@@ -288,7 +381,7 @@ fun ErrorText(text: String) {
 fun PageHead(title: String, subtitle: String? = null, action: (@Composable () -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.headlineSmall, color = T.text)
+            Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, color = T.text)
             if (subtitle != null) Muted(subtitle)
         }
         action?.invoke()

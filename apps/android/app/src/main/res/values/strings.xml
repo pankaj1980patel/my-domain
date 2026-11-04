@@ -474,7 +474,6 @@
     <string name="info_battery">Battery</string>
     <string name="info_battery_level">%1$d%%</string>
     <string name="info_battery_charging">%1$d%%, charging</string>
-    <string name="info_battery_chart">Battery over the last 24 hours</string>
     <string name="info_battery_day_ago">24 h ago</string>
     <string name="info_battery_now">now</string>
     <string name="info_battery_left">About %1$s left at this rate</string>
@@ -803,4 +802,13 @@
     <string name="automation_apps_queued">Waiting to reach the device; it’ll happen once it’s reachable</string>
     <string name="automation_apps_pending">Sent; no answer yet</string>
     <string name="automation_apps_failed">Couldn’t do it: %1$s</string>
+    <!-- Accessibility: words only TalkBack reads. -->
+    <plurals name="a11y_unread">
+        <item quantity="one">%1$d unread message</item>
+        <item quantity="other">%1$d unread messages</item>
+    </plurals>
+    <string name="a11y_battery_chart_summary">Battery over the last 24 hours: %1$d%% to %2$d%% now, lowest %3$d%%, highest %4$d%%.</string>
+    <string name="a11y_battery_chart_charging">Charging now.</string>
+    <string name="a11y_touchpad">Touchpad. With TalkBack on, use the click, key and swipe buttons instead.</string>
+    <string name="a11y_key_hidden">Key hidden</string>
 </resources>

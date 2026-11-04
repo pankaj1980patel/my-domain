@@ -1,5 +1,9 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
 import android.content.Intent
@@ -82,14 +86,15 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
                                 name, style = MaterialTheme.typography.headlineSmall, color = T.text,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                                maxLines = 1, overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false).semantics { heading() },
                             )
                             Spacer(Modifier.width(8.dp))
                             GhostButton(stringResource(R.string.label_edit), { editing = !editing }, small = true)
                         }
                         StatusPill(node)
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
-                            progressLabel(Core.progress[node])?.let { Muted(it) }
+                            progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
                         }
                         // Asleep? Wake it (Wake-on-LAN), if it ever said how.
                         if ((s == LinkState.Offline || s == LinkState.Failed) && Core.canWake(node)) {
@@ -175,9 +180,12 @@ private fun ChatTile(node: String) {
         }
         thread.forEach { m ->
             val waiting = m.queued && m.pending
+            val way = stringResource(if (m.incoming) R.string.transfers_dir_received else R.string.transfers_dir_sent)
             Box(Modifier.fillMaxWidth(), contentAlignment = if (m.incoming) Alignment.CenterStart else Alignment.CenterEnd) {
                 Column(
-                    Modifier.widthIn(max = 280.dp)
+                    // One stop per message, saying which way it went.
+                    Modifier.semantics(mergeDescendants = true) { stateDescription = way }
+                        .widthIn(max = 280.dp)
                         .alpha(if (waiting) 0.7f else 1f)
                         .background(if (m.incoming) T.surface2 else T.primary, MaterialTheme.shapes.medium)
                         .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -247,12 +255,15 @@ private fun ClipHistory() {
     val recent = Core.clipHistory.take(8)
     if (recent.isEmpty()) return
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(stringResource(R.string.clipboard_recent), style = MaterialTheme.typography.labelLarge, color = T.text, modifier = Modifier.weight(1f))
+        Text(
+            stringResource(R.string.clipboard_recent), style = MaterialTheme.typography.labelLarge, color = T.text,
+            modifier = Modifier.weight(1f).semantics { heading() },
+        )
         GhostButton(stringResource(R.string.clipboard_clear), { Core.clearClipHistory() }, small = true)
     }
     recent.forEach { e ->
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Text(e.text, style = MaterialTheme.typography.bodyMedium, color = T.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     if (e.source == null) stringResource(R.string.clipboard_from_this_phone) else Core.peerName(e.source),
@@ -325,7 +336,7 @@ private fun LocateRow(node: String, name: String, status: DeviceStatus) {
         val mins = ((System.currentTimeMillis() / 1000 - place.at) / 60).coerceAtLeast(0)
         Text(
             stringResource(R.string.locate_where, "%.5f".format(place.lat), "%.5f".format(place.lon), place.acc.toInt(), mins),
-            style = MaterialTheme.typography.bodyMedium, color = T.text,
+            Modifier.announce(), style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -430,7 +441,7 @@ private fun Controls(node: String, st: DeviceStatus) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     st.volume?.let { stringResource(R.string.ctl_volume_level, it) } ?: stringResource(R.string.ctl_volume),
-                    color = T.text2, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
+                    color = T.text2, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f).announce(),
                 )
                 if ("volume" in st.actions) {
                     Btn(R.string.ctl_volume_down, "volume", JSONObject().put("step", -1))
@@ -492,9 +503,10 @@ private fun Controls(node: String, st: DeviceStatus) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("normal" to R.string.ctl_ring_normal, "vibrate" to R.string.ctl_ring_vibrate, "silent" to R.string.ctl_ring_silent)
                     .forEach { (mode, label) ->
+                        // The current mode is the filled one, and says "selected".
                         val m = Modifier.weight(1f)
-                        if (st.ringer == mode) SoftButton(stringResource(label), { }, m)
-                        else Btn(label, "ringer", JSONObject().put("mode", mode), m)
+                        if (st.ringer == mode) SoftButton(stringResource(label), { }, m, selected = true)
+                        else Btn(label, "ringer", JSONObject().put("mode", mode), m.semantics { selected = false })
                     }
             }
         }

@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -85,7 +87,10 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(stringResource(R.string.transfers_title), style = MaterialTheme.typography.headlineSmall, color = T.text)
+                    Text(
+                        stringResource(R.string.transfers_title), Modifier.semantics { heading() },
+                        style = MaterialTheme.typography.headlineSmall, color = T.text,
+                    )
                 }
                 if (finished.isNotEmpty()) {
                     GhostButton(stringResource(R.string.transfers_clear), { TransferLog.clearFinished() }, small = true)
@@ -110,7 +115,7 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit) {
 @Composable
 private fun Section(title: String) {
     Text(
-        title, Modifier.padding(top = 16.dp, bottom = 4.dp),
+        title, Modifier.padding(top = 16.dp, bottom = 4.dp).semantics { heading() },
         style = MaterialTheme.typography.titleSmall, color = T.text2,
     )
 }
@@ -120,9 +125,10 @@ private fun Section(title: String) {
 private fun Head(t: TransferRecord, action: @Composable () -> Unit) {
     val device = Core.peerName(t.node)
     val dir = stringResource(if (t.incoming) R.string.transfers_dir_received else R.string.transfers_dir_sent)
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    // "Sent, report.pdf, to Pixel" as one stop; the button stays its own.
+    Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.CenterVertically) {
         Box(
-            Modifier.size(28.dp).background(T.surface2, CircleShape).semantics { contentDescription = dir },
+            Modifier.size(28.dp).background(T.surface2, CircleShape).clearAndSetSemantics { contentDescription = dir },
             contentAlignment = Alignment.Center,
         ) {
             Text(if (t.incoming) "↓" else "↑", color = T.text, style = MaterialTheme.typography.bodyMedium)
@@ -172,7 +178,7 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
         }
         LinearProgressIndicator(
             progress = { t.fraction },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().progressInfo(t.name, t.fraction),
             color = T.accent,
             trackColor = T.surface2,
         )

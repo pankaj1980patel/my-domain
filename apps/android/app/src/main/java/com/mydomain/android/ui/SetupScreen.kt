@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
@@ -169,7 +171,10 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
             }
             Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineSmall, color = T.text)
+                Text(
+                    stringResource(R.string.setup_title), Modifier.semantics { heading() },
+                    style = MaterialTheme.typography.headlineSmall, color = T.text,
+                )
                 val (on, total) = setup.count
                 Muted(stringResource(R.string.setup_count, on, total))
             }

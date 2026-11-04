@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.semantics
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -100,7 +101,8 @@ private fun TransferRow(t: Transfer) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+            // Name and state as one stop; Cancel or Open stays its own.
+            Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}) {
                 Text(
                     t.name, style = MaterialTheme.typography.bodyMedium, color = T.text,
                     maxLines = 1, overflow = TextOverflow.Ellipsis,
@@ -123,7 +125,7 @@ private fun TransferRow(t: Transfer) {
         if (t.state == TransferState.Active) {
             LinearProgressIndicator(
                 progress = { t.fraction },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().progressInfo(t.name, t.fraction),
                 color = T.accent,
                 trackColor = T.surface2,
             )

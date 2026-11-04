@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.selection.selectableGroup
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -119,7 +122,7 @@ fun PhotosTile() {
             SwitchRow(stringResource(R.string.settings_backup_charging), b?.chargingOnly == true) { on ->
                 set(b?.enabled == true, b?.target.orEmpty(), on)
             }
-            b?.takeIf { it.enabled }?.let { Muted(backupLine(it)) }
+            b?.takeIf { it.enabled }?.let { Muted(backupLine(it), Modifier.announce()) }
             Muted(stringResource(R.string.settings_backup_hint))
         }
         var alerts by remember { mutableStateOf(Core.batteryAlerts()?.enabled ?: true) }
@@ -131,7 +134,7 @@ fun PhotosTile() {
         }
         if (alerts) {
             Muted(stringResource(R.string.settings_battery_charged))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(0, 80, 90, 100).forEach { pct ->
                     val label = if (pct == 0) stringResource(R.string.settings_battery_charged_off)
                     else stringResource(R.string.settings_battery_charged_pct, pct)
@@ -141,8 +144,9 @@ fun PhotosTile() {
                             try { Core.setBatteryAlerts(true, low(), pct) } catch (e: Exception) { toast(friendlyError(e)) }
                         }
                     }
-                    if (pct == charged) PrimaryButton(label, pick, Modifier.weight(1f))
-                    else SoftButton(label, pick, Modifier.weight(1f))
+                    // The chosen one is filled, and says "selected".
+                    if (pct == charged) PrimaryButton(label, pick, Modifier.weight(1f), selected = true)
+                    else SoftButton(label, pick, Modifier.weight(1f), selected = false)
                 }
             }
             Muted(stringResource(R.string.settings_battery_charged_hint))
@@ -195,7 +199,10 @@ fun HelperSettingsTile() {
     }
     Tile(title = stringResource(R.string.helper_title)) {
         Muted(stringResource(R.string.helper_hint))
-        Text(stringResource(if (on) R.string.helper_on else R.string.helper_off), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            stringResource(if (on) R.string.helper_on else R.string.helper_off), Modifier.announce(),
+            style = MaterialTheme.typography.bodyMedium, color = T.text,
+        )
         SoftButton(stringResource(R.string.helper_open), onClick = {
             runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         })
@@ -227,7 +234,7 @@ fun ShizukuSettingsTile() {
                     Privileged.State.READY -> R.string.shizuku_ready
                 },
             ),
-            style = MaterialTheme.typography.bodyMedium,
+            Modifier.announce(), style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
         when (state) {
             Privileged.State.NOT_INSTALLED ->
@@ -350,7 +357,7 @@ fun SettingsScreen(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Muted(
                 stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-                Modifier.clickable {
+                Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
                     taps += 1
                     if (taps >= 7) {
                         taps = 0

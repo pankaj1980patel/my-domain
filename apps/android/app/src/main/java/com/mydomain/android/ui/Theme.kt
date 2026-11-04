@@ -80,6 +80,9 @@ data class Tokens(
     val bar: Color,
     val border: Color,
     val borderStrong: Color,
+    /** Edges of text fields and an off switch: 3:1 on every surface
+     *  (WCAG 1.4.11). Decorative card borders keep [border]. */
+    val controlBorder: Color,
     val text: Color,
     val text2: Color,
     val text3: Color,
@@ -88,6 +91,9 @@ data class Tokens(
     val onPrimary: Color,
     /** Brand gradient stops (fraction to colour), drawn at about 120 degrees. */
     val gradient: List<Pair<Float, Color>>,
+    /** Laid over [gradient] on primary buttons only, so the white label
+     *  keeps 4.5:1 at the gradient's lightest stop. */
+    val primaryScrim: Color,
     val secondaryButton: Color,
     val secondaryButtonBorder: Color,
     /** Interaction: focus, selection, active navigation. */
@@ -132,10 +138,12 @@ private val Danger = Color(0xFFFB7185)
  *  Cyan for interaction, Cosmic Gold for highlights. */
 private val CosmicBlueTokens = Tokens(
     bg = Color(0xFF050B18), surface = Color(0xB80B1630), surface2 = Color(0xDB101D35), bar = Color(0xF00B1630),
-    border = Color(0xFF203454), borderStrong = Color(0xFF2A456A),
+    border = Color(0xFF203454), borderStrong = Color(0xFF2A456A), controlBorder = Color(0xFF5D7598),
     text = Color(0xFFF4F8FF), text2 = Color(0xFFC6D5EA), text3 = Color(0xFF94A3B8),
     primary = Color(0xFF1455D9), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF1455D9), 0.55f to Color(0xFF22C7F2), 1f to Color(0xFF713BDB)),
+    // #22C7F2 alone is 2.0:1 under white.
+    primaryScrim = Color(0x66050B18),
     secondaryButton = Color(0xFF152744), secondaryButtonBorder = Color(0xFF2A456A),
     accent = Color(0xFF22C7F2), onAccent = Color(0xFF041321), accentFg = Color(0xFF22C7F2),
     accentBg = Color(0x1F22C7F2), accentSoft = Color(0xFF64BFFF), highlight = Gold, highlightFg = Gold,
@@ -148,10 +156,12 @@ private val CosmicBlueTokens = Tokens(
 /** Aurora Purple: expressive violet, Aurora Cyan interaction, pink highlights. */
 private val AuroraTokens = Tokens(
     bg = Color(0xFF090817), surface = Color(0xB817152E), surface2 = Color(0xDB201D3D), bar = Color(0xF017152E),
-    border = Color(0xFF2E2A52), borderStrong = Color(0xFF433C74),
+    border = Color(0xFF2E2A52), borderStrong = Color(0xFF433C74), controlBorder = Color(0xFF6F679E),
     text = Color(0xFFF7F4FF), text2 = Color(0xFFD6D0EA), text3 = Color(0xFFA8A2C2),
     primary = Color(0xFF713BDB), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF312E81), 0.5f to Color(0xFF713BDB), 1f to Color(0xFFE879F9)),
+    // #E879F9 alone is 2.5:1 under white.
+    primaryScrim = Color(0x52050B18),
     secondaryButton = Color(0xFF221F42), secondaryButtonBorder = Color(0xFF433C74),
     accent = Color(0xFF42D9F5), onAccent = Color(0xFF041321), accentFg = Color(0xFF42D9F5),
     accentBg = Color(0x1F42D9F5), accentSoft = Color(0xFF9B75FF), highlight = Color(0xFFE879F9), highlightFg = Color(0xFFE879F9),
@@ -164,10 +174,12 @@ private val AuroraTokens = Tokens(
 /** Ocean Blue: calm blues, Aqua interaction, Mint for "connected". */
 private val OceanTokens = Tokens(
     bg = Color(0xFF061321), surface = Color(0xB80D2439), surface2 = Color(0xDB12304A), bar = Color(0xF00D2439),
-    border = Color(0xFF1D3D5A), borderStrong = Color(0xFF2A5578),
+    border = Color(0xFF1D3D5A), borderStrong = Color(0xFF2A5578), controlBorder = Color(0xFF4F7A9C),
     text = Color(0xFFF2FAFF), text2 = Color(0xFFC4DBE8), text3 = Color(0xFF8AA8BC),
     primary = Color(0xFF0759A6), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF0759A6), 0.6f to Color(0xFF0A8FC4), 1f to Color(0xFF00B8D9)),
+    // #00B8D9 alone is 2.4:1 under white.
+    primaryScrim = Color(0x57050B18),
     secondaryButton = Color(0xFF11304B), secondaryButtonBorder = Color(0xFF2A5578),
     accent = Color(0xFF00B8D9), onAccent = Color(0xFF03121F), accentFg = Color(0xFF00B8D9),
     accentBg = Color(0x1F00B8D9), accentSoft = Color(0xFFA5E8FF), highlight = Gold, highlightFg = Gold,
@@ -181,10 +193,12 @@ private val OceanTokens = Tokens(
  *  no glow, flat primary buttons. */
 private val MidnightTokens = Tokens(
     bg = Color(0xFF080B12), surface = Color(0xFF111827), surface2 = Color(0xFF1C2738), bar = Color(0xFF111827),
-    border = Color(0xFF29364A), borderStrong = Color(0xFF36465F),
+    border = Color(0xFF29364A), borderStrong = Color(0xFF36465F), controlBorder = Color(0xFF64758F),
     text = Color(0xFFF8FAFC), text2 = Color(0xFFCBD5E1), text3 = Color(0xFF94A3B8),
     primary = Color(0xFF2563EB), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF2563EB), 1f to Color(0xFF2563EB)),
+    // Flat #2563EB is 5.2:1 already.
+    primaryScrim = Color.Transparent,
     secondaryButton = Color(0xFF1C2738), secondaryButtonBorder = Color(0xFF36465F),
     accent = Color(0xFF38BDF8), onAccent = Color(0xFF04131F), accentFg = Color(0xFF38BDF8),
     accentBg = Color(0x1A38BDF8), accentSoft = Color(0xFF38BDF8), highlight = Gold, highlightFg = Gold,
@@ -198,15 +212,21 @@ private val MidnightTokens = Tokens(
  *  Ink text. */
 private val LightTokens = Tokens(
     bg = Color(0xFFF4F8FF), surface = Color(0xDBFFFFFF), surface2 = Color(0xFFE7F0FF), bar = Color(0xF5FFFFFF),
-    border = Color(0xFFDCE8F7), borderStrong = Color(0xFFC3D5EC),
-    text = Color(0xFF10213D), text2 = Color(0xFF33476A), text3 = Color(0xFF61738D),
+    border = Color(0xFFDCE8F7), borderStrong = Color(0xFFC3D5EC), controlBorder = Color(0xFF73859E),
+    // Muted Blue deepened to 4.5:1 on surface2 (was #61738D).
+    text = Color(0xFF10213D), text2 = Color(0xFF33476A), text3 = Color(0xFF56677F),
     primary = Color(0xFF1769E8), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF1769E8), 0.55f to Color(0xFF38BDF8), 1f to Color(0xFF713BDB)),
+    // #38BDF8 alone is 2.1:1 under white.
+    primaryScrim = Color(0x61050B18),
     secondaryButton = Color.White, secondaryButtonBorder = Color(0xFFC3D5EC),
-    accent = Color(0xFF38BDF8), onAccent = Color(0xFF041321), accentFg = Color(0xFF0369A1),
-    accentBg = Color(0x171769E8), accentSoft = Color(0xFF38BDF8), highlight = Color(0xFFF5B942), highlightFg = Color(0xFF9A6400),
-    success = Color(0xFF059669), successSoft = Color(0x1F059669), warning = Color(0xFFB45309),
-    danger = Color(0xFFE11D48), dangerSoft = Color(0x1AE11D48),
+    // Accent was #38BDF8 (2.1:1 on white): switches, the battery line and
+    // selection rings need 3:1. Status colours and the tagline darkened to
+    // 4.5:1 on surface2 (were #059669, #B45309, #E11D48, #9A6400).
+    accent = Color(0xFF0284C7), onAccent = Color(0xFF041321), accentFg = Color(0xFF0369A1),
+    accentBg = Color(0x171769E8), accentSoft = Color(0xFF38BDF8), highlight = Color(0xFFF5B942), highlightFg = Color(0xFF8A5900),
+    success = Color(0xFF047857), successSoft = Color(0x1F059669), warning = Color(0xFF9A4508),
+    danger = Color(0xFFBE123C), dangerSoft = Color(0x1AE11D48),
     toastBg = Color(0xFF10213D), toastFg = Color(0xFFF4F8FF),
     starField = false, veil = Color.Transparent, glow = Color(0x3838BDF8), dotGlow = true, isLight = true,
 )
@@ -297,7 +317,8 @@ fun MdTheme(content: @Composable () -> Unit) {
         surfaceContainerLowest = t.bar, surfaceContainerLow = t.bar, surfaceContainer = t.bar,
         surfaceContainerHigh = t.bar, surfaceContainerHighest = t.surface2,
         inverseSurface = t.toastBg, inverseOnSurface = t.toastFg, inversePrimary = t.accent,
-        outline = t.borderStrong, outlineVariant = t.border,
+        // Material draws component edges in `outline`: the 3:1 control edge.
+        outline = t.controlBorder, outlineVariant = t.border,
         error = t.danger, onError = Color.White, errorContainer = t.dangerSoft, onErrorContainer = t.danger,
         scrim = Color(0x99000000),
     )

@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -20,7 +21,7 @@ fun ShareScreenTile(node: String, name: String) {
             Muted(stringResource(R.string.screen_share_body, name))
             SoftButton(stringResource(R.string.screen_share_start, name), { ScreenShare.share(ctx, node) })
         } else {
-            Muted(stringResource(R.string.screen_share_now, name))
+            Muted(stringResource(R.string.screen_share_now, name), Modifier.announce())
             if (PhoneHelper.instance != null) {
                 SwitchRow(stringResource(R.string.screen_share_allow, name), ScreenShare.control) { ScreenShare.allowControl(it) }
                 Muted(stringResource(R.string.screen_share_allow_hint, name))

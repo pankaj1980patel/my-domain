@@ -1,5 +1,9 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -82,11 +86,14 @@ fun AutomationAppsTile() {
         if (!on) return@Tile
 
         // The key, for apps that can't hold the permission.
-        Text(stringResource(R.string.automation_apps_key), style = MaterialTheme.typography.titleSmall, color = T.text)
+        Text(stringResource(R.string.automation_apps_key), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = T.text)
         Muted(stringResource(R.string.automation_apps_key_hint))
         val k = key.orEmpty()
+        val hidden = stringResource(R.string.a11y_key_hidden)
         Text(
             if (showKey) k else "•".repeat(16),
+            // Hidden, TalkBack says so rather than "bullet" sixteen times.
+            if (showKey) Modifier else Modifier.clearAndSetSemantics { contentDescription = hidden },
             fontFamily = FontFamily.Monospace, fontSize = 13.sp, color = T.text,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -112,7 +119,7 @@ fun AutomationAppsTile() {
         }
 
         // Apps Android has given the permission to (no key needed).
-        Text(stringResource(R.string.automation_apps_allowed), style = MaterialTheme.typography.titleSmall, color = T.text)
+        Text(stringResource(R.string.automation_apps_allowed), Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = T.text)
         val allowed = remember(on) { AutomationAppsGate.allowedApps(ctx) }
         Muted(
             if (allowed.isEmpty()) stringResource(R.string.automation_apps_allowed_none)
@@ -153,7 +160,7 @@ fun AutomationAppsTile() {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.automation_apps_history), style = MaterialTheme.typography.titleSmall, color = T.text,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).semantics { heading() },
             )
             if (AutomationAppsGate.history.isNotEmpty()) {
                 GhostButton(stringResource(R.string.automation_apps_clear), { AutomationAppsGate.clearHistory(ctx) }, small = true)
@@ -163,7 +170,7 @@ fun AutomationAppsTile() {
         if (history.isEmpty()) Muted(stringResource(R.string.automation_apps_history_empty))
         val shown = if (allHistory) history.toList() else history.take(HISTORY_SHOWN)
         shown.forEach { r ->
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(r.what, style = MaterialTheme.typography.bodyMedium, color = T.text)
                 Muted(
                     "${AutomationAppsGate.appName(ctx, r.caller)} · ${timeAgo(r.ts)} · " +

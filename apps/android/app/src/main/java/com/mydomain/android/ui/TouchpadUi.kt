@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.background
 import kotlinx.coroutines.delay
 import androidx.compose.ui.layout.ContentScale
@@ -221,10 +223,15 @@ private fun Pad(
     // Read inside the touch handler, which isn't restarted when they change.
     val pointing by rememberUpdatedState(pointMode && screen != null)
     val shot by rememberUpdatedState(screen?.let { it.width to it.height })
+    // TalkBack: one stop that says what this is (and the computer's screen
+    // when it shows) and points to the buttons, which do the same things.
+    val padDesc = stringResource(R.string.a11y_touchpad)
+    val screenDesc = stringResource(R.string.screen_desc)
     Box(
         modifier
             .background(T.surface2, MaterialTheme.shapes.small)
             .border(1.dp, T.border, MaterialTheme.shapes.small)
+            .clearAndSetSemantics { contentDescription = if (screen != null) "$screenDesc. $padDesc" else padDesc }
             .pointerInput(node) {
                 awaitEachGesture {
                     val at = awaitFirstDown(requireUnconsumed = false).position
@@ -294,7 +301,7 @@ private fun Pad(
         contentAlignment = Alignment.Center,
     ) {
         if (screen != null) {
-            Image(screen, stringResource(R.string.screen_desc), Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
+            Image(screen, screenDesc, Modifier.fillMaxSize(), contentScale = ContentScale.Fit)
         } else {
             Muted(stringResource(R.string.touchpad_pad_hint), center = true)
         }

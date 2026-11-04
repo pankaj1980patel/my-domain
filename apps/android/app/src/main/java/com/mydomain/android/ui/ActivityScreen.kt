@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,7 +44,7 @@ fun ActivityScreen(onTransfers: () -> Unit) {
                         else stringResource(R.string.transfers_open),
                         Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = T.text,
                     )
-                    Text("›", style = MaterialTheme.typography.titleMedium, color = T.text3)
+                    Text("›", Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.titleMedium, color = T.text3)
                 }
                 Muted(stringResource(R.string.transfers_subtitle))
             }
@@ -57,7 +59,8 @@ fun ActivityScreen(onTransfers: () -> Unit) {
                 Tone.Error -> T.danger
                 Tone.Info -> T.text3
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
+            // One stop per entry: what happened, then when.
+            Row(Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(vertical = 12.dp), verticalAlignment = Alignment.Top) {
                 Box(Modifier.padding(top = 6.dp).size(8.dp).background(dot, CircleShape))
                 Spacer(Modifier.width(12.dp))
                 Text(a.text, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = T.text)

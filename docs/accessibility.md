@@ -1,13 +1,18 @@
-# Accessibility: desktop app
+# Accessibility
 
-This covers the desktop UI (`apps/desktop/ui/src`). The target is **WCAG 2.2 AA**.
+The target in both apps is **WCAG 2.2 AA**. The desktop app comes first; the
+Android app has its own section at the end ([Android](#android)).
+
+## Desktop
+
+This covers the desktop UI (`apps/desktop/ui/src`).
 It records what was checked, what was fixed, and what is still open. Shared
 keyboard helpers are in `src/lib/a11y.ts`. Words that only a screen reader
 hears are the `a11y.*` keys in `src/i18n/en.ts`. The CSS is the block headed
 "Accessibility" at the end of `src/styles/app.css`, plus the tokens in
 `src/styles/tokens.css`.
 
-## What was checked
+### What was checked
 
 Every screen and component was read:
 `App.tsx`, `screens/*.tsx`, `screens/device/*.tsx` and `components/*.tsx`.
@@ -28,9 +33,9 @@ Each was checked for:
 - **Canvas and graphs.** The phone or computer screen view and the battery
   graph have text alternatives.
 
-## What was fixed
+### What was fixed
 
-### Keyboard and focus
+#### Keyboard and focus
 
 - **Skip to content.** A "Skip to content" link is the first Tab stop. It
   stays off screen until it has focus, then moves focus to `<main id="main">`.
@@ -88,7 +93,7 @@ Each was checked for:
   - The screen view's focus ring used `--accent` with a hard-coded fallback
     colour. It now uses `--focus`.
 
-### Semantics
+#### Semantics
 
 - **Sidebar.** The places are now a list (`<ul>`). The current one has
   `aria-current="page"`. The count badges are hidden from screen readers and
@@ -140,7 +145,7 @@ Each was checked for:
 - **Device label editor.** The form is named by its heading. The "no icon"
   choice, which shows only a letter, is named "None".
 
-### Canvas and graphs
+#### Canvas and graphs
 
 - **Screen view (`<canvas>`).**
   - When it only shows a picture, it is `role="img"` named "{name}'s screen,
@@ -157,7 +162,7 @@ Each was checked for:
   6 h left at this rate." The hover tooltip and the axis captions are hidden
   from screen readers because the summary covers them.
 
-### Contrast (token changes in `tokens.css`)
+#### Contrast (token changes in `tokens.css`)
 
 The four dark themes (Cosmic Blue, Aurora, Ocean, Midnight) already passed for
 text. Measured on `--surface`, `--card-bg` and `--surface-2`:
@@ -198,7 +203,7 @@ How the new tokens are used:
   - Primary buttons used to brighten on hover, which took them back under
     4.5:1. They now show a ring on hover instead.
 
-### Motion
+#### Motion
 
 - The tokens already set `--fast` and `--normal` to 0 under
   `prefers-reduced-motion: reduce`.
@@ -207,7 +212,7 @@ How the new tokens are used:
   were missed before. A global reduced-motion rule at the end of `app.css`
   now stops every animation and transition.
 
-## Known remaining gaps
+### Known remaining gaps
 
 - **Phone control.** Taps and swipes on a phone's screen need a pointer. The
   phone's Back, Home, Recents and the Controls tile's keys are keyboard
@@ -234,6 +239,229 @@ How the new tokens are used:
 - **Not tested with assistive technology.** No screen reader (VoiceOver,
   NVDA, Orca) has been run on the Tauri webviews (WKWebView, WebView2,
   WebKitGTK). The checks so far were by reading the code and measuring.
-- **Android mirrors.** `tokens.css` says the Android app (`ui/Theme.kt`) uses
-  the same values. The Cosmic Light changes and the two new tokens above
-  haven't been carried over to it, or to `docs/design/theme.md`, yet.
+- **Android mirrors.** Done: `ui/Theme.kt` and `docs/design/theme.md` now
+  carry the Cosmic Light changes and the two new tokens (see
+  [Android](#android)).
+
+## Android
+
+This covers the Android app's Compose UI
+(`apps/android/app/src/main/java/com/mydomain/android/ui`), plus the
+lost-mode screen in `LostMode.kt`. The target is the same, WCAG 2.2 AA, read
+for TalkBack and touch. Shared helpers are in `ui/Components.kt`:
+`reducedMotion()`, `Modifier.progressInfo(label, fraction)` and
+`Modifier.announce()`. Words that only TalkBack hears are the `a11y_*`
+strings in `res/values/strings.xml`.
+
+### What was checked
+
+Every screen, tile and component in `ui/*.kt` was read, along with the lost
+mode screen. Each was checked for:
+
+- **Names.** Icon-only buttons and meaningful icons have a content
+  description; decorative ones have none (`null` or cleared).
+- **Roles and states.** Switches, chosen options and selectable chips say
+  what they are and whether they are on or chosen.
+- **Grouping.** A row that is one thing (a device, a transfer, an activity
+  entry) is one TalkBack stop, while its buttons stay their own stops.
+- **Headings.** Screen titles, tile titles and sub-section titles are
+  headings, so TalkBack's heading navigation works.
+- **Touch targets.** 48 dp at least (Android's guideline, well above
+  WCAG 2.5.8's 24 px).
+- **Progress.** Bars report their value and say what they measure.
+- **Live changes.** Status lines that change while the screen is open are
+  live regions.
+- **Canvas.** The battery graph and the computer's screen in the touchpad
+  have text alternatives.
+- **Contrast.** Measured as for the desktop. Android uses the same token
+  colours, and its glass panels use the same alpha over the same `bg`.
+- **Motion.** Android's "Remove animations" setting.
+
+### What was fixed
+
+#### Theme (`ui/Theme.kt`)
+
+- **Same values as the desktop.** The Cosmic Light changes and the two new
+  tokens from the desktop pass are now in `Theme.kt` (see the table under
+  "Contrast" in the desktop section, and `docs/design/theme.md`):
+  - `text3` #61738D → #56677F
+  - `success` #059669 → #047857
+  - `warning` #B45309 → #9A4508
+  - `danger` #E11D48 → #BE123C
+  - `highlightFg` #9A6400 → #8A5900
+  - `accent` #38BDF8 → #0284C7
+- **`controlBorder`** (#5D7598, #6F679E, #4F7A9C, #64758F, #73859E). It is:
+  - the unfocused edge of every text field (was `border`, 1.1–1.5:1);
+  - the outline of an off switch (was `borderStrong`);
+  - the unchosen edge of the device-icon choices;
+  - Material's `outline` colour (component edges).
+
+  Card borders keep `border`, so the glass look is unchanged.
+- **`primaryScrim`** (navy #050B18 at 40 / 32 / 34 / 0 / 38 %) is laid over
+  the gradient on `PrimaryButton`. The white label is now 4.5:1 or better at
+  the gradient's light stop. Before, it was 2.0–2.5:1 there.
+- In Cosmic Light, switches (the accent track) and selection rings were
+  2.1:1 against white. They are now 4.1:1, with the new `accent`.
+
+#### Names, roles and states
+
+- **Switch rows** (`SwitchRow`, used for every on/off setting). Before, the
+  row and the switch inside it were two separate stops: the row had no role,
+  and the switch had no label. Now the row is one `toggleable` with
+  `Role.Switch` and is at least 48 dp tall. TalkBack reads "Keep clipboards
+  in sync with my devices, switch, on", and a tap anywhere on the row
+  toggles it.
+- **Tiles.** A tile without an action was a *disabled* clickable `Surface`.
+  TalkBack read the whole tile as one block, followed by "disabled". Now only
+  a tile you can tap is clickable. Other tiles are plain surfaces, so each
+  line and control is its own stop.
+- **Chosen options say "selected".** These are buttons where the chosen one
+  is drawn filled (`selected` on `PrimaryButton` and `SoftButton`):
+  - the "Tell my other devices when charged to" level (Settings);
+  - the automation form's trigger, device, target and action rows;
+  - the ringer mode buttons on a phone's page.
+
+  Each row is a `selectableGroup`.
+- **Device icon and colour choices** (label editor) use `selectable` with
+  `Role.RadioButton` in a `selectableGroup`. Their inner letter or slash is
+  cleared, so TalkBack reads only the choice's name.
+- **Unread badge** on a device card reads "3 unread messages", not "3".
+- **Avatars** (the initial or icon) are decorative and hidden. The device's
+  name is always next to them.
+- **Directions.**
+  - Transfers and clipboard history: the ↑/↓ glyphs are cleared and replaced
+    by "Sent" or "Received", or "From …" or "To …".
+  - Chat messages: each message is one stop, with "Sent" or "Received" as its
+    state.
+- **Automation-app key.** When hidden, it reads "Key hidden", not "bullet"
+  sixteen times.
+- **Small decorative glyphs** are hidden: the "›" on the Transfers tile and
+  the "•" of Help bullet lists. Numbered list items keep their numbers.
+- **Developer screen.** Back used a hard-coded "Back". It now uses the string
+  resource.
+- **Icon buttons** already had names: Back on every pushed screen and Help
+  on Set up. The bottom navigation icons are rightly `null`, because the tab
+  label names them.
+
+#### Grouping (merged semantics)
+
+Each of these is now one TalkBack stop. Its buttons (Cancel, Open, Copy, Send
+again, Connect) remain their own stops.
+
+- Device card: the name (a heading), the status and signal, and the unread
+  count. The card was already one clickable `Surface`.
+- Transfers row: direction, file name and device.
+- Files tile row: name and state.
+- Activity entry: what happened and when.
+- Clipboard history entries (the device page and the history tile).
+- Automation-app history entries.
+- Browse rows.
+- Info rows (Battery, Storage, Memory, Processor, Uptime, Do Not Disturb).
+
+#### Headings
+
+`heading()` is set on:
+
+- `PageHead` titles (Your devices, Activity, Settings);
+- the titles of the pushed screens: the device's name, Transfers,
+  Automations, Help (and the topic shown), Set up this phone, Developer, the
+  sign-in title, and lost mode's "This phone is lost";
+- every `Tile` title;
+- device names on the cards;
+- the Transfers section titles;
+- the sub-titles in the Automation apps tile and the clipboard history;
+- Help topic headings.
+
+#### Touch targets
+
+- **Buttons.** `SoftButton` and `GhostButton` have a *minimum* height of 44
+  or 36 dp now, instead of a fixed one, and Material keeps a 48 dp touch area
+  around them. `PrimaryButton` draws its gradient on its own modifier, so it
+  puts `minimumInteractiveComponentSize()` around a box instead. Every button
+  is now a 48 dp target in layout, not only through Compose's touch-bounds
+  expansion, and its label can grow with the font size instead of being
+  clipped.
+- **Device icon and colour choices** went from 44 and 40 dp to 48 dp. The
+  swatch inside grew from 30 to 36 dp.
+- **Folder rows** in the Browse tile are at least 48 dp tall, with
+  `Role.Button`.
+- **The Settings version line** (7 taps unlock Developer) is at least 48 dp
+  tall, with `Role.Button`.
+- **Switch rows** are at least 48 dp tall.
+
+#### Progress
+
+- Transfer bars (Transfers screen and the Files tile) carry
+  `ProgressBarRangeInfo` and the file's name: "report.pdf, 40 percent".
+- Info rows with a bar (battery, storage, memory, processor) are one stop
+  with the label, the value and the range: "Storage, 12 GB free of 64 GB, 81
+  percent". The bar shows how full it is.
+
+#### Live regions
+
+Polite unless marked otherwise:
+
+- the error box on sign-in (`ErrorText`), which is **assertive**;
+- the connecting progress line on a device page;
+- the volume level;
+- the located position;
+- Browse's path, "Asking…" and its errors;
+- a command's result line;
+- the backup status;
+- Accessibility helper on or off;
+- the Shizuku state;
+- "Sharing your screen with …";
+- "Playing on …";
+- the computer audio state and its last stop reason.
+
+Toasts are Material snackbars. They are already announced, and their time
+on screen follows Android's "Time to take action" setting.
+
+#### Canvas and screen views
+
+- **Battery graph.** Its description was "Battery over the last 24 hours".
+  It now sums up the data: "Battery over the last 24 hours: 92% to 41% now,
+  lowest 38%, highest 92%. Charging now." The "24 h ago" and "now" captions
+  are hidden. The estimate line under the graph is read as normal.
+- **Touchpad and the computer's screen** (`TouchpadUi.kt`). The pad is one
+  stop that says what it is and that the click, key and swipe buttons do the
+  same with TalkBack on. When the computer's screen shows on the pad, the
+  description says so first. Before, the pad had no description, and only
+  the picture had a name.
+
+#### Motion
+
+- The only app animation is the pulsing "Connecting" dot (`StatusPill`).
+  `reducedMotion()` reads `Settings.Global.ANIMATOR_DURATION_SCALE`. When it
+  is 0 ("Remove animations"), the dot stays still. The pull-to-refresh
+  spinner is Material's and follows the system scale itself.
+
+### Known remaining gaps
+
+- **Not tested with TalkBack.** These checks were made by reading the code
+  and measuring colours. Nothing has been run on a phone with TalkBack or
+  Switch Access yet, and Accessibility Scanner hasn't been run either.
+- **Touchpad gestures.** Moving the pointer and point-and-click need direct
+  touch. With TalkBack on, the buttons cover clicks, keys and the three- and
+  four-finger swipes. There is no TalkBack way to move the pointer to a
+  given spot.
+- **Battery graph points.** As on the desktop, the summary covers the trend,
+  not each reading.
+- **Chat.** New incoming messages aren't announced. A live region on the
+  whole thread would read every message again. A polite announcement of the
+  newest one is still to do.
+- **Chosen-option buttons** say "selected", but their role stays "button",
+  not "radio button".
+- **Switch thumb.** In the dark themes, the white thumb on the cyan track is
+  about 2:1. The state is still clear from the track against the panel
+  (3:1 or better) and from where the thumb sits.
+- **Waiting chat messages** are drawn at 70 % opacity, which lowers their
+  contrast. The words "Sends when connected" say so.
+- **Translucent panels over the star field.** As on the desktop, contrast
+  was measured over the plain `bg`.
+- **"Remove animations" is read once per screen.** Changing it while a
+  screen is open takes effect when that screen is next opened.
+- **Font scale.** Buttons now grow with the font size. Fixed-size bits do
+  not: the 8 dp status dot, the 28 dp direction circle and the unread badge.
+  They hold one glyph each. Long one-line texts (file names, keys) are
+  ellipsized rather than wrapped.

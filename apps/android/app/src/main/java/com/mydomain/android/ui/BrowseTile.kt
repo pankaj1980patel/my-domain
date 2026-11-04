@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
 import android.text.format.DateUtils
 import android.text.format.Formatter
 import androidx.compose.foundation.clickable
@@ -93,7 +96,7 @@ fun BrowseTile(node: String, name: String) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 if (root.isEmpty()) stringResource(R.string.browse_shared, name) else listOf(root, path).filter { it.isNotEmpty() }.joinToString(" / "),
-                style = MaterialTheme.typography.bodyMedium, color = T.text, modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium, color = T.text, modifier = Modifier.weight(1f).announce(),
             )
             if (root.isNotEmpty()) {
                 GhostButton(stringResource(R.string.browse_up), {
@@ -102,16 +105,18 @@ fun BrowseTile(node: String, name: String) {
             }
             GhostButton(stringResource(R.string.browse_close), { open = false }, small = true)
         }
-        error?.let { Muted(browseError(it)) }
-        if (waiting && entries.isEmpty()) Muted(stringResource(R.string.browse_loading))
+        error?.let { Muted(browseError(it), Modifier.announce()) }
+        if (waiting && entries.isEmpty()) Muted(stringResource(R.string.browse_loading), Modifier.announce())
         if (!waiting && error == null && entries.isEmpty()) {
             Muted(stringResource(if (root.isEmpty()) R.string.browse_none_shared else R.string.browse_empty))
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             entries.forEach { e ->
                 Row(
-                    Modifier.fillMaxWidth()
-                        .clickable(enabled = e.dir || root.isEmpty()) {
+                    // A folder row opens it: a button, 48 dp tall at least.
+                    Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                        .semantics(mergeDescendants = true) {}
+                        .clickable(enabled = e.dir || root.isEmpty(), role = Role.Button) {
                             when {
                                 root.isEmpty() -> list(e.name, "")
                                 e.dir -> list(root, if (path.isEmpty()) e.name else "$path/${e.name}")

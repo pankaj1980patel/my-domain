@@ -42,19 +42,44 @@ filled in where the kit's palette has no colour for that role.
 | Surface (panels) | `--surface` | `surface` | **#0B1630** at 72% | **#17152E** at 72% | **#0D2439** at 72% | **#111827** | **#FFFFFF** at 86% |
 | Raised surface | `--surface-2` | `surface2` | **#101D35** at 86% | #201D3D | #12304A | **#1C2738** | #E7F0FF |
 | Border | `--border` | `border` | **#203454** | #2E2A52 | #1D3D5A | **#29364A** | **#DCE8F7** |
+| Control edge | `--control-border` | `controlBorder` | #5D7598 | #6F679E | #4F7A9C | #64758F | #73859E |
 | Text | `--text` | `text` | **#F4F8FF** | **#F7F4FF** | **#F2FAFF** | **#F8FAFC** | **#10213D** |
 | Secondary text | `--text-2` | `text2` | **#C6D5EA** | #D6D0EA | #C4DBE8 | #CBD5E1 | #33476A |
-| Muted text | `--text-3` | `text3` | **#94A3B8** | **#A8A2C2** | **#8AA8BC** | **#94A3B8** | **#61738D** |
+| Muted text | `--text-3` | `text3` | **#94A3B8** | **#A8A2C2** | **#8AA8BC** | **#94A3B8** | #56677F |
 | Primary | `--primary` | `primary` | **#1455D9** | **#713BDB** | **#0759A6** | **#2563EB** | **#1769E8** |
 | Primary gradient | `--gradient` | `brush` | **Cosmic Flow** | **Aurora** | #0759A6, #0A8FC4, #00B8D9 | flat #2563EB | #1769E8, #38BDF8, #713BDB |
-| Accent (interaction) | `--accent` | `accent` | **#22C7F2** | **#42D9F5** | **#00B8D9** | **#38BDF8** | **#38BDF8** |
+| Primary scrim | `--primary-scrim` | `primaryScrim` | #050B18 at 40% | #050B18 at 32% | #050B18 at 34% | none | #050B18 at 38% |
+| Accent (interaction) | `--accent` | `accent` | **#22C7F2** | **#42D9F5** | **#00B8D9** | **#38BDF8** | #0284C7 |
 | Accent as text | `--accent-fg` | `accentFg` | #22C7F2 | #42D9F5 | #00B8D9 | #38BDF8 | #0369A1 |
 | Secondary accent | `--accent-soft` | `accentSoft` | **#64BFFF** | **#9B75FF** | **#A5E8FF** | #38BDF8 | #38BDF8 |
 | Highlight | `--highlight` | `highlight` | **#FFC857** | **#E879F9** | #FFC857 | #FFC857 | **#F5B942** |
-| Highlight as text (tagline) | `--highlight-fg` | `highlightFg` | #FFC857 | #E879F9 | #FFC857 | #FFC857 | #9A6400 |
-| Success | `--success` | `success` | **#34D399** | #34D399 | **#55E6C1** | #34D399 | #059669 |
-| Warning | `--warning` | `warning` | **#FFC857** | #FFC857 | #FFC857 | #FFC857 | #B45309 |
-| Danger | `--danger` | `danger` | **#FB7185** | #FB7185 | #FB7185 | #FB7185 | #E11D48 |
+| Highlight as text (tagline) | `--highlight-fg` | `highlightFg` | #FFC857 | #E879F9 | #FFC857 | #FFC857 | #8A5900 |
+| Success | `--success` | `success` | **#34D399** | #34D399 | **#55E6C1** | #34D399 | #047857 |
+| Warning | `--warning` | `warning` | **#FFC857** | #FFC857 | #FFC857 | #FFC857 | #9A4508 |
+| Danger | `--danger` | `danger` | **#FB7185** | #FB7185 | #FB7185 | #FB7185 | #BE123C |
+
+Cosmic Light differs from the kit in a few places, for contrast (WCAG 2.2
+AA, measured in [`docs/accessibility.md`](../accessibility.md)):
+
+- Muted text is #56677F, not the kit's #61738D, so it reaches 4.5:1 on the
+  raised surface.
+- The accent is #0284C7, not the kit's #38BDF8. Switches, the battery line
+  and selection rings need 3:1 against white, and #38BDF8 is only 2.1:1. The
+  kit's #38BDF8 stays in the gradient, the glow and `accentSoft`.
+- Success, warning, danger and the tagline gold are darker than before
+  (#059669, #B45309, #E11D48 and #9A6400 were just under 4.5:1 on the raised
+  surface).
+
+The two newer tokens:
+
+- **Control edge** (`--control-border`, `controlBorder`): the edge of text
+  fields and of an off switch, 3:1 on every surface. Card and panel borders
+  are decorative and keep `--border`, so the glass look doesn't change. On
+  Android it is also Material's `outline`.
+- **Primary scrim** (`--primary-scrim`, `primaryScrim`): a thin navy veil
+  laid over the gradient on primary buttons only, so their white label
+  keeps 4.5:1 at the gradient's lightest stop. Progress bars keep the plain
+  gradient. Minimal Midnight's flat blue doesn't need one.
 
 Supporting tokens:
 
@@ -111,16 +136,18 @@ Supporting tokens:
 
 ## Components
 
-- **Primary button**: filled with the theme gradient, white label, extra-bold,
-  12 px corners. Use one per view, for the main action.
+- **Primary button**: filled with the theme gradient under the primary
+  scrim, white label, extra-bold, 12 px corners. Use one per view, for the
+  main action.
 - **Secondary button**: a deep panel fill with a hairline border.
 - **Ghost button**: transparent with a border. The border turns to the
   accent on hover.
 - **Card / tile**: glass surface, 1 px border, 18 px corners, no shadow.
   A clickable card's border turns to the accent on hover.
-- **Input**: raised surface and 12 px corners. On focus, the border turns to
-  the accent and a faint accent ring appears.
-- **Switch**: accent track when on.
+- **Input**: raised surface, a control-edge border and 12 px corners. On
+  focus, the border turns to the focus colour (desktop: a 2 px `--focus`
+  ring; Android: Material's 2 dp accent border).
+- **Switch**: accent track when on; a control-edge outline when off.
 - **Chip / badge**: fully round. An accent fill takes dark navy text.
 - **Navigation**: the active item shows a faint accent wash and accent text.
 - **Status dot**: green when connected, with a soft glow. The glow is off in

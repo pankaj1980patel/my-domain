@@ -24,7 +24,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
@@ -84,7 +87,17 @@ fun InfoTile(node: String, name: String, st: DeviceStatus) {
 /** A label and its value on one line, with a bar under them when [fraction] is given. */
 @Composable
 private fun InfoRow(label: String, value: String, fraction: Float? = null) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    // One TalkBack stop: "Storage, 12 GB free of 64 GB" and, with a bar,
+    // how full it is ("81 percent").
+    val a11y = if (fraction != null) {
+        Modifier.clearAndSetSemantics {
+            contentDescription = "$label, $value"
+            progressBarRangeInfo = ProgressBarRangeInfo(fraction.coerceIn(0f, 1f), 0f..1f)
+        }
+    } else {
+        Modifier.semantics(mergeDescendants = true) {}
+    }
+    Column(a11y, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, style = MaterialTheme.typography.labelMedium, color = T.text2, modifier = Modifier.weight(1f))
             Text(value, style = MaterialTheme.typography.bodyMedium, color = T.text)
@@ -138,7 +151,12 @@ private fun BatteryGraph(samples: List<BatterySample>) {
     val lineColor = T.accent
     val areaColor = T.accentBg
     val chargingColor = T.successSoft
-    val label = stringResource(R.string.info_battery_chart)
+    // Its text alternative sums the line up (the axis captions are hidden).
+    val inWindow = samples.subList(first, samples.size)
+    val summary = stringResource(
+        R.string.a11y_battery_chart_summary,
+        inWindow.first().level, inWindow.last().level, inWindow.minOf { it.level }, inWindow.maxOf { it.level },
+    ) + if (samples.last().charging) " " + stringResource(R.string.a11y_battery_chart_charging) else ""
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Canvas(
             Modifier
@@ -146,7 +164,7 @@ private fun BatteryGraph(samples: List<BatterySample>) {
                 .height(48.dp)
                 .clip(RoundedCornerShape(4.dp))
                 .background(T.surface2)
-                .semantics { contentDescription = label },
+                .semantics { contentDescription = summary },
         ) {
             val pad = 3.dp.toPx()
             val x = { at: Long -> (at - start).toFloat() / DAY_S * size.width }
@@ -173,7 +191,7 @@ private fun BatteryGraph(samples: List<BatterySample>) {
                 drawPath(line, lineColor, style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round))
             }
         }
-        Row {
+        Row(Modifier.clearAndSetSemantics {}) {
             Text(stringResource(R.string.info_battery_day_ago), style = MaterialTheme.typography.labelSmall, color = T.text3, modifier = Modifier.weight(1f))
             Text(stringResource(R.string.info_battery_now), style = MaterialTheme.typography.labelSmall, color = T.text3)
         }

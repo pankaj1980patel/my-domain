@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -19,6 +20,7 @@ fun ComputerAudioTile(node: String, name: String) {
                 Muted(
                     if (ComputerAudio.flowing) stringResource(R.string.caudio_tile_playing, name)
                     else stringResource(R.string.caudio_tile_waiting, name),
+                    Modifier.announce(),
                 )
                 GhostButton(stringResource(R.string.audio_stop), { ComputerAudio.stop() })
             }
@@ -27,7 +29,7 @@ fun ComputerAudioTile(node: String, name: String) {
                     if (offered) stringResource(R.string.caudio_tile_offered, name)
                     else stringResource(R.string.caudio_tile_body, name),
                 )
-                ComputerAudio.lastStop?.let { Muted(it) }
+                ComputerAudio.lastStop?.let { Muted(it, Modifier.announce()) }
                 SoftButton(stringResource(R.string.caudio_tile_start, name), { ComputerAudio.playHere(ctx, node) })
             }
         }

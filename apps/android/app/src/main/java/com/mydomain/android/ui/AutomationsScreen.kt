@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -75,7 +78,10 @@ fun AutomationsScreen(onBack: () -> Unit) {
             IconButton(onClick = { if (editing != null) editing = null else onBack() }) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
             }
-            Text(stringResource(R.string.automations_title), style = MaterialTheme.typography.headlineSmall, color = T.text)
+            Text(
+                stringResource(R.string.automations_title), Modifier.semantics { heading() },
+                style = MaterialTheme.typography.headlineSmall, color = T.text,
+            )
         }
         val e = editing
         if (e != null) {
@@ -138,11 +144,13 @@ private fun AutomationRow(a: Automation, onEdit: () -> Unit, onDelete: () -> Uni
 @Composable
 private fun <V> Choices(options: List<Pair<V, String>>, selected: V, onPick: (V) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+        Modifier.fillMaxWidth().selectableGroup().horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         options.forEach { (v, label) ->
-            if (v == selected) PrimaryButton(label, { onPick(v) }) else SoftButton(label, { onPick(v) })
+            // The chosen one is filled, and says "selected".
+            if (v == selected) PrimaryButton(label, { onPick(v) }, selected = true)
+            else SoftButton(label, { onPick(v) }, selected = false)
         }
     }
 }

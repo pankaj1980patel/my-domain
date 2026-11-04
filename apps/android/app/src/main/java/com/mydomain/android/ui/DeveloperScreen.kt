@@ -1,5 +1,9 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.R
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -55,8 +59,8 @@ fun DeveloperScreen(onBack: () -> Unit) {
     ) {
         item {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = T.text) }
-                Text("Developer", style = MaterialTheme.typography.headlineSmall, color = T.text)
+                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
+                Text("Developer", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, color = T.text)
             }
         }
         item {

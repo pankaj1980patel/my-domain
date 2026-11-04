@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -307,7 +309,7 @@ private fun LostScreen(message: String, contact: String, onCall: () -> Unit, onF
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    stringResource(R.string.lost_title), style = MaterialTheme.typography.headlineMedium,
+                    stringResource(R.string.lost_title), Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineMedium,
                     color = Color.White, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.height(16.dp))

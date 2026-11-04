@@ -115,7 +115,7 @@ private fun RunResult(r: LastRun) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            line, style = MaterialTheme.typography.labelMedium,
+            line, Modifier.announce(), style = MaterialTheme.typography.labelMedium,
             color = if (r.code == 0) T.text2 else T.danger,
         )
         Text(

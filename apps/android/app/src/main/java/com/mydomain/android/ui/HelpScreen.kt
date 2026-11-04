@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.heading
 import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -91,7 +94,7 @@ fun HelpScreen(topic: String?, onTopic: (String?) -> Unit, onBack: () -> Unit) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
             }
             Text(
-                current?.title ?: stringResource(R.string.help_title),
+                current?.title ?: stringResource(R.string.help_title), Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall, color = T.text,
             )
         }
@@ -133,7 +136,7 @@ private fun HelpBlocks(blocks: List<MdBlock>, known: Set<String>, onTopic: (Stri
         when (b) {
             is MdBlock.Heading -> Text(
                 annotated(b.inlines),
-                Modifier.padding(top = 6.dp),
+                Modifier.padding(top = 6.dp).semantics { heading() },
                 style = if (b.level <= 2) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleSmall,
                 color = T.text,
             )
@@ -141,9 +144,10 @@ private fun HelpBlocks(blocks: List<MdBlock>, known: Set<String>, onTopic: (Stri
             is MdBlock.ListBlock -> Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 b.items.forEachIndexed { i, item ->
                     Row {
+                        // TalkBack reads the item, not "bullet"; numbers stay.
                         Text(
                             if (b.ordered) "${i + 1}." else "•",
-                            Modifier.width(22.dp),
+                            Modifier.width(22.dp).then(if (b.ordered) Modifier else Modifier.clearAndSetSemantics {}),
                             style = MaterialTheme.typography.bodyMedium, color = T.text2,
                         )
                         Text(annotated(item), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = T.text)

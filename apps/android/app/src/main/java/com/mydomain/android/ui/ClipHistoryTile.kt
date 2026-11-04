@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.heading
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -69,7 +71,10 @@ fun ClipHistoryTile(node: String, name: String) {
 
     Tile {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.clip_history_title), style = MaterialTheme.typography.titleMedium, color = T.text, modifier = Modifier.weight(1f))
+            Text(
+                stringResource(R.string.clip_history_title), style = MaterialTheme.typography.titleMedium, color = T.text,
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
             if (page.kept > 0) {
                 GhostButton(stringResource(R.string.clip_history_clear), {
                     ClipLog.clear(node)
@@ -87,13 +92,14 @@ fun ClipHistoryTile(node: String, name: String) {
             return@Tile
         }
         page.entries.forEach { e ->
-            Row(verticalAlignment = Alignment.Top) {
+            // Way, text and time as one stop; Copy and Send again stay their own.
+            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
                 val way = if (e.incoming) from else to
                 Text(
                     if (e.incoming) "↓" else "↑",
                     style = MaterialTheme.typography.titleMedium,
                     color = if (e.incoming) T.accentFg else T.text2,
-                    modifier = Modifier.semantics { contentDescription = way },
+                    modifier = Modifier.clearAndSetSemantics { contentDescription = way },
                 )
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
