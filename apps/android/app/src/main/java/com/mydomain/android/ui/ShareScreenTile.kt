@@ -22,7 +22,7 @@ fun ShareScreenTile(node: String, name: String) {
         } else {
             Muted(stringResource(R.string.screen_share_now, name))
             if (PhoneHelper.instance != null) {
-                SwitchRow(stringResource(R.string.screen_share_allow, name), ScreenShare.control) { ScreenShare.setControl(it) }
+                SwitchRow(stringResource(R.string.screen_share_allow, name), ScreenShare.control) { ScreenShare.allowControl(it) }
                 Muted(stringResource(R.string.screen_share_allow_hint, name))
             } else {
                 Muted(stringResource(R.string.screen_share_needs_helper, name))

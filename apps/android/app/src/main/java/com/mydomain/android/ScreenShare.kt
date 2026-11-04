@@ -135,7 +135,7 @@ object ScreenShare {
     }
 
     /** Allow or forbid taps and swipes from the computers it shares with. */
-    fun setControl(on: Boolean) {
+    fun allowControl(on: Boolean) {
         ScreenShareService.current?.setControl(on)
     }
 
