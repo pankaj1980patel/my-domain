@@ -324,6 +324,21 @@ Built by three agents in parallel (worktrees), merged and built here.
   charge at the chosen level, replacing "full"; 100 is sent as "full" for
   older versions; re-arms 5 points below. mdctl `battery-alerts on|off
   [low] [charged]`. Unit tests plus a 2-node test.
+- **Send a whole folder** (core `features/folders.rs`, desktop drop, mdctl
+  `sendfile`): each file is its own resumable transfer carrying an optional
+  `folder` path in the offer (old receivers save flat); 4 at a time; the
+  receiver checks the path (no `..`, absolute, backslash); symlinks and
+  hidden entries skipped; 10,000 files / 32 levels max. 2-node tests.
+- **Device info card** (desktop `InfoTile.tsx`, phone `ui/InfoTile.kt`):
+  battery, storage, memory, CPU and uptime. Computers send `cpu` (busy %
+  since the last push; macOS `host_statistics`, Linux `/proc/stat`) and
+  `boot_at`, which the core turns into `uptime_s`. No CPU on Android (apps
+  can't read it since Android 8).
+- **Scheduled actions** (desktop `schedule.rs`, `ScheduleTile.tsx` on each
+  device page): presets from the device's actions, a time, weekdays (none =
+  once), on/off, run now. Checked each minute; a time missed while asleep or
+  closed is skipped, not replayed; an unreachable device gets it queued.
+  14 unit tests on the timing (DST, midnight, sleep).
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
