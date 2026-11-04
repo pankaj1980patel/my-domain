@@ -347,6 +347,8 @@ export const en = {
   "settings.followDndHint": "While your phone is on Do Not Disturb, my-domain holds its pop-ups here and tells you how many came when it ends.",
   "settings.remoteInput": "Let my phone control this computer",
   "settings.remoteInputHint": "Use your phone as a touchpad and keyboard here. On a Mac, also allow my-domain under Privacy & Security > Accessibility.",
+  "settings.shareLocation": "Let my phone see where this computer is",
+  "settings.shareLocationHint": "Only when your own phone asks, and you get a notification each time. macOS asks once for location access.",
   "settings.screenShare": "Let my phone see this screen",
   "settings.screenShareHint": "Your phone shows this screen behind its full-screen touchpad, and you get a notice each time it starts watching. On a Mac, also allow my-domain under Privacy & Security > Screen Recording.",
   "settings.deviceKey": "Device key",

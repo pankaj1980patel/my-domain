@@ -271,6 +271,32 @@ Tried: mdctl → the phone, the picture was saved (`file-sent`); whether it
 landed on the phone's clipboard couldn't be seen over adb (no clipboard
 command; the screen-share prompt was on top). Desktop side: clippy only.
 
+## Photos, browse files, phone screen settings, find my computer (2026-11-04)
+
+Built by three agents in parallel (worktrees), merged and built here.
+- **Photos** (desktop `screens/device/PhotosTile.tsx`): the phone's recent
+  photos and videos as a thumbnail grid, newest first, 60 a page, Download
+  per item or for a selection; clear messages for no access or no answer.
+  The phone now lists `gallery`. Tried: `gallery` from mdctl returned the
+  phone's newest pictures with names, sizes and dates.
+- **Browse files** (desktop `screens/device/BrowseTile.tsx`): another
+  device's shared folders, into folders with a clickable path, Up, Load
+  more, Download per file. The core now puts `shared_folders` (how many)
+  in every status, so the tile shows only for devices that can be browsed.
+- **Phone screen settings** (`ScreenSettings.kt`, action `screen_settings
+  {brightness?, auto_brightness?, timeout_s?, rotate?}`; desktop
+  `ScreenSettingsRow.tsx`): brightness slider and Auto, screen timeout,
+  auto-rotate. Needs Android's "Modify system settings": the phone opens
+  it when asked; the desktop greys the controls out until then. Tried: the
+  status carries brightness, auto brightness, timeout, auto-rotate and
+  `write_settings`.
+- **Find my computer** (desktop `location.rs`): the phone's Locate row on
+  a computer's page; the Mac answers from CoreLocation, only with
+  "Let my phone see where this computer is" on (desktop Settings, off by
+  default), with a notification each time; macOS asks for location access
+  once. Linux doesn't offer it yet. `Gate` moved to `components/ui.tsx`.
+  Not tried live yet.
+
 ## Find this phone: its location, and Location on/off (2026-11-04)
 
 - `PhoneLocation.kt`, action `locate`: the phone puts `location {lat,

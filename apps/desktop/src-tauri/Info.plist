@@ -9,5 +9,10 @@
 	<!-- Now playing: asks Spotify or Music what they're playing (AppleScript). -->
 	<key>NSAppleEventsUsageDescription</key>
 	<string>my-domain shows your other devices what Spotify or Music is playing.</string>
+	<!-- Find my computer: your phone asks where this computer is (location.rs). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>my-domain tells your own phone where this computer is, when you allow it in Settings.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>my-domain tells your own phone where this computer is, when you allow it in Settings.</string>
 </dict>
 </plist>

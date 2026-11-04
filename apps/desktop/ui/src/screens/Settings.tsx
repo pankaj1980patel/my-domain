@@ -18,11 +18,15 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [followDnd, setFollowDnd] = createSignal(false);
   const [remoteInput, setRemoteInput] = createSignal(true);
   const [screenShare, setScreenShare] = createSignal(true);
+  const [shareLocation, setShareLocation] = createSignal(false);
+  const [canLocate, setCanLocate] = createSignal(false);
   onMount(async () => {
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
     setRemoteInput(await commands.remoteInputAllowed());
     setScreenShare(await commands.screenAllowed());
+    setShareLocation(await commands.shareLocation());
+    setCanLocate(await commands.locationAvailable());
   });
   const toggleNotifs = async (on: boolean) => {
     await commands.setNotificationsEnabled(on);
@@ -39,6 +43,10 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const toggleScreenShare = async (on: boolean) => {
     await commands.setScreenAllowed(on);
     setScreenShare(on);
+  };
+  const toggleShareLocation = async (on: boolean) => {
+    await commands.setShareLocation(on);
+    setShareLocation(on);
   };
 
   const tapVersion = () => {
@@ -92,6 +100,18 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={screenShare()} onChange={(e) => toggleScreenShare(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.screenShareHint")}</p>
+        <Show when={canLocate()}>
+          <label class="switch-row">
+            <span>{t("settings.shareLocation")}</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={shareLocation()}
+              onChange={(e) => toggleShareLocation(e.currentTarget.checked)}
+            />
+          </label>
+          <p class="muted small">{t("settings.shareLocationHint")}</p>
+        </Show>
       </article>
 
       <article class="tile">

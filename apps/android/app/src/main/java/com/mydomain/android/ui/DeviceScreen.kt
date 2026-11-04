@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.platform.LocalContext
+import android.net.Uri
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -273,6 +276,43 @@ private fun AppsTile(node: String) {
 }
 
 /** Find & control: ring it, open a link on it, and its battery. */
+/** Where another device is (find my computer): Locate, the position, and
+ *  a map. Greyed out, saying why, until that device allows it. */
+@Composable
+private fun LocateRow(node: String, name: String, status: DeviceStatus) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val ctx = LocalContext.current
+    val asking = stringResource(R.string.locate_asking, name)
+    val place = status.location
+    if (place != null) {
+        val mins = ((System.currentTimeMillis() / 1000 - place.at) / 60).coerceAtLeast(0)
+        Text(
+            stringResource(R.string.locate_where, "%.5f".format(place.lat), "%.5f".format(place.lon), place.acc.toInt(), mins),
+            style = MaterialTheme.typography.bodyMedium, color = T.text,
+        )
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        SoftButton(stringResource(R.string.locate), {
+            scope.launch {
+                try {
+                    Core.runAction(node, "locate")
+                    toast(asking)
+                } catch (e: Exception) { toast(friendlyError(e)) }
+            }
+        }, Modifier.weight(1f), enabled = status.locationSharing)
+        if (place != null) {
+            Spacer(Modifier.width(8.dp))
+            GhostButton(stringResource(R.string.locate_map), {
+                val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:${place.lat},${place.lon}?q=${place.lat},${place.lon}"))
+                val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lon}#map=17/${place.lat}/${place.lon}"))
+                runCatching { ctx.startActivity(geo) }.onFailure { runCatching { ctx.startActivity(web) } }
+            })
+        }
+    }
+    if (!status.locationSharing) Muted(stringResource(R.string.locate_off, name))
+}
+
 @Composable
 private fun FindTile(node: String, name: String) {
     val toast = LocalToast.current
@@ -310,6 +350,7 @@ private fun FindTile(node: String, name: String) {
                 } catch (e: Exception) { toast(friendlyError(e)) }
             }
         }, Modifier.fillMaxWidth())
+        if (status != null && "locate" in status.actions) LocateRow(node, name, status)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(url, { url = it }, stringResource(R.string.find_link_hint), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))

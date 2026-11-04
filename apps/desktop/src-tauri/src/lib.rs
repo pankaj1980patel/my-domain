@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod clip_image;
 mod device;
 mod fcm;
+mod location;
 mod notify;
 mod remote_input;
 mod screen_share;
@@ -805,6 +806,28 @@ fn set_follow_phone_dnd(on: bool, app: AppHandle, prefs: State<notify::Prefs>) {
     notify::dnd_changed(&app);
 }
 
+/// Whether your phone may see where this computer is (find my computer).
+#[tauri::command]
+#[specta::specta]
+fn share_location(pref: State<location::LocationPref>) -> bool {
+    pref.allowed()
+}
+
+/// Let your phone see where this computer is, or stop it.
+#[tauri::command]
+#[specta::specta]
+fn set_share_location(on: bool, app: AppHandle, pref: State<location::LocationPref>) {
+    pref.set_allowed(on);
+    device::refresh_status(&app);
+}
+
+/// This computer can tell where it is at all (macOS for now).
+#[tauri::command]
+#[specta::specta]
+fn location_available() -> bool {
+    location::available()
+}
+
 /// Your devices in Do Not Disturb right now (node ids).
 #[tauri::command]
 #[specta::specta]
@@ -1175,6 +1198,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         keep_awake,
         follow_phone_dnd,
         set_follow_phone_dnd,
+        share_location,
+        set_share_location,
+        location_available,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1211,6 +1237,7 @@ pub fn run() {
             let handle = app.handle().clone();
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
+            app.manage(location::LocationPref::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {

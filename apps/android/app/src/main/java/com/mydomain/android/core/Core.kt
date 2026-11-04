@@ -80,7 +80,14 @@ data class DeviceStatus(
      *  permission), "grim" or "imagemagick" (tool to install). */
     val screenNeeds: String? = null,
     val storageFree: Long? = null, val storageTotal: Long? = null,
+    /** It lets your other devices see where it is (its own switch). */
+    val locationSharing: Boolean = false,
+    /** Where it last said it was (after a Locate). */
+    val location: Place? = null,
 )
+
+/** A reported position: degrees, accuracy in metres, unix seconds. */
+data class Place(val lat: Double, val lon: Double, val acc: Double, val at: Long)
 
 /** One item in another device's shared folder: a file ([size] bytes) or a
  *  folder ([dir]), last changed at [modified] (unix seconds). */
@@ -405,6 +412,10 @@ object Core {
                     ramTotal = st.optJSONObject("ram")?.optLong("total"),
                     storageFree = st.optJSONObject("storage")?.optLong("free"),
                     storageTotal = st.optJSONObject("storage")?.optLong("total"),
+                    locationSharing = st.optBoolean("location_sharing", false),
+                    location = st.optJSONObject("location")?.takeIf { it.has("lat") && it.has("lon") }?.let {
+                        Place(it.optDouble("lat"), it.optDouble("lon"), it.optDouble("acc", 0.0), it.optLong("at"))
+                    },
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)

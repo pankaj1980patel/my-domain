@@ -384,4 +384,9 @@
     <string name="location_shared_body">You allowed your computers to see where this phone is. Tap to change that.</string>
     <string name="screen_settings_ask_title">Let your computers change screen settings?</string>
     <string name="screen_settings_ask_body">To change brightness, screen timeout and auto-rotate from your computer, allow my-domain to modify system settings. Tap to open that setting.</string>
+    <string name="locate">Locate</string>
+    <string name="locate_map">Open map</string>
+    <string name="locate_asking">Asking where %1$s is…</string>
+    <string name="locate_where">Near %1$s, %2$s (±%3$d m, %4$d min ago)</string>
+    <string name="locate_off">Location sharing is off on %1$s. Turn on “Let my phone see where this computer is” in my-domain’s Settings there.</string>
 </resources>

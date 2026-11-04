@@ -160,6 +160,12 @@ export const commands = {
 	/**  Whether pop-ups are held while your phone is in Do Not Disturb. */
 	followPhoneDnd: () => __TAURI_INVOKE<boolean>("follow_phone_dnd"),
 	setFollowPhoneDnd: (on: boolean) => __TAURI_INVOKE<void>("set_follow_phone_dnd", { on }),
+	/**  Whether your phone may see where this computer is (find my computer). */
+	shareLocation: () => __TAURI_INVOKE<boolean>("share_location"),
+	/**  Let your phone see where this computer is, or stop it. */
+	setShareLocation: (on: boolean) => __TAURI_INVOKE<void>("set_share_location", { on }),
+	/**  This computer can tell where it is at all (macOS for now). */
+	locationAvailable: () => __TAURI_INVOKE<boolean>("location_available"),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */

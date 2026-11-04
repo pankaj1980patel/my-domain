@@ -87,6 +87,12 @@ fn push_status(app: &AppHandle) {
             status["screen_needs"] = why.into();
         }
     }
+    // Where this computer is: listed where it can tell (the switch in
+    // Settings decides whether it shares; see location.rs).
+    if crate::location::available() {
+        actions.push("locate");
+        crate::location::extend(app, &mut status);
+    }
     if awake::available() {
         actions.push("keep_awake");
         if let Some(until) = awake::until() {
@@ -171,6 +177,10 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
             if let Err(why) = slides::press(args["key"].as_str().unwrap_or_default()) {
                 crate::notify::post(app, "my-domain can't change slides", why);
             }
+        }
+        "locate" => {
+            crate::location::locate(app, push_status);
+            return;
         }
         "keep_awake" => {
             let minutes = args["minutes"].as_u64().unwrap_or(0);
