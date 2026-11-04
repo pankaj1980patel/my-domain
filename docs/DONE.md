@@ -371,6 +371,7 @@ Built by three agents in parallel (worktrees), merged and built here.
   it; one ring; a location only if sharing is already on; survives a
   restart; stopped from the computer or "I found it" after unlocking.
   Wipe is not built (excluded).
+- **Notification history** (desktop `notif_history.rs`, `NotificationHistory.tsx`): the phone's notifications kept on the computer (newest 500, `notification-history.json`), searchable by words, filtered by app, grouped by day; mute an app to stop its pop-ups and history (`prefs.json` `muted_apps`). Dismissals made on the phone aren't reported yet (no `onNotificationRemoved` message).
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
