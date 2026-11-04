@@ -1,8 +1,8 @@
 // Account, this device, and preferences. Tap the version 7 times for the
 // Developer screen.
 
-import { createSignal, onMount, Show } from "solid-js";
-import { commands } from "../bindings";
+import { createSignal, For, onMount, Show } from "solid-js";
+import { commands, type AwayLock } from "../bindings";
 import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
@@ -20,6 +20,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [screenShare, setScreenShare] = createSignal(true);
   const [shareLocation, setShareLocation] = createSignal(false);
   const [canLocate, setCanLocate] = createSignal(false);
+  const [awayLock, setAwayLock] = createSignal<AwayLock>({ on: false, minutes: 5, can_lock: false });
   onMount(async () => {
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
@@ -27,6 +28,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
     setScreenShare(await commands.screenAllowed());
     setShareLocation(await commands.shareLocation());
     setCanLocate(await commands.locationAvailable());
+    setAwayLock(await commands.awayLock());
   });
   const toggleNotifs = async (on: boolean) => {
     await commands.setNotificationsEnabled(on);
@@ -47,6 +49,10 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const toggleShareLocation = async (on: boolean) => {
     await commands.setShareLocation(on);
     setShareLocation(on);
+  };
+  const changeAwayLock = async (on: boolean, minutes: number) => {
+    await commands.setAwayLock(on, minutes);
+    setAwayLock({ ...awayLock(), on, minutes });
   };
 
   const tapVersion = () => {
@@ -111,6 +117,35 @@ export default function Settings(props: { onDeveloper: () => void }) {
             />
           </label>
           <p class="muted small">{t("settings.shareLocationHint")}</p>
+        </Show>
+        <Show when={awayLock().can_lock}>
+          <label class="switch-row">
+            <span>{t("settings.awayLock")}</span>
+            <input
+              type="checkbox"
+              role="switch"
+              checked={awayLock().on}
+              onChange={(e) => changeAwayLock(e.currentTarget.checked, awayLock().minutes)}
+            />
+          </label>
+          <Show when={awayLock().on}>
+            <label class="row small">
+              <span class="muted">{t("settings.awayLockAfter")}</span>
+              <select
+                aria-label={t("settings.awayLockAfter")}
+                onChange={(e) => changeAwayLock(true, Number(e.currentTarget.value))}
+              >
+                <For each={[2, 5, 10]}>
+                  {(m) => (
+                    <option value={String(m)} selected={m === awayLock().minutes}>
+                      {t("settings.awayLockMinutes", { n: m })}
+                    </option>
+                  )}
+                </For>
+              </select>
+            </label>
+          </Show>
+          <p class="muted small">{t("settings.awayLockHint")}</p>
         </Show>
       </article>
 

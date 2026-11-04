@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod away_lock;
 mod clip_image;
 mod device;
 mod fcm;
@@ -250,6 +251,10 @@ impl EventSink for TauriSink {
             CoreEvent::PeersUpdated { .. }
             | CoreEvent::PeerConnected { .. }
             | CoreEvent::PeerDisconnected { .. } => tray::refresh(&self.app),
+            // Which of your devices are phones (lock when they go away).
+            CoreEvent::DeviceStatus { from, status } => {
+                away_lock::on_status(&self.app, from, status)
+            }
             CoreEvent::Ring { from } => {
                 let (app, from) = (self.app.clone(), from.clone());
                 std::thread::spawn(move || device::on_ring(&app, &from));
@@ -1201,6 +1206,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         share_location,
         set_share_location,
         location_available,
+        away_lock::away_lock,
+        away_lock::set_away_lock,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1238,6 +1245,7 @@ pub fn run() {
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
             app.manage(location::LocationPref::load(&handle));
+            app.manage(away_lock::AwayLockState::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -1286,6 +1294,7 @@ pub fn run() {
             fcm::spawn(handle.clone(), fcm_token);
             device::spawn_status_reporter(handle.clone());
             device::spawn_now_playing(handle.clone());
+            away_lock::spawn(handle.clone());
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

@@ -638,7 +638,7 @@ mod awake {
 }
 
 /// Locking the screen ("I walked away and left it open").
-mod screen {
+pub(crate) mod screen {
     use std::process::Command;
 
     fn ok(cmd: &str, args: &[&str]) -> bool {

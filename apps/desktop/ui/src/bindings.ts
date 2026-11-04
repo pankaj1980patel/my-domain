@@ -166,6 +166,16 @@ export const commands = {
 	setShareLocation: (on: boolean) => __TAURI_INVOKE<void>("set_share_location", { on }),
 	/**  This computer can tell where it is at all (macOS for now). */
 	locationAvailable: () => __TAURI_INVOKE<boolean>("location_available"),
+	/**
+	 *  "Lock this computer when my phone goes away": on or off, how long to
+	 *  wait, and whether this computer can lock at all.
+	 */
+	awayLock: () => __TAURI_INVOKE<AwayLock>("away_lock"),
+	/**
+	 *  Turn locking when your phone goes away on or off, and set the wait
+	 *  (2, 5 or 10 minutes).
+	 */
+	setAwayLock: (on: boolean, minutes: number) => __TAURI_INVOKE<void>("set_away_lock", { on, minutes }),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -195,6 +205,15 @@ export const commands = {
 };
 
 /* Types */
+/**  The setting, as the UI sees it. */
+export type AwayLock = {
+	on: boolean,
+	/**  Minutes without a phone before locking: 2, 5 or 10. */
+	minutes: number,
+	/**  This computer can lock its screen at all (else the row is hidden). */
+	can_lock: boolean,
+};
+
 /**
  *  Battery alerts this device sends your other devices
  *  (`Engine::set_battery_alerts`): once when it drops to `low` percent
