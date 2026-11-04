@@ -218,6 +218,19 @@ export const commands = {
 	 *  reading the volume runs a command.
 	 */
 	localActions: () => typedError<LocalActions, string>(__TAURI_INVOKE("local_actions")),
+	/**  The commands your other devices can run. */
+	listShellCommands: () => __TAURI_INVOKE<ShellCommand[]>("list_shell_commands"),
+	/**  Add a command your other devices can run. */
+	addShellCommand: (command: NewShellCommand) => typedError<ShellCommand, string>(__TAURI_INVOKE("add_shell_command", { command })),
+	/**  Change a command (its name, command line, on/off). */
+	updateShellCommand: (command: ShellCommand) => typedError<ShellCommand, string>(__TAURI_INVOKE("update_shell_command", { command })),
+	/**  Remove a command. */
+	deleteShellCommand: (id: string) => __TAURI_INVOKE<void>("delete_shell_command", { id }),
+	/**
+	 *  Run a command here, to try it (on or off; no notification). Waits for it
+	 *  to finish, up to the time limit.
+	 */
+	testShellCommand: (id: string) => typedError<RunOutcome_Serialize, string>(__TAURI_INVOKE("test_shell_command", { id })),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -422,6 +435,13 @@ export type NewSchedule = {
 	enabled: boolean,
 };
 
+/**  A new command, from the UI. */
+export type NewShellCommand = {
+	name: string,
+	command: string,
+	enabled: boolean,
+};
+
 /**
  *  A known peer device. Deserializable too: the peer list is cached on the
  *  device (see engine/background.rs `spawn_peer_cache`).
@@ -498,6 +518,29 @@ export type Quality = "excellent" | "good" | "weak" |
 /**  Not measured on this kind of link. */
 "unknown";
 
+/**  How a run went. */
+export type RunOutcome = RunOutcome_Serialize | RunOutcome_Deserialize;
+
+/**  How a run went. */
+export type RunOutcome_Deserialize = {
+	/**  Its exit code; none when it was stopped (or killed by a signal). */
+	code?: number | null,
+	/**  The last `MAX_OUTPUT` bytes of what it printed (output and errors). */
+	output: string,
+	/**  It ran past the time limit and was stopped. */
+	timed_out: boolean,
+};
+
+/**  How a run went. */
+export type RunOutcome_Serialize = {
+	/**  Its exit code; none when it was stopped (or killed by a signal). */
+	code: number | null,
+	/**  The last `MAX_OUTPUT` bytes of what it printed (output and errors). */
+	output: string,
+	/**  It ran past the time limit and was stopped. */
+	timed_out: boolean,
+};
+
 export type SavedSession = {
 	server_url: string,
 	username: string,
@@ -567,6 +610,16 @@ export type SessionInfo_Serialize = {
 export type SharedFolder = {
 	name: string,
 	path: string,
+};
+
+/**  One command your other devices can run. */
+export type ShellCommand = {
+	id: string,
+	/**  What the button says ("Back up photos"). */
+	name: string,
+	/**  The command line, run with `sh -c`. */
+	command: string,
+	enabled: boolean,
 };
 
 /**  What Settings shows. */

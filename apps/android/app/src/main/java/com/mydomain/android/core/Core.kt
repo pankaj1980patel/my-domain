@@ -91,7 +91,22 @@ data class DeviceStatus(
     /** Seconds since it started, when it answered (at [seenAt], this
      *  phone's clock in ms). */
     val uptimeS: Long? = null,
+    /** Commands its owner lets your devices run there (the `run` action). */
+    val commands: List<RemoteCommand> = emptyList(),
+    /** How the last command run there went. */
+    val lastRun: LastRun? = null,
     val seenAt: Long = System.currentTimeMillis(),
+)
+
+/** A command a computer lets your devices run: only its [id] is sent. */
+data class RemoteCommand(val id: String, val name: String)
+
+/** How a command run on a computer went: its exit [code] (null when it was
+ *  stopped), the end of its [output], or why it was refused ([error]); [at]
+ *  is unix seconds on that computer's clock. */
+data class LastRun(
+    val id: String, val name: String, val code: Int?, val output: String,
+    val timedOut: Boolean, val error: String?, val at: Long,
 )
 
 /** A reported position: degrees, accuracy in metres, unix seconds. */
@@ -428,6 +443,23 @@ object Core {
                     sharedFolders = if (st.has("shared_folders")) st.optInt("shared_folders") else null,
                     cpu = if (st.has("cpu")) st.optInt("cpu").coerceIn(0, 100) else null,
                     uptimeS = if (st.has("uptime_s")) st.optLong("uptime_s").coerceAtLeast(0) else null,
+                    commands = st.optJSONArray("commands")?.let { arr ->
+                        (0 until arr.length()).mapNotNull { i ->
+                            arr.optJSONObject(i)?.takeIf { it.has("id") && it.has("name") }
+                                ?.let { RemoteCommand(it.optString("id"), it.optString("name")) }
+                        }
+                    } ?: emptyList(),
+                    lastRun = st.optJSONObject("last_run")?.takeIf { it.has("id") && it.has("at") }?.let {
+                        LastRun(
+                            id = it.optString("id"),
+                            name = it.optString("name"),
+                            code = if (it.has("code") && !it.isNull("code")) it.optInt("code") else null,
+                            output = it.optString("output"),
+                            timedOut = it.optBoolean("timed_out", false),
+                            error = if (it.isNull("error")) null else it.optString("error").ifEmpty { null },
+                            at = it.optLong("at"),
+                        )
+                    },
                     location = st.optJSONObject("location")?.takeIf { it.has("lat") && it.has("lon") }?.let {
                         Place(it.optDouble("lat"), it.optDouble("lon"), it.optDouble("acc", 0.0), it.optLong("at"))
                     },

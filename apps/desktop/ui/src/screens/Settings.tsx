@@ -14,6 +14,7 @@ import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
 import { ShortcutSetting } from "../components/ShortcutSetting";
 import { ScheduleList, type Preset } from "../components/ScheduleList";
+import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { t, tRich } from "../i18n";
 
 /** What a schedule can do on this computer (only those it takes are shown). */
@@ -206,6 +207,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
         <ShortcutSetting />
       </article>
+
+      <ShellCommandsSetting />
 
       <article class="tile">
         <h2>{t("schedule.local.title")}</h2>

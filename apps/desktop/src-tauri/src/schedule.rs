@@ -360,7 +360,8 @@ fn run(app: &AppHandle, s: &Schedule) -> Result<String, CoreError> {
             // Off this thread, as a sibling's action is: "Run now" comes
             // from the UI, and locking can take a moment.
             let (app, action) = (app.clone(), s.action.clone());
-            std::thread::spawn(move || crate::device::on_action(&app, &action, &args));
+            let me = s.node.clone();
+            std::thread::spawn(move || crate::device::on_action(&app, &me, &action, &args));
             Ok("here".into())
         }
         Route::Ring => engine.ring(&s.node),

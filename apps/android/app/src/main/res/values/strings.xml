@@ -448,4 +448,17 @@
     <string name="qs_clip_queued">Will copy to %1$s when it\'s reachable</string>
     <string name="qs_locked">Locking %1$s</string>
     <string name="qs_failed">Couldn\'t reach %1$s</string>
+    <!-- Commands a computer lets your devices run (CommandsTile) -->
+    <string name="run_title">Commands</string>
+    <string name="run_hint">Set up on %1$s, in my-domain\'s Settings there. It shows a notification each time one runs.</string>
+    <string name="run_run">Run</string>
+    <string name="run_running">Running…</string>
+    <string name="run_asked">Asked %1$s to run “%2$s”</string>
+    <string name="run_queued">Will run when %1$s is reachable</string>
+    <string name="run_exit_code">“%1$s” finished with exit code %2$d</string>
+    <string name="run_timed_out">“%1$s” took too long and was stopped</string>
+    <string name="run_stopped">“%1$s” was stopped</string>
+    <string name="run_refused">%1$s didn\'t run it: %2$s</string>
+    <string name="run_no_answer">No answer yet from %1$s. It may still be running.</string>
+    <string name="run_no_output">No output.</string>
 </resources>

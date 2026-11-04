@@ -119,6 +119,10 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             Core.deviceStatus[node]?.takeIf { hasInfo(it) }?.let { st ->
                 item { InfoTile(niceName(peer.name), st) }
             }
+            // Commands its owner lets your devices run (it lists "run").
+            if (Core.deviceStatus[node]?.actions?.contains("run") == true) {
+                item { CommandsTile(node, niceName(peer.name)) }
+            }
             // A computer that lets the phone control it (it lists "input").
             Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
                 item { TouchpadTile(node, st) }

@@ -221,7 +221,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Actions | Any feature above, as a step | per-action flag | A D | varies | ⬜ |
 | Scenes | e.g. *Meeting*: phone on DND, desktop media paused | `automation` | A D | varies | ⬜ |
 | Scheduled actions | Run at a set time | `automation` | A D | — | 🟡 (2026-11-04, desktop only: a Schedules tile on a device's page; runs while the app is open, a time missed asleep or off is skipped; not tried live yet) |
-| Run command | Run a predefined shell script on the desktop (Owner only) | `desktop.exec` | D | — | ⬜ |
+| Run command | Run a predefined shell script on the desktop (Owner only) | `desktop.exec` | D | — | 🟡 (2026-11-04: commands written in the computer's Settings (name, command, on/off, Test) show as buttons on its page on the phone and other computers; only the id is sent, `sh -c` as the user, stopped after 60 s, exit code and the last 2 KB of output come back in its status; a notification each time; `mdctl action <node> run {"id":…}`; not tried live yet) |
 | Webhooks | Trigger actions from outside, e.g. Home Assistant | `automation` | A D | — | ⬜ |
 
 ### 3.13 Domain management

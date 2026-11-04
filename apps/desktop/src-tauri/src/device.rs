@@ -111,6 +111,8 @@ fn actions(app: &AppHandle, status: &mut serde_json::Value) -> Vec<&'static str>
             status["awake_until"] = until.into();
         }
     }
+    // Commands written in Settings, while one is on (commands_run.rs).
+    crate::commands_run::extend(app, status, &mut actions);
     actions
 }
 
@@ -169,11 +171,11 @@ fn parse_now_playing(line: &str, app: &str) -> Option<serde_json::Value> {
     Some(m)
 }
 
-/// A sibling asked this computer to run an action (`volume {step}`,
-/// `mute {on}`, `media {key}`, `lock` or `slides {key}`: next, previous,
-/// black); then the status is pushed again
-/// so it shows the new level.
-pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
+/// A sibling (`from`) asked this computer to run an action (`volume {step}`,
+/// `mute {on}`, `media {key}`, `lock`, `slides {key}`: next, previous,
+/// black, or `run {id}`: a command from Settings); then the status is pushed
+/// again so it shows the new level.
+pub fn on_action(app: &AppHandle, from: &str, name: &str, args: &serde_json::Value) {
     match name {
         "volume" => sound::step(if args["step"].as_i64().unwrap_or(1) < 0 {
             -10
@@ -197,6 +199,10 @@ pub fn on_action(app: &AppHandle, name: &str, args: &serde_json::Value) {
         }
         "locate" => {
             crate::location::locate(app, push_status);
+            return;
+        }
+        "run" => {
+            crate::commands_run::on_run(app, from, args, push_status);
             return;
         }
         "keep_awake" => {

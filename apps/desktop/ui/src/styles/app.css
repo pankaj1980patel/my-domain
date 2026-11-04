@@ -1344,3 +1344,43 @@ input[type="checkbox"][role="switch"]:checked::after {
   background: var(--accent-bg);
   border-color: var(--accent);
 }
+
+/* --- run command (screens/device/CommandsTile.tsx, components/ShellCommandsSetting.tsx) --- */
+
+.commands-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.command-row {
+  padding: var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.command-off strong,
+.command-off code {
+  opacity: 0.6;
+}
+.command-line {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+.run-failed {
+  color: var(--danger);
+}
+.run-output {
+  margin: 0;
+  max-height: 200px;
+  overflow: auto;
+  padding: var(--s-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+}

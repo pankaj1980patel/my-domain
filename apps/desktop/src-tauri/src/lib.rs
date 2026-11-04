@@ -18,6 +18,7 @@ use mdcore::CoreError;
 
 mod away_lock;
 mod clip_image;
+mod commands_run;
 mod device;
 mod fcm;
 mod location;
@@ -269,9 +270,10 @@ impl EventSink for TauriSink {
                 let (app, url) = (self.app.clone(), url.clone());
                 std::thread::spawn(move || device::on_open_url(&app, &url));
             }
-            CoreEvent::Action { name, args, .. } => {
-                let (app, name, args) = (self.app.clone(), name.clone(), args.clone());
-                std::thread::spawn(move || device::on_action(&app, &name, &args));
+            CoreEvent::Action { from, name, args } => {
+                let (app, from, name, args) =
+                    (self.app.clone(), from.clone(), name.clone(), args.clone());
+                std::thread::spawn(move || device::on_action(&app, &from, &name, &args));
             }
             // The phone's touchpad: queued to one thread, so the order holds.
             CoreEvent::Input { events, .. } => remote_input::play(&self.app, events.clone()),
@@ -1256,6 +1258,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         schedule::delete_schedule,
         schedule::run_schedule_now,
         schedule::local_actions,
+        commands_run::list_shell_commands,
+        commands_run::add_shell_command,
+        commands_run::update_shell_command,
+        commands_run::delete_shell_command,
+        commands_run::test_shell_command,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1295,6 +1302,7 @@ pub fn run() {
             app.manage(location::LocationPref::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
+            app.manage(commands_run::ShellCommands::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {

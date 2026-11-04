@@ -107,8 +107,37 @@ export type DeviceStatus = {
   cpu?: number;
   /** Seconds since it started, when it answered (at `ts`). */
   uptimeS?: number;
+  /** Commands its owner lets your devices run there (the `run` action). */
+  commands?: { id: string; name: string }[];
+  /** How the last command run there went. */
+  lastRun?: LastRun;
   ts: number;
 };
+
+/** A command run on a computer: exit code (none if stopped), the end of its
+ *  output, or why it was refused; `at` in unix seconds. */
+export type LastRun = { id: string; name: string; code?: number; output: string; timedOut: boolean; error?: string; at: number };
+
+function commandsOf(v: unknown): DeviceStatus["commands"] {
+  if (!Array.isArray(v)) return undefined;
+  return v
+    .filter((c): c is { id: string; name: string } => !!c && typeof c.id === "string" && typeof c.name === "string")
+    .map((c) => ({ id: c.id, name: c.name }));
+}
+
+function lastRunOf(v: unknown): LastRun | undefined {
+  const r = v as Record<string, unknown> | undefined;
+  if (!r || typeof r.id !== "string" || typeof r.at !== "number") return undefined;
+  return {
+    id: r.id,
+    name: typeof r.name === "string" ? r.name : "",
+    code: typeof r.code === "number" ? r.code : undefined,
+    output: typeof r.output === "string" ? r.output : "",
+    timedOut: r.timed_out === true,
+    error: typeof r.error === "string" ? r.error : undefined,
+    at: r.at,
+  };
+}
 
 export type Space = { free: number; total: number };
 
@@ -408,6 +437,8 @@ export async function startEvents() {
         ram: spaceOf(status?.ram),
         cpu: typeof status?.cpu === "number" ? Math.min(100, Math.max(0, Math.round(status.cpu))) : undefined,
         uptimeS: typeof status?.uptime_s === "number" ? Math.round(status.uptime_s) : undefined,
+        commands: commandsOf(status?.commands),
+        lastRun: lastRunOf(status?.last_run),
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],
