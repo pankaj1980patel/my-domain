@@ -729,6 +729,7 @@ export const en = {
   "calls.hint": "Take your phone's calls here over Bluetooth, like a car kit: answer, hang up and talk through this Mac. my-domain never pairs for you: pair the phone in System Settings → Bluetooth first.",
   "calls.switch": "Take my phone's calls on this Mac",
   "calls.unavailable": "Calls over Bluetooth work on a Mac only.",
+  "calls.macAudioRefused": "Call audio stays on your phone: macOS doesn’t let apps carry phone-call audio on this Mac. Answer, hang up, mute and the keypad still work from here; talk on the phone, or on a headset paired with it.",
   "calls.phone": "Phone",
   "calls.pickPhone": "Choose a phone",
   "calls.noPhones": "No paired phone offers calls yet. Pair your phone in System Settings → Bluetooth (and allow calls for this Mac on the phone if it asks), then press Refresh.",

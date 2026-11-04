@@ -54,6 +54,8 @@ use tauri::{AppHandle, Emitter, Manager};
 const KEY_ON: &str = "calls";
 const KEY_DEVICE: &str = "calls_device";
 const KEY_ANSWER_AUDIO: &str = "calls_answer_audio";
+/// "refused" once macOS turned down carrying call audio on this Mac.
+const KEY_MAC_AUDIO: &str = "calls_mac_audio";
 /// The longest number `call_dial` accepts.
 const MAX_NUMBER: usize = 32;
 const NOT_AVAILABLE: &str = "Calls on this computer aren\u{2019}t available here (macOS only).";
@@ -83,11 +85,50 @@ pub struct AudioTarget {
 static CALL_TARGET: Mutex<Option<AudioTarget>> = Mutex::new(None);
 
 fn call_target() -> AudioTarget {
-    CALL_TARGET
+    let t = CALL_TARGET
         .lock()
         .ok()
         .and_then(|t| t.clone())
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if mac_audio_refused() {
+        // Nowhere else to put it: this Mac can't carry it.
+        return AudioTarget { phone: true, ..t };
+    }
+    t
+}
+
+/// macOS turned down carrying call audio here before.
+fn mac_audio_refused() -> bool {
+    APP.get()
+        .and_then(|app| {
+            app.try_state::<CallsPrefs>()
+                .map(|p| p.get().mac_audio_refused)
+        })
+        .unwrap_or(false)
+}
+
+/// macOS refused the call's audio link (`kIOReturnUnsupported`): remember
+/// it, keep the audio on the phone, and say so once.
+fn on_mac_audio_refused() {
+    let Some(app) = APP.get() else {
+        return;
+    };
+    let Some(prefs) = app.try_state::<CallsPrefs>() else {
+        return;
+    };
+    if prefs.get().mac_audio_refused {
+        return;
+    }
+    eprintln!("[calls] macOS won\u{2019}t carry call audio here: keeping it on the phone");
+    prefs.update(|p| p.mac_audio_refused = true);
+    crate::notify::post_always(
+        app,
+        "Call audio stays on your phone",
+        "macOS doesn\u{2019}t let apps carry phone-call audio on this Mac. Answer, hang up, mute and the keypad still work from here; talk on the phone or a headset paired with it.",
+    );
+    if let Ok(m) = MACHINE.lock().map(|m| m.clone()) {
+        emit_state(app, &m);
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -97,6 +138,9 @@ struct PrefsInner {
     device: Option<String>,
     /// Where the audio goes when a call is answered here.
     answer: AudioTarget,
+    /// macOS refused to carry call audio on this Mac (seen on a call): the
+    /// audio stays on the phone and the Mac is only the call's remote.
+    mac_audio_refused: bool,
 }
 
 /// "Calls on this Mac": the switch, the phone, where answered audio goes.
@@ -119,6 +163,7 @@ impl CallsPrefs {
             answer: get(KEY_ANSWER_AUDIO)
                 .and_then(|a| serde_json::from_str(&a).ok())
                 .unwrap_or_default(),
+            mac_audio_refused: get(KEY_MAC_AUDIO).as_deref() == Some("refused"),
         };
         CallsPrefs {
             kv,
@@ -140,7 +185,13 @@ impl CallsPrefs {
             let saved = kv
                 .set(KEY_ON, if p.on { "on" } else { "off" })
                 .and_then(|()| kv.set(KEY_DEVICE, p.device.as_deref().unwrap_or("")))
-                .and_then(|()| kv.set(KEY_ANSWER_AUDIO, &answer));
+                .and_then(|()| kv.set(KEY_ANSWER_AUDIO, &answer))
+                .and_then(|()| {
+                    kv.set(
+                        KEY_MAC_AUDIO,
+                        if p.mac_audio_refused { "refused" } else { "" },
+                    )
+                });
             if let Err(e) = saved {
                 eprintln!("[calls] couldn't save the setting: {e}");
             }
@@ -488,11 +539,28 @@ fn feed(ev: Ev) {
             *t = Some(answer);
         }
     }
+    eprintln!(
+        "[calls] {:?} -> {:?} (audio link {})",
+        was,
+        m.phase(),
+        if m.sco { "open" } else { "closed" }
+    );
     #[cfg(target_os = "macos")]
     match sco {
         Some(true) => audio::start(mac::device_name(), call_target()),
         Some(false) => audio::stop(),
         None => {}
+    }
+    // A call dialling or under way with its audio meant for this Mac, and
+    // no audio link yet: ask for it. The phone doesn't open one by itself
+    // for a call placed from here or answered on the phone.
+    #[cfg(target_os = "macos")]
+    if matches!(m.phase(), Phase::Outgoing | Phase::Active)
+        && was != m.phase()
+        && !m.sco
+        && !call_target().phone
+    {
+        request_mac_audio(app);
     }
     #[cfg(not(target_os = "macos"))]
     let _ = sco;
@@ -603,6 +671,31 @@ pub fn tray_action(app: &AppHandle, what: &str) {
     let _ = (app, what);
 }
 
+/// Ask the phone to send the call's audio to this Mac (main thread); if no
+/// audio link has opened two seconds later, open one directly.
+#[cfg(target_os = "macos")]
+fn request_mac_audio(app: &AppHandle) {
+    if let Err(e) = mac::audio_to_mac() {
+        eprintln!("[calls] couldn't ask for the call audio: {e}");
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let still = MACHINE
+            .lock()
+            .map(|m| !m.sco && m.phase() != Phase::Idle)
+            .unwrap_or(false);
+        if still && !call_target().phone {
+            eprintln!("[calls] no audio link yet: opening one");
+            let _ = app.run_on_main_thread(|| {
+                if let Err(e) = mac::connect_sco() {
+                    eprintln!("[calls] couldn't open the audio link: {e}");
+                }
+            });
+        }
+    });
+}
+
 /// Send this call's audio somewhere (main thread): to the phone (closes the
 /// audio link), or to this Mac on the given devices (opens the link, or
 /// moves the running bridge).
@@ -684,6 +777,8 @@ pub struct CallsStatus {
     pub target: AudioTarget,
     /// Where the audio goes when a call is answered here (Settings).
     pub answer: AudioTarget,
+    /// This Mac can carry call audio (false once macOS refused it).
+    pub mac_audio: bool,
 }
 
 /// The audio devices on this Mac (by name), for the pickers.
@@ -725,6 +820,7 @@ fn status_of(app: &AppHandle) -> CallsStatus {
         battery: m.battery,
         audio: m.audio(),
         answer: p.answer,
+        mac_audio: !p.mac_audio_refused,
     }
 }
 
@@ -979,6 +1075,9 @@ mod mac {
     const UUID_HFP_AG: u16 = 0x111F;
     /// `kIOReturnSuccess`.
     const OK: i32 = 0;
+    /// `kIOReturnUnsupported`: what macOS answers when it won't open the
+    /// call's audio link for an app.
+    const UNSUPPORTED: i32 = 0xE000_02C7_u32 as i32;
 
     const NOT_CONNECTED: &str = "Your phone isn\u{2019}t connected for calls. Connect it in Settings \u{2192} Calls on this Mac.";
 
@@ -1038,6 +1137,10 @@ mod mac {
 
             #[unsafe(method(handsFree:scoConnectionOpened:))]
             fn hf_sco_opened(&self, _d: &AnyObject, status: Option<&NSNumber>) {
+                eprintln!("[calls] audio link opened: {:?}", status.map(|s| s.intValue()));
+                if status.is_some_and(|s| s.intValue() == UNSUPPORTED) {
+                    super::on_mac_audio_refused();
+                }
                 if status.is_none_or(|s| s.intValue() == OK) {
                     feed(Ev::Sco(true));
                 }
@@ -1367,6 +1470,14 @@ mod mac {
     pub fn audio_to_mac() -> Result<(), String> {
         with_connected(|hf| unsafe {
             let _: () = msg_send![hf, transferAudioToComputer];
+        })
+    }
+
+    /// Open the audio (SCO) link directly, for when the phone didn't move
+    /// the audio on request.
+    pub fn connect_sco() -> Result<(), String> {
+        with_connected(|hf| unsafe {
+            let _: () = msg_send![hf, connectSCO];
         })
     }
 }

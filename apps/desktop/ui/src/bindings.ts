@@ -560,6 +560,8 @@ export type CallsStatus_Deserialize = {
 	target: AudioTarget_Deserialize,
 	/**  Where the audio goes when a call is answered here (Settings). */
 	answer: AudioTarget_Deserialize,
+	/**  This Mac can carry call audio (false once macOS refused it). */
+	mac_audio: boolean,
 };
 
 /**  Everything the Settings tile and the in-call bar show. */
@@ -587,6 +589,8 @@ export type CallsStatus_Serialize = {
 	target: AudioTarget_Serialize,
 	/**  Where the audio goes when a call is answered here (Settings). */
 	answer: AudioTarget_Serialize,
+	/**  This Mac can carry call audio (false once macOS refused it). */
+	mac_audio: boolean,
 };
 
 /**  Which way a clip went. */

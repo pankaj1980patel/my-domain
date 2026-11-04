@@ -4,7 +4,7 @@
 // answered calls). The device list follows devices coming and going.
 
 import { For, onMount, Show } from "solid-js";
-import { audioDevices, refreshAudioDevices, type AudioTarget } from "../lib/calls";
+import { audioDevices, callStatus, refreshAudioDevices, type AudioTarget } from "../lib/calls";
 import { t } from "../i18n";
 
 export function CallAudioPicker(props: { value: AudioTarget; onChange: (t: AudioTarget) => void; id: string }) {
@@ -22,6 +22,10 @@ export function CallAudioPicker(props: { value: AudioTarget; onChange: (t: Audio
     const i = props.value.input;
     return i && !list.includes(i) ? [i, ...list] : list;
   };
+  // macOS refused call audio here before: the phone is the only choice.
+  if (callStatus()?.mac_audio === false) {
+    return <p class="call-audio-picker small muted">{t("calls.macAudioRefused")}</p>;
+  }
   return (
     <div class="call-audio-picker stack">
       <label class="row small">
