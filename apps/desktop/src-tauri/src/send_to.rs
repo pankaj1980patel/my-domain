@@ -676,8 +676,10 @@ mod menu {
             .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
     }
 
-    /// (file, contents maker, executable)
-    fn files() -> Option<[(PathBuf, fn(&str) -> String, bool); 3]> {
+    /// One menu entry: (file, contents maker, executable).
+    type Entry = (PathBuf, fn(&str) -> String, bool);
+
+    fn files() -> Option<[Entry; 3]> {
         let d = data_home()?;
         Some([
             (
