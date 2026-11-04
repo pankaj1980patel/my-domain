@@ -23,6 +23,7 @@ mod calls;
 mod clip_history;
 mod clip_image;
 mod commands_run;
+mod computer_audio;
 mod device;
 mod device_labels;
 mod fcm;
@@ -318,6 +319,7 @@ impl EventSink for TauriSink {
             | CoreEvent::PeerDisconnected { .. } => {
                 if let CoreEvent::PeerDisconnected { node_id } = &ev {
                     phone_audio::on_disconnected(&self.app, node_id);
+                    computer_audio::on_disconnected(&self.app, node_id);
                 }
                 tray::refresh(&self.app);
                 automations::on_link(&self.app);
@@ -366,6 +368,12 @@ impl EventSink for TauriSink {
             CoreEvent::AudioOffer { from, on, .. } => {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || phone_audio::on_offer(&app, &from, on));
+            }
+            // A phone plays this computer's sound (or stopped, or said no):
+            // off the core's thread (it starts the capture, posts a notice).
+            CoreEvent::AudioListen { from, on } => {
+                let (app, from, on) = (self.app.clone(), from.clone(), *on);
+                std::thread::spawn(move || computer_audio::on_listen(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
             // OS notifications for what arrives while the window is in the
@@ -1474,6 +1482,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         phone_audio::phone_audio_stop,
         phone_audio::phone_audio_set_volume,
         phone_audio::phone_audio_set_output,
+        computer_audio::computer_audio_status,
+        computer_audio::computer_audio_offer,
+        computer_audio::computer_audio_stop,
         send_input,
         send_clipboard_image,
         shortcut::send_clipboard,
@@ -1577,9 +1588,11 @@ pub fn run() {
                         }
                     }
                     app.manage(DownloadDir(dir.unwrap_or_default()));
-                    // A phone's audio plays here (`phone_audio.rs`); said
-                    // in this computer's status as `audio_sink`.
-                    engine.set_audio_roles(true, false);
+                    // A phone's audio plays here (`phone_audio.rs`), and
+                    // this computer's sound on a phone where it can be
+                    // captured (`computer_audio.rs`); said in this
+                    // computer's status as `audio_sink` / `audio_source`.
+                    engine.set_audio_roles(true, computer_audio::supported());
                     app.manage(engine);
                 }
                 Err(e) => {

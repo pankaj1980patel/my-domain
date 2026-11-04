@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ClipPage_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { commands, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
@@ -100,6 +100,9 @@ export type DeviceStatus = {
   /** A phone that can play its media audio on this computer
    *  (`audio_source`: Android 10 or later, an up-to-date app). */
   audioSource?: boolean;
+  /** A phone that can play this computer's sound (`audio_sink`; the
+   *  first phone apps with audio only sent theirs). */
+  audioSink?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -269,6 +272,9 @@ type State = {
   /** node_id -> when a phone offered to share its screen with this
    *  computer (`screen-offer`); its screen tile starts watching and clears it. */
   screenOffers: Record<string, number>;
+  /** This computer's sound on your phones (`computer-audio`): where it
+   *  plays and who was asked; null until known. */
+  computerAudio: ComputerAudioStatus_Serialize | null;
   devLog: DevEvent[];
 };
 
@@ -291,6 +297,7 @@ export const [state, setState] = createStore<State>({
   transfers: {},
   labels: {},
   screenOffers: {},
+  computerAudio: null,
   devLog: [],
 });
 
@@ -476,6 +483,9 @@ export async function startEvents() {
     on<{ from: string; on: boolean }>("audio-offer", ({ from, on: playing }) => {
       if (playing) addActivity({ icon: "", tone: "info", node: from, text: t("phoneAudio.offered", { name: peerName(from) }) });
     }),
+    // This computer's sound on a phone: started, asked, stopped. The
+    // sidebar's Stop and the phone's tile follow it.
+    on<ComputerAudioStatus_Serialize>("computer-audio", (s) => setState("computerAudio", reconcile(s))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
@@ -503,6 +513,7 @@ export async function startEvents() {
         screenSend: status?.screen_send === true,
         screenControl: status?.screen_control === true,
         audioSource: status?.audio_source === true,
+        audioSink: status?.audio_sink === true,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
@@ -630,6 +641,7 @@ export async function loadAll() {
     commands.getDeviceLabels(),
   ]);
   setState("labels", reconcile(labels));
+  commands.computerAudioStatus().then((s) => setState("computerAudio", reconcile(s)), () => {});
   setState({
     me,
     peers,

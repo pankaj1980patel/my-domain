@@ -360,6 +360,15 @@ export const commands = {
 	 *  if playing.
 	 */
 	phoneAudioSetOutput: (output: string | null) => __TAURI_INVOKE<void>("phone_audio_set_output", { output }),
+	/**  Where this computer's sound stands. */
+	computerAudioStatus: () => __TAURI_INVOKE<ComputerAudioStatus_Serialize>("computer_audio_status"),
+	/**
+	 *  Offer this computer's sound to phone `node_id`: it plays once its owner
+	 *  taps on the phone.
+	 */
+	computerAudioOffer: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("computer_audio_offer", { nodeId })),
+	/**  Stop playing this computer's sound on `node_id` (`None`: everywhere). */
+	computerAudioStop: (nodeId: string | null) => __TAURI_INVOKE<void>("computer_audio_stop", { nodeId }),
 	/**
 	 *  Control another computer from this one (its screen tile): `events_json`
 	 *  is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
@@ -798,6 +807,48 @@ export type ClipRecord_Serialize = {
 	direction: ClipDirection,
 	/**  When, in milliseconds since 1970. */
 	at: number | null,
+};
+
+/**
+ *  Where this computer's sound stands, for the phone's tile and the
+ *  sidebar.
+ */
+export type ComputerAudioStatus = ComputerAudioStatus_Serialize | ComputerAudioStatus_Deserialize;
+
+/**
+ *  Where this computer's sound stands, for the phone's tile and the
+ *  sidebar.
+ */
+export type ComputerAudioStatus_Deserialize = {
+	/**
+	 *  This computer can capture its sound (macOS 13 or later, Linux,
+	 *  Windows).
+	 */
+	supported: boolean,
+	/**  The phones it plays on now. */
+	playing_to: string[],
+	/**  Phones asked to play it, waiting for the tap there. */
+	asked: string[],
+	/**  Why it stopped or couldn't start, if it did. */
+	error?: string | null,
+};
+
+/**
+ *  Where this computer's sound stands, for the phone's tile and the
+ *  sidebar.
+ */
+export type ComputerAudioStatus_Serialize = {
+	/**
+	 *  This computer can capture its sound (macOS 13 or later, Linux,
+	 *  Windows).
+	 */
+	supported: boolean,
+	/**  The phones it plays on now. */
+	playing_to: string[],
+	/**  Phones asked to play it, waiting for the tap there. */
+	asked: string[],
+	/**  Why it stopped or couldn't start, if it did. */
+	error: string | null,
 };
 
 /**

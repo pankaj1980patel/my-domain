@@ -98,4 +98,7 @@ cpal = "0.16"
 objc2 = "0.6"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate", "NSString", "NSValue", "NSArray"] }
 objc2-core-location = { version = "0.3.2", default-features = false, features = ["std", "CLLocation", "CLLocationManager"] }
+# This Mac's sound on a phone (`computer_audio.rs`): ScreenCaptureKit's
+# completion handlers are blocks. Same version objc2-foundation pulls in.
+block2 = "0.6"
 

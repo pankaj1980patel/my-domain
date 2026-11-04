@@ -674,6 +674,25 @@
     <string name="audio_unsupported">Playing this phone’s audio on a computer needs Android 10 or later.</string>
     <string name="audio_busy_screen">Stop sharing the screen first: Android lets one capture run at a time.</string>
     <string name="audio_cant_capture">Android didn’t let my-domain capture the audio.</string>
+    <!-- A computer’s sound on this phone (ComputerAudio.kt). -->
+    <string name="caudio_ask_title">%1$s wants to play its sound here</string>
+    <string name="caudio_ask_body">Listen to it on this phone and the earbuds on it. Nothing plays until you tap Play.</string>
+    <string name="caudio_play">Play</string>
+    <string name="caudio_not_now">Not now</string>
+    <string name="caudio_playing_title">Playing %1$s’s sound</string>
+    <string name="caudio_playing_body">On this phone and the earbuds on it. Stop it here, on its page in my-domain, or on the computer.</string>
+    <string name="caudio_tile_title">Computer sound</string>
+    <string name="caudio_tile_body">Listen to %1$s on this phone and the earbuds on it: everything it plays. The computer says so each time it starts.</string>
+    <string name="caudio_tile_offered">%1$s offers its sound: tap Play to listen here.</string>
+    <string name="caudio_tile_start">Play %1$s’s sound here</string>
+    <string name="caudio_tile_waiting">Waiting for %1$s… A Mac asks once to allow recording its sound.</string>
+    <string name="caudio_tile_playing">%1$s’s sound plays here.</string>
+    <string name="caudio_stopped_by">%1$s stopped sharing its sound.</string>
+    <string name="caudio_refused">%1$s couldn’t share its sound. Check the computer.</string>
+    <string name="caudio_no_frames">%1$s didn’t start sending its sound.</string>
+    <string name="caudio_stalled">%1$s stopped sending its sound.</string>
+    <string name="caudio_link_lost">The connection to %1$s was lost.</string>
+    <string name="caudio_cant_play">This phone couldn’t play the sound.</string>
     <string name="screen_busy_audio">Stop playing this phone’s audio on the computer first: Android lets one capture run at a time.</string>
     <!-- Set up this phone (SetupScreen): what each optional permission is for. -->
     <string name="setup_title">Set up this phone</string>

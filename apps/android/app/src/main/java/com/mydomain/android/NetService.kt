@@ -91,8 +91,9 @@ class NetService : Service() {
         // Your computers may look at the photos (we answer "no access" until
         // it's allowed), and the photo backup watches for new ones.
         Core.engine()?.setGalleryEnabled(true)
-        // This phone's audio on a computer: Android 10 or later.
-        Core.engine()?.setAudioRoles(false, PhoneAudio.supported)
+        // A computer's sound plays here (any Android: ComputerAudio.kt);
+        // this phone's audio on a computer: Android 10 or later.
+        Core.engine()?.setAudioRoles(true, PhoneAudio.supported)
         PhotoBackup.start(this)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
@@ -324,6 +325,12 @@ class NetService : Service() {
      */
     private val coreEvents = object : EventListener {
         override fun onEvent(name: String, payloadJson: String) {
+            // A computer's sound, many frames a second: straight to the
+            // player, never logged or kept.
+            if (name == "audio-frame") {
+                ComputerAudio.onFrame(payloadJson)
+                return
+            }
             Core.onEvent(name, payloadJson)
             // A screen snapshot is for the UI alone (and big): don't parse it again.
             if (name == "screen-frame") return
@@ -348,8 +355,12 @@ class NetService : Service() {
                         "input" -> ScreenShare.onInput(this@NetService, o.optString("from"), o.optJSONArray("events"))
                         // A computer asks to play this phone's audio, or stopped listening.
                         "audio_listen" -> PhoneAudio.onListen(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        // A computer offers its sound here (the phone asks
+                        // first), or stopped / said no.
+                        "audio_offer" -> ComputerAudio.onOffer(this@NetService, o.optString("from"), o.optBoolean("on"))
                         "peer_disconnected" -> {
                             PhoneAudio.linkLost(o.optString("node_id"))
+                            ComputerAudio.linkLost(o.optString("node_id"))
                             PhoneAutomations.linksChanged()
                         }
                         "peer_connected", "peers_updated" -> PhoneAutomations.linksChanged()

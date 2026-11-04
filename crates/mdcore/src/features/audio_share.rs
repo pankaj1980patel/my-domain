@@ -1,37 +1,56 @@
-//! A phone's media audio (music, videos, podcasts; never calls) played on
-//! a computer's speakers, like a Bluetooth speaker but over the encrypted
-//! link. The phone captures what its apps play (Android's playback
-//! capture, after its own prompt every time) and sends it as raw PCM; the
-//! computer buffers a little and plays it. The core carries the messages;
-//! the host apps capture and play.
+//! One device's audio played on another, over the encrypted link, like a
+//! Bluetooth speaker. Both ways round:
 //!
-//!   audio_play  { from, on }                       computer → phone: "play
+//! - a phone's media audio (music, videos, podcasts; never calls) on a
+//!   computer's speakers: the phone captures what its apps play (Android's
+//!   playback capture, after its own prompt every time);
+//! - a computer's sound on a phone (and the earbuds on it): the computer
+//!   captures what it plays (ScreenCaptureKit on macOS, the default
+//!   output's monitor on Linux, WASAPI loopback on Windows).
+//!
+//! The side that sends is the *source*, the side that plays the *sink*.
+//! The source sends raw PCM; the sink buffers a little and plays it. The
+//! core carries the messages; the host apps capture and play.
+//!
+//!   audio_play  { from, on }                       sink → source: "play
 //!                                                  your audio here" (`on`,
-//!                                                  renewed), or "stop"
-//!   audio_offer { from, on, rate, ch }             phone → computer: "I'm
+//!                                                  renewed), or "stop" (also
+//!                                                  the sink's "no" to an
+//!                                                  offer)
+//!   audio_offer { from, on, rate, ch }             source → sink: "I'm
 //!                                                  playing my audio to you"
 //!                                                  (`on`), or "I stopped"
-//!   audio_frame { from, seq, rate, ch, data }      phone → computer (data:
+//!                                                  (also its "no" to a
+//!                                                  listen)
+//!   audio_frame { from, seq, rate, ch, data }      source → sink (data:
 //!                                                  base64 PCM, s16le,
 //!                                                  interleaved)
 //!
-//! - Only to devices that said they understand it: a computer says
-//!   `"audio_sink": true` in its status, a phone `"audio_source": true`
-//!   (`Engine::set_audio_roles`; the core adds them to every status
-//!   reply and remembers what each peer said, or showed by sending one of
-//!   these messages). An older app doesn't know
-//!   these messages and would show them as chat, so the core refuses to
-//!   send them to a device that didn't say so (`Unsupported`).
-//! - A listen lasts `LISTEN_FOR` unless renewed: the computer renews it
-//!   every `RENEW_EVERY` while it plays, so a computer that went away
-//!   (crashed, lost its link) stops the stream by itself.
-//! - The phone sends only to the computers its owner chose that listen
-//!   (`Engine::audio_frame_to`); a computer plays only what comes from
-//!   a phone it listens to (`Engine::audio_listen`).
+//! - Only to devices that said they understand it: a device that plays
+//!   says `"audio_sink": true` in its status, one that sends
+//!   `"audio_source": true`, and a device may say both
+//!   (`Engine::set_audio_roles`; the core adds them to every status reply
+//!   and remembers what each peer said, or showed by sending one of these
+//!   messages). The first apps had one direction only (computers said
+//!   `audio_sink`, phones `audio_source`); an app older still doesn't know
+//!   these messages and would show them as chat. So the core sends
+//!   `audio_play` only to a device that said `audio_source`, and
+//!   `audio_offer` / `audio_frame` only to one that said `audio_sink`
+//!   (`Unsupported` otherwise): a one-direction app never gets a message
+//!   for the direction it doesn't have.
+//! - A listen lasts `LISTEN_FOR` unless renewed: the sink renews it every
+//!   `RENEW_EVERY` while it plays, so a sink that went away (crashed, lost
+//!   its link) stops the stream by itself.
+//! - The source sends only to the sinks its owner chose that listen
+//!   (`Engine::audio_frame_to`); a sink plays only what comes from a
+//!   source it listens to (`Engine::audio_listen`). Whoever starts it, the
+//!   other side's owner says yes there (a phone never starts playing a
+//!   computer's sound without a tap; a computer says, every time, that its
+//!   sound is playing on a phone).
 //! - Frames go only over a live link, never queued (late audio is
 //!   noise). 48 kHz stereo over a direct link, 24 kHz through the relay
 //!   (half the bytes), none over Bluetooth (far too slow): see
-//!   `rate_for`. Each frame says its rate and channels, so the computer
+//!   `rate_for`. Each frame says its rate and channels, so the sink
 //!   follows a change.
 //! - Only your own devices (decrypted with your key, in this device's
 //!   list).
@@ -65,9 +84,9 @@ pub const RATES: [u32; 5] = [16_000, 22_050, 24_000, 44_100, 48_000];
 /// Largest frame sent, in bytes of PCM (100 ms of 48 kHz stereo).
 pub const MAX_FRAME_BYTES: usize = 48_000 * 2 * 2 / 10;
 
-/// What a computer says in its status: it plays a phone's audio.
+/// What a device says in its status: it plays another device's audio.
 pub const SINK_FLAG: &str = "audio_sink";
-/// What a phone says in its status: it sends its audio.
+/// What a device says in its status: it sends its own audio.
 pub const SOURCE_FLAG: &str = "audio_source";
 
 const CAPS_PREFIX: &str = "audio_caps:";
@@ -77,9 +96,9 @@ const CAPS_PREFIX: &str = "audio_caps:";
 pub struct AudioShare {
     sink: AtomicBool,
     source: AtomicBool,
-    /// Phone: listening computer -> when its listen ends.
+    /// Source: listening sink -> when its listen ends.
     listeners: Mutex<HashMap<String, Instant>>,
-    /// Computer: the phones it listens to.
+    /// Sink: the sources it listens to.
     listening: Mutex<HashSet<String>>,
     /// What each peer said it understands: (sink, source). `None` until
     /// read from `kv`.
@@ -131,9 +150,9 @@ fn caps_text((sink, source): (bool, bool)) -> String {
     v.join(",")
 }
 
-/// `node` sent one of these messages, so it understands them: a computer
-/// that asks to listen plays audio, a phone that offers sends it (before
-/// this device ever asked for its status).
+/// `node` sent one of these messages, so it understands them: a device
+/// that asks to listen plays audio, one that offers sends it (before this
+/// device ever asked for its status).
 fn learned<P: Platform>(ctx: &NetCtx<P>, node: &str, sink: bool, source: bool) {
     let (was_sink, was_source) = caps_of(ctx, node);
     let now = (was_sink || sink, was_source || source);
@@ -186,12 +205,12 @@ fn link_rate<P: Platform>(ctx: &NetCtx<P>, node: &str) -> crate::Result<u32> {
     ))
 }
 
-const OLD_SINK: &str = "that computer's my-domain doesn't play a phone's audio yet: update it";
-const OLD_SOURCE: &str =
-    "that phone's my-domain can't send its audio (Android 10 or later, and an up-to-date app)";
+const OLD_SINK: &str = "that device's my-domain can't play another device's audio yet: update it";
+const OLD_SOURCE: &str = "that device's my-domain can't send its audio (an up-to-date app is needed; on a phone, Android 10 or later)";
 
-/// Computer: ask phone `node` to play its audio here (`on`, renew every
-/// `RENEW_EVERY`), or to stop. Only to a phone that said `audio_source`.
+/// Sink: ask source `node` to play its audio here (`on`, renew every
+/// `RENEW_EVERY`), or to stop (also the answer "no" to its offer). Only to
+/// a device that said `audio_source`.
 /// Over the live link only; with none, fails with `NoLink` (and starts
 /// connecting).
 pub fn listen<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Result<()> {
@@ -221,7 +240,7 @@ pub fn listen<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Resu
     )
 }
 
-/// Phone: the computers listening now (expired listens are dropped).
+/// Source: the sinks listening now (expired listens are dropped).
 pub fn listeners<P: Platform>(ctx: &NetCtx<P>) -> Vec<String> {
     let now = Instant::now();
     let mut l = ctx.extras.audio.listeners.lock();
@@ -231,10 +250,10 @@ pub fn listeners<P: Platform>(ctx: &NetCtx<P>) -> Vec<String> {
     list
 }
 
-/// Phone: tell computer `node` this phone plays its audio to it (`on`),
-/// or stopped. Returns the rate to capture at for its link (0 when
-/// stopping). Only to a computer that said `audio_sink`; over a live link
-/// only.
+/// Source: tell sink `node` this device plays its audio to it (`on`), or
+/// stopped (also the answer "no" to its listen). Returns the rate to
+/// capture at for its link (0 when stopping). Only to a device that said
+/// `audio_sink`; over a live link only.
 pub fn offer<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Result<u32> {
     if !ctx.peers.lock().contains_key(node) {
         return Err(CoreError::PeerNotFound);
@@ -258,7 +277,7 @@ pub fn offer<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Resul
     Ok(rate)
 }
 
-/// Phone: send `pcm` (s16le, interleaved, `channels` of `rate` Hz) to
+/// Source: send `pcm` (s16le, interleaved, `channels` of `rate` Hz) to
 /// those of `nodes` that listen and understand it; returns how many got it.
 pub fn send_frame_to<P: Platform>(
     ctx: &NetCtx<P>,
@@ -335,8 +354,9 @@ impl<P: Platform> ControlHandler<P> for AudioShareHandler {
                     }
                     was != on
                 };
-                // A renewal is not news.
-                if changed {
+                // A renewal is not news. A stop always is: it's also the
+                // sink's "no" to an offer this device made.
+                if changed || !on {
                     ctx.sink.emit(CoreEvent::AudioListen { from, on });
                 }
             }

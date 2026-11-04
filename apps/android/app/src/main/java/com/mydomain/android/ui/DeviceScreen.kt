@@ -143,7 +143,15 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             if (Core.deviceStatus[node]?.screenView == true) item { ShareScreenTile(node, name) }
             // A computer that plays this phone's audio (it says audio_sink),
             // from a phone that can capture it (Android 10 or later).
-            if (Core.deviceStatus[node]?.audioSink == true && PhoneAudio.supported) item { PhoneAudioTile(node, name) }
+            // (Phones say audio_sink too now, for a computer's sound: only
+            // a computer's page offers this.)
+            Core.deviceStatus[node]?.takeIf { it.audioSink && it.platform != "android" && PhoneAudio.supported }?.let {
+                item { PhoneAudioTile(node, name) }
+            }
+            // A computer that plays its sound here (it says audio_source).
+            Core.deviceStatus[node]?.takeIf { it.audioSource && it.platform != "android" }?.let {
+                item { ComputerAudioTile(node, name) }
+            }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
             if (ClipLog.enabled) item { ClipHistoryTile(node, name) }

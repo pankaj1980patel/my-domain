@@ -53,6 +53,7 @@ import LostModeTile from "./device/LostModeTile";
 import NotificationHistory from "./device/NotificationHistory";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
+import ComputerAudioTile from "./device/ComputerAudioTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -155,8 +156,12 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />
             </Show>
-            <Show when={state.status[props.node]?.audioSource}>
+            <Show when={state.status[props.node]?.audioSource && state.status[props.node]?.platform === "android"}>
               <PhoneAudioTile node={props.node} />
+            </Show>
+            {/* A phone that plays this computer's sound (it says audio_sink). */}
+            <Show when={state.status[props.node]?.audioSink && state.status[props.node]?.platform === "android"}>
+              <ComputerAudioTile node={props.node} />
             </Show>
             <Show when={state.status[props.node]?.actions.includes("gallery")}>
               <PhotosTile node={props.node} />

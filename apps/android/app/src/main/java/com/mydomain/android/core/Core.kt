@@ -105,6 +105,11 @@ data class DeviceStatus(
     /** A computer that plays this phone's audio (`audio_sink`; older ones
      *  would show the messages as chat). */
     val audioSink: Boolean = false,
+    /** A computer that plays its sound on this phone (`audio_source`;
+     *  older ones only play a phone's). */
+    val audioSource: Boolean = false,
+    /** "android" or "desktop" (null: it didn't say). */
+    val platform: String? = null,
     val seenAt: Long = System.currentTimeMillis(),
 )
 
@@ -472,6 +477,8 @@ object Core {
                     batteryHealth = st.optString("battery_health").ifEmpty { null },
                     screenView = st.optBoolean("screen_view", false),
                     audioSink = st.optBoolean("audio_sink", false),
+                    audioSource = st.optBoolean("audio_source", false),
+                    platform = st.optString("platform").ifEmpty { null },
                     wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
                     wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
                     ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },

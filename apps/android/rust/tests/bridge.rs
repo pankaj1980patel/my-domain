@@ -264,6 +264,42 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     assert_eq!(st["kind"], "device_status");
     assert_eq!(st["from"], desktop.node_id().as_str());
 
+    // The computer's sound on the phone: the phone learns the desktop sends
+    // its sound, listens, and gets its frames as `audio-frame` events.
+    desktop.engine.set_audio_roles(true, true);
+    phone.set_audio_roles(true, true);
+    assert!(!phone.audio_source(desktop.node_id()));
+    phone.request_status(desktop.node_id()).unwrap();
+    events.wait_for("device-status-event", |v| {
+        v["status"]["audio_source"] == true
+    });
+    assert!(phone.audio_source(desktop.node_id()));
+    phone.audio_listen(desktop.node_id(), true).unwrap();
+    desktop
+        .sink
+        .wait_until(Duration::from_secs(10), |e| match e {
+            mdcore::events::CoreEvent::AudioListen { on: true, .. } => Some(()),
+            _ => None,
+        })
+        .expect("the listen arrived");
+    desktop
+        .engine
+        .audio_frame_to(&[1, 0, 2, 0], 48_000, 2, std::slice::from_ref(&id.node_id))
+        .unwrap();
+    let frame = events.wait_for("audio-frame", |_| true);
+    assert_eq!(frame["kind"], "audio_frame");
+    assert_eq!(frame["from"], desktop.node_id().as_str());
+    assert_eq!(
+        (frame["rate"].clone(), frame["channels"].clone()),
+        (48_000.into(), 2.into())
+    );
+    assert_eq!(frame["pcm"], "AQACAA==");
+    phone.audio_listen(desktop.node_id(), false).unwrap();
+    assert!(matches!(
+        phone.audio_listen("nobody".into(), true),
+        Err(MdError::PeerNotFound)
+    ));
+
     // Files: the desktop sends the phone a file; it lands in the phone's
     // download dir and the listener hears `file-received`.
     let inbox = dir.join("inbox");

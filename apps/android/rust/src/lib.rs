@@ -1048,6 +1048,21 @@ impl MdEngine {
         self.inner.audio_caps(&node_id).0
     }
 
+    /// Whether a computer said it sends its sound (`audio_source` in its
+    /// status, or it offered it; kept across restarts).
+    pub fn audio_source(&self, node_id: String) -> bool {
+        self.inner.audio_caps(&node_id).1
+    }
+
+    /// Play a computer's sound on this phone (`on`; renew every 10 s while
+    /// playing, a listen ends by itself after 25 s), or stop (also the
+    /// answer "no" to its offer). Its frames arrive as `audio-frame` events
+    /// while this listens. Only to a computer whose status says
+    /// `audio_source`; fails with no link (and starts connecting).
+    pub fn audio_listen(&self, node_id: String, on: bool) -> MdResult<()> {
+        Ok(self.inner.audio_listen(&node_id, on)?)
+    }
+
     /// The computers listening to this phone's audio now: while there are
     /// any, capture and send with `audio_frame_to`.
     pub fn audio_listeners(&self) -> Vec<String> {

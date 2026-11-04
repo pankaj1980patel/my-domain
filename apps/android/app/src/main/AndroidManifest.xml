@@ -11,6 +11,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <!-- Your computers see this screen, after Android's own prompt each time. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- A computer's sound playing here (ComputerAudio.kt): a mediaPlayback
+         foreground service. Needed from Android 14's targets; harmless before. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Playing this phone's media audio on a computer (PhoneAudio.kt):
          Android's playback capture needs it. Asked in the app, with why;
          nothing is recorded from the microphone. -->
@@ -161,6 +164,17 @@
             android:name=".PhoneAudioService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <!-- A computer's sound on this phone (ComputerAudio.kt): asks before
+             it plays (Play / Not now), then plays in the foreground with Stop. -->
+        <activity
+            android:name=".ComputerAudioAskActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".ComputerAudioService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
         <!-- The touchpad full screen (the touchpad tile's Enlarge). -->
         <activity
             android:name=".TouchpadActivity"

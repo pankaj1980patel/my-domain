@@ -21,6 +21,7 @@ import Developer from "./screens/Developer";
 import Help from "./screens/Help";
 import { setHelpOpener } from "./help/HelpLink";
 import { t } from "./i18n";
+import { commands } from "./bindings";
 
 type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string };
 
@@ -95,6 +96,24 @@ export default function App() {
               <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
                 <span class="quiet-dot" aria-hidden="true" />
                 {t("quiet.on")}
+              </div>
+            </Show>
+            {/* This computer's sound playing on a phone: always in sight,
+                with its Stop, while it lasts. */}
+            <Show when={(state.computerAudio?.playing_to.length ?? 0) > 0}>
+              <div class="sound-badge small" role="status">
+                <span class="sound-dot" aria-hidden="true" />
+                <span class="sound-badge-text">
+                  {t("computerAudio.badge", { names: (state.computerAudio?.playing_to ?? []).map(peerName).join(", ") })}
+                </span>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  title={t("computerAudio.badgeStop")}
+                  aria-label={t("computerAudio.badgeStop")}
+                  onClick={() => commands.computerAudioStop(null)}
+                >
+                  {t("computerAudio.stop")}
+                </button>
               </div>
             </Show>
             <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>

@@ -318,6 +318,11 @@ fn start(app: &AppHandle, node: &str) -> Result<bool, String> {
             return Ok(false);
         }
     }
+    // Off macOS, this computer's sound going to a phone (`computer_audio`)
+    // would carry the phone's audio straight back to it.
+    if !cfg!(target_os = "macos") && crate::computer_audio::streaming() {
+        return Err("Stop playing this computer\u{2019}s sound on the phone first: it would carry the phone\u{2019}s audio back to it.".into());
+    }
     stop(app, true, None);
     let engine = app.try_state::<Eng>().ok_or("not started yet")?;
     engine.audio_listen(node, true).map_err(|e| e.to_string())?;
@@ -355,6 +360,11 @@ fn stop(app: &AppHandle, tell: bool, why: Option<String>) {
         }
     }
     emit(app, why);
+}
+
+/// Whether a phone's audio plays here now (or was asked to).
+pub fn playing_here() -> bool {
+    SESSION.lock().unwrap_or_else(|e| e.into_inner()).is_some()
 }
 
 /// Stop if `node` is the phone playing (its link went, it stopped).

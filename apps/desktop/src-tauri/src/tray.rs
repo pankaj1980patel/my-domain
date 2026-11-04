@@ -18,7 +18,8 @@
 // rebuilt (through `refresh`) whenever the clipboard history changes.
 //
 // During a call taken on this Mac (`calls`), the menu starts with Answer /
-// Decline, or Hang up and "Use phone / this Mac for audio".
+// Decline, or Hang up and "Use phone / this Mac for audio". While this
+// computer's sound plays on a phone (`computer_audio`), a Stop for it.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -314,6 +315,15 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     if !call.is_empty() {
         menu = menu.separator();
     }
+    // This computer's sound playing on a phone (computer_audio.rs): its
+    // Stop, at the top while it lasts.
+    let sound = crate::computer_audio::tray_items(app);
+    for (id, label) in &sound {
+        menu = menu.text(format!("csound:{id}"), label);
+    }
+    if !sound.is_empty() {
+        menu = menu.separator();
+    }
     let mut menu = menu.text(ID_OPEN_APP, LABEL_OPEN_APP).separator();
     let devices = devices(app);
     if devices.is_empty() {
@@ -397,6 +407,7 @@ fn on_menu(app: &AppHandle, id: &str) {
             Some(("rclip", id)) => copy_clip(app, id),
             // Menu events arrive on the main thread, where IOBluetooth lives.
             Some(("call", what)) => crate::calls::tray_action(app, what),
+            Some(("csound", what)) => crate::computer_audio::tray_action(app, what),
             Some(("locate", node)) => locate(app, node),
             Some(("map", node)) => show_on_map(app, node),
             Some(("open", node)) => {

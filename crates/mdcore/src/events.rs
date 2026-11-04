@@ -263,20 +263,21 @@ pub enum CoreEvent {
     /// owner's choice: watch it (`Engine::screen_watch`) to see it. Or it
     /// stopped (`!on`).
     ScreenOffer { from: String, on: bool },
-    /// A computer started (`on`) or stopped listening to this phone's
-    /// audio (`features::audio_share`): while any does
-    /// (`Engine::audio_listeners`), capture and send with
-    /// `Engine::audio_frame_to`. A renewal is not reported.
+    /// A device started (`on`) or stopped listening to this device's
+    /// audio (`features::audio_share`; a computer to a phone's, or a phone
+    /// to a computer's): while any does (`Engine::audio_listeners`),
+    /// capture and send with `Engine::audio_frame_to`. A renewal is not
+    /// reported; a stop always is (it's also the answer "no" to an offer).
     AudioListen { from: String, on: bool },
-    /// A phone started (`on`) playing its audio to this computer, its
-    /// owner's choice (listen with `Engine::audio_listen` to hear it), or
-    /// it stopped (`!on`; also its answer when its owner said no). `rate`
-    /// is what it captures at (0 when stopping).
+    /// A device started (`on`) playing its audio to this one, its owner's
+    /// choice (listen with `Engine::audio_listen` to hear it), or it
+    /// stopped (`!on`; also its answer when its owner said no). `rate` is
+    /// what it captures at (0 when stopping).
     AudioOffer { from: String, on: bool, rate: u32 },
-    /// Audio from a phone this computer listens to: `pcm` is base64 of
-    /// s16le samples, `channels` interleaved, at `rate` Hz. `seq` counts
-    /// up. Many a second: the desktop plays these itself and never hands
-    /// them to the window.
+    /// Audio from a device this one listens to: `pcm` is base64 of s16le
+    /// samples, `channels` interleaved, at `rate` Hz. `seq` counts up.
+    /// Many a second: the hosts play these themselves (the desktop never
+    /// hands them to the window, Android keeps them out of its logs).
     AudioFrame {
         from: String,
         seq: u64,
