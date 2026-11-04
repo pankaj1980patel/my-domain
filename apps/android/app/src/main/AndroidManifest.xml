@@ -150,6 +150,34 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/phone_helper" />
         </service>
+        <!-- Quick Settings tiles (QuickTiles.kt): send clipboard to / lock the computer. -->
+        <service
+            android:name=".ClipTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_menu_send"
+            android:label="@string/qs_clip_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <service
+            android:name=".LockTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_lock_lock"
+            android:label="@string/qs_lock_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <activity
+            android:name=".ClipSendActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Shizuku hands this app its binder here (ADR-0006, Privileged.kt). -->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

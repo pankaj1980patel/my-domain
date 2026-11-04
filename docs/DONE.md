@@ -293,6 +293,11 @@ Built by three agents in parallel (worktrees), merged and built here.
 - **Browse files from the phone** (`ui/BrowseTile.kt`): the same browsing
   the other way round, on the phone's device page for any device that
   reports `shared_folders`: folders, path and Up, Load more, Download.
+- **Quick Settings tiles** (`QuickTiles.kt`): "Send clipboard" (an
+  invisible screen reads the clipboard, as Android allows only on screen,
+  sends it onto the computer's clipboard and closes) and "Lock computer".
+  "The computer" is the device that takes `lock`, preferring a live link,
+  remembered for later. Add them from the phone's Quick Settings editor.
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by

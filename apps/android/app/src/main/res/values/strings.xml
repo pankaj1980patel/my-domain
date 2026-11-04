@@ -403,4 +403,12 @@
     <string name="browse_err_not_shared">That folder isn\'t shared any more.</string>
     <string name="browse_err_missing">That folder or file isn\'t there any more.</string>
     <string name="browse_err_access">my-domain can\'t read that folder on the other device.</string>
+    <string name="qs_clip_label">Send clipboard</string>
+    <string name="qs_lock_label">Lock computer</string>
+    <string name="qs_no_computer">No computer to send to: open my-domain and connect to it once.</string>
+    <string name="qs_nothing_copied">Nothing copied to send.</string>
+    <string name="qs_clip_sent">Copied to %1$s</string>
+    <string name="qs_clip_queued">Will copy to %1$s when it\'s reachable</string>
+    <string name="qs_locked">Locking %1$s</string>
+    <string name="qs_failed">Couldn\'t reach %1$s</string>
 </resources>
