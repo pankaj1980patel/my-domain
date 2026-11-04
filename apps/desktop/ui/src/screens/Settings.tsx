@@ -30,6 +30,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [remoteInput, setRemoteInput] = createSignal(true);
   const [screenShare, setScreenShare] = createSignal(true);
   const [shareLocation, setShareLocation] = createSignal(false);
+  const [clipHistory, setClipHistory] = createSignal(true);
   const [canLocate, setCanLocate] = createSignal(false);
   const [awayLock, setAwayLock] = createSignal<AwayLock>({ on: false, minutes: 5, can_lock: false });
   const [battery, setBattery] = createSignal<BatteryAlertSettings>({ enabled: true, low: 15, charged: 0 });
@@ -41,6 +42,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
     setRemoteInput(await commands.remoteInputAllowed());
     setScreenShare(await commands.screenAllowed());
     setShareLocation(await commands.shareLocation());
+    setClipHistory(await commands.clipHistoryEnabled());
     setCanLocate(await commands.locationAvailable());
     setAwayLock(await commands.awayLock());
     setBattery(await commands.batteryAlerts());
@@ -64,6 +66,10 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const toggleShareLocation = async (on: boolean) => {
     await commands.setShareLocation(on);
     setShareLocation(on);
+  };
+  const toggleClipHistory = async (on: boolean) => {
+    await commands.setClipHistoryEnabled(on);
+    setClipHistory(on);
   };
   const changeAwayLock = async (on: boolean, minutes: number) => {
     await commands.setAwayLock(on, minutes);
@@ -110,6 +116,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <span>{t("settings.clipSync")}</span>
           <input type="checkbox" role="switch" checked={state.clipSync} onChange={(e) => setClipSync(e.currentTarget.checked)} />
         </label>
+        <label class="switch-row">
+          <span>{t("settings.clipHistory")}</span>
+          <input type="checkbox" role="switch" checked={clipHistory()} onChange={(e) => toggleClipHistory(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.clipHistoryHint")}</p>
         <label class="switch-row">
           <span>{t("settings.notifications")}</span>
           <input type="checkbox" role="switch" checked={notifs()} onChange={(e) => toggleNotifs(e.currentTarget.checked)} />

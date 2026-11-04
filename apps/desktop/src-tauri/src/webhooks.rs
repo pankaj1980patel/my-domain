@@ -722,9 +722,13 @@ impl Backend for AppBackend {
     fn text(&self, node: &str, text: &str, mode: &str) -> Result<String, String> {
         let engine = self.engine()?;
         if node != engine.identity().node_id {
-            return engine
+            let how = engine
                 .send_text(node, text, mode)
-                .map_err(|e| e.to_string());
+                .map_err(|e| e.to_string())?;
+            if mode == "clipboard" {
+                crate::clip_history::on_sent(&self.app, node, text);
+            }
+            return Ok(how);
         }
         if text.trim().is_empty() {
             return Err("nothing to send".into());

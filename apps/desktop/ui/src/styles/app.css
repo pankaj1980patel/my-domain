@@ -1585,3 +1585,58 @@ input[type="checkbox"][role="switch"]:checked::after {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
 }
+
+/* --- clipboard history (screens/device/ClipHistoryTile.tsx) --- */
+
+.clip-log-search {
+  width: 100%;
+}
+.clip-log {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 420px;
+  overflow-y: auto;
+}
+.clip-log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  padding: var(--s-2);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.clip-log-dir {
+  flex: none;
+  width: 1.2em;
+  text-align: center;
+  color: var(--text-3);
+  font-weight: 600;
+}
+.clip-log-dir.clip-log-in {
+  color: var(--accent);
+}
+.clip-log-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.clip-log-text {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+.clip-log-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}

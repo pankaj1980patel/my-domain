@@ -19,6 +19,7 @@ use mdcore::CoreError;
 mod automations;
 mod away_lock;
 mod battery_log;
+mod clip_history;
 mod clip_image;
 mod commands_run;
 mod device;
@@ -359,8 +360,12 @@ impl EventSink for TauriSink {
                 });
             }
             // Text another device sent: the core already put a clipboard
-            // one on the clipboard; say so, or show a "notify" one.
+            // one on the clipboard; say so (and keep it in the clipboard
+            // history), or show a "notify" one.
             CoreEvent::TextShared { from, text, mode } => {
+                if mode == "clipboard" {
+                    clip_history::on_received(&self.app, from, text);
+                }
                 let app = self.app.clone();
                 let (from, text, mode) = (from.clone(), text.clone(), mode.clone());
                 std::thread::spawn(move || {
@@ -1050,9 +1055,14 @@ fn send_text(
     node_id: String,
     text: String,
     mode: String,
+    app: AppHandle,
     engine: State<Eng>,
 ) -> Result<String, CoreError> {
-    engine.send_text(&node_id, &text, &mode)
+    let how = engine.send_text(&node_id, &text, &mode)?;
+    if mode == "clipboard" {
+        clip_history::on_sent(&app, &node_id, &text);
+    }
+    Ok(how)
 }
 
 // --- browsing another device's shared folders ---
@@ -1284,6 +1294,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notif_history::clear_notification_history,
         notif_history::muted_apps,
         notif_history::set_muted_apps,
+        clip_history::clip_history,
+        clip_history::clear_clip_history,
+        clip_history::clip_history_enabled,
+        clip_history::set_clip_history_enabled,
         request_status,
         ring_device,
         open_url_on,
@@ -1380,6 +1394,7 @@ pub fn run() {
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
             app.manage(notif_history::NotifHistory::load(&handle));
+            app.manage(clip_history::ClipHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));

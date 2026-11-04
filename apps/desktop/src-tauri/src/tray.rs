@@ -12,6 +12,10 @@
 // `location {lat, lon, acc, at}`, and the map opens then). Statuses come in
 // through `on_status`, which rebuilds the menu when something it shows
 // changed.
+//
+// "Recent clips" lists the last few clips received as clipboard (kept by
+// `clip_history`); choosing one puts it on this computer's clipboard. It's
+// rebuilt (through `refresh`) whenever the clipboard history changes.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,6 +44,12 @@ const LABEL_NO_DEVICES: &str = "No devices yet";
 const CONNECTED_SUFFIX: &str = " · connected";
 const NOT_CONNECTED_SUFFIX: &str = " · not connected";
 const LOCATE_OFF_SUFFIX: &str = " (off on the phone)";
+const LABEL_RECENT_CLIPS: &str = "Recent clips";
+const LABEL_NO_CLIPS: &str = "Nothing received yet";
+/// How many received clips "Recent clips" lists.
+const RECENT_CLIPS: usize = 5;
+/// The most characters of a clip a menu line shows.
+const CLIP_PREVIEW: usize = 40;
 
 // Menu item ids; device items are `<action>:<node_id>`.
 const ID_OPEN_APP: &str = "app:open";
@@ -313,7 +323,37 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             .build()?;
         menu = menu.item(&sub);
     }
-    menu.separator().text(ID_QUIT, LABEL_QUIT).build()
+    let mut clips = SubmenuBuilder::new(app, LABEL_RECENT_CLIPS);
+    let recent = crate::clip_history::recent_received(app, RECENT_CLIPS);
+    if recent.is_empty() {
+        let none = MenuItemBuilder::with_id(ID_NONE, LABEL_NO_CLIPS)
+            .enabled(false)
+            .build(app)?;
+        clips = clips.item(&none);
+    }
+    for c in recent {
+        let device = c
+            .from_node
+            .as_deref()
+            .map(|n| notify::device_name(app, n))
+            .unwrap_or_default();
+        clips = clips.text(format!("rclip:{}", c.id), clip_label(&c.text, &device));
+    }
+    menu.separator()
+        .item(&clips.build()?)
+        .separator()
+        .text(ID_QUIT, LABEL_QUIT)
+        .build()
+}
+
+/// A "Recent clips" line: a short preview of the text, and where it came from.
+fn clip_label(text: &str, device: &str) -> String {
+    let text = crate::clip_history::preview(text, CLIP_PREVIEW);
+    if device.is_empty() {
+        text
+    } else {
+        format!("{text} \u{2014} {device}")
+    }
 }
 
 fn on_menu(app: &AppHandle, id: &str) {
@@ -328,6 +368,7 @@ fn on_menu(app: &AppHandle, id: &str) {
             Some(("send", node)) => send_file(app, node),
             Some(("folder", node)) => send_folder(app, node),
             Some(("clip", node)) => send_clipboard(app, node),
+            Some(("rclip", id)) => copy_clip(app, id),
             Some(("locate", node)) => locate(app, node),
             Some(("map", node)) => show_on_map(app, node),
             Some(("open", node)) => {
@@ -366,6 +407,26 @@ fn send_clipboard(app: &AppHandle, node: &str) {
     std::thread::spawn(move || {
         if let Some(engine) = app.try_state::<Eng>() {
             shortcut::send_clipboard_to(&app, &engine, &node);
+        }
+    });
+}
+
+/// Put a recent clip back on this computer's clipboard; off the main thread.
+fn copy_clip(app: &AppHandle, id: &str) {
+    let Some(text) = id
+        .parse()
+        .ok()
+        .and_then(|id| crate::clip_history::text_of(app, id))
+    else {
+        return;
+    };
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let Some(engine) = app.try_state::<Eng>() else {
+            return;
+        };
+        if let Err(e) = engine.copy_to_clipboard(&text) {
+            notify::post(&app, "Couldn't copy the clip", &e.to_string());
         }
     });
 }
@@ -558,6 +619,17 @@ mod tests {
         assert_eq!(
             locate_label("I2405", Some(&off)),
             ("Locate I2405 (off on the phone)".into(), false)
+        );
+    }
+
+    #[test]
+    fn tray_clip_labels() {
+        assert_eq!(clip_label("hello", "Pixel"), "hello \u{2014} Pixel");
+        assert_eq!(clip_label("hello", ""), "hello");
+        let long = "x".repeat(60);
+        assert_eq!(
+            clip_label(&long, ""),
+            format!("{}\u{2026}", "x".repeat(CLIP_PREVIEW))
         );
     }
 

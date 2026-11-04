@@ -79,6 +79,17 @@ export const commands = {
 	/**  Replace the muted list; returns it tidied (see `tidy_muted`). */
 	setMutedApps: (apps: string[]) => __TAURI_INVOKE<string[]>("set_muted_apps", { apps }),
 	/**
+	 *  Device `node_id`'s kept clips (sent and received), newest first: the
+	 *  first `limit` matching `query` (every word in the text, ignoring case).
+	 */
+	clipHistory: (nodeId: string, query: string, limit: number) => __TAURI_INVOKE<ClipPage_Serialize>("clip_history", { nodeId, query, limit }),
+	/**  Forget device `node_id`'s kept clips. */
+	clearClipHistory: (nodeId: string) => __TAURI_INVOKE<void>("clear_clip_history", { nodeId }),
+	/**  Whether clips are kept ("Keep a clipboard history" in Settings). */
+	clipHistoryEnabled: () => __TAURI_INVOKE<boolean>("clip_history_enabled"),
+	/**  Turn the history on or off; off also forgets everything kept. */
+	setClipHistoryEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_clip_history_enabled", { on }),
+	/**
 	 *  Ask a device for its battery/charging; the answer arrives as
 	 *  `device-status-event`.
 	 */
@@ -388,6 +399,74 @@ export type BatterySample = {
 	/**  Percent, 0-100. */
 	level: number,
 	charging: boolean,
+};
+
+/**  Which way a clip went. */
+export type ClipDirection = 
+/**  Another device sent it here. */
+"in" | 
+/**  This computer sent it. */
+"out";
+
+/**
+ *  What a device's clipboard tile shows: the first matches, how many there
+ *  are, and how many this device has kept in all.
+ */
+export type ClipPage = ClipPage_Serialize | ClipPage_Deserialize;
+
+/**
+ *  What a device's clipboard tile shows: the first matches, how many there
+ *  are, and how many this device has kept in all.
+ */
+export type ClipPage_Deserialize = {
+	entries: ClipRecord_Deserialize[],
+	total: number,
+	kept: number,
+};
+
+/**
+ *  What a device's clipboard tile shows: the first matches, how many there
+ *  are, and how many this device has kept in all.
+ */
+export type ClipPage_Serialize = {
+	entries: ClipRecord_Serialize[],
+	total: number,
+	kept: number,
+};
+
+/**  One clip as kept. */
+export type ClipRecord = ClipRecord_Serialize | ClipRecord_Deserialize;
+
+/**  One clip as kept. */
+export type ClipRecord_Deserialize = {
+	id: number,
+	/**  Up to `MAX_TEXT` bytes of it. */
+	text: string,
+	/**  The text was longer and was cut. */
+	truncated?: boolean,
+	/**  The device it came from (node id), for one received. */
+	from_node?: string | null,
+	/**  The device it went to (node id), for one sent. */
+	to_node?: string | null,
+	direction: ClipDirection,
+	/**  When, in milliseconds since 1970. */
+	at: number | null,
+};
+
+/**  One clip as kept. */
+export type ClipRecord_Serialize = {
+	id: number,
+	/**  Up to `MAX_TEXT` bytes of it. */
+	text: string,
+	/**  The text was longer and was cut. */
+	truncated: boolean,
+	/**  The device it came from (node id), for one received. */
+	from_node: string | null,
+	/**  The device it went to (node id), for one sent. */
+	to_node: string | null,
+	direction: ClipDirection,
+	/**  When, in milliseconds since 1970. */
+	at: number | null,
 };
 
 /**

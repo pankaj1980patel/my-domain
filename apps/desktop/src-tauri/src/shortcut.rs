@@ -220,9 +220,10 @@ pub fn send_clipboard_to(app: &AppHandle, engine: &Eng, phone: &str) {
     let name = crate::notify::device_name(app, phone);
     let live = engine.links().iter().any(|(id, _)| *id == phone);
     let sent = match crate::clip_image::copied_text().filter(|t| !t.trim().is_empty()) {
-        Some(text) => engine
-            .send_text(phone, &text, "clipboard")
-            .map(|how| how != "queued"),
+        Some(text) => engine.send_text(phone, &text, "clipboard").map(|how| {
+            crate::clip_history::on_sent(app, phone, &text);
+            how != "queued"
+        }),
         None => match crate::clip_image::copied_to_png() {
             Ok(path) => engine
                 .send_clipboard_image(phone, &path.to_string_lossy())

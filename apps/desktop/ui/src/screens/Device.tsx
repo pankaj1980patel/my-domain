@@ -49,6 +49,7 @@ import ScheduleTile from "./device/ScheduleTile";
 import CommandsTile from "./device/CommandsTile";
 import LostModeTile from "./device/LostModeTile";
 import NotificationHistory from "./device/NotificationHistory";
+import ClipHistoryTile from "./device/ClipHistoryTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -124,6 +125,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <NotificationsTile node={props.node} />
             <NotificationHistory node={props.node} />
             <ClipboardTile node={props.node} />
+            <ClipHistoryTile node={props.node} />
             <FilesTile node={props.node} />
             <DropToSend node={props.node} />
             <BrowseTile node={props.node} />

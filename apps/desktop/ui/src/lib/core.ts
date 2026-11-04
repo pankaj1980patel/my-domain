@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { commands, type ClipPage_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
@@ -406,6 +406,7 @@ export async function startEvents() {
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.codeCopied", { device }) });
       toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
     }),
+    on<null>("clip-history-changed", () => setClipTick((x) => x + 1)),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
@@ -698,6 +699,32 @@ export async function setMutedApps(apps: string[]): Promise<string[]> {
     setState("notifications", node, (list = []) => list.filter((n) => !isMuted(n.app)));
   }
   return muted;
+}
+
+// --- clipboard history (kept by the backend, clip_history.rs) ---
+
+export type ClipPage = ClipPage_Serialize;
+export type ClipRecord = ClipPage["entries"][number];
+
+/** Bumped when the clipboard history changed (`clip-history-changed`), so
+ *  the device's clipboard history tile reloads. */
+const [clipTick, setClipTick] = createSignal(0);
+export { clipTick };
+
+/** A device's kept clips, sent and received: the first `limit` matching
+ *  `query` (every word in the text). */
+export function clipHistory(node: string, query: string, limit: number): Promise<ClipPage> {
+  return commands.clipHistory(node, query, limit);
+}
+
+export async function clearClipHistoryOf(node: string) {
+  await commands.clearClipHistory(node);
+}
+
+/** Send a kept clip to a device's clipboard again. Returns the transport,
+ *  or "queued". */
+export async function sendClipAgain(node: string, text: string): Promise<string> {
+  return unwrap(commands.sendText(node, text, "clipboard"));
 }
 
 export async function requestApps(node: string) {
