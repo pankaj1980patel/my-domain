@@ -5,13 +5,12 @@
 // device.
 
 import { peerName, state } from "../../lib/core";
-import { niceName } from "../../lib/words";
 import { ScheduleList } from "../../components/ScheduleList";
 import { DEVICE_PRESETS } from "../../lib/presets";
 import { t } from "../../i18n";
 
 export default function ScheduleTile(props: { node: string }) {
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   return (
     <article class="tile tile-wide">
       <h2>{t("schedule.title")}</h2>

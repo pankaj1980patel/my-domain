@@ -99,7 +99,7 @@ export default function App() {
           // Another device is looking for this one: any click silences it.
           <div class="ring-banner" role="alertdialog" aria-live="assertive" onClick={dismissRing}>
             <span class="ring-pulse" aria-hidden="true" />
-            <strong>{t("ring.title", { name: niceName(peerName(r().from)) })}</strong>
+            <strong>{t("ring.title", { name: peerName(r().from) })}</strong>
             <button class="btn btn-primary" onClick={dismissRing} autofocus>
               {t("ring.stop")}
             </button>

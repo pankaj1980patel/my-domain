@@ -265,7 +265,7 @@ fn devices(app: &AppHandle) -> Vec<Device> {
             let phone = phone_entry(&p.node_id, &known, status);
             Device {
                 connected: live.contains(&p.node_id),
-                name: notify::nice_name(&p.name),
+                name: crate::device_labels::display_name(app, &p.node_id, &p.name),
                 node: p.node_id,
                 phone,
             }

@@ -8,7 +8,7 @@ import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { peerName, sendFile, sendFolder } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t, tn } from "../../i18n";
 
@@ -18,7 +18,7 @@ const isNotAFile = (e: unknown) => String(e instanceof Error ? e.message : e).in
 
 export default function DropToSend(props: { node: string }) {
   const [over, setOver] = createSignal(false);
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
 
   /** Send each path, a folder with everything in it; counts the files. */
   const sendAll = async (paths: string[]) => {

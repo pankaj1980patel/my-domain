@@ -1,8 +1,8 @@
 // Home: your devices as cards. Connected ones first.
 
 import { createMemo, For, Show } from "solid-js";
-import { connect, refreshDevices, state } from "../lib/core";
-import { friendlyError, niceName } from "../lib/words";
+import { connect, peerName, refreshDevices, state } from "../lib/core";
+import { friendlyError } from "../lib/words";
 import { DeviceCard, Empty, toast } from "../components/ui";
 import { t } from "../i18n";
 
@@ -11,7 +11,7 @@ export default function Home(props: { onOpen: (node: string) => void }) {
     [...state.peers].sort((a, b) => {
       const la = state.links[a.node_id] ? 0 : 1;
       const lb = state.links[b.node_id] ? 0 : 1;
-      return la - lb || niceName(a.name).localeCompare(niceName(b.name));
+      return la - lb || peerName(a.node_id).localeCompare(peerName(b.node_id));
     }),
   );
   const online = () => state.peers.filter((p) => state.links[p.node_id]).length;

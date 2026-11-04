@@ -429,7 +429,7 @@ fn device_name(app: &AppHandle, node: &str) -> String {
         .get_peers()
         .into_iter()
         .find(|p| p.node_id == node)
-        .map(|p| p.name)
+        .map(|p| crate::device_labels::display_name(app, node, &p.name))
         .unwrap_or_else(|| "your device".into())
 }
 

@@ -59,7 +59,6 @@ import com.mydomain.android.core.LinkState
 import com.mydomain.android.core.initial
 import com.mydomain.android.core.linkLabel
 import com.mydomain.android.core.linkStateOf
-import com.mydomain.android.core.niceName
 import com.mydomain.android.core.qualityLabel
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -245,10 +244,10 @@ fun DeviceCard(peer: PeerInfo, onOpen: () -> Unit, onConnect: () -> Unit) {
     val unread = Core.messages.count { it.node == peer.nodeId && it.incoming }
     Tile(onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(peer.name)
+            DeviceAvatar(peer.nodeId)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(niceName(peer.name), style = MaterialTheme.typography.titleMedium, color = T.text)
+                Text(Core.peerName(peer.nodeId), style = MaterialTheme.typography.titleMedium, color = T.text)
                 StatusPill(peer.nodeId)
             }
             if (unread > 0) {

@@ -2,7 +2,7 @@
 
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { peerName, runAction, type DeviceStatus } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { Gate, toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -18,7 +18,7 @@ function timeoutLabel(s: number): string {
  *  settings" permission; until it's given the controls are greyed out, and
  *  "Allow on the phone" makes the phone open that setting. */
 export default function ScreenSettingsRow(props: { node: string; st: DeviceStatus }) {
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const off = () => (props.st.writeSettings === false ? t("screenSettings.off", { name: name() }) : undefined);
   // The slider's level while it's dragged, and until the phone answers.
   const [drag, setDrag] = createSignal<number | null>(null);

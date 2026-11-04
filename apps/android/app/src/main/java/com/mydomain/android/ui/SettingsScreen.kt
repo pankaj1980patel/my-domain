@@ -106,11 +106,11 @@ fun PhotosTile() {
         if (b?.enabled == true || picking) {
             val current = Core.peers.firstOrNull { it.nodeId == b?.target }
             if (current != null && !picking) {
-                GhostButton(String.format(stringResource(R.string.settings_backup_to), niceName(current.name)), { picking = true }, small = true)
+                GhostButton(String.format(stringResource(R.string.settings_backup_to), Core.peerName(current.nodeId)), { picking = true }, small = true)
             } else {
                 Muted(stringResource(R.string.settings_backup_pick))
                 Core.peers.forEach { p ->
-                    SoftButton(niceName(p.name), {
+                    SoftButton(Core.peerName(p.nodeId), {
                         picking = false
                         set(true, p.nodeId, b?.chargingOnly == true)
                     }, Modifier.fillMaxWidth())

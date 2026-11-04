@@ -5,7 +5,7 @@
 
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { clearClipHistoryOf, clipHistory, clipTick, copyText, peerName, sendClipAgain, type ClipPage } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -21,7 +21,7 @@ function whenOf(ts: number, now = new Date()): string {
 }
 
 export default function ClipHistoryTile(props: { node: string }) {
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const [query, setQuery] = createSignal("");
   const [limit, setLimit] = createSignal(PAGE);
   const [page, setPage] = createSignal<ClipPage>({ entries: [], total: 0, kept: 0 });

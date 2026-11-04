@@ -44,7 +44,6 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.linkStateOf
-import com.mydomain.android.core.niceName
 import com.mydomain.android.core.progressLabel
 import kotlinx.coroutines.launch
 
@@ -54,6 +53,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
     val peer = Core.peers.firstOrNull { it.nodeId == node }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
+    var editing by remember(node) { mutableStateOf(false) }
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -65,6 +65,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             return
         }
         val s = linkStateOf(node)
+        // The nickname you gave it here, else its own name.
+        val name = Core.peerName(node)
         val wakeSent = stringResource(R.string.wake_sent)
         LazyColumn(
             Modifier.fillMaxSize(),
@@ -73,10 +75,17 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                    Avatar(peer.name, 56.dp)
+                    DeviceAvatar(node, 56.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(niceName(peer.name), style = MaterialTheme.typography.headlineSmall, color = T.text)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                name, style = MaterialTheme.typography.headlineSmall, color = T.text,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            GhostButton(stringResource(R.string.label_edit), { editing = !editing }, small = true)
+                        }
                         StatusPill(node)
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
                             progressLabel(Core.progress[node])?.let { Muted(it) }
@@ -111,18 +120,19 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                     }
                 }
             }
+            if (editing) item { DeviceLabelEditor(node) { editing = false } }
             item { ChatTile(node) }
             item { FilesTile(node) }
             // Its shared folders, for a device that can be browsed.
-            if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, niceName(peer.name)) }
-            item { FindTile(node, niceName(peer.name)) }
+            if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, name) }
+            item { FindTile(node, name) }
             // What it said about itself: battery, storage, memory, processor, uptime.
             Core.deviceStatus[node]?.takeIf { hasInfo(it) }?.let { st ->
-                item { InfoTile(node, niceName(peer.name), st) }
+                item { InfoTile(node, name, st) }
             }
             // Commands its owner lets your devices run (it lists "run").
             if (Core.deviceStatus[node]?.actions?.contains("run") == true) {
-                item { CommandsTile(node, niceName(peer.name)) }
+                item { CommandsTile(node, name) }
             }
             // A computer that lets the phone control it (it lists "input").
             Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
@@ -130,7 +140,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
-            if (ClipLog.enabled) item { ClipHistoryTile(node, niceName(peer.name)) }
+            if (ClipLog.enabled) item { ClipHistoryTile(node, name) }
             item { NotifyTile() }
             item { AppsTile(node) }
         }

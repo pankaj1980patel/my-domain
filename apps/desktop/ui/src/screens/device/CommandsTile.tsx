@@ -6,7 +6,7 @@
 
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { peerName, requestStatus, runAction, state } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -17,7 +17,7 @@ const WAIT_MS = 75_000;
 
 export default function CommandsTile(props: { node: string }) {
   const [running, setRunning] = createSignal<string | null>(null);
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const st = () => state.status[props.node];
   let timer: ReturnType<typeof setInterval> | undefined;
   const stop = () => {

@@ -223,6 +223,7 @@ object Core {
         app = context.applicationContext
         BatteryLog.load(app)
         ClipLog.load(app)
+        DeviceLabels.load(app)
     }
 
     fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
@@ -253,8 +254,20 @@ object Core {
         Thread { engine()?.setBackground(!now) }.start()
     }
 
+    /** The name to show for a device: the nickname you gave it on this
+     *  phone ([DeviceLabels]), else its own name tidied. Screens, tiles,
+     *  the widget and notifications all name devices through this. */
     fun peerName(node: String?): String =
-        peers.firstOrNull { it.nodeId == node }?.name?.let(::niceName) ?: str(R.string.a_device)
+        DeviceLabels.nickname(node)
+            ?: peers.firstOrNull { it.nodeId == node }?.name?.let(::niceName)
+            ?: str(R.string.a_device)
+
+    /** Give a device a nickname, an icon and a colour on this phone (blank:
+     *  none). Main thread. */
+    fun setDeviceLabel(node: String, nickname: String?, icon: String?, color: String?) {
+        DeviceLabels.set(app, node, nickname, icon, color)
+        HomeWidget.refresh(app)
+    }
 
     private fun onMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block)

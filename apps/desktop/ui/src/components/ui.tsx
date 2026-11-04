@@ -1,8 +1,9 @@
 // Small shared pieces: toasts, the status pill, the device card.
 
 import { createSignal, For, Show, type JSX } from "solid-js";
-import { state, type Peer } from "../lib/core";
-import { initial, linkLabel, linkState, niceName, qualityLabel, type LinkState } from "../lib/words";
+import { peerName, state, type Peer } from "../lib/core";
+import { DeviceAvatar } from "./DeviceLabel";
+import { linkLabel, linkState, qualityLabel, type LinkState } from "../lib/words";
 import type { Quality } from "../bindings";
 import { t, tn } from "../i18n";
 
@@ -75,11 +76,9 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
   const unread = () => state.messages.filter((m) => m.node === props.peer.node_id && m.dir === "in").length;
   return (
     <article class="device-card" onClick={props.onOpen} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && props.onOpen()}>
-      <div class="device-avatar" aria-hidden="true">
-        {initial(props.peer.name)}
-      </div>
+      <DeviceAvatar node={props.peer.node_id} />
       <div class="device-main">
-        <h3>{niceName(props.peer.name)}</h3>
+        <h3>{peerName(props.peer.node_id)}</h3>
         <StatusPill node={props.peer.node_id} />
       </div>
       <Show when={unread() > 0}>

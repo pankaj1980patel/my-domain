@@ -27,7 +27,7 @@ import {
   type Radio,
 } from "../lib/core";
 import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../lib/presets";
-import { friendlyError, niceName } from "../lib/words";
+import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, tn, type Key } from "../i18n";
 
@@ -84,8 +84,7 @@ const report = (what: string, name: string) => (via: string) =>
 const fail = (e: unknown) => toast(friendlyError(e), "error");
 
 /** The commands for one paired device. */
-function deviceCommands(node: string, rawName: string, onDevice: (node: string) => void): Cmd[] {
-  const name = niceName(rawName);
+function deviceCommands(node: string, name: string, onDevice: (node: string) => void): Cmd[] {
   const live = !!state.links[node];
   const st: DeviceStatus | undefined = state.status[node];
   const has = (a: string) => !!st?.actions.includes(a);
@@ -289,7 +288,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
 
   const all = createMemo(() => {
     if (!open()) return [] as Cmd[];
-    const devices = state.peers.flatMap((p) => deviceCommands(p.node_id, p.name || peerName(p.node_id), props.onDevice));
+    const devices = state.peers.flatMap((p) => deviceCommands(p.node_id, peerName(p.node_id), props.onDevice));
     return [...devices, ...localCommands(), ...places()];
   });
 

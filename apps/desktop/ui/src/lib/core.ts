@@ -5,15 +5,17 @@
 // directly.
 
 import { createSignal } from "solid-js";
-import { createStore, produce } from "solid-js/store";
+import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ClipPage_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { commands, type ClipPage_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
+/** What you call a device here: nickname, icon, colour (this computer only). */
+export type DeviceLabel = DeviceLabel_Serialize;
 export type Identity = Identity_Serialize;
 
 export type ChatMessage = {
@@ -242,6 +244,8 @@ type State = {
   ringing: { from: string } | null;
   /** transfer id -> file transfer (both ways) */
   transfers: Record<string, Transfer>;
+  /** node_id -> the nickname, icon and colour you gave it here. */
+  labels: Record<string, DeviceLabel>;
   devLog: DevEvent[];
 };
 
@@ -261,6 +265,7 @@ export const [state, setState] = createStore<State>({
   status: {},
   ringing: null,
   transfers: {},
+  labels: {},
   devLog: [],
 });
 
@@ -276,9 +281,25 @@ export async function unwrap<T>(
   return x.data;
 }
 
+/** The name to show for a device: the nickname you gave it here, else its
+ *  own name tidied (niceName). Every screen names devices through this. */
 export function peerName(node: string | undefined): string {
   if (!node) return t("activity.someDevice");
-  return state.peers.find((p) => p.node_id === node)?.name ?? t("activity.someDevice");
+  const nick = state.labels[node]?.nickname;
+  if (nick) return nick;
+  const own = state.peers.find((p) => p.node_id === node)?.name;
+  return own ? niceName(own) : t("activity.someDevice");
+}
+
+/** The icon and colour you gave a device here, if any. */
+export function peerLabel(node: string): DeviceLabel | undefined {
+  return state.labels[node];
+}
+
+/** Give a device a nickname, an icon and a colour (blank: none). */
+export async function setDeviceLabel(node: string, nickname: string, icon: string | null, color: string | null) {
+  const labels = await unwrap(commands.setDeviceLabel(node, nickname.trim() || null, icon, color));
+  setState("labels", reconcile(labels));
 }
 
 export function addActivity(item: Omit<ActivityItem, "id" | "ts">) {
@@ -410,7 +431,7 @@ export async function startEvents() {
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),
     on<{ from: string; code: string; app?: string | null }>("code-copied", ({ from, app }) => {
-      const device = niceName(peerName(from));
+      const device = peerName(from);
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.codeCopied", { device }) });
       toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
     }),
@@ -501,7 +522,7 @@ export async function startEvents() {
         path,
         ts: state.transfers[id]?.ts ?? now(),
       });
-      const device = niceName(peerName(from));
+      const device = peerName(from);
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.fileSaved", { name, device }) });
       toast(t("files.savedToast", { name, device }), "ok");
     }),
@@ -543,12 +564,14 @@ export async function startEvents() {
 
 /** Load everything the home screen shows. */
 export async function loadAll() {
-  const [me, peers, info, clip] = await Promise.all([
+  const [me, peers, info, clip, labels] = await Promise.all([
     commands.getIdentity(),
     commands.getPeers(),
     commands.sessionInfo(),
     commands.clipboardSyncEnabled(),
+    commands.getDeviceLabels(),
   ]);
+  setState("labels", reconcile(labels));
   setState({
     me,
     peers,

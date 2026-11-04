@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
-import com.mydomain.android.core.niceName
 import kotlinx.coroutines.launch
 
 /** Your devices as cards, connected ones first. Pull down to refresh the list. */
@@ -35,7 +34,7 @@ fun HomeScreen(onOpen: (String) -> Unit) {
     val pull = rememberPullToRefreshState()
     var refreshing by remember { mutableStateOf(false) }
     val devices = Core.peers.sortedWith(
-        compareBy({ if (Core.links.containsKey(it.nodeId)) 0 else 1 }, { niceName(it.name).lowercase() }),
+        compareBy({ if (Core.links.containsKey(it.nodeId)) 0 else 1 }, { Core.peerName(it.nodeId).lowercase() }),
     )
     val online = Core.peers.count { Core.links.containsKey(it.nodeId) }
     val updated = stringResource(R.string.home_list_updated)

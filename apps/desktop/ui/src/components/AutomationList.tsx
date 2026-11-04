@@ -6,9 +6,9 @@
 
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { commands, type Automation_Serialize as Automation } from "../bindings";
-import { state, unwrap } from "../lib/core";
+import { peerName, state, unwrap } from "../lib/core";
 import { DEVICE_PRESETS, LOCAL_PRESETS, NOTIFY_PRESET, offeredPresets, type Preset } from "../lib/presets";
-import { friendlyError, niceName } from "../lib/words";
+import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
 
@@ -63,7 +63,7 @@ export function AutomationList(props: {
   const name = (node: string) =>
     !node || node === props.me
       ? t("automation.thisComputer")
-      : niceName(state.peers.find((p) => p.node_id === node)?.name ?? t("activity.someDevice"));
+      : peerName(node);
 
   const load = () => commands.listAutomations().then(setList, () => {});
   onMount(() => {
@@ -165,7 +165,7 @@ export function AutomationList(props: {
             <For each={peers()}>
               {(p) => (
                 <option value={p.node_id} selected={p.node_id === watched()}>
-                  {niceName(p.name)}
+                  {peerName(p.node_id)}
                 </option>
               )}
             </For>
@@ -226,7 +226,7 @@ export function AutomationList(props: {
             <For each={peers()}>
               {(p) => (
                 <option value={p.node_id} selected={p.node_id === where()}>
-                  {niceName(p.name)}
+                  {peerName(p.node_id)}
                 </option>
               )}
             </For>

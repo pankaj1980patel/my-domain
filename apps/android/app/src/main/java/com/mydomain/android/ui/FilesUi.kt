@@ -32,7 +32,6 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.Transfer
 import com.mydomain.android.core.TransferState
 import com.mydomain.android.core.friendlyError
-import com.mydomain.android.core.niceName
 
 /** Files: send some or a whole folder (system pickers), and this device's
  *  transfers. */
@@ -150,7 +149,7 @@ fun ShareChooser() {
                 Muted(if (text != null) stringResource(R.string.share_text_body) else pluralStringResource(R.plurals.share_body, uris.size, uris.size))
                 if (peers.isEmpty()) Muted(stringResource(R.string.share_no_devices))
                 peers.forEach { p ->
-                    val name = niceName(p.name)
+                    val name = Core.peerName(p.nodeId)
                     SoftButton(name, {
                         Core.clearShare()
                         toast(String.format(sendingTo, name))

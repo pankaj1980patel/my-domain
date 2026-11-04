@@ -281,6 +281,13 @@ export const commands = {
 	setWebhookPort: (port: number) => typedError<WebhookSettings_Serialize, string>(__TAURI_INVOKE("set_webhook_port", { port })),
 	/**  Replace the token: tools using the old one stop working. */
 	newWebhookToken: () => typedError<WebhookSettings_Serialize, string>(__TAURI_INVOKE("new_webhook_token")),
+	/**  Every label you gave your devices here (node id -> label). */
+	getDeviceLabels: () => __TAURI_INVOKE<{ [key in string]: DeviceLabel_Serialize }>("get_device_labels"),
+	/**
+	 *  Give a device a nickname, an icon and a colour (each optional; all
+	 *  blank clears its label). Answers with every label.
+	 */
+	setDeviceLabel: (node: string, nickname: string | null, icon: string | null, color: string | null) => typedError<{ [key in string]: DeviceLabel_Serialize }, string>(__TAURI_INVOKE("set_device_label", { node, nickname, icon, color })),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -491,6 +498,29 @@ export type DevCredentials = {
 	user: string,
 	pass: string,
 	key: string,
+};
+
+/**  What you call one of your devices here. */
+export type DeviceLabel = DeviceLabel_Serialize | DeviceLabel_Deserialize;
+
+/**  What you call one of your devices here. */
+export type DeviceLabel_Deserialize = {
+	/**  Shown instead of its own name; none: its own name. */
+	nickname?: string | null,
+	/**  One of `ICONS`; none: the initial of its name. */
+	icon?: string | null,
+	/**  One of `COLORS`; none: the theme's default. */
+	color?: string | null,
+};
+
+/**  What you call one of your devices here. */
+export type DeviceLabel_Serialize = {
+	/**  Shown instead of its own name; none: its own name. */
+	nickname?: string,
+	/**  One of `ICONS`; none: the initial of its name. */
+	icon?: string,
+	/**  One of `COLORS`; none: the theme's default. */
+	color?: string,
 };
 
 export type FirewallStatus = {

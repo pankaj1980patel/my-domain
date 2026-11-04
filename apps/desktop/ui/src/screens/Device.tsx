@@ -37,8 +37,9 @@ import {
   type Transfer,
   unwrap,
 } from "../lib/core";
-import { fileFailReason, friendlyError, humanSize, initial, niceName, progressLabel } from "../lib/words";
+import { fileFailReason, friendlyError, humanSize, progressLabel } from "../lib/words";
 import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
+import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import PhotosTile from "./device/PhotosTile";
@@ -54,6 +55,9 @@ import ClipHistoryTile from "./device/ClipHistoryTile";
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
   const s = () => linkStateOf(props.node);
+  const [editing, setEditing] = createSignal(false);
+  // Another device's page: close the form.
+  createEffect(on(() => props.node, () => setEditing(false), { defer: true }));
   // Ask for its battery whenever this page opens (answer: device-status-event).
   // Asked only over a live link (and again when one comes up): asking a
   // device that isn't connected would wake it by push just to show this.
@@ -82,11 +86,19 @@ export default function Device(props: { node: string; onBack: () => void }) {
             {t("device.back")}
           </button>
           <header class="device-head">
-            <div class="device-avatar lg" aria-hidden="true">
-              {initial(p().name)}
-            </div>
+            <DeviceAvatar node={props.node} large />
             <div class="device-main">
-              <h1>{niceName(p().name)}</h1>
+              <div class="label-title">
+                <h1>{peerName(p().node_id)}</h1>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  title={t("label.editHint")}
+                  aria-expanded={editing()}
+                  onClick={() => setEditing((v) => !v)}
+                >
+                  {t("label.edit")}
+                </button>
+              </div>
               <StatusPill node={props.node} />
               <Show when={s() === "connecting" || s() === "failed"}>
                 <p class="muted small">{progressLabel(state.progress[props.node])}</p>
@@ -119,6 +131,9 @@ export default function Device(props: { node: string; onBack: () => void }) {
               </div>
             </Show>
           </header>
+          <Show when={editing()}>
+            <DeviceLabelForm node={props.node} onClose={() => setEditing(false)} />
+          </Show>
 
           <div class="tiles">
             <ChatTile node={props.node} />
@@ -235,7 +250,7 @@ function NotificationsTile(props: { node: string }) {
 function NotificationRow(props: { n: PhoneNotification }) {
   const [reply, setReply] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const name = () => niceName(peerName(props.n.from));
+  const name = () => peerName(props.n.from);
   const actionable = () => !!props.n.key && !props.n.handled;
   // Buttons keep their index in the device's list; the first `reply` one
   // becomes the reply box.
@@ -343,7 +358,7 @@ function ClipboardTile(props: { node: string }) {
         onClick={async () => {
           const r = await commands.sendClipboardImage(props.node);
           if (r.status === "error") toast(friendlyError(r.error), "error");
-          else toast(t("clipboard.pictureSent", { name: niceName(peerName(props.node)) }), "ok");
+          else toast(t("clipboard.pictureSent", { name: peerName(props.node) }), "ok");
         }}
       >
         {t("clipboard.sendPicture")}
@@ -370,7 +385,7 @@ function ClipboardTile(props: { node: string }) {
               <li class="clip-entry">
                 <div class="grow clip-text">
                   <span class="clip-value">{e.text}</span>
-                  <span class="muted small">{e.from ? niceName(peerName(e.from)) : t("clipboard.fromHere")}</span>
+                  <span class="muted small">{e.from ? peerName(e.from) : t("clipboard.fromHere")}</span>
                 </div>
                 <button
                   class="btn btn-ghost btn-sm"
@@ -496,7 +511,7 @@ function ScreenTile(props: { node: string }) {
 function ControlTile(props: { node: string }) {
   const [url, setUrl] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const status = () => state.status[props.node];
 
   const ring = async () => {
@@ -589,7 +604,7 @@ function NotifyTile() {
 function AppsTile(props: { node: string }) {
   const [q, setQ] = createSignal("");
   const data = () => state.apps[props.node];
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   // Opening an app needs the device to say it can (`launch` in its status).
   const canLaunch = () => !!state.status[props.node]?.actions.includes("launch");
   const shown = () =>
@@ -651,7 +666,7 @@ function AppsTile(props: { node: string }) {
 
 function FilesTile(props: { node: string }) {
   const [busy, setBusy] = createSignal(false);
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const list = () =>
     Object.values(state.transfers)
       .filter((x) => x.node === props.node)
@@ -856,7 +871,7 @@ function RadioRow(props: { node: string; st: DeviceStatus }) {
   const flip = (r: Radio) => () => {
     const on = !props.st.radios[r];
     const direct = props.st.radioDirect.includes(r);
-    const name = niceName(peerName(props.node));
+    const name = peerName(props.node);
     runAction(props.node, "radio", { what: r, on })
       .then(() => toast(t(direct ? "control.radioSwitching" : "control.radioAsked", { name, radio: label(r) })))
       .catch((e) => toast(friendlyError(e), "error"));
@@ -888,7 +903,7 @@ function RadioRow(props: { node: string; st: DeviceStatus }) {
  *  notification each time). */
 function LocateRow(props: { node: string; st: DeviceStatus }) {
   const loc = () => props.st.location;
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const off = () => (props.st.locationSharing ? undefined : t("locate.offOn", { name: name() }));
   const ago = () => {
     const l = loc();
@@ -938,7 +953,7 @@ function WifiList(props: { node: string; st: DeviceStatus }) {
   // and sent in Rust: it never comes to this page).
   const [mine, setMine] = createSignal<string | null>(null);
   onMount(() => commands.currentWifiName().then(setMine, () => {}));
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const shareMine = () =>
     unwrap(commands.shareWifiTo(props.node)).then(
       (ssid) => toast(t("wifi.shareSent", { ssid, name: name() }), "ok"),
@@ -1049,7 +1064,7 @@ function WifiList(props: { node: string; st: DeviceStatus }) {
  *  phone (its Accessibility service presses them). */
 function KeyRow(props: { node: string; st: DeviceStatus }) {
   const off = () =>
-    props.st.helper === false ? t("control.keysOff", { name: niceName(peerName(props.node)) }) : undefined;
+    props.st.helper === false ? t("control.keysOff", { name: peerName(props.node) }) : undefined;
   const keys = [
     ["back", "control.key.back"],
     ["home", "control.key.home"],
@@ -1078,7 +1093,7 @@ function KeyRow(props: { node: string; st: DeviceStatus }) {
 /** Type a number; the phone opens its dialer with it (it doesn't call). */
 function DialRow(props: { node: string }) {
   const [number, setNumber] = createSignal("");
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const send = (e: Event) => {
     e.preventDefault();
     const n = number().replace(/[^0-9+*#]/g, "");

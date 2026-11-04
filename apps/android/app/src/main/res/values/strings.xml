@@ -578,4 +578,31 @@
     <string name="automation_bad_level">Choose a battery level from 1 to 99.</string>
     <string name="automation_pick_device">Choose a device to watch.</string>
     <string name="automation_empty_note">Write the note to send.</string>
+
+    <!-- Device labels: a nickname, icon and colour, on this phone only -->
+    <string name="label_edit">Edit</string>
+    <string name="label_title">How this device looks here</string>
+    <string name="label_hint">Only on this phone. %1$s and your other devices don’t see it.</string>
+    <string name="label_nickname">Nickname</string>
+    <string name="label_nickname_blank">Left blank, it’s called %1$s.</string>
+    <string name="label_icon">Icon</string>
+    <string name="label_color">Colour</string>
+    <string name="label_none">None</string>
+    <string name="label_save">Save</string>
+    <string name="label_cancel">Cancel</string>
+    <string name="label_reset">Reset</string>
+    <string name="label_saved">Saved</string>
+    <string name="label_icon_phone">Phone</string>
+    <string name="label_icon_tablet">Tablet</string>
+    <string name="label_icon_laptop">Laptop</string>
+    <string name="label_icon_desktop">Desktop</string>
+    <string name="label_icon_tv">TV</string>
+    <string name="label_icon_watch">Watch</string>
+    <string name="label_color_cyan">Cyan</string>
+    <string name="label_color_blue">Blue</string>
+    <string name="label_color_sky">Sky</string>
+    <string name="label_color_green">Green</string>
+    <string name="label_color_gold">Gold</string>
+    <string name="label_color_rose">Rose</string>
+    <string name="label_color_grey">Grey</string>
 </resources>

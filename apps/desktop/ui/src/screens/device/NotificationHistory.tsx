@@ -15,7 +15,7 @@ import {
   type HistoryEntry,
   type HistoryPage,
 } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -42,7 +42,7 @@ function dayLabel(ts: number, now = new Date()): string {
 const timeOf = (ts: number) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 
 export default function NotificationHistory(props: { node: string }) {
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const [query, setQuery] = createSignal("");
   const [app, setApp] = createSignal<string | null>(null);
   const [limit, setLimit] = createSignal(PAGE);

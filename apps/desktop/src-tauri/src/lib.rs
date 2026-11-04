@@ -23,6 +23,7 @@ mod clip_history;
 mod clip_image;
 mod commands_run;
 mod device;
+mod device_labels;
 mod fcm;
 mod location;
 mod notif_history;
@@ -1363,6 +1364,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         webhooks::set_webhooks_enabled,
         webhooks::set_webhook_port,
         webhooks::new_webhook_token,
+        device_labels::get_device_labels,
+        device_labels::set_device_label,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,
@@ -1403,6 +1406,7 @@ pub fn run() {
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
+            app.manage(device_labels::DeviceLabels::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
             app.manage(automations::Automations::load(&handle));

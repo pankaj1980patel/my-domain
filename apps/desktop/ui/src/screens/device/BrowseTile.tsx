@@ -7,7 +7,7 @@ import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "s
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "../../bindings";
 import { peerName, setState, state, unwrap } from "../../lib/core";
-import { friendlyError, humanSize, niceName } from "../../lib/words";
+import { friendlyError, humanSize } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -45,7 +45,7 @@ function Browser(props: { node: string }) {
   const [loading, setLoading] = createSignal(false);
   // Downloads started here, by file location, to show them as under way.
   const [downloads, setDownloads] = createSignal<Record<string, string>>({});
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
 
   // The request we're waiting for; replies to older ones are dropped. A
   // reply can beat listFolder's answer, so unclaimed ones wait in `early`.

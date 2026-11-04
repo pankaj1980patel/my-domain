@@ -186,18 +186,21 @@ fn permitted(app: &AppHandle) -> bool {
     GRANTED.load(Ordering::Relaxed)
 }
 
-/// A peer's display name ("Pankajs-MacBook-Pro.local" reads as "Pankajs
-/// MacBook Pro"), the same tidy-up the UI does (`niceName`).
+/// A peer's display name: the nickname you gave it here (see
+/// `device_labels`), else its own name tidied ("Pankajs-MacBook-Pro.local"
+/// reads as "Pankajs MacBook Pro"), the same as the UI (`peerName`).
 pub fn device_name(app: &AppHandle, node_id: &str) -> String {
-    app.try_state::<Eng>()
-        .and_then(|e| {
-            e.get_peers()
-                .into_iter()
-                .find(|p| p.node_id == node_id)
-                .map(|p| p.name)
-        })
-        .map(|name| nice_name(&name))
-        .unwrap_or_else(|| "One of your devices".to_string())
+    let own = app.try_state::<Eng>().and_then(|e| {
+        e.get_peers()
+            .into_iter()
+            .find(|p| p.node_id == node_id)
+            .map(|p| p.name)
+    });
+    match own {
+        Some(name) => crate::device_labels::display_name(app, node_id, &name),
+        None => crate::device_labels::nickname(app, node_id)
+            .unwrap_or_else(|| "One of your devices".to_string()),
+    }
 }
 
 pub(crate) fn nice_name(name: &str) -> String {

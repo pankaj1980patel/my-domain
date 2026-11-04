@@ -5,7 +5,7 @@
 
 import { createSignal, Show } from "solid-js";
 import { peerName, runAction, state } from "../../lib/core";
-import { friendlyError, niceName } from "../../lib/words";
+import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -14,7 +14,7 @@ const MAX_MESSAGE = 500;
 
 export default function LostModeTile(props: { node: string }) {
   const st = () => state.status[props.node];
-  const name = () => niceName(peerName(props.node));
+  const name = () => peerName(props.node);
   const [open, setOpen] = createSignal(false);
   const [message, setMessage] = createSignal("");
   const [contact, setContact] = createSignal("");

@@ -6,7 +6,7 @@
 
 import { Index, Show } from "solid-js";
 import { peerName, state, type DeviceStatus, type Space } from "../../lib/core";
-import { humanSize, niceName } from "../../lib/words";
+import { humanSize } from "../../lib/words";
 import { t, tn } from "../../i18n";
 import BatteryChart from "./BatteryChart";
 
@@ -20,7 +20,7 @@ export default function InfoTile(props: { node: string }) {
     <Show when={rows().length}>
       <article class="tile">
         <h2>{t("info.title")}</h2>
-        <p class="muted small">{t("info.hint", { name: niceName(peerName(props.node)) })}</p>
+        <p class="muted small">{t("info.hint", { name: peerName(props.node) })}</p>
         <dl class="info-rows">
           {/* By place, not by object: a new status updates the rows in
               place, so the battery graph isn't rebuilt each time. */}
