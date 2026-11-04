@@ -134,7 +134,10 @@ pub enum CoreEvent {
         args: serde_json::Value,
     },
     /// A file transfer moved on (`incoming`: to this device). `node_id` is
-    /// the other device; `done` of `total` bytes are confirmed.
+    /// the other device; `done` of `total` bytes are confirmed. `resumed`:
+    /// it carried on from a partial file (after a dropped link or a
+    /// restart), so `done` starts there rather than at 0 (only sent when
+    /// true).
     FileProgress {
         id: String,
         node_id: String,
@@ -142,6 +145,8 @@ pub enum CoreEvent {
         done: u64,
         total: u64,
         incoming: bool,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        resumed: bool,
     },
     /// A file arrived and was saved at `path`.
     FileReceived {

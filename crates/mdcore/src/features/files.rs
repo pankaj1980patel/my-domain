@@ -18,6 +18,21 @@
 //! file, so it resumes where it stopped. At the end the SHA-256 is checked
 //! and the file moved into the downloads folder under a free name.
 //!
+//! Resuming survives more than a dropped link:
+//! - The receiver keeps `<id>.json` next to the partial file (who sends it,
+//!   its name, size and SHA-256). A partial file is only resumed for an
+//!   offer of the same file; anything else starts from zero.
+//! - The sender keeps its transfers (not a folder's or a backup's files:
+//!   those features restart their own) in the platform's store, so after a
+//!   restart it offers them again, for up to `RESUME_FOR`, as long as the
+//!   file is still there unchanged (same size and modification time). A
+//!   changed file fails the transfer and the receiver drops its part.
+//! - Progress after a resume starts from the offset, with `resumed` set.
+//!
+//! Nothing new on the wire: `file_accept.offset` was always there (an
+//! older receiver that leaves it out, or always answers 0, simply gets the
+//! whole file again), so peers of any version still talk.
+//!
 //! Your own devices are trusted, so offers are accepted without asking
 //! (Phase 4's grants add an `ask`).
 
@@ -58,17 +73,22 @@ const MAX_BACKOFF: Duration = Duration::from_secs(10 * 60);
 /// An offer nobody accepted is given up after this (it has left the
 /// outbox by then, see `transport::outbox`).
 const NEVER_ACCEPTED: Duration = Duration::from_secs(11 * 60);
-/// A transfer paused this long in total (the device never came back) is
-/// given up.
-const GIVE_UP_AFTER: Duration = Duration::from_secs(60 * 60);
+/// A transfer paused this long (the device never came back) is given up;
+/// a sender that restarts drops the transfers it started longer ago.
+const RESUME_FOR: Duration = Duration::from_secs(24 * 60 * 60);
 /// A partial incoming file nobody has fed for this long is dropped (the
-/// sender gave up or restarted).
-const INCOMING_IDLE: Duration = Duration::from_secs(2 * 60 * 60);
+/// sender gave up): a little longer than the sender keeps trying.
+const INCOMING_IDLE: Duration = Duration::from_secs(25 * 60 * 60);
+/// How often the partial folder is swept for files of transfers this run
+/// never heard of (from before a restart) that are past `INCOMING_IDLE`.
+const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 /// A gap ack rewinds the sender at most this often (each chunk in flight
 /// after the gap is answered with one).
 const REWIND_EVERY: Duration = Duration::from_millis(500);
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 const PARTIAL_DIR: &str = ".mydomain-partial";
+/// Why a transfer whose file changed under it ends.
+const CHANGED: &str = "the file changed since it was offered";
 
 struct Outgoing {
     node: String,
@@ -96,6 +116,16 @@ struct Outgoing {
     paused_since: Option<Instant>,
     /// More fields for the offer (e.g. `features::backup`'s folder).
     extra: Option<serde_json::Value>,
+    /// The file's modification time when it was offered (ns since the
+    /// epoch, if the platform has one): with `size`, how a resume knows
+    /// it's still the same file.
+    mtime: Option<u64>,
+    /// When the transfer started (unix seconds; see `RESUME_FOR`).
+    created: u64,
+    /// Kept in the platform's store, to be offered again after a restart.
+    persist: bool,
+    /// It carried on from a partial file at least once.
+    resumed: bool,
 }
 
 struct Incoming {
@@ -115,6 +145,8 @@ struct Incoming {
     progress_at: Option<Instant>,
     /// Last offer or chunk for it (see `INCOMING_IDLE`).
     last_seen: Instant,
+    /// It carried on from a partial file at least once.
+    resumed: bool,
 }
 
 /// Transfers in progress, both ways.
@@ -136,7 +168,49 @@ pub struct Files {
     pub shared: Mutex<Vec<(String, PathBuf)>>,
     /// Folders being sent, file by file (see `features::folders`).
     pub(crate) folders: Mutex<Vec<super::folders::FolderSend>>,
+    /// The outgoing transfers were read back from the platform's store.
+    out_restored: std::sync::atomic::AtomicBool,
+    /// What was last written there (to skip writing the same again).
+    out_saved: Mutex<String>,
+    /// When the partial folder was last swept.
+    swept_at: Mutex<Option<Instant>>,
+    /// Devices a cancel was sent to: node -> (last connect try, since).
+    cancels: Mutex<HashMap<String, (Instant, Instant)>>,
+    /// Tests only: answer offers like a device from before resuming (no
+    /// `offset` in the accept, the partial file thrown away).
+    pub(crate) legacy_receiver: std::sync::atomic::AtomicBool,
 }
+
+/// An outgoing transfer as kept in the platform's store.
+#[derive(serde::Serialize, serde::Deserialize)]
+struct SavedOutgoing {
+    id: String,
+    node: String,
+    path: PathBuf,
+    name: String,
+    size: u64,
+    sha: String,
+    #[serde(default)]
+    mtime: Option<u64>,
+    created: u64,
+    #[serde(default)]
+    started: bool,
+    #[serde(default)]
+    extra: Option<serde_json::Value>,
+}
+
+/// What the receiver keeps next to a partial file (`<id>.json`): the offer
+/// it belongs to.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+struct PartMeta {
+    from: String,
+    name: String,
+    size: u64,
+    sha256: String,
+}
+
+/// Where `Files`' outgoing transfers are kept between runs.
+const OUTGOING_KEY: &str = "files_outgoing";
 
 /// How many finished transfers are remembered.
 const FINISHED_KEPT: usize = 64;
@@ -305,6 +379,259 @@ fn hex(b: &[u8]) -> String {
     b.iter().map(|x| format!("{x:02x}")).collect()
 }
 
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// A file's modification time in ns since the epoch, if the platform has
+/// one.
+fn mtime_of(meta: &std::fs::Metadata) -> Option<u64> {
+    let d = meta
+        .modified()
+        .ok()?
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?;
+    u64::try_from(d.as_nanos()).ok()
+}
+
+/// `path` is still the file that was offered: there, same size, same
+/// modification time.
+fn unchanged(path: &Path, size: u64, mtime: Option<u64>) -> bool {
+    std::fs::metadata(path)
+        .is_ok_and(|m| m.is_file() && m.len() == size && (mtime.is_none() || mtime_of(&m) == mtime))
+}
+
+/// A cancel must arrive, or the other side keeps a partial file (or keeps
+/// offering it) for a day: through the outbox, which holds it until the
+/// peer acknowledges it, connecting if there's no link (or the link is
+/// closing under us).
+fn send_cancel<P: Platform>(ctx: &NetCtx<P>, node: &str, id: &str) {
+    let msg = json!({ "type": "file_cancel", "from": me(ctx), "id": id });
+    crate::engine::send_reliably(ctx, node, &msg.to_string());
+    // If it went out on a link that was closing, nothing else would bring
+    // a new one: `nudge_cancels` does.
+    let now = Instant::now();
+    ctx.files
+        .cancels
+        .lock()
+        .insert(node.to_string(), (now, now));
+}
+
+/// A cancel still waiting in the outbox for a device with no link: connect
+/// (every `REOFFER_EVERY`, for as long as the outbox keeps it).
+fn nudge_cancels<P: Platform>(ctx: &NetCtx<P>) {
+    let mut due = Vec::new();
+    ctx.files.cancels.lock().retain(|node, (last, since)| {
+        let waiting = crate::transport::outbox::waiting(ctx, node) > 0;
+        if !waiting || since.elapsed() >= NEVER_ACCEPTED {
+            return false;
+        }
+        if !ctx.ws_conns.lock().contains_key(node) && last.elapsed() >= REOFFER_EVERY {
+            *last = Instant::now();
+            due.push(node.clone());
+        }
+        true
+    });
+    for node in due {
+        crate::engine::start_ladder(ctx, &node);
+    }
+}
+
+fn offer_msg(me: &str, id: &str, t: &Outgoing) -> serde_json::Value {
+    let mut msg = json!({
+        "type": "file_offer", "from": me, "id": id,
+        "name": t.name, "size": t.size, "sha256": t.sha,
+    });
+    add_extra(&mut msg, t.extra.as_ref());
+    msg
+}
+
+/// A folder's and a backup's files are restarted by their own feature, so
+/// only other transfers outlive a restart here.
+fn persists(extra: Option<&serde_json::Value>) -> bool {
+    extra.is_none_or(|e| e.get("folder").is_none() && e.get("backup").is_none())
+}
+
+/// Write the transfers worth resuming after a restart to the platform's
+/// store (if they changed since last time).
+fn save_outgoing<P: Platform>(ctx: &NetCtx<P>) {
+    // Not over what the last run left before it's taken back.
+    restore_outgoing(ctx);
+    let mut saved: Vec<SavedOutgoing> = ctx
+        .files
+        .out
+        .lock()
+        .iter()
+        .filter(|(_, t)| t.persist)
+        .map(|(id, t)| SavedOutgoing {
+            id: id.clone(),
+            node: t.node.clone(),
+            path: t.path.clone(),
+            name: t.name.clone(),
+            size: t.size,
+            sha: t.sha.clone(),
+            mtime: t.mtime,
+            created: t.created,
+            started: t.started,
+            extra: t.extra.clone(),
+        })
+        .collect();
+    saved.sort_by(|a, b| a.id.cmp(&b.id));
+    let json = serde_json::to_string(&saved).unwrap_or_default();
+    let mut last = ctx.files.out_saved.lock();
+    if *last != json {
+        ctx.platform.kv_set(OUTGOING_KEY, &json);
+        *last = json;
+    }
+}
+
+/// Once per run: take back the transfers a previous run was sending. One
+/// that's too old, or whose file is gone or changed, fails (and the
+/// receiver is told, so it drops its part); the rest are offered again.
+fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
+    use std::sync::atomic::Ordering;
+    if ctx.files.out_restored.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let saved: Vec<SavedOutgoing> = ctx
+        .platform
+        .kv_get(OUTGOING_KEY)
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let me = me(ctx);
+    let now = now_secs();
+    for s in saved {
+        if !is_transfer_id(&s.id) || ctx.files.out.lock().contains_key(&s.id) {
+            continue;
+        }
+        let why = if now.saturating_sub(s.created) >= RESUME_FOR.as_secs() {
+            Some("the device wasn't reachable")
+        } else if !unchanged(&s.path, s.size, s.mtime) {
+            Some("the file changed or is gone")
+        } else {
+            None
+        };
+        if let Some(why) = why {
+            failed(ctx, &s.id, &s.node, &s.name, false, why);
+            send_cancel(ctx, &s.node, &s.id);
+            continue;
+        }
+        let t = Outgoing {
+            node: s.node.clone(),
+            path: s.path,
+            name: s.name.clone(),
+            size: s.size,
+            sha: s.sha,
+            acked: 0,
+            running: false,
+            started: s.started,
+            // Offered again at once: started ones by `resume_paused`, the
+            // others just below.
+            offered_at: (!s.started).then(Instant::now),
+            backoff: FIRST_BACKOFF,
+            progress_at: None,
+            last_progress: Instant::now(),
+            rewind: false,
+            rewound_at: None,
+            paused_since: s.started.then(Instant::now),
+            extra: s.extra,
+            mtime: s.mtime,
+            created: s.created,
+            persist: true,
+            resumed: false,
+        };
+        let offer = (!s.started).then(|| offer_msg(&me, &s.id, &t));
+        ctx.files.out.lock().insert(s.id.clone(), t);
+        ctx.sink.emit(CoreEvent::FileProgress {
+            id: s.id.clone(),
+            node_id: s.node.clone(),
+            name: s.name,
+            done: 0,
+            total: s.size,
+            incoming: false,
+            resumed: false,
+        });
+        if let Some(offer) = offer {
+            crate::engine::send_reliably(ctx, &s.node, &offer.to_string());
+        }
+    }
+}
+
+/// The receiver's note next to partial file `part`.
+fn meta_path(part: &Path) -> PathBuf {
+    part.with_extension("json")
+}
+
+fn remove_partial(part: &Path) {
+    let _ = std::fs::remove_file(part);
+    let _ = std::fs::remove_file(meta_path(part));
+}
+
+/// Remove the partial file of transfer `id` that this run never took up
+/// (it's from before a restart), if it's from `from` (any device for
+/// `None`). Returns the device it was from.
+fn drop_stale_partial<P: Platform>(
+    ctx: &NetCtx<P>,
+    id: &str,
+    from: Option<&str>,
+) -> Option<String> {
+    if !is_transfer_id(id) {
+        return None;
+    }
+    let dir = ctx.files.download_dir.lock().clone()?;
+    let part = dir.join(PARTIAL_DIR).join(format!("{id}.part"));
+    let note: PartMeta = std::fs::read_to_string(meta_path(&part))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())?;
+    if from.is_some_and(|f| f != note.from) {
+        return None;
+    }
+    remove_partial(&part);
+    Some(note.from)
+}
+
+/// Drop partial files (and their notes) nobody has fed for
+/// `INCOMING_IDLE`: from transfers this run never heard of again.
+fn sweep_partials<P: Platform>(ctx: &NetCtx<P>) {
+    let Some(dir) = ctx.files.download_dir.lock().clone() else {
+        return;
+    };
+    {
+        let mut at = ctx.files.swept_at.lock();
+        if at.is_some_and(|t| t.elapsed() < SWEEP_EVERY) {
+            return;
+        }
+        *at = Some(Instant::now());
+    }
+    let Ok(entries) = std::fs::read_dir(dir.join(PARTIAL_DIR)) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        let id = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if ctx.files.inc.lock().contains_key(&id) {
+            continue;
+        }
+        // A note is as old as its partial file (written to last).
+        let part = path.with_extension("part");
+        let fed = if part.exists() { part } else { path.clone() };
+        let old = std::fs::metadata(&fed)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|m| m.elapsed().ok())
+            .is_some_and(|age| age >= INCOMING_IDLE);
+        if old {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+}
+
 // --- sending ---------------------------------------------------------------
 
 /// Start sending `path` to `node`: hashes it (off the caller's thread) and
@@ -345,6 +672,7 @@ pub fn start_with_extra<P: Platform>(
     let id = id.to_string();
     let name = safe_name(&path.file_name().unwrap_or_default().to_string_lossy());
     let size = meta.len();
+    let mtime = mtime_of(&meta);
     ctx.sink.emit(CoreEvent::FileProgress {
         id: id.clone(),
         node_id: node.to_string(),
@@ -352,6 +680,7 @@ pub fn start_with_extra<P: Platform>(
         done: 0,
         total: size,
         incoming: false,
+        resumed: false,
     });
     let (ctx, node, path, id2) = (
         ctx.clone(),
@@ -366,32 +695,34 @@ pub fn start_with_extra<P: Platform>(
                 return failed(&ctx, &id2, &node, &name, false, &format!("can't read: {e}"));
             }
         };
-        let mut msg = json!({
-            "type": "file_offer", "from": me(&ctx), "id": id2,
-            "name": name, "size": size, "sha256": sha,
-        });
-        add_extra(&mut msg, extra.as_ref());
-        ctx.files.out.lock().insert(
-            id2.clone(),
-            Outgoing {
-                node: node.clone(),
-                path,
-                name,
-                size,
-                sha,
-                acked: 0,
-                running: false,
-                started: false,
-                offered_at: Some(Instant::now()),
-                backoff: FIRST_BACKOFF,
-                progress_at: None,
-                last_progress: Instant::now(),
-                rewind: false,
-                rewound_at: None,
-                paused_since: None,
-                extra,
-            },
-        );
+        let persist = persists(extra.as_ref());
+        let t = Outgoing {
+            node: node.clone(),
+            path,
+            name,
+            size,
+            sha,
+            acked: 0,
+            running: false,
+            started: false,
+            offered_at: Some(Instant::now()),
+            backoff: FIRST_BACKOFF,
+            progress_at: None,
+            last_progress: Instant::now(),
+            rewind: false,
+            rewound_at: None,
+            paused_since: None,
+            extra,
+            mtime,
+            created: now_secs(),
+            persist,
+            resumed: false,
+        };
+        let msg = offer_msg(&me(&ctx), &id2, &t);
+        ctx.files.out.lock().insert(id2.clone(), t);
+        if persist {
+            save_outgoing(&ctx);
+        }
         crate::engine::send_reliably(&ctx, &node, &msg.to_string());
     });
     Ok(id)
@@ -444,14 +775,19 @@ pub fn outgoing_progress<P: Platform>(ctx: &NetCtx<P>, id: &str) -> Option<(u64,
 /// acked, the link fails, or the transfer is gone.
 fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
     let files = &ctx.files;
-    let Some((node, path, size)) = files
+    let Some((node, path, size, mtime)) = files
         .out
         .lock()
         .get(&id)
-        .map(|t| (t.node.clone(), t.path.clone(), t.size))
+        .map(|t| (t.node.clone(), t.path.clone(), t.size, t.mtime))
     else {
         return;
     };
+    // The offer's hash (and the receiver's partial file) is of the file as
+    // it was: a changed one can't go on.
+    if !unchanged(&path, size, mtime) {
+        return give_up(&ctx, &id, CHANGED);
+    }
     // Paused: offered again on the next link (see `resume_paused`).
     let pause = |t: &mut Outgoing| {
         t.running = false;
@@ -528,12 +864,10 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
         return;
     };
     ctx.files.acked.notify_all();
+    save_outgoing(ctx);
     failed(ctx, id, &t.node, &t.name, false, why);
-    let _ = send(
-        ctx,
-        &t.node,
-        &json!({ "type": "file_cancel", "from": me(ctx), "id": id }),
-    );
+    // Even with no link now: the receiver drops its partial file.
+    send_cancel(ctx, &t.node, id);
 }
 
 /// Offer paused transfers again (called on a timer); the receiver answers
@@ -541,9 +875,11 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
 /// live link; without one, after a backoff, since each try may wake it by
 /// push.
 pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
+    restore_outgoing(ctx);
     let me = me(ctx);
     let mut offers = Vec::new();
     let mut expired = Vec::new();
+    let mut changed = Vec::new();
     {
         let mut out = ctx.files.out.lock();
         // Never accepted, and the queued offer has expired from the outbox.
@@ -566,32 +902,38 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
             if t.offered_at.is_some_and(|at| at.elapsed() < every) {
                 continue;
             }
+            // Only the file that was offered is resumed.
+            if !unchanged(&t.path, t.size, t.mtime) {
+                changed.push(id.clone());
+                continue;
+            }
             t.offered_at = Some(Instant::now());
             if !linked {
                 t.backoff = (t.backoff * 2).min(MAX_BACKOFF);
             }
-            let mut msg = json!({
-                "type": "file_offer", "from": me, "id": id,
-                "name": t.name, "size": t.size, "sha256": t.sha,
-            });
-            add_extra(&mut msg, t.extra.as_ref());
-            offers.push((t.node.clone(), msg));
+            offers.push((t.node.clone(), offer_msg(&me, id, t)));
         }
     }
     for (id, node, name) in expired {
         failed(ctx, &id, &node, &name, false, "the device wasn't reachable");
+    }
+    for id in changed {
+        give_up(ctx, &id, CHANGED);
     }
     let stuck: Vec<String> = ctx
         .files
         .out
         .lock()
         .iter()
-        .filter(|(_, t)| !t.running && t.paused_since.is_some_and(|p| p.elapsed() >= GIVE_UP_AFTER))
+        .filter(|(_, t)| !t.running && t.paused_since.is_some_and(|p| p.elapsed() >= RESUME_FOR))
         .map(|(id, _)| id.clone())
         .collect();
     for id in stuck {
         give_up(ctx, &id, "the device wasn't reachable");
     }
+    save_outgoing(ctx);
+    sweep_partials(ctx);
+    nudge_cancels(ctx);
     // Partial incoming files nobody feeds any more.
     let idle: Vec<Incoming> = {
         let mut inc = ctx.files.inc.lock();
@@ -603,7 +945,7 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
         ids.iter().filter_map(|id| inc.remove(id)).collect()
     };
     for t in idle {
-        let _ = std::fs::remove_file(&t.part);
+        remove_partial(&t.part);
     }
     // Reliably, linked or not: the outbox resends it on the next link,
     // connects (waking the device by push) when there's none, and notices
@@ -622,25 +964,31 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
         None => ctx.files.inc.lock().remove(id),
     };
     let peer = if let Some(t) = outgoing {
+        save_outgoing(ctx);
         failed(ctx, id, &t.node, &t.name, false, "cancelled");
         Some(t.node)
     } else if let Some(t) = incoming {
-        let _ = std::fs::remove_file(&t.part);
+        drop(t.file);
+        remove_partial(&t.part);
         // A re-offer still on its way is answered "cancelled", not restarted.
         ctx.files
             .finished(ctx, id, Some("cancelled on the other device"));
         failed(ctx, id, &t.from, &t.name, true, "cancelled");
         Some(t.from)
     } else {
-        None
+        // A partial file from before a restart, not offered again yet.
+        let from = drop_stale_partial(ctx, id, None);
+        if from.is_some() {
+            ctx.files
+                .finished(ctx, id, Some("cancelled on the other device"));
+        }
+        from
     };
     ctx.files.acked.notify_all();
+    // Even with no link now: a paused transfer's other side drops its
+    // partial file (or stops offering it) once it hears.
     if let Some(node) = peer {
-        let _ = send(
-            ctx,
-            &node,
-            &json!({ "type": "file_cancel", "from": me(ctx), "id": id }),
-        );
+        send_cancel(ctx, &node, id);
     }
 }
 
@@ -693,12 +1041,39 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         return reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": true }));
     }
 
-    let known = ctx.files.inc.lock().get_mut(&id).map(|t| {
-        t.last_seen = Instant::now();
-        t.len
-    });
-    let offset = if let Some(len) = known {
-        len
+    let legacy = ctx
+        .files
+        .legacy_receiver
+        .load(std::sync::atomic::Ordering::Relaxed);
+    let meta = PartMeta {
+        from: from.to_string(),
+        name: name.clone(),
+        size,
+        sha256: sha.clone(),
+    };
+    // Already going: the same file carries on where it is; a different
+    // one under this id starts over (from another device: ignored).
+    let known = {
+        let mut inc = ctx.files.inc.lock();
+        match inc.get_mut(&id) {
+            Some(t) if t.from != from => return,
+            Some(t) if !legacy && t.size == size && t.sha == sha => {
+                t.last_seen = Instant::now();
+                t.resumed |= t.len > 0;
+                Some((t.len, t.resumed))
+            }
+            Some(_) => {
+                if let Some(t) = inc.remove(&id) {
+                    drop(t.file);
+                    remove_partial(&t.part);
+                }
+                None
+            }
+            None => None,
+        }
+    };
+    let (offset, resumed) = if let Some(known) = known {
+        known
     } else {
         let partial = dir.join(PARTIAL_DIR);
         let part = partial.join(format!("{id}.part"));
@@ -712,31 +1087,43 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         let Ok(file) = opened else {
             return reject("can't write to the downloads folder");
         };
-        // A partial file from before (an earlier link, or a restart):
-        // resume after it, hashing what's already there. Outside the lock:
-        // a big partial file takes a while, and chunks of other transfers
-        // shouldn't wait for it.
+        // A partial file from before (an earlier link, or a restart) of
+        // this very file (its note says so): resume after it, hashing
+        // what's already there. Outside the lock: a big partial file takes
+        // a while, and chunks of other transfers shouldn't wait for it.
+        let note = meta_path(&part);
+        let same = !legacy
+            && std::fs::read_to_string(&note)
+                .ok()
+                .and_then(|s| serde_json::from_str::<PartMeta>(&s).ok())
+                .is_some_and(|m| m == meta);
         let mut hasher = Sha256::new();
         let mut len = 0u64;
-        if let Ok(mut f) = File::open(&part) {
-            let mut buf = vec![0u8; CHUNK];
-            while let Ok(n) = f.read(&mut buf) {
-                if n == 0 {
-                    break;
+        if same {
+            if let Ok(mut f) = File::open(&part) {
+                let mut buf = vec![0u8; CHUNK];
+                while let Ok(n) = f.read(&mut buf) {
+                    if n == 0 {
+                        break;
+                    }
+                    hasher.update(&buf[..n]);
+                    len += n as u64;
                 }
-                hasher.update(&buf[..n]);
-                len += n as u64;
             }
         }
-        if len > size {
+        if !same || len > size {
             let _ = file.set_len(0);
             hasher = Sha256::new();
             len = 0;
+            if !legacy {
+                let note_json = serde_json::to_string(&meta).unwrap_or_default();
+                let _ = std::fs::write(&note, note_json);
+            }
         }
         let mut inc = ctx.files.inc.lock();
         // Another copy of the offer may have got here first.
         if let Some(t) = inc.get(&id) {
-            t.len
+            (t.len, t.resumed)
         } else {
             inc.insert(
                 id.clone(),
@@ -753,9 +1140,10 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                     clipboard: msg.json("clipboard").as_bool().unwrap_or(false),
                     progress_at: None,
                     last_seen: Instant::now(),
+                    resumed: len > 0,
                 },
             );
-            len
+            (len, len > 0)
         }
     };
     ctx.sink.emit(CoreEvent::FileProgress {
@@ -765,8 +1153,14 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         done: offset,
         total: size,
         incoming: true,
+        resumed,
     });
-    reply(json!({ "type": "file_accept", "from": me(ctx), "id": id, "offset": offset }));
+    if legacy {
+        // As a device from before resuming answers: no offset.
+        reply(json!({ "type": "file_accept", "from": me(ctx), "id": id }));
+    } else {
+        reply(json!({ "type": "file_accept", "from": me(ctx), "id": id, "offset": offset }));
+    }
     if offset == size {
         finish(ctx, &id);
     }
@@ -796,7 +1190,7 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             drop(inc);
             if let Some(t) = t {
                 drop(t.file);
-                let _ = std::fs::remove_file(&t.part);
+                remove_partial(&t.part);
                 let why = "couldn't save the file (is the storage full?)";
                 ctx.files.finished(ctx, &id, Some(why));
                 failed(ctx, &id, from, &t.name, true, why);
@@ -812,7 +1206,7 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         t.len += data.len() as u64;
     }
     // Ack what we have; a gap makes the sender resend from there.
-    let (len, size, name) = (t.len, t.size, t.name.clone());
+    let (len, size, name, resumed) = (t.len, t.size, t.name.clone(), t.resumed);
     let show = t
         .progress_at
         .is_none_or(|at| at.elapsed() >= PROGRESS_EVERY)
@@ -834,6 +1228,7 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             done: len,
             total: size,
             incoming: true,
+            resumed,
         });
     }
     if len == size {
@@ -856,6 +1251,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
         None
     };
     let moved = dest.is_some();
+    let _ = std::fs::remove_file(meta_path(&t.part));
     let me = me(ctx);
     let why = if moved {
         None
@@ -881,7 +1277,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
             &json!({ "type": "file_done", "from": me, "id": id, "ok": true }),
         );
     } else {
-        let _ = std::fs::remove_file(&t.part);
+        remove_partial(&t.part);
         let why = why.unwrap_or_default();
         failed(ctx, id, &t.from, &t.name, true, why);
         let _ = send(
@@ -923,17 +1319,36 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 if t.node != from {
                     return;
                 }
+                // Kept as started at once: a restart now re-offers it.
+                let first = !t.started && t.persist;
                 t.started = true;
                 t.backoff = FIRST_BACKOFF;
                 t.paused_since = None;
                 t.last_progress = Instant::now();
                 t.acked = offset.min(t.size);
+                t.resumed |= t.acked > 0;
                 files.acked.notify_all();
+                // Where it (re)starts: from the receiver's offset.
+                t.progress_at = Some(Instant::now());
+                let ev = CoreEvent::FileProgress {
+                    id: id.clone(),
+                    node_id: from.clone(),
+                    name: t.name.clone(),
+                    done: t.acked,
+                    total: t.size,
+                    incoming: false,
+                    resumed: t.resumed,
+                };
                 if !t.running && t.acked < t.size {
                     t.running = true;
                     let (ctx, id, at) = (ctx.clone(), id.clone(), t.acked);
                     std::thread::spawn(move || run_sender(ctx, id, at));
                 }
+                drop(out);
+                if first {
+                    save_outgoing(ctx);
+                }
+                ctx.sink.emit(ev);
             }
             "file_ack" => {
                 let upto = msg.json("upto").as_u64().unwrap_or(0);
@@ -969,6 +1384,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                         done: t.acked,
                         total: t.size,
                         incoming: false,
+                        resumed: t.resumed,
                     };
                     drop(out);
                     ctx.sink.emit(ev);
@@ -982,6 +1398,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 let Some(t) = out.remove(&id) else { return };
                 drop(out);
                 files.acked.notify_all();
+                save_outgoing(ctx);
                 if msg.json("ok").as_bool() == Some(true) {
                     ctx.sink.emit(CoreEvent::FileSent {
                         id: id.clone(),
@@ -1004,6 +1421,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                 };
                 if let Some(t) = gone_out {
                     files.acked.notify_all();
+                    save_outgoing(ctx);
                     failed(
                         ctx,
                         &id,
@@ -1021,7 +1439,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     }
                 };
                 if let Some(t) = gone_in {
-                    let _ = std::fs::remove_file(&t.part);
+                    remove_partial(&t.part);
                     ctx.files
                         .finished(ctx, &id, Some("cancelled on the other device"));
                     failed(
@@ -1032,6 +1450,9 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                         true,
                         "cancelled on the other device",
                     );
+                } else {
+                    // A partial file from before a restart here.
+                    drop_stale_partial(ctx, &id, Some(&from));
                 }
             }
             _ => {}

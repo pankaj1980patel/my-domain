@@ -86,6 +86,7 @@ impl<P: Platform> Engine<P> {
             done: 0,
             total: 0,
             incoming: true,
+            resumed: false,
         });
         Ok(id)
     }

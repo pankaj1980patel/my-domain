@@ -227,6 +227,17 @@ impl<P: Platform> Engine<P> {
         crate::features::files::cancel(&self.ctx, id);
     }
 
+    /// Tests only: answer file offers like a device from before transfers
+    /// could resume (no offset in the accept, any partial file thrown
+    /// away), to check such a peer still gets whole files.
+    #[doc(hidden)]
+    pub fn test_legacy_file_receiver(&self, on: bool) {
+        self.ctx
+            .files
+            .legacy_receiver
+            .store(on, std::sync::atomic::Ordering::Relaxed);
+    }
+
     // --- browsing another device's shared folders (see features::browse) ---
 
     /// The folders other devices may browse and download from, each shown
@@ -313,6 +324,7 @@ impl<P: Platform> Engine<P> {
             done: 0,
             total: 0,
             incoming: true,
+            resumed: false,
         });
         Ok(id)
     }
