@@ -208,6 +208,11 @@ export const commands = {
 	 *  the transport, "queued" or "here".
 	 */
 	runScheduleNow: (id: string) => typedError<string, string>(__TAURI_INVOKE("run_schedule_now", { id })),
+	/**
+	 *  This computer's own id and actions. Async, off the main thread:
+	 *  reading the volume runs a command.
+	 */
+	localActions: () => typedError<LocalActions, string>(__TAURI_INVOKE("local_actions")),
 	/**  Your devices in Do Not Disturb right now (node ids). */
 	dndDevices: () => __TAURI_INVOKE<string[]>("dnd_devices"),
 	/**  Whether your phone may move the pointer and type here. */
@@ -374,6 +379,15 @@ export type LinkStats_Serialize = {
 	loss_pct: number | null,
 	quality: Quality,
 	label: string,
+};
+
+/**
+ *  This computer's node id and the actions it can run on itself, for its
+ *  own schedules (Settings).
+ */
+export type LocalActions = {
+	node: string,
+	actions: string[],
 };
 
 /**  How our NAT maps a socket's outgoing traffic, as far as hole punching cares. */

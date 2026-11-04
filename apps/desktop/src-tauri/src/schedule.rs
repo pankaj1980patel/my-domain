@@ -1,6 +1,7 @@
 // Scheduled actions: run an action on one of your devices at a set time, e.g.
 // "every weekday at 08:00, set my phone's ringer to normal" or "once at 18:30,
-// ring my phone". Set up on a device's page (Schedules tile).
+// ring my phone". Set up on a device's page (Schedules tile), or for this
+// computer in Settings ("lock this computer at 23:00").
 //
 //  - kept in `<app config dir>/schedules.json` (key `schedules`, a JSON list);
 //  - the time is this computer's local time ("HH:MM"), on the chosen days
@@ -319,6 +320,27 @@ pub fn spawn(app: AppHandle) {
         .ok();
 }
 
+/// Where a schedule goes.
+#[derive(Debug, PartialEq)]
+enum Route {
+    /// This computer (`me`): run it here.
+    Here,
+    /// Another device: ring it.
+    Ring,
+    /// Another device: send it the action.
+    Send,
+}
+
+fn route(s: &Schedule, me: &str) -> Route {
+    if s.node == me {
+        Route::Here
+    } else if s.action == "ring" {
+        Route::Ring
+    } else {
+        Route::Send
+    }
+}
+
 /// Run one now, the way the device page's buttons do. Returns the
 /// transport, "queued" (sent once the device is reachable) or "here" (this
 /// computer).
@@ -326,15 +348,23 @@ fn run(app: &AppHandle, s: &Schedule) -> Result<String, CoreError> {
     let engine = app
         .try_state::<Eng>()
         .ok_or_else(|| CoreError::Other("not started yet".into()))?;
-    if s.node == engine.identity().node_id {
-        let args = serde_json::from_str(&s.args).unwrap_or(serde_json::Value::Null);
-        crate::device::on_action(app, &s.action, &args);
-        return Ok("here".into());
-    }
-    if s.action == "ring" {
-        engine.ring(&s.node)
-    } else {
-        engine.run_action(&s.node, &s.action, &s.args)
+    match route(s, &engine.identity().node_id) {
+        Route::Here => {
+            // `on_action` skips what it doesn't know: say so instead.
+            if !crate::device::local_actions(app).contains(&s.action) {
+                return Err(CoreError::InvalidInput(
+                    "this computer can\u{2019}t do that right now".into(),
+                ));
+            }
+            let args = serde_json::from_str(&s.args).unwrap_or(serde_json::Value::Null);
+            // Off this thread, as a sibling's action is: "Run now" comes
+            // from the UI, and locking can take a moment.
+            let (app, action) = (app.clone(), s.action.clone());
+            std::thread::spawn(move || crate::device::on_action(&app, &action, &args));
+            Ok("here".into())
+        }
+        Route::Ring => engine.ring(&s.node),
+        Route::Send => engine.run_action(&s.node, &s.action, &s.args),
     }
 }
 
@@ -419,6 +449,28 @@ pub fn run_schedule_now(
 ) -> Result<String, CoreError> {
     let s = state.get(&id).ok_or_else(gone)?;
     run(&app, &s)
+}
+
+/// This computer's node id and the actions it can run on itself, for its
+/// own schedules (Settings).
+#[derive(serde::Serialize, specta::Type)]
+pub struct LocalActions {
+    pub node: String,
+    pub actions: Vec<String>,
+}
+
+/// This computer's own id and actions. Async, off the main thread:
+/// reading the volume runs a command.
+#[tauri::command]
+#[specta::specta]
+pub async fn local_actions(app: AppHandle) -> Result<LocalActions, CoreError> {
+    let engine = app
+        .try_state::<Eng>()
+        .ok_or_else(|| CoreError::Other("not started yet".into()))?;
+    Ok(LocalActions {
+        node: engine.identity().node_id,
+        actions: crate::device::local_actions(&app),
+    })
 }
 
 #[cfg(test)]
@@ -586,6 +638,23 @@ mod tests {
         let s = sched("10:00", &[]);
         let (from, to) = window(at(2, 8, 0, 0), 0, at(2, 14, 0, 0), 60);
         assert!(due(&s, from, to).is_none());
+    }
+
+    #[test]
+    fn this_computers_own_run_here() {
+        // Locking this computer runs here (`device::on_action`), not through
+        // the core, which only sends to other devices.
+        let mut s = sched("23:00", &[]);
+        s.node = "me".into();
+        s.action = "lock".into();
+        s.args = "{}".into();
+        assert_eq!(route(&s, "me"), Route::Here);
+        s.action = "ring".into();
+        assert_eq!(route(&s, "me"), Route::Here);
+        s.node = "phone".into();
+        assert_eq!(route(&s, "me"), Route::Ring);
+        s.action = "lock".into();
+        assert_eq!(route(&s, "me"), Route::Send);
     }
 
     #[test]

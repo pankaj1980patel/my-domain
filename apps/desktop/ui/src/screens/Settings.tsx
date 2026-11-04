@@ -2,13 +2,29 @@
 // Developer screen.
 
 import { createSignal, For, onMount, Show } from "solid-js";
-import { commands, type AwayLock, type BatteryAlertSettings_Serialize as BatteryAlertSettings } from "../bindings";
+import {
+  commands,
+  type AwayLock,
+  type BatteryAlertSettings_Serialize as BatteryAlertSettings,
+  type LocalActions,
+} from "../bindings";
 import { setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
 import { ShortcutSetting } from "../components/ShortcutSetting";
+import { ScheduleList, type Preset } from "../components/ScheduleList";
 import { t, tRich } from "../i18n";
+
+/** What a schedule can do on this computer (only those it takes are shown). */
+const LOCAL_PRESETS: Preset[] = [
+  { id: "lock", action: "lock", args: {}, label: "schedule.preset.lockComputer" },
+  { id: "mute", action: "mute", args: { on: true }, label: "schedule.preset.mute" },
+  { id: "unmute", action: "mute", args: { on: false }, label: "schedule.preset.unmute" },
+  // Media keys only toggle, so it says so.
+  { id: "media", action: "media", args: { key: "play_pause" }, label: "schedule.preset.media" },
+  { id: "awake_off", action: "keep_awake", args: { minutes: 0 }, label: "schedule.preset.awakeOffComputer" },
+];
 
 export default function Settings(props: { onDeveloper: () => void }) {
   const [taps, setTaps] = createSignal(0);
@@ -23,7 +39,9 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [canLocate, setCanLocate] = createSignal(false);
   const [awayLock, setAwayLock] = createSignal<AwayLock>({ on: false, minutes: 5, can_lock: false });
   const [battery, setBattery] = createSignal<BatteryAlertSettings>({ enabled: true, low: 15, charged: 0 });
+  const [local, setLocal] = createSignal<LocalActions>();
   onMount(async () => {
+    unwrap(commands.localActions()).then(setLocal, () => {});
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
     setRemoteInput(await commands.remoteInputAllowed());
@@ -187,6 +205,21 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </Show>
         <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
         <ShortcutSetting />
+      </article>
+
+      <article class="tile">
+        <h2>{t("schedule.local.title")}</h2>
+        <p class="muted small">{t("schedule.local.hint")}</p>
+        <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
+          {(me) => (
+            <ScheduleList
+              node={me().node}
+              name={t("schedule.local.name")}
+              presets={LOCAL_PRESETS}
+              actions={me().actions}
+            />
+          )}
+        </Show>
       </article>
 
       <article class="tile">

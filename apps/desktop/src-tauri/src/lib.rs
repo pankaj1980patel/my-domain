@@ -1237,6 +1237,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         schedule::update_schedule,
         schedule::delete_schedule,
         schedule::run_schedule_now,
+        schedule::local_actions,
         dnd_devices,
         remote_input_allowed,
         set_remote_input_allowed,

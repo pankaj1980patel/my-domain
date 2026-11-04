@@ -47,6 +47,18 @@ fn push_status(app: &AppHandle) {
         status["storage"] = serde_json::json!({ "free": free, "total": total });
     }
     crate::sysinfo::extend(&mut status);
+    let actions = actions(app, &mut status);
+    if !actions.is_empty() {
+        status["actions"] = actions.into();
+    }
+    if let Some(engine) = app.try_state::<Eng>() {
+        engine.set_device_status(&status.to_string());
+    }
+}
+
+/// The actions this computer takes right now, as its status lists them
+/// (what some of them need, or are missing, goes into `status` too).
+fn actions(app: &AppHandle, status: &mut serde_json::Value) -> Vec<&'static str> {
     let mut actions = Vec::new();
     if let Some((volume, muted)) = sound::read() {
         status["volume"] = volume.into();
@@ -91,7 +103,7 @@ fn push_status(app: &AppHandle) {
     // Settings decides whether it shares; see location.rs).
     if crate::location::available() {
         actions.push("locate");
-        crate::location::extend(app, &mut status);
+        crate::location::extend(app, status);
     }
     if awake::available() {
         actions.push("keep_awake");
@@ -99,12 +111,17 @@ fn push_status(app: &AppHandle) {
             status["awake_until"] = until.into();
         }
     }
-    if !actions.is_empty() {
-        status["actions"] = actions.into();
-    }
-    if let Some(engine) = app.try_state::<Eng>() {
-        engine.set_device_status(&status.to_string());
-    }
+    actions
+}
+
+/// The actions this computer can run on itself now (what a schedule for
+/// this computer may use).
+pub fn local_actions(app: &AppHandle) -> Vec<String> {
+    let mut scratch = serde_json::json!({});
+    actions(app, &mut scratch)
+        .into_iter()
+        .map(String::from)
+        .collect()
 }
 
 /// Tell the core what's playing (Linux: any MPRIS player; macOS: Spotify
