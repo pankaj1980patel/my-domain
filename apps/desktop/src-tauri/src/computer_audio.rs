@@ -163,7 +163,8 @@ impl Encoder {
 /// Samples from buffers as captured: one buffer of interleaved channels,
 /// or one buffer per channel (planar). Each is (channels in it, bytes);
 /// samples are f32 (`float`) or 16-bit, native-endian. Returns them
-/// interleaved, with the channel count.
+/// interleaved, with the channel count. Used by the macOS capture (and tests).
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 pub fn interleave(buffers: &[(usize, &[u8])], float: bool) -> Option<(Vec<f32>, usize)> {
     let size = if float { 4 } else { 2 };
     let read = |b: &[u8]| -> f32 {
@@ -661,6 +662,8 @@ mod loopback {
 
     use super::Feed;
 
+    /// Only Windows captures from an output device.
+    #[cfg_attr(not(windows), allow(dead_code))]
     const NO_OUTPUT: &str = "This computer has no sound output to capture.";
 
     /// Capture what this computer plays and feed it on.
