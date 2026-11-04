@@ -43,6 +43,8 @@ fn a_device_reports_its_status() {
     assert_eq!(status["bluetooth"], false);
     assert_eq!(status["ram"]["total"], 8000);
     assert!(status["platform"].is_string());
+    // Nothing shared yet, but it says it can be browsed.
+    assert_eq!(status["shared_folders"], 0);
 }
 
 #[test]

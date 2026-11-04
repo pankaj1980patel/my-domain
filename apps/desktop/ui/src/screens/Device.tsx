@@ -42,6 +42,7 @@ import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import PhotosTile from "./device/PhotosTile";
+import BrowseTile from "./device/BrowseTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -117,6 +118,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <NotificationsTile node={props.node} />
             <ClipboardTile node={props.node} />
             <FilesTile node={props.node} />
+            <BrowseTile node={props.node} />
             <ControlTile node={props.node} />
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />

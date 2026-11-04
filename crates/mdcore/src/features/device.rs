@@ -16,6 +16,10 @@
 //! its status (`"actions": [...]`), so the asking side only offers buttons
 //! that will work. Names are short lowercase words (`[a-z0-9_.]`, up to 40
 //! characters); anything else is dropped.
+//!
+//! The core adds to every status reply: `platform`, `now_playing` (if
+//! something plays) and `shared_folders`, how many folders this device lets
+//! the others browse (`features::browse`; absent from older versions).
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -53,6 +57,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     status = serde_json::json!({});
                 }
                 status["platform"] = ctx.platform.platform_kind().into();
+                status["shared_folders"] = ctx.files.shared.lock().len().into();
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;

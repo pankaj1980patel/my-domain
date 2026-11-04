@@ -98,6 +98,8 @@ export type DeviceStatus = {
   writeSettings?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
+  /** How many folders it lets you browse (absent: it can't be browsed). */
+  sharedFolders?: number;
   ts: number;
 };
 
@@ -386,6 +388,7 @@ export async function startEvents() {
         screenTimeoutS: typeof status?.screen_timeout_s === "number" ? Math.round(status.screen_timeout_s) : undefined,
         autoRotate: typeof status?.auto_rotate === "boolean" ? status.auto_rotate : undefined,
         writeSettings: typeof status?.write_settings === "boolean" ? status.write_settings : undefined,
+        sharedFolders: typeof status?.shared_folders === "number" ? status.shared_folders : undefined,
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],
