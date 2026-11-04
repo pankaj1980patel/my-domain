@@ -39,6 +39,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
+import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
 import com.mydomain.android.core.friendlyError
@@ -128,6 +129,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                 item { TouchpadTile(node, st) }
             }
             item { ClipboardTile(node) }
+            // Text sent to it and from it as clipboard, kept on this phone.
+            if (ClipLog.enabled) item { ClipHistoryTile(node, niceName(peer.name)) }
             item { NotifyTile() }
             item { AppsTile(node) }
         }

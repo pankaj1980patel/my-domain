@@ -34,6 +34,7 @@ import com.mydomain.android.PhoneHelper
 import com.mydomain.android.PhoneLocation
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
+import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.niceName
@@ -61,6 +62,15 @@ fun ShareCodesSwitch() {
         prefs.edit().putBoolean(NotifListener.PREF_SHARE_CODES, it).apply()
     }
     Muted(stringResource(R.string.settings_share_codes_hint))
+}
+
+/** "Keep a clipboard history" ([ClipLog]): on by default; turning it off
+ *  forgets every clip kept. */
+@Composable
+fun ClipHistorySwitch() {
+    val ctx = LocalContext.current
+    SwitchRow(stringResource(R.string.settings_clip_history), ClipLog.enabled) { ClipLog.setEnabled(ctx, it) }
+    Muted(stringResource(R.string.settings_clip_history_hint))
 }
 
 /** Photo access, the photo backup (on/off, which computer, charging only)
@@ -282,6 +292,7 @@ fun SettingsScreen(prefs: SharedPreferences, onDeveloper: () -> Unit, onAutomati
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
             )
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
+            ClipHistorySwitch()
             ShareCodesSwitch()
         }
 

@@ -222,6 +222,7 @@ object Core {
     fun init(context: Context) {
         app = context.applicationContext
         BatteryLog.load(app)
+        ClipLog.load(app)
     }
 
     fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
@@ -485,9 +486,12 @@ object Core {
             }
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
-            "text_shared" -> addActivity(
-                str(if (o.optString("mode") == "clipboard") R.string.act_text_copied else R.string.act_text_from, peerName(o.optString("from")), o.optString("text").take(200)),
-            )
+            "text_shared" -> {
+                if (o.optString("mode") == "clipboard") ClipLog.received(o.optString("from"), o.optString("text"))
+                addActivity(
+                    str(if (o.optString("mode") == "clipboard") R.string.act_text_copied else R.string.act_text_from, peerName(o.optString("from")), o.optString("text").take(200)),
+                )
+            }
             "folder_listing" -> {
                 val arr = o.optJSONArray("entries") ?: JSONArray()
                 val entries = (0 until arr.length()).mapNotNull { i ->
@@ -773,8 +777,12 @@ object Core {
 
     /** Send [text] to a device: onto its clipboard ([mode] "clipboard") or
      *  shown there as a notification ("notify"). */
-    suspend fun sendText(node: String, text: String, mode: String = "clipboard"): String =
-        call { it.sendText(node, text, mode) }
+    suspend fun sendText(node: String, text: String, mode: String = "clipboard"): String {
+        val how = call { it.sendText(node, text, mode) }
+        // Sent (or queued): kept in the clipboard history.
+        if (mode == "clipboard") ClipLog.sent(node, text)
+        return how
+    }
 
     /** Text from the share sheet: a lone web link opens on the device, any
      *  other text goes onto its clipboard. */
