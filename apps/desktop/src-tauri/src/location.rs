@@ -125,6 +125,7 @@ pub fn locate(app: &AppHandle, done: impl FnOnce(&AppHandle) + Send + 'static) {
 type Fix = (f64, f64, f64, f64);
 
 /// How long to wait for a fresh position before settling for the last one.
+#[cfg(target_os = "macos")]
 const FIX_WAIT: std::time::Duration = std::time::Duration::from_secs(15);
 
 /// (lat, lon, accuracy in m, unix seconds) from CoreLocation: started on
