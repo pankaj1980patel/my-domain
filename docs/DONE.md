@@ -345,6 +345,16 @@ Built by three agents in parallel (worktrees), merged and built here.
   once), on/off, run now. Checked each minute; a time missed while asleep or
   closed is skipped, not replayed; an unreachable device gets it queued.
   14 unit tests on the timing (DST, midnight, sleep).
+- **Run command** (desktop `commands_run.rs`, Settings "Commands my other
+  devices can run"; `CommandsTile` on desktop and phone): named commands
+  written on the computer; others send only `run {id}` (unknown or off
+  refused); `sh -c` as the user, own process group, killed after 60 s; exit
+  code and the last 2 KB come back as `last_run` in the status, which the
+  caller asks for until it changes; a notification each run. 6 unit tests.
+- **Schedules for this computer** (desktop Settings, shared
+  `components/ScheduleList.tsx`; `local_actions` command): lock, mute,
+  unmute, play/pause, stop keeping awake; an action this computer can't do
+  now is an error, not a silent "Done".
 - **Find my computer** (desktop `location.rs`): the phone's Locate row on
   a computer's page; the Mac answers from CoreLocation, only with
   "Let my phone see where this computer is" on (desktop Settings, off by
