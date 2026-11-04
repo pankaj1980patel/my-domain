@@ -38,6 +38,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.PhoneAudio
 import com.mydomain.android.R
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
@@ -140,6 +141,9 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             }
             // A computer that can show this phone's screen (it says screen_view).
             if (Core.deviceStatus[node]?.screenView == true) item { ShareScreenTile(node, name) }
+            // A computer that plays this phone's audio (it says audio_sink),
+            // from a phone that can capture it (Android 10 or later).
+            if (Core.deviceStatus[node]?.audioSink == true && PhoneAudio.supported) item { PhoneAudioTile(node, name) }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
             if (ClipLog.enabled) item { ClipHistoryTile(node, name) }

@@ -1035,6 +1035,48 @@ impl MdEngine {
         Ok(self.inner.screen_offer(&node_id, on)?)
     }
 
+    /// This phone sends its audio (`source`: Android 10 or later) or
+    /// plays another's (`sink`). Said in its status (`audio_source`,
+    /// `audio_sink`); off until set.
+    pub fn set_audio_roles(&self, sink: bool, source: bool) {
+        self.inner.set_audio_roles(sink, source);
+    }
+
+    /// Whether a computer said it plays a phone's audio (`audio_sink` in
+    /// its status; kept across restarts).
+    pub fn audio_sink(&self, node_id: String) -> bool {
+        self.inner.audio_caps(&node_id).0
+    }
+
+    /// The computers listening to this phone's audio now: while there are
+    /// any, capture and send with `audio_frame_to`.
+    pub fn audio_listeners(&self) -> Vec<String> {
+        self.inner.audio_listeners()
+    }
+
+    /// Tell a computer this phone plays its audio to it (`on`: it starts
+    /// listening), or stopped (also the answer when you said no). Returns
+    /// the rate to capture at for the link (48000 direct, 24000 relayed; 0
+    /// when stopping). Only to a computer whose status says `audio_sink`;
+    /// fails with no link, or over Bluetooth only.
+    pub fn audio_offer(&self, node_id: String, on: bool) -> MdResult<u32> {
+        Ok(self.inner.audio_offer(&node_id, on)?)
+    }
+
+    /// Send captured audio (s16le PCM, `channels` interleaved, at `rate`
+    /// Hz; at most 100 ms of 48 kHz stereo) to those of `nodes` listening;
+    /// returns how many it went to.
+    pub fn audio_frame_to(
+        &self,
+        pcm: Vec<u8>,
+        rate: u32,
+        channels: u8,
+        nodes: Vec<String>,
+    ) -> MdResult<u32> {
+        let sent = self.inner.audio_frame_to(&pcm, rate, channels, &nodes)?;
+        Ok(u32::try_from(sent).unwrap_or(u32::MAX))
+    }
+
     /// Send a picture copied on this phone (a PNG or JPEG file) to a
     /// device's clipboard. Returns the transfer id.
     pub fn send_clipboard_image(&self, node_id: String, path: String) -> MdResult<String> {

@@ -29,6 +29,7 @@ mod fcm;
 mod location;
 mod notif_history;
 mod notify;
+mod phone_audio;
 mod phone_screen;
 mod quiet;
 mod remote_input;
@@ -288,6 +289,19 @@ impl EventSink for TauriSink {
         // mdcore::events, so this adapter no longer hand-builds JSON per event.
         // Debug builds also log every event, so the device lab can verify
         // delivery from the log without looking at the window.
+        // A phone's audio, many frames a second: played here, never logged
+        // or handed to the window.
+        if let CoreEvent::AudioFrame {
+            from,
+            seq,
+            rate,
+            channels,
+            pcm,
+        } = &ev
+        {
+            phone_audio::on_frame(from, *seq, *rate, *channels, pcm);
+            return;
+        }
         if cfg!(debug_assertions) {
             let payload = ev.ui_payload().to_string();
             let short: String = payload.chars().take(200).collect();
@@ -301,6 +315,9 @@ impl EventSink for TauriSink {
             CoreEvent::PeersUpdated { .. }
             | CoreEvent::PeerConnected { .. }
             | CoreEvent::PeerDisconnected { .. } => {
+                if let CoreEvent::PeerDisconnected { node_id } = &ev {
+                    phone_audio::on_disconnected(&self.app, node_id);
+                }
                 tray::refresh(&self.app);
                 automations::on_link(&self.app);
                 quiet::on_link(&self.app);
@@ -341,6 +358,12 @@ impl EventSink for TauriSink {
             CoreEvent::ScreenOffer { from, on } => {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || phone_screen::on_offer(&app, &from, on));
+            }
+            // A phone plays its audio here (or stopped): off the core's
+            // thread (it opens the output, posts a notice).
+            CoreEvent::AudioOffer { from, on, .. } => {
+                let (app, from, on) = (self.app.clone(), from.clone(), *on);
+                std::thread::spawn(move || phone_audio::on_offer(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
             // OS notifications for what arrives while the window is in the
@@ -1441,6 +1464,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_screen_allowed,
         screen_watch,
         phone_screen::phone_touch,
+        phone_audio::phone_audio_status,
+        phone_audio::phone_audio_outputs,
+        phone_audio::phone_audio_start,
+        phone_audio::phone_audio_stop,
+        phone_audio::phone_audio_set_volume,
+        phone_audio::phone_audio_set_output,
         send_input,
         send_clipboard_image,
         shortcut::send_clipboard,
@@ -1544,6 +1573,9 @@ pub fn run() {
                         }
                     }
                     app.manage(DownloadDir(dir.unwrap_or_default()));
+                    // A phone's audio plays here (`phone_audio.rs`); said
+                    // in this computer's status as `audio_sink`.
+                    engine.set_audio_roles(true, false);
                     app.manage(engine);
                 }
                 Err(e) => {

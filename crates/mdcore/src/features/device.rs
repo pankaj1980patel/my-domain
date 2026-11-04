@@ -66,6 +66,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                         status["uptime_s"] = up.into();
                     }
                 }
+                // Whether it plays or sends a phone's audio.
+                super::audio_share::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;
@@ -82,6 +84,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 let status = msg.json("status");
                 // How to wake it later, while it's asleep and says nothing.
                 super::wake::remember(ctx, &from, &status);
+                // Whether it plays or sends a phone's audio.
+                super::audio_share::remember(ctx, &from, &status);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

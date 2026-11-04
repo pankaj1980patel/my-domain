@@ -227,6 +227,12 @@ class ScreenConsentActivity : Activity() {
             if (node.isNotEmpty()) svc.addViewer(node, offer)
             return finish()
         }
+        // One capture at a time: this phone's audio is playing on a
+        // computer (a second MediaProjection would end it).
+        if (PhoneAudioService.running) {
+            android.widget.Toast.makeText(this, getString(R.string.screen_busy_audio), android.widget.Toast.LENGTH_LONG).show()
+            return finish()
+        }
         val mpm = getSystemService(MediaProjectionManager::class.java) ?: return finish()
         @Suppress("DEPRECATION")
         startActivityForResult(mpm.createScreenCaptureIntent(), ASK)

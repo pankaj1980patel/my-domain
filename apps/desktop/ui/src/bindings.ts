@@ -329,6 +329,24 @@ export const commands = {
 	 *  owner allows control from here (its status says `screen_control`).
 	 */
 	phoneTouch: (nodeId: string, x: number, y: number, x2: number, y2: number, ms: number) => typedError<null, string>(__TAURI_INVOKE("phone_touch", { nodeId, x, y, x2, y2, ms })),
+	/**  Where a phone's audio stands here. */
+	phoneAudioStatus: () => __TAURI_INVOKE<PhoneAudioStatus_Serialize>("phone_audio_status"),
+	/**  This computer's speakers and headphones. */
+	phoneAudioOutputs: () => __TAURI_INVOKE<AudioOutputs_Serialize>("phone_audio_outputs"),
+	/**
+	 *  Ask phone `node_id` to play its audio here (its owner says yes on the
+	 *  phone, then Android asks).
+	 */
+	phoneAudioStart: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("phone_audio_start", { nodeId })),
+	/**  Stop playing the phone's audio here. */
+	phoneAudioStop: () => __TAURI_INVOKE<void>("phone_audio_stop"),
+	/**  Volume, 0 to 100 (kept). */
+	phoneAudioSetVolume: (volume: number) => __TAURI_INVOKE<void>("phone_audio_set_volume", { volume }),
+	/**
+	 *  Play on `output` (`None`: the system default); kept, and switched now
+	 *  if playing.
+	 */
+	phoneAudioSetOutput: (output: string | null) => __TAURI_INVOKE<void>("phone_audio_set_output", { output }),
 	/**
 	 *  Control another computer from this one (its screen tile): `events_json`
 	 *  is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
@@ -418,6 +436,21 @@ export type AudioDevices_Serialize = {
 	inputs: string[],
 	default_output: string | null,
 	default_input: string | null,
+};
+
+/**  This computer's outputs, for the picker. */
+export type AudioOutputs = AudioOutputs_Serialize | AudioOutputs_Deserialize;
+
+/**  This computer's outputs, for the picker. */
+export type AudioOutputs_Deserialize = {
+	outputs: string[],
+	default_output?: string | null,
+};
+
+/**  This computer's outputs, for the picker. */
+export type AudioOutputs_Serialize = {
+	outputs: string[],
+	default_output: string | null,
 };
 
 /**  Where the call's audio is. */
@@ -1038,6 +1071,53 @@ export type Phase = "idle" |
 "incoming" | 
 /**  Dialling, or the other side is ringing. */
 "outgoing" | "active";
+
+/**  Where a phone's audio stands, for its tile. */
+export type PhoneAudioStatus = PhoneAudioStatus_Serialize | PhoneAudioStatus_Deserialize;
+
+/**  Where a phone's audio stands, for its tile. */
+export type PhoneAudioStatus_Deserialize = {
+	/**  The phone playing here (or asked to), if any. */
+	node?: string | null,
+	/**
+	 *  "idle", "waiting" (asked; the phone hasn't started), "playing", or
+	 *  "buffering" (filling up again after running dry).
+	 */
+	state: string,
+	buffered_ms: number,
+	underruns: number,
+	late: number,
+	trimmed: number,
+	/**  The phone's rate, Hz (0 until it plays). */
+	rate: number,
+	/**  The output it plays on (`None`: the system default). */
+	output?: string | null,
+	volume: number,
+	/**  Why it stopped or can't play, if it did. */
+	error?: string | null,
+};
+
+/**  Where a phone's audio stands, for its tile. */
+export type PhoneAudioStatus_Serialize = {
+	/**  The phone playing here (or asked to), if any. */
+	node: string | null,
+	/**
+	 *  "idle", "waiting" (asked; the phone hasn't started), "playing", or
+	 *  "buffering" (filling up again after running dry).
+	 */
+	state: string,
+	buffered_ms: number,
+	underruns: number,
+	late: number,
+	trimmed: number,
+	/**  The phone's rate, Hz (0 until it plays). */
+	rate: number,
+	/**  The output it plays on (`None`: the system default). */
+	output: string | null,
+	volume: number,
+	/**  Why it stopped or can't play, if it did. */
+	error: string | null,
+};
 
 export type Quality = "excellent" | "good" | "weak" | 
 /**  Not measured on this kind of link. */

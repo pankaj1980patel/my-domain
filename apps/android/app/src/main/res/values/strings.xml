@@ -653,4 +653,26 @@
     <string name="label_color_gold">Gold</string>
     <string name="label_color_rose">Rose</string>
     <string name="label_color_grey">Grey</string>
+    <!-- This phone’s audio on a computer (PhoneAudio.kt). -->
+    <string name="channel_audio">Phone audio on a computer</string>
+    <string name="audio_ask_title">%1$s wants to play this phone’s audio</string>
+    <string name="audio_ask_body">Tap to choose. Nothing is captured until you say yes.</string>
+    <string name="audio_playing_title">Playing this phone’s audio</string>
+    <string name="audio_playing_on">Playing this phone’s audio on %1$s</string>
+    <string name="audio_playing_body">Music, videos and games play there too. The phone keeps playing them: turn its volume down if you like. Apps that don’t allow it stay silent there. Calls are never sent.</string>
+    <string name="audio_stop">Stop</string>
+    <string name="audio_tile_title">Phone audio</string>
+    <string name="audio_tile_body">Play this phone’s music, videos and podcasts on %1$s’s speakers. Android asks first, every time. Calls are never sent.</string>
+    <string name="audio_tile_start">Play on %1$s</string>
+    <string name="audio_tile_now">This phone’s audio plays on %1$s.</string>
+    <string name="audio_tile_hint">The phone keeps playing it too: turn its volume down if you like. Apps that don’t allow it (some streaming apps) stay silent there. It keeps going with the screen off.</string>
+    <string name="audio_mic_title">Allow audio capture</string>
+    <string name="audio_mic_body">To send what your apps play to %1$s, Android needs the microphone permission. my-domain uses it only to copy the audio your apps play; nothing is recorded from the microphone, and Android still asks before each start.</string>
+    <string name="audio_mic_continue">Continue</string>
+    <string name="audio_mic_not_now">Not now</string>
+    <string name="audio_mic_denied">Without the microphone permission, this phone’s audio can’t play on a computer. You can allow it in Settings &gt; Apps &gt; my-domain &gt; Permissions.</string>
+    <string name="audio_unsupported">Playing this phone’s audio on a computer needs Android 10 or later.</string>
+    <string name="audio_busy_screen">Stop sharing the screen first: Android lets one capture run at a time.</string>
+    <string name="audio_cant_capture">Android didn’t let my-domain capture the audio.</string>
+    <string name="screen_busy_audio">Stop playing this phone’s audio on the computer first: Android lets one capture run at a time.</string>
 </resources>

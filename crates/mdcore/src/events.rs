@@ -263,6 +263,27 @@ pub enum CoreEvent {
     /// owner's choice: watch it (`Engine::screen_watch`) to see it. Or it
     /// stopped (`!on`).
     ScreenOffer { from: String, on: bool },
+    /// A computer started (`on`) or stopped listening to this phone's
+    /// audio (`features::audio_share`): while any does
+    /// (`Engine::audio_listeners`), capture and send with
+    /// `Engine::audio_frame_to`. A renewal is not reported.
+    AudioListen { from: String, on: bool },
+    /// A phone started (`on`) playing its audio to this computer, its
+    /// owner's choice (listen with `Engine::audio_listen` to hear it), or
+    /// it stopped (`!on`; also its answer when its owner said no). `rate`
+    /// is what it captures at (0 when stopping).
+    AudioOffer { from: String, on: bool, rate: u32 },
+    /// Audio from a phone this computer listens to: `pcm` is base64 of
+    /// s16le samples, `channels` interleaved, at `rate` Hz. `seq` counts
+    /// up. Many a second: the desktop plays these itself and never hands
+    /// them to the window.
+    AudioFrame {
+        from: String,
+        seq: u64,
+        rate: u32,
+        channels: u8,
+        pcm: String,
+    },
 }
 
 impl CoreEvent {
@@ -313,6 +334,9 @@ impl CoreEvent {
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
             CoreEvent::ScreenOffer { .. } => "screen-offer",
+            CoreEvent::AudioListen { .. } => "audio-listen",
+            CoreEvent::AudioOffer { .. } => "audio-offer",
+            CoreEvent::AudioFrame { .. } => "audio-frame",
         }
     }
 
@@ -474,6 +498,32 @@ mod tests {
                 {"kind": "tap", "x": 5000, "y": 100},
                 {"kind": "swipe", "x": 1, "y": 2, "x2": 3, "y2": 4, "ms": 300},
             ]})
+        );
+    }
+
+    #[test]
+    fn phone_audio_events_keep_their_shape() {
+        // Android matches "audio_listen"; the desktop listens to
+        // "audio-offer".
+        let ev = CoreEvent::AudioListen {
+            from: "pc".into(),
+            on: true,
+        };
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "audio_listen", "from": "pc", "on": true})
+        );
+        let ev = CoreEvent::AudioOffer {
+            from: "phone".into(),
+            on: false,
+            rate: 0,
+        };
+        assert_eq!(
+            (ev.name(), ev.ui_payload()),
+            (
+                "audio-offer",
+                json!({"from": "phone", "on": false, "rate": 0})
+            )
         );
     }
 

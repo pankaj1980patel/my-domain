@@ -2219,3 +2219,21 @@ input[type="checkbox"][role="switch"]:checked::after {
 .screen-keys {
   justify-content: center;
 }
+
+/* ---------------------------------------------------------------------------
+   Phone audio: a phone's media audio on this computer (PhoneAudioTile).
+   --------------------------------------------------------------------------- */
+.phone-audio {
+  gap: 8px;
+}
+.phone-audio select {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.phone-audio-volume input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.phone-audio-stats {
+  font-variant-numeric: tabular-nums;
+}

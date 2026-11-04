@@ -97,6 +97,9 @@ export type DeviceStatus = {
   /** Its owner allows control from the computers it shares its screen
    *  with now (`screen_control`, phones). */
   screenControl?: boolean;
+  /** A phone that can play its media audio on this computer
+   *  (`audio_source`: Android 10 or later, an up-to-date app). */
+  audioSource?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -468,6 +471,11 @@ export async function startEvents() {
         setState("screenOffers", from, undefined!);
       }
     }),
+    // A phone plays its audio here (the backend plays it and posts a
+    // notice); its tile shows it.
+    on<{ from: string; on: boolean }>("audio-offer", ({ from, on: playing }) => {
+      if (playing) addActivity({ icon: "", tone: "info", node: from, text: t("phoneAudio.offered", { name: peerName(from) }) });
+    }),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
@@ -494,6 +502,7 @@ export async function startEvents() {
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
         screenSend: status?.screen_send === true,
         screenControl: status?.screen_control === true,
+        audioSource: status?.audio_source === true,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,

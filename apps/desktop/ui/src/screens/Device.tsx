@@ -52,6 +52,7 @@ import CommandsTile from "./device/CommandsTile";
 import LostModeTile from "./device/LostModeTile";
 import NotificationHistory from "./device/NotificationHistory";
 import ClipHistoryTile from "./device/ClipHistoryTile";
+import PhoneAudioTile from "./device/PhoneAudioTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -153,6 +154,9 @@ export default function Device(props: { node: string; onBack: () => void }) {
             </Show>
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />
+            </Show>
+            <Show when={state.status[props.node]?.audioSource}>
+              <PhoneAudioTile node={props.node} />
             </Show>
             <Show when={state.status[props.node]?.actions.includes("gallery")}>
               <PhotosTile node={props.node} />

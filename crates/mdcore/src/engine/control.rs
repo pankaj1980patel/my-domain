@@ -163,4 +163,56 @@ impl<P: Platform> Engine<P> {
     pub fn dnd_active(&self) -> Vec<String> {
         crate::features::dnd::active(&self.ctx)
     }
+
+    // --- a phone's audio on a computer (features::audio_share) ---
+
+    /// This device plays a phone's audio (`sink`: a computer) or sends its
+    /// own (`source`: a phone that can capture it). Said in its status
+    /// (`audio_sink`, `audio_source`); off until set.
+    pub fn set_audio_roles(&self, sink: bool, source: bool) {
+        crate::features::audio_share::set_roles(&self.ctx, sink, source);
+    }
+
+    /// What `node` last said in its status: (it plays a phone's audio, it
+    /// sends its audio). Kept across restarts.
+    pub fn audio_caps(&self, node_id: &str) -> (bool, bool) {
+        crate::features::audio_share::caps_of(&self.ctx, node_id)
+    }
+
+    /// Computer: ask phone `node` to play its audio here (`on`; renew
+    /// every `features::audio_share::RENEW_EVERY` while playing, a listen
+    /// ends by itself after `LISTEN_FOR`), or to stop. Its frames arrive as
+    /// `CoreEvent::AudioFrame` while this listens. Only to a phone whose
+    /// status says `audio_source`; over a live link only.
+    pub fn audio_listen(&self, node_id: &str, on: bool) -> crate::Result<()> {
+        crate::features::audio_share::listen(&self.ctx, node_id, on)
+    }
+
+    /// Phone: the computers listening to its audio now.
+    pub fn audio_listeners(&self) -> Vec<String> {
+        crate::features::audio_share::listeners(&self.ctx)
+    }
+
+    /// Phone: tell computer `node` this phone plays its audio to it
+    /// (`on`; it starts listening, `CoreEvent::AudioOffer` there), or
+    /// stopped (also the answer when its owner said no). Returns the rate
+    /// to capture at for the link (48 kHz direct, 24 kHz relayed; 0 when
+    /// stopping); fails over a Bluetooth-only link. Only to a computer
+    /// whose status says `audio_sink`.
+    pub fn audio_offer(&self, node_id: &str, on: bool) -> crate::Result<u32> {
+        crate::features::audio_share::offer(&self.ctx, node_id, on)
+    }
+
+    /// Phone: send captured audio (s16le PCM, `channels` interleaved, at
+    /// `rate` Hz, at most `features::audio_share::MAX_FRAME_BYTES`) to
+    /// those of `nodes` listening; returns how many it went to.
+    pub fn audio_frame_to(
+        &self,
+        pcm: &[u8],
+        rate: u32,
+        channels: u8,
+        nodes: &[String],
+    ) -> crate::Result<usize> {
+        crate::features::audio_share::send_frame_to(&self.ctx, pcm, rate, channels, nodes)
+    }
 }

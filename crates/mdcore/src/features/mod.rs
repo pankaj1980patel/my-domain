@@ -10,6 +10,7 @@
 //! (protocol v2) instead; that seam is documented in `crate::service`.
 
 pub mod addr_update;
+pub mod audio_share;
 pub mod backup;
 pub mod battery;
 pub mod browse;
@@ -133,6 +134,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(input::InputHandler));
         r.register(Arc::new(dnd::DndHandler));
         r.register(Arc::new(screen::ScreenHandler));
+        r.register(Arc::new(audio_share::AudioShareHandler));
         r
     }
 

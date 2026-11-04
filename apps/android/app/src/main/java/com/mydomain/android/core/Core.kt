@@ -102,6 +102,9 @@ data class DeviceStatus(
     /** A computer this phone may share its screen with from here
      *  (`screen_view`; older ones would show the offer as chat). */
     val screenView: Boolean = false,
+    /** A computer that plays this phone's audio (`audio_sink`; older ones
+     *  would show the messages as chat). */
+    val audioSink: Boolean = false,
     val seenAt: Long = System.currentTimeMillis(),
 )
 
@@ -468,6 +471,7 @@ object Core {
                     batteryTemp = if (st.has("battery_temp")) st.optInt("battery_temp") else null,
                     batteryHealth = st.optString("battery_health").ifEmpty { null },
                     screenView = st.optBoolean("screen_view", false),
+                    audioSink = st.optBoolean("audio_sink", false),
                     wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
                     wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
                     ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },

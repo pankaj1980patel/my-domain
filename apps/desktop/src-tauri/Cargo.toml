@@ -85,6 +85,12 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 httparse = "1"
 base64 = "0.22"
 getrandom = "0.3"
+# Audio out: calls on this computer (`calls.rs`, macOS and Linux: the
+# phone's call audio to and from the speakers and microphones) and a
+# phone's media audio played here (`phone_audio.rs`, every OS). Already
+# built everywhere: rodio (via fcm_receiver_rs) pulls in this exact version
+# on every OS (CoreAudio, ALSA, WASAPI), so no new crates.
+cpal = "0.16"
 
 # Find my computer: where this Mac is, from CoreLocation (see `location.rs`).
 # Same versions Tauri already pulls in.
@@ -93,9 +99,3 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSDate", "NSString", "NSValue", "NSArray"] }
 objc2-core-location = { version = "0.3.2", default-features = false, features = ["std", "CLLocation", "CLLocationManager"] }
 
-# Calls on this computer (see `calls.rs`): the phone's call audio to and
-# from this computer's speakers and microphones (CoreAudio on macOS, ALSA
-# on Linux). Already built: rodio (via fcm_receiver_rs) pulls in this exact
-# version on both, so no new crates.
-[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
-cpal = "0.16"
