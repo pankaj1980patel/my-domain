@@ -98,8 +98,6 @@
     <string name="find_link_sent">Link sent to %1$s</string>
     <string name="find_link_queued">Will open when %1$s is reachable</string>
     <string name="find_link_invalid">Only web links (http or https) can be opened.</string>
-    <string name="find_battery">Battery %1$d%%</string>
-    <string name="find_battery_charging">Battery %1$d%%, charging</string>
 
     <!-- Settings -->
     <string name="settings_title">Settings</string>
@@ -396,6 +394,26 @@
     <string name="locate_asking">Asking where %1$s is…</string>
     <string name="locate_where">Near %1$s, %2$s (±%3$d m, %4$d min ago)</string>
     <string name="locate_off">Location sharing is off on %1$s. Turn on “Let my phone see where this computer is” in my-domain’s Settings there.</string>
+    <string name="info_title">This device</string>
+    <string name="info_hint">What %1$s last said about itself.</string>
+    <string name="info_battery">Battery</string>
+    <string name="info_battery_level">%1$d%%</string>
+    <string name="info_battery_charging">%1$d%%, charging</string>
+    <string name="info_storage">Storage</string>
+    <string name="info_memory">Memory</string>
+    <string name="info_free">%1$s free of %2$s</string>
+    <string name="info_cpu">Processor</string>
+    <string name="info_cpu_busy">%1$d%% in use</string>
+    <string name="info_uptime">On for</string>
+    <plurals name="info_up_minutes">
+        <item quantity="one">%1$d minute</item>
+        <item quantity="other">%1$d minutes</item>
+    </plurals>
+    <string name="info_up_hours">%1$d h %2$d min</string>
+    <plurals name="info_up_days">
+        <item quantity="one">%1$d day, %2$d h</item>
+        <item quantity="other">%1$d days, %2$d h</item>
+    </plurals>
     <string name="browse_title">Browse files</string>
     <string name="browse_open">Browse %1$s\'s files</string>
     <string name="browse_shared">Folders %1$s shares</string>

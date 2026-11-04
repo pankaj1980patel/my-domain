@@ -1262,3 +1262,25 @@ input[type="checkbox"][role="switch"]:checked::after {
   font-size: 1.25rem;
   color: var(--text);
 }
+
+/* --- device info (battery, storage, memory, processor, uptime) ---------------- */
+
+.info-rows {
+  display: grid;
+  gap: var(--s-3);
+  margin: 0;
+}
+.info-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px var(--s-3);
+  align-items: baseline;
+}
+.info-row dd {
+  margin: 0;
+  text-align: right;
+  color: var(--text);
+}
+.info-row .progress {
+  grid-column: 1 / -1;
+}

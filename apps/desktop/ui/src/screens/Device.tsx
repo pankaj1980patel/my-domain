@@ -43,6 +43,7 @@ import { t, tn } from "../i18n";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
 import DropToSend from "./device/DropToSend";
+import InfoTile from "./device/InfoTile";
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -121,6 +122,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <DropToSend node={props.node} />
             <BrowseTile node={props.node} />
             <ControlTile node={props.node} />
+            <InfoTile node={props.node} />
             <Show when={state.status[props.node]?.actions.includes("screen")}>
               <ScreenTile node={props.node} />
             </Show>
@@ -483,12 +485,6 @@ function ControlTile(props: { node: string }) {
   const [busy, setBusy] = createSignal(false);
   const name = () => niceName(peerName(props.node));
   const status = () => state.status[props.node];
-  const battery = () => {
-    const st = status();
-    if (!st) return undefined;
-    if (st.battery === undefined) return t("control.noBattery");
-    return st.charging ? t("control.batteryCharging", { level: st.battery }) : t("control.battery", { level: st.battery });
-  };
 
   const ring = async () => {
     setBusy(true);
@@ -524,9 +520,6 @@ function ControlTile(props: { node: string }) {
     <article class="tile">
       <h2>{t("control.title")}</h2>
       <p class="muted small">{t("control.hint")}</p>
-      <Show when={battery()}>
-        <p class="small">{battery()}</p>
-      </Show>
       <Show when={status()?.actions.length}>
         <Controls node={props.node} st={status()!} />
       </Show>

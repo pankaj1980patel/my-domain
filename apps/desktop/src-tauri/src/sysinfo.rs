@@ -1,10 +1,13 @@
 // More of this computer's state for its status (see `device::push_status`):
-// Wi-Fi, Bluetooth and memory, read with the OS's own command-line tools
-// (no extra crates). Each part is left out when it can't be read.
+// Wi-Fi, Bluetooth, memory, CPU and boot time, read with the OS's own
+// command-line tools or counters (no extra crates). Each part is left out
+// when it can't be read.
 //
 //   "wifi":      {"on": bool, "connected": bool, "ssid"?: str, "signal"?: 0-4}
 //   "bluetooth": bool (powered)
 //   "ram":       {"free": bytes, "total": bytes}
+//   "cpu":       0-100, percent busy since the previous push (absent on the first)
+//   "boot_at":   unix seconds it started (the core turns it into `uptime_s`)
 
 use serde_json::{json, Value};
 
@@ -19,10 +22,39 @@ pub fn extend(status: &mut Value) {
     if let Some((free, total)) = ram() {
         status["ram"] = json!({ "free": free, "total": total });
     }
+    if let Some(pct) = cpu() {
+        status["cpu"] = pct.into();
+    }
+    if let Some(at) = boot_at() {
+        status["boot_at"] = at.into();
+    }
     // How to wake this computer from the phone later (Wake-on-LAN).
     if let Some(mac) = wake_mac() {
         status["wake"] = json!({ "mac": mac });
     }
+}
+
+/// CPU time since boot, all cores together: (idle, total) clock ticks.
+type Ticks = (u64, u64);
+
+/// How busy the CPU was since the last call: the counters are sampled on
+/// each status push (every minute) and the two last samples compared, so
+/// nothing waits here. `None` on the first call; a call within a few
+/// seconds of the last (a setting changed) repeats the last answer.
+fn cpu() -> Option<u8> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    static LAST: Mutex<Option<(Instant, Ticks, Option<u8>)>> = Mutex::new(None);
+    let mut last = LAST.lock().ok()?;
+    if let Some((at, _, pct)) = *last {
+        if at.elapsed() < Duration::from_secs(5) {
+            return pct;
+        }
+    }
+    let now = cpu_ticks()?;
+    let pct = last.and_then(|(_, prev, _)| cpu_busy(prev, now));
+    *last = Some((Instant::now(), now, pct));
+    pct
 }
 
 #[cfg_attr(not(unix), allow(dead_code))]
@@ -62,6 +94,16 @@ fn bluetooth() -> Option<bool> {
 #[cfg(target_os = "linux")]
 fn ram() -> Option<(u64, u64)> {
     parse_meminfo(&std::fs::read_to_string("/proc/meminfo").ok()?)
+}
+
+#[cfg(target_os = "linux")]
+fn cpu_ticks() -> Option<Ticks> {
+    parse_proc_stat(&std::fs::read_to_string("/proc/stat").ok()?)
+}
+
+#[cfg(target_os = "linux")]
+fn boot_at() -> Option<u64> {
+    parse_btime(&std::fs::read_to_string("/proc/stat").ok()?)
 }
 
 // --- macOS -------------------------------------------------------------------
@@ -130,6 +172,39 @@ fn ram() -> Option<(u64, u64)> {
     Some((free.min(total), total))
 }
 
+/// The kernel's CPU load counters (`host_statistics`, the numbers `top`
+/// reads): user, system, idle and nice ticks, all cores together.
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+fn cpu_ticks() -> Option<Ticks> {
+    use std::sync::OnceLock;
+    extern "C" {
+        fn mach_host_self() -> u32;
+        fn host_statistics(host: u32, flavor: i32, info: *mut i32, count: *mut u32) -> i32;
+    }
+    /// `HOST_CPU_LOAD_INFO`, answered with `CPU_STATE_MAX` (4) counters.
+    const HOST_CPU_LOAD_INFO: i32 = 3;
+    // Each mach_host_self() takes a port reference: take one, keep it.
+    static HOST: OnceLock<u32> = OnceLock::new();
+    let host = *HOST.get_or_init(|| unsafe { mach_host_self() });
+    let mut ticks = [0u32; 4];
+    let mut count = ticks.len() as u32;
+    let kr = unsafe {
+        host_statistics(
+            host,
+            HOST_CPU_LOAD_INFO,
+            ticks.as_mut_ptr().cast(),
+            &mut count,
+        )
+    };
+    (kr == 0 && count == 4).then(|| mach_ticks(ticks))
+}
+
+#[cfg(target_os = "macos")]
+fn boot_at() -> Option<u64> {
+    parse_boottime(&run("sysctl", &["-n", "kern.boottime"])?)
+}
+
 // --- elsewhere ---------------------------------------------------------------
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
@@ -149,6 +224,16 @@ fn ram() -> Option<(u64, u64)> {
 
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn wake_mac() -> Option<String> {
+    None
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn cpu_ticks() -> Option<Ticks> {
+    None
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn boot_at() -> Option<u64> {
     None
 }
 
@@ -249,6 +334,59 @@ fn parse_vm_stat(out: &str) -> Option<u64> {
     Some(n * page)
 }
 
+/// Percent of the time between two samples the CPU wasn't idle, rounded.
+/// `None` if no time passed or a counter went back (wrapped, or reset).
+fn cpu_busy(prev: Ticks, now: Ticks) -> Option<u8> {
+    let total = now.1.checked_sub(prev.1).filter(|t| *t > 0)?;
+    let idle = now.0.checked_sub(prev.0)?.min(total);
+    Some((((total - idle) * 100 + total / 2) / total).min(100) as u8)
+}
+
+/// `/proc/stat`'s first line, `cpu  user nice system idle iowait irq
+/// softirq steal guest guest_nice`: idle is idle + iowait; the total is
+/// the first eight (guest time is already counted in user).
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_proc_stat(text: &str) -> Option<Ticks> {
+    let line = text.lines().find_map(|l| l.strip_prefix("cpu "))?;
+    let n: Vec<u64> = line
+        .split_whitespace()
+        .take(8)
+        .map(|v| v.parse().ok())
+        .collect::<Option<_>>()?;
+    let idle = n.get(3)? + n.get(4).unwrap_or(&0);
+    Some((idle, n.iter().sum()))
+}
+
+/// `btime 1730700000` in `/proc/stat`: when it started, unix seconds.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn parse_btime(text: &str) -> Option<u64> {
+    text.lines()
+        .find_map(|l| l.strip_prefix("btime "))?
+        .trim()
+        .parse()
+        .ok()
+}
+
+/// `host_statistics` counters in `CPU_STATE_*` order: user, system, idle,
+/// nice.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn mach_ticks(t: [u32; 4]) -> Ticks {
+    let [user, system, idle, nice] = t.map(u64::from);
+    (idle, user + system + idle + nice)
+}
+
+/// `sysctl -n kern.boottime`: `{ sec = 1730700000, usec = 1234 } Mon Nov  4 …`.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+fn parse_boottime(out: &str) -> Option<u64> {
+    out.split("sec = ")
+        .nth(1)?
+        .split(|c: char| !c.is_ascii_digit())
+        .next()?
+        .parse()
+        .ok()
+        .filter(|s| *s > 0)
+}
+
 /// `dev wlan0` in `ip route show default`.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn parse_default_dev(out: &str) -> Option<String> {
@@ -335,6 +473,50 @@ mod tests {
         );
         let vm = "Mach Virtual Memory Statistics: (page size of 16384 bytes)\nPages free:                               10.\nPages active:                            99.\nPages inactive:                          20.\nPages speculative:                        2.\n";
         assert_eq!(parse_vm_stat(vm), Some(32 * 16384));
+    }
+
+    #[test]
+    fn cpu_busy_is_the_share_of_ticks_not_idle() {
+        // 1000 ticks passed, 250 of them idle: 75% busy.
+        assert_eq!(cpu_busy((1_000, 4_000), (1_250, 5_000)), Some(75));
+        assert_eq!(cpu_busy((0, 0), (300, 300)), Some(0));
+        assert_eq!(cpu_busy((0, 0), (0, 300)), Some(100));
+        // Rounded to the nearest percent.
+        assert_eq!(cpu_busy((0, 0), (2, 3)), Some(33));
+        assert_eq!(cpu_busy((0, 0), (1, 3)), Some(67));
+        // No time passed, or a counter went back: no answer.
+        assert_eq!(cpu_busy((10, 100), (10, 100)), None);
+        assert_eq!(cpu_busy((10, 100), (5, 50)), None);
+        assert_eq!(cpu_busy((10, 100), (5, 150)), None);
+    }
+
+    #[test]
+    fn reads_cpu_counters_and_boot_time() {
+        let stat = "cpu  100 20 30 800 50 0 0 0 7 0\ncpu0 50 10 15 400 25 0 0 0 0 0\nintr 1 2\nbtime 1730700000\n";
+        assert_eq!(parse_proc_stat(stat), Some((850, 1_000)));
+        assert_eq!(parse_btime(stat), Some(1_730_700_000));
+        // Old kernels with fewer columns still count.
+        assert_eq!(parse_proc_stat("cpu 1 2 3 4\n"), Some((4, 10)));
+        assert_eq!(parse_proc_stat("cpu0 1 2 3 4\n"), None);
+        assert_eq!(mach_ticks([10, 5, 80, 5]), (80, 100));
+        assert_eq!(
+            parse_boottime("{ sec = 1730700000, usec = 123456 } Mon Nov  4 09:00:00 2026\n"),
+            Some(1_730_700_000)
+        );
+        assert_eq!(parse_boottime(""), None);
+    }
+
+    #[test]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    fn reads_this_machines_cpu_and_boot_time() {
+        let (idle, total) = cpu_ticks().expect("CPU counters");
+        assert!(total > 0 && idle <= total);
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(boot_at().is_some_and(|b| b > 0 && b <= now));
+        assert_eq!(cpu(), None, "no earlier sample yet");
     }
 
     #[test]

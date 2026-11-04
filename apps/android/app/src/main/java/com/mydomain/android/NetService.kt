@@ -33,6 +33,8 @@ class NetService : Service() {
     private var batteryReceiver: BroadcastReceiver? = null
     /** Last status pushed to the core, so only real changes are pushed. */
     private var lastStatus: String? = null
+    /** When the phone started, unix seconds (for the status). */
+    private val bootAt = (System.currentTimeMillis() - SystemClock.elapsedRealtime()) / 1000
     
     private val binder = LocalBinder()
     
@@ -208,6 +210,10 @@ class NetService : Service() {
         wifiStatus()?.let { o.put("wifi", it) }
         bluetoothOn()?.let { o.put("bluetooth", it) }
         ram()?.let { o.put("ram", it) }
+        // When it started (fixed, so it doesn't make every push different);
+        // the core turns it into `uptime_s` when it answers. No `cpu`: apps
+        // can't read /proc/stat since Android 8.
+        o.put("boot_at", bootAt)
         val json = o.toString()
         if (json == lastStatus) return
         val engine = Core.engine() ?: return

@@ -20,6 +20,9 @@
 //! The core adds to every status reply: `platform`, `now_playing` (if
 //! something plays) and `shared_folders`, how many folders this device lets
 //! the others browse (`features::browse`; absent from older versions).
+//! A host that pushes `boot_at` (unix seconds it started) has it turned
+//! into `uptime_s` at reply time, so the uptime is right however long ago
+//! the status was pushed (it's pushed only when something changes).
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -58,6 +61,11 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 }
                 status["platform"] = ctx.platform.platform_kind().into();
                 status["shared_folders"] = ctx.files.shared.lock().len().into();
+                if let Some(boot) = status.as_object_mut().and_then(|o| o.remove("boot_at")) {
+                    if let Some(up) = uptime(boot.as_u64(), crate::transport::now_secs()) {
+                        status["uptime_s"] = up.into();
+                    }
+                }
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;
@@ -100,6 +108,12 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
             _ => {}
         }
     }
+}
+
+/// Seconds since `boot_at` (unix seconds), or `None` if it's missing or in
+/// the future (a clock that moved back).
+fn uptime(boot_at: Option<u64>, now: u64) -> Option<u64> {
+    now.checked_sub(boot_at.filter(|b| *b > 0)?)
 }
 
 /// An Android package name (`com.google.android.youtube`): what `open_url`
@@ -148,6 +162,14 @@ mod tests {
         ] {
             assert!(!is_openable(bad), "{bad}");
         }
+    }
+
+    #[test]
+    fn uptime_counts_from_boot() {
+        assert_eq!(uptime(Some(1_000), 4_600), Some(3_600));
+        assert_eq!(uptime(Some(5_000), 4_600), None);
+        assert_eq!(uptime(Some(0), 4_600), None);
+        assert_eq!(uptime(None, 4_600), None);
     }
 
     #[test]

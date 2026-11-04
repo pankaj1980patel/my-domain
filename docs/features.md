@@ -181,7 +181,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Feature | What it does | Flag | Target | Tier | Status |
 |---|---|---|---|---|---|
 | Battery | %, charging, temperature, health | `device.battery` | A D | — | ✅ (temperature and health on Android) |
-| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | 🟡 (storage and RAM free/total; no CPU) |
+| Storage / RAM / CPU | Usage overview | `device.read` | A D | — | ✅ (2026-11-04: storage and RAM free/total, uptime, and CPU % on computers (Android apps can't read it); shown as a "This device" card on the other device's page; not tried live) |
 | Brightness / screen timeout / auto-rotate | | `device.settings` | A D | P (Modify system settings) | 🟡 (2026-11-04: phone, from the computer; needs "Modify system settings" on the phone; not tried live) |
 | Do Not Disturb | Toggle and schedule | `device.settings` | A D | P | ⬜ |
 | DND follows the phone | Computers hold my-domain's pop-ups while the phone is in Do Not Disturb (the OS state is only read, never changed) | `device.settings` | A→D | — | ✅ (2026-11-03; no permission needed; option on the computer, off by default; not tried live yet) |

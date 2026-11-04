@@ -86,6 +86,12 @@ data class DeviceStatus(
     val location: Place? = null,
     /** How many folders it lets your devices browse (null: it can't). */
     val sharedFolders: Int? = null,
+    /** Percent of its processor in use lately, 0-100 (computers only). */
+    val cpu: Int? = null,
+    /** Seconds since it started, when it answered (at [seenAt], this
+     *  phone's clock in ms). */
+    val uptimeS: Long? = null,
+    val seenAt: Long = System.currentTimeMillis(),
 )
 
 /** A reported position: degrees, accuracy in metres, unix seconds. */
@@ -416,6 +422,8 @@ object Core {
                     storageTotal = st.optJSONObject("storage")?.optLong("total"),
                     locationSharing = st.optBoolean("location_sharing", false),
                     sharedFolders = if (st.has("shared_folders")) st.optInt("shared_folders") else null,
+                    cpu = if (st.has("cpu")) st.optInt("cpu").coerceIn(0, 100) else null,
+                    uptimeS = if (st.has("uptime_s")) st.optLong("uptime_s").coerceAtLeast(0) else null,
                     location = st.optJSONObject("location")?.takeIf { it.has("lat") && it.has("lon") }?.let {
                         Place(it.optDouble("lat"), it.optDouble("lon"), it.optDouble("acc", 0.0), it.optLong("at"))
                     },

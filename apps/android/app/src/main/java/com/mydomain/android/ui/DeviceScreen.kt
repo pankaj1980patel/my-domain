@@ -115,6 +115,10 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             // Its shared folders, for a device that can be browsed.
             if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, niceName(peer.name)) }
             item { FindTile(node, niceName(peer.name)) }
+            // What it said about itself: battery, storage, memory, processor, uptime.
+            Core.deviceStatus[node]?.takeIf { hasInfo(it) }?.let { st ->
+                item { InfoTile(niceName(peer.name), st) }
+            }
             // A computer that lets the phone control it (it lists "input").
             Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
                 item { TouchpadTile(node, st) }
@@ -277,7 +281,6 @@ private fun AppsTile(node: String) {
     }
 }
 
-/** Find & control: ring it, open a link on it, and its battery. */
 /** Where another device is (find my computer): Locate, the position, and
  *  a map. Greyed out, saying why, until that device allows it. */
 @Composable
@@ -328,20 +331,14 @@ private fun FindTile(node: String, name: String) {
     val linkQueued = stringResource(R.string.find_link_queued, name)
     val linkInvalid = stringResource(R.string.find_link_invalid)
 
-    // Ask for its battery when the screen opens; the reply fills `status`.
+    // Ask for its status when the screen opens; the reply fills `status`
+    // (and the info tile).
     // Asked only over a live link (and again when one comes up): asking a
     // device that isn't connected would wake it by push just to show this.
     val linked = Core.links.containsKey(node)
     LaunchedEffect(node, linked) { if (linked) runCatching { Core.requestStatus(node) } }
 
     Tile(title = stringResource(R.string.find_title)) {
-        val battery = status?.battery
-        if (battery != null) {
-            Text(
-                stringResource(if (status.charging == true) R.string.find_battery_charging else R.string.find_battery, battery),
-                style = MaterialTheme.typography.bodyMedium, color = T.text,
-            )
-        }
         Muted(stringResource(R.string.find_body))
         if (status != null && status.actions.isNotEmpty()) Controls(node, status)
         SoftButton(stringResource(R.string.find_ring), {

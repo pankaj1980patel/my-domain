@@ -100,8 +100,23 @@ export type DeviceStatus = {
   location?: { lat: number; lon: number; acc: number; at: number };
   /** How many folders it lets you browse (absent: it can't be browsed). */
   sharedFolders?: number;
+  /** Free and total bytes of its disk and memory. */
+  storage?: Space;
+  ram?: Space;
+  /** Percent of its processor in use lately, 0-100 (computers only). */
+  cpu?: number;
+  /** Seconds since it started, when it answered (at `ts`). */
+  uptimeS?: number;
   ts: number;
 };
+
+export type Space = { free: number; total: number };
+
+function spaceOf(v: unknown): Space | undefined {
+  const s = v as { free?: unknown; total?: unknown } | undefined;
+  if (typeof s?.free !== "number" || typeof s?.total !== "number" || s.total <= 0) return undefined;
+  return { free: Math.min(s.free, s.total), total: s.total };
+}
 
 export type WifiNetwork = { ssid: string; signal: number; secure: boolean; saved: boolean; current: boolean };
 
@@ -389,6 +404,10 @@ export async function startEvents() {
         autoRotate: typeof status?.auto_rotate === "boolean" ? status.auto_rotate : undefined,
         writeSettings: typeof status?.write_settings === "boolean" ? status.write_settings : undefined,
         sharedFolders: typeof status?.shared_folders === "number" ? status.shared_folders : undefined,
+        storage: spaceOf(status?.storage),
+        ram: spaceOf(status?.ram),
+        cpu: typeof status?.cpu === "number" ? Math.min(100, Math.max(0, Math.round(status.cpu))) : undefined,
+        uptimeS: typeof status?.uptime_s === "number" ? Math.round(status.uptime_s) : undefined,
         radioDirect: Array.isArray(status?.radio_direct)
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],
