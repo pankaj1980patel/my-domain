@@ -19,6 +19,7 @@ import { LOCAL_PRESETS } from "../lib/presets";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { WebhookSetting } from "../components/WebhookSetting";
 import { CallsSetting } from "../components/CallsSetting";
+import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { t, tRich, type Key } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
@@ -241,6 +242,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <ShortcutSetting me={local()?.node} />
 
       <CallsSetting />
+
+      <ComputerNotifsSetting />
 
       <FileManagerSetting />
 

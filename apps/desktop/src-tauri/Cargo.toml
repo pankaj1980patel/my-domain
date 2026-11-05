@@ -27,6 +27,9 @@ md-ble = { workspace = true }
 md-hfp = { workspace = true }
 # Find my computer on Linux (GeoClue2) and Windows (Geolocator); see `location.rs`.
 md-geo = { workspace = true }
+# This computer's own notifications on a phone (Linux, session D-Bus); see
+# `computer_notifs.rs`.
+md-notify = { workspace = true }
 # Typed commands: generates TypeScript bindings for the UI from the Rust
 # commands (ADR-0003). The three crates move in lockstep (release candidates).
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }

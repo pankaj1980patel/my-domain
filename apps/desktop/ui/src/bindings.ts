@@ -369,6 +369,12 @@ export const commands = {
 	computerAudioOffer: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("computer_audio_offer", { nodeId })),
 	/**  Stop playing this computer's sound on `node_id` (`None`: everywhere). */
 	computerAudioStop: (nodeId: string | null) => __TAURI_INVOKE<void>("computer_audio_stop", { nodeId }),
+	/**  The Settings tile: the switch, the apps seen, the phones showing them. */
+	computerNotifsState: () => __TAURI_INVOKE<ComputerNotifsState_Serialize>("computer_notifs_state"),
+	/**  Turn "Show this computer's notifications on my phone" on or off. */
+	computerNotifsSetEnabled: (on: boolean) => __TAURI_INVOKE<ComputerNotifsState_Serialize>("computer_notifs_set_enabled", { on }),
+	/**  Mute an app (its notifications stay here) or share it again. */
+	computerNotifsSetMuted: (id: string, muted: boolean) => __TAURI_INVOKE<ComputerNotifsState_Serialize>("computer_notifs_set_muted", { id, muted }),
 	/**
 	 *  Control another computer from this one (its screen tile): `events_json`
 	 *  is a list of input events (`{"kind": "point", "x", "y"}`, `{"kind":
@@ -851,6 +857,37 @@ export type ComputerAudioStatus_Serialize = {
 	error: string | null,
 };
 
+/**  What the Settings tile shows. */
+export type ComputerNotifsState = ComputerNotifsState_Serialize | ComputerNotifsState_Deserialize;
+
+/**  What the Settings tile shows. */
+export type ComputerNotifsState_Deserialize = {
+	/**  "linux", "macos" or "windows". */
+	os: string,
+	/**  This computer's notifications can be read here at all. */
+	supported: boolean,
+	on: boolean,
+	apps: NotifApp[],
+	/**  Why reading them didn't start (a sentence), while on. */
+	error?: string | null,
+	/**  The devices showing them now (node ids). */
+	phones: string[],
+};
+
+/**  What the Settings tile shows. */
+export type ComputerNotifsState_Serialize = {
+	/**  "linux", "macos" or "windows". */
+	os: string,
+	/**  This computer's notifications can be read here at all. */
+	supported: boolean,
+	on: boolean,
+	apps: NotifApp[],
+	/**  Why reading them didn't start (a sentence), while on. */
+	error: string | null,
+	/**  The devices showing them now (node ids). */
+	phones: string[],
+};
+
 /**
  *  Device-lab test account, from `MD_DEV_SERVER` / `MD_DEV_USER` /
  *  `MD_DEV_PASS` / `MD_DEV_KEY` (see scripts/lab/test-creds.env). The login
@@ -1100,6 +1137,19 @@ export type NewShellCommand = {
 	name: string,
 	command: string,
 	enabled: boolean,
+};
+
+/**  An app seen showing notifications here. */
+export type NotifApp = {
+	/**
+	 *  What the list keys it by (its name, or GNOME's app id; "" when it
+	 *  gave none).
+	 */
+	id: string,
+	/**  Its name to show ("" when it gave none). */
+	name: string,
+	/**  Its notifications stay on this computer. */
+	muted: boolean,
 };
 
 /**

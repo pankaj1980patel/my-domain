@@ -42,6 +42,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.ComputerNotifs
 import com.mydomain.android.PhoneAudio
 import com.mydomain.android.R
 import com.mydomain.android.core.ClipLog
@@ -156,6 +157,10 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             // A computer that plays its sound here (it says audio_source).
             Core.deviceStatus[node]?.takeIf { it.audioSource && it.platform != "android" }?.let {
                 item { ComputerAudioTile(node, name) }
+            }
+            // A computer that can show its own notifications here (it says notif_share).
+            Core.deviceStatus[node]?.notifShare?.let { sharing ->
+                item { ComputerNotifsTile(node, name, sharing) }
             }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
@@ -277,6 +282,22 @@ private fun ClipHistory() {
         }
     }
     Muted(stringResource(R.string.clipboard_recent_hint))
+}
+
+/** A computer's own notifications on this phone ([ComputerNotifs]): on
+ *  unless turned off here; [sharing] is the computer's own switch. */
+@Composable
+private fun ComputerNotifsTile(node: String, name: String, sharing: Boolean) {
+    val ctx = LocalContext.current
+    var on by remember(node) { mutableStateOf(ComputerNotifs.isOn(ctx, node)) }
+    Tile(title = stringResource(R.string.computer_notifs_title)) {
+        Muted(stringResource(R.string.computer_notifs_body, name))
+        SwitchRow(stringResource(R.string.computer_notifs_switch), on) {
+            on = it
+            ComputerNotifs.setOn(ctx, node, it)
+        }
+        if (!sharing) Muted(stringResource(R.string.computer_notifs_off_there, name))
+    }
 }
 
 @Composable

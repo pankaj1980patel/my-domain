@@ -269,6 +269,7 @@ class NetService : Service() {
         }
         DeviceActions.createChannels(this)
         FileActions.createChannels(this)
+        ComputerNotifs.createChannel(this)
     }
 
     private fun createNotification(): Notification {
@@ -339,7 +340,14 @@ class NetService : Service() {
                     val o = JSONObject(payloadJson)
                     when (o.optString("kind")) {
                         "message_received" -> handleIncomingMessage(o)
-                        "notification" -> postSharedNotification(o.optString("title"), o.optString("body"))
+                        // A computer's own notification (it was asked for them), or
+                        // one a device shared by hand / from a phone app.
+                        "notification" ->
+                            if (ComputerNotifs.handles(this@NetService, o)) ComputerNotifs.post(this@NetService, o)
+                            else postSharedNotification(o.optString("title"), o.optString("body"))
+                        "notification_removed" -> ComputerNotifs.remove(this@NetService, o.optString("from"), o.optString("key"))
+                        // A computer that can share its notifications says so here.
+                        "device_status" -> ComputerNotifs.onStatus(this@NetService, o.optString("from"), o.optJSONObject("status") ?: JSONObject())
                         "notification_action" -> NotifListener.onAction(o)
                         "call_notification" -> postSharedNotification(getString(R.string.notification_call, o.optString("caller")), o.optString("state"))
                         "ring" -> DeviceActions.ring(this@NetService, Core.peerName(o.optString("from")))
@@ -363,7 +371,12 @@ class NetService : Service() {
                             ComputerAudio.linkLost(o.optString("node_id"))
                             PhoneAutomations.linksChanged()
                         }
-                        "peer_connected", "peers_updated" -> PhoneAutomations.linksChanged()
+                        "peer_connected" -> {
+                            PhoneAutomations.linksChanged()
+                            // A computer may have restarted: ask for its notifications again.
+                            ComputerNotifs.onConnected(this@NetService, o.optString("node_id"))
+                        }
+                        "peers_updated" -> PhoneAutomations.linksChanged()
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {

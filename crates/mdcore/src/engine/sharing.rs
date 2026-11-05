@@ -401,6 +401,54 @@ impl<P: Platform> Engine<P> {
         self.send_control(node_id, &m)
     }
 
+    /// Consumer (a phone): show (`on`) or stop showing a computer's own
+    /// notifications here. Only for a computer whose status says
+    /// `notif_share`. They arrive as `CoreEvent::Notification` with a key,
+    /// go away as `CoreEvent::NotificationRemoved`, and a dismiss here goes
+    /// back with `notification_action` (index -1).
+    pub fn subscribe_computer_notifications(&self, node_id: &str, on: bool) -> crate::Result<()> {
+        let apps = if on {
+            serde_json::json!([crate::features::notif_apps::ALL_APPS])
+        } else {
+            serde_json::json!([])
+        };
+        self.subscribe_apps(node_id, &apps.to_string())
+    }
+
+    /// Producer (a computer): the devices that asked for this computer's
+    /// own notifications (`subscribe_computer_notifications`).
+    pub fn computer_notification_subscribers(&self) -> Vec<String> {
+        let all = crate::features::notif_apps::ALL_APPS;
+        let mut nodes: Vec<String> = self
+            .ctx
+            .subs
+            .lock()
+            .iter()
+            .filter(|(_, pkgs)| pkgs.iter().any(|p| p == all))
+            .map(|(n, _)| n.clone())
+            .collect();
+        nodes.sort();
+        nodes
+    }
+
+    /// Producer (a computer): one of its own apps (`app`, its name) posted
+    /// a notification, `key` naming it here; it goes to the devices that
+    /// asked for this computer's notifications. The computer decides which
+    /// apps go out before calling this.
+    pub fn share_computer_notification(&self, app: &str, title: &str, body: &str, key: &str) {
+        if key.is_empty() {
+            return;
+        }
+        let all = crate::features::notif_apps::ALL_APPS;
+        self.share_app_notification_with(all, app, title, body, Some(key), "[]")
+    }
+
+    /// Producer (a computer): its notification `key`, shared with
+    /// `share_computer_notification`, went away here.
+    pub fn share_computer_notification_removed(&self, key: &str) {
+        self.share_app_notification_removed(crate::features::notif_apps::ALL_APPS, key)
+    }
+
     /// Producer: a local app posted a notification — forward it to every peer
     /// subscribed to that package (as a normal `notification`).
     pub fn share_app_notification(&self, pkg: &str, app: &str, title: &str, body: &str) {

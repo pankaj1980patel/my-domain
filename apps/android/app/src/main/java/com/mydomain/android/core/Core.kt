@@ -108,6 +108,9 @@ data class DeviceStatus(
     /** A computer that plays its sound on this phone (`audio_source`;
      *  older ones only play a phone's). */
     val audioSource: Boolean = false,
+    /** A computer that can show its own notifications on this phone
+     *  (`notif_share`: whether its switch is on; null: it can't, or is older). */
+    val notifShare: Boolean? = null,
     /** "android" or "desktop" (null: it didn't say). */
     val platform: String? = null,
     val seenAt: Long = System.currentTimeMillis(),
@@ -479,6 +482,7 @@ object Core {
                     audioSink = st.optBoolean("audio_sink", false),
                     audioSource = st.optBoolean("audio_source", false),
                     platform = st.optString("platform").ifEmpty { null },
+                    notifShare = if (st.has("notif_share")) st.optBoolean("notif_share") else null,
                     wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
                     wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
                     ssid = st.optJSONObject("wifi")?.optString("ssid")?.ifEmpty { null },

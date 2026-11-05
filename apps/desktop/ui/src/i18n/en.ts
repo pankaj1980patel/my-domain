@@ -853,6 +853,20 @@ export const en = {
   "palette.clipSent": "Sent your clipboard to {name}",
   "palette.clipQueued": "Your clipboard goes to {name} when it's reachable",
 
+  // This computer's own notifications on the phone (ComputerNotifsSetting)
+  "computerNotifs.title": "This computer’s notifications",
+  "computerNotifs.switch": "Show this computer’s notifications on my phone",
+  "computerNotifs.hint": "Notifications from apps on this computer also show on your phones, under “From” this computer. Swipe one away on the phone and it closes here too. my-domain’s own notifications never go back. Each phone turns them on or off on this computer’s page.",
+  "computerNotifs.macos": "Showing this computer’s notifications on your phone isn’t possible on macOS: it doesn’t let apps read other apps’ notifications.",
+  "computerNotifs.windows": "Showing this computer’s notifications on your phone isn’t available on Windows yet: Windows lets only packaged apps read notifications, and my-domain isn’t packaged yet.",
+  "computerNotifs.unavailable": "Showing this computer’s notifications on your phone works on Linux only.",
+  "computerNotifs.error": "Can’t read this computer’s notifications: {why}",
+  "computerNotifs.phones": "Showing on: {names}",
+  "computerNotifs.noPhones": "No phone shows them yet. On your phone, open this computer’s page and turn on “Show its notifications here”.",
+  "computerNotifs.apps": "Apps",
+  "computerNotifs.noApps": "Apps appear here as they show notifications. Each is shared until you turn it off.",
+  "computerNotifs.unnamed": "Unnamed app",
+  "computerNotifs.shareApp": "Show {app} notifications on my phone",
   // Calls on this computer (Bluetooth hands-free; CallsSetting, CallOverlay)
   "calls.title": "Calls on this computer",
   "calls.hint": "Take your phone's calls here over Bluetooth, like a car kit: answer, hang up and talk through this computer. my-domain never pairs for you: pair the phone in your Bluetooth settings first.",

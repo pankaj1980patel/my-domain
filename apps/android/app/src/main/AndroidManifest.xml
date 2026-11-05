@@ -101,6 +101,11 @@
             android:name=".AutomationAppsKeyReceiver"
             android:exported="true" />
 
+        <!-- A computer's notification swiped away here (ComputerNotifs.kt). -->
+        <receiver
+            android:name=".ComputerNotifReceiver"
+            android:exported="false" />
+
         <!-- The receiving-file notification's Cancel action. -->
         <receiver
             android:name=".FileActionReceiver"

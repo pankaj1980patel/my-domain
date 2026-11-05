@@ -1,0 +1,25 @@
+[package]
+name = "md-notify"
+description = "my-domain: this computer's own app notifications, read from the session D-Bus on Linux, for showing them on a phone."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# No dependencies off Linux: reading other apps' notifications isn't
+# possible there (see the crate docs). The versions are the ones Tauri and
+# md-geo already pull in: no new crates.
+[target.'cfg(target_os = "linux")'.dependencies]
+# Blocking API (default features), as md-geo uses it.
+zbus = "5.16"
+# The D-Bus value types of a Notify call's hints (zbus re-exports this
+# exact version; named directly so the pure parsing can use it in tests).
+zvariant = "5"
+
+[dev-dependencies]
+# The parsing tests encode real D-Bus message bodies, on every OS.
+zvariant = "5"
+serde = { workspace = true }
+
+[lints]
+workspace = true

@@ -116,6 +116,8 @@ fn actions(app: &AppHandle, status: &mut serde_json::Value) -> Vec<&'static str>
     }
     // Commands written in Settings, while one is on (commands_run.rs).
     crate::commands_run::extend(app, status, &mut actions);
+    // Whether a phone may show this computer's notifications (Linux).
+    crate::computer_notifs::extend(app, status);
     actions
 }
 

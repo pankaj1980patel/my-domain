@@ -24,6 +24,7 @@ mod clip_history;
 mod clip_image;
 mod commands_run;
 mod computer_audio;
+mod computer_notifs;
 mod device;
 mod device_labels;
 mod fcm;
@@ -523,6 +524,11 @@ impl EventSink for TauriSink {
             // window hears of it (it drops it from the active list).
             CoreEvent::NotificationRemoved { from, key } => {
                 notif_history::on_dismissed(&self.app, from, key);
+            }
+            // Swiped away on a phone showing this computer's notifications:
+            // closed here too, if it's one of ours still on screen.
+            CoreEvent::NotificationAction { key, index: -1, .. } => {
+                computer_notifs::on_dismiss(&self.app, key);
             }
             // Kept in the history first (cheap, and before the window
             // hears of it); a muted app's get no further.
@@ -1485,6 +1491,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         computer_audio::computer_audio_status,
         computer_audio::computer_audio_offer,
         computer_audio::computer_audio_stop,
+        computer_notifs::computer_notifs_state,
+        computer_notifs::computer_notifs_set_enabled,
+        computer_notifs::computer_notifs_set_muted,
         send_input,
         send_clipboard_image,
         shortcut::send_clipboard,
@@ -1561,6 +1570,7 @@ pub fn run() {
             app.manage(commands_run::ShellCommands::load(&handle));
             app.manage(webhooks::Webhooks::load(&handle));
             app.manage(calls::CallsPrefs::load(&handle));
+            app.manage(computer_notifs::ComputerNotifs::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -1615,6 +1625,9 @@ pub fn run() {
             // Calls on this Mac: off by default; reconnects to the chosen
             // phone when turned on (macOS only).
             calls::init(&handle);
+            // This computer's notifications on your phone: off by default;
+            // reads them only once switched on (Linux only).
+            computer_notifs::init(&handle);
             // Reach phones over Bluetooth LE when there's no network path
             // (does nothing without Bluetooth).
             md_ble::central::start(EngineHandle(handle.clone()));

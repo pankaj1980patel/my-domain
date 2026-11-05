@@ -254,6 +254,14 @@
     <string name="ring_body">Tap to stop ringing.</string>
     <string name="ring_stop">Stop</string>
     <string name="link_title">%1$s sent a link</string>
+    <!-- A computer’s own notifications on this phone (ComputerNotifs.kt) -->
+    <string name="channel_computer_notifs">Computer notifications</string>
+    <string name="computer_notif_from">From %1$s</string>
+    <string name="computer_notif_from_app">%1$s · from %2$s</string>
+    <string name="computer_notifs_title">Its notifications</string>
+    <string name="computer_notifs_switch">Show its notifications here</string>
+    <string name="computer_notifs_body">Notifications from apps on %1$s show on this phone, under Computer notifications. Swipe one away and it closes there too.</string>
+    <string name="computer_notifs_off_there">%1$s isn’t sharing them yet: turn on “Show this computer’s notifications on my phone” in my-domain’s Settings there.</string>
     <!-- Files -->
     <string name="channel_file_progress">File transfers</string>
     <string name="channel_files">Files from your devices</string>

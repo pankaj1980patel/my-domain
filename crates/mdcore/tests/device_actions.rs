@@ -348,6 +348,159 @@ fn an_older_subscriber_is_never_told_of_removals() {
 }
 
 #[test]
+fn a_computers_own_notifications_show_on_the_phone_and_dismiss_back() {
+    let (pc, phone) = pair("pc-notifs");
+    phone.engine.send(&pc.node_id(), "hi").unwrap();
+    pc.sink.wait_for_message("hi");
+    phone
+        .engine
+        .subscribe_computer_notifications(&pc.node_id(), true)
+        .unwrap();
+    wait_for(|| !pc.engine.computer_notification_subscribers().is_empty());
+    assert_eq!(
+        pc.engine.computer_notification_subscribers(),
+        vec![phone.node_id()]
+    );
+    pc.engine
+        .share_computer_notification("Thunderbird", "Asha", "Lunch?", "fd:42");
+    let got = phone
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::Notification {
+                from,
+                title,
+                body,
+                app,
+                key,
+                ..
+            } => Some((
+                from.clone(),
+                title.clone(),
+                body.clone(),
+                app.clone(),
+                key.clone(),
+            )),
+            _ => None,
+        })
+        .expect("no notification");
+    assert_eq!(
+        got,
+        (
+            pc.node_id(),
+            "Asha".to_string(),
+            "Lunch?".to_string(),
+            Some("Thunderbird".to_string()),
+            Some("fd:42".to_string())
+        )
+    );
+    // Swiped away on the phone: the computer hears it.
+    phone
+        .engine
+        .notification_action(&pc.node_id(), "fd:42", -1, None)
+        .unwrap();
+    let action = pc
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::NotificationAction { key, index, .. } => Some((key.clone(), *index)),
+            _ => None,
+        })
+        .expect("no dismiss");
+    assert_eq!(action, ("fd:42".to_string(), -1));
+    // Closed on the computer: gone on the phone.
+    pc.engine.share_computer_notification_removed("fd:42");
+    let removed = phone
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::NotificationRemoved { from, key } => Some((from.clone(), key.clone())),
+            _ => None,
+        })
+        .expect("no removal");
+    assert_eq!(removed, (pc.node_id(), "fd:42".to_string()));
+    // Turned off on the phone: nothing more comes.
+    phone
+        .engine
+        .subscribe_computer_notifications(&pc.node_id(), false)
+        .unwrap();
+    wait_for(|| pc.engine.computer_notification_subscribers().is_empty());
+    pc.engine
+        .share_computer_notification("Thunderbird", "Asha", "Again", "fd:43");
+    std::thread::sleep(Duration::from_millis(800));
+    let shown = phone
+        .sink
+        .all()
+        .into_iter()
+        .filter(|e| matches!(e, CoreEvent::Notification { .. }))
+        .count();
+    assert_eq!(shown, 1);
+}
+
+#[test]
+fn a_computers_notifications_never_reach_a_device_that_didnt_ask() {
+    let (pc, old_phone) = pair("pc-notifs-old");
+    let other = TestNode::start("pc-notifs-old-c");
+    TestNode::pair(&pc, &other);
+    // An older phone: it follows an "app" here the old way (a computer
+    // never listed any), but never asks for this computer's notifications.
+    let old = format!(
+        r#"{{"type":"subscribe_apps","from":"{}","apps":["com.messages"]}}"#,
+        old_phone.node_id()
+    );
+    old_phone.engine.send(&pc.node_id(), &old).unwrap();
+    other.engine.send(&pc.node_id(), "hi").unwrap();
+    pc.sink.wait_for_message("hi");
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(pc.engine.computer_notification_subscribers().is_empty());
+    pc.engine
+        .share_computer_notification("Thunderbird", "Asha", "Lunch?", "fd:1");
+    pc.engine.share_computer_notification_removed("fd:1");
+    std::thread::sleep(Duration::from_millis(800));
+    for node in [&old_phone, &other] {
+        assert!(!node.sink.all().iter().any(|e| matches!(
+            e,
+            CoreEvent::Notification { .. }
+                | CoreEvent::NotificationRemoved { .. }
+                | CoreEvent::MessageReceived(_)
+        )));
+    }
+}
+
+#[test]
+fn a_phone_never_shares_its_apps_with_a_computer_notification_subscriber() {
+    // The computer-notifications name is no wildcard: a phone producer
+    // sends nothing to a device subscribed to it.
+    let (phone, pc) = pair("pc-notifs-phone");
+    pc.engine.send(&phone.node_id(), "hi").unwrap();
+    phone.sink.wait_for_message("hi");
+    pc.engine
+        .subscribe_computer_notifications(&phone.node_id(), true)
+        .unwrap();
+    wait_for(|| !phone.engine.computer_notification_subscribers().is_empty());
+    phone.engine.share_app_notification_with(
+        "com.messages",
+        "Messages",
+        "Asha",
+        "Coming tonight?",
+        Some("0|com.messages|7"),
+        "[]",
+    );
+    std::thread::sleep(Duration::from_millis(800));
+    assert!(!pc
+        .sink
+        .all()
+        .iter()
+        .any(|e| matches!(e, CoreEvent::Notification { .. })));
+}
+
+/// Wait (up to `WAIT`) until `ok()`.
+fn wait_for(ok: impl Fn() -> bool) {
+    let deadline = std::time::Instant::now() + WAIT;
+    while !ok() {
+        assert!(std::time::Instant::now() < deadline, "timed out");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+#[test]
 fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
     let (phone, pc) = pair("wake");
     assert!(!phone.engine.can_wake(&pc.node_id()));

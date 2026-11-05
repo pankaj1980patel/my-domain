@@ -11,6 +11,15 @@
 //! `removals: true` asks the producer to also say when a shared notification
 //! goes away there (`notif_removed`, see `features::notification`). Builds
 //! that don't send it never get one: to them it would be an unknown message.
+//!
+//! A computer shares its own notifications the same way, under one package,
+//! [`ALL_APPS`]: which of its apps go out is decided on the computer (its
+//! own switch and per-app list), so a phone subscribes to that one name
+//! (`Engine::subscribe_computer_notifications`). A phone only does that for
+//! a computer whose status says `notif_share`; older computers never say
+//! it, so they never get the subscription (and an older phone never sends
+//! one). The name matches no Android package, so a phone producer never
+//! sends anything for it.
 
 use serde_json::Value;
 
@@ -19,6 +28,10 @@ use crate::events::CoreEvent;
 use crate::platform::Platform;
 
 use super::{ControlHandler, ControlMsg};
+
+/// The package a computer shares its own notifications under (see the
+/// module docs).
+pub const ALL_APPS: &str = "*";
 
 pub struct NotifAppsHandler;
 
