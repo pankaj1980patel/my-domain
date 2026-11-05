@@ -213,7 +213,7 @@ Targets: **A** = Android, **D** = Desktop (macOS/Linux/Windows).
 | Download / delete remote file | | `files.read` / `.write` | A D | P | 🟡 (download done, resumable; no delete) |
 | Gallery | Browse photos and videos with thumbnails | `files.read` | A | S | 🟡 (2026-11-04: desktop Photos tile: grid, newest first, paged, Download per item or selected; tried: listing from the phone) |
 | Photo auto-backup | New phone photos copied to the desktop | `files.read` | A→D | S | ✅ (2026-11-03: unmetered Wi-Fi, optionally only while charging, resumable, never twice; switch in the phone's Settings; remembered per computer, so a new computer gets the recent photos it lacks) |
-| Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | ⬜ |
+| Folder sync | Keep a folder in sync between devices | `files.write` | A D | P | 🟡 (2026-11-05: synced folders, both ways or one way, conflicts kept as copies, deletions to a 7-day trash; desktop tile + Settings, phone Settings; phone folder in Downloads/my-domain/Sync by path, no SAF; not yet tried on devices) |
 
 ### 3.12 Automation
 | Feature | What it does | Flag | Target | Tier | Status |

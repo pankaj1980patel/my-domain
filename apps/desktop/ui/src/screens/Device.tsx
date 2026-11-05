@@ -46,6 +46,7 @@ import { t, tn } from "../i18n";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
+import SyncTile from "./device/SyncTile";
 import DropToSend from "./device/DropToSend";
 import InfoTile from "./device/InfoTile";
 import ScheduleTile from "./device/ScheduleTile";
@@ -150,6 +151,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <FilesTile node={props.node} />
             <DropToSend node={props.node} />
             <BrowseTile node={props.node} />
+            <SyncTile node={props.node} />
             <ControlTile node={props.node} />
             <InfoTile node={props.node} />
             <ScheduleTile node={props.node} />

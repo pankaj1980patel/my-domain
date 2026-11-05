@@ -1,6 +1,6 @@
 //! State for the gallery, photo backup, battery alerts, remote input, Do
-//! Not Disturb, screen sharing and the phone's audio, in one place so the engine's context gains one field for
-//! all of them.
+//! Not Disturb, screen sharing, the phone's audio and synced folders, in
+//! one place so the engine's context gains one field for all of them.
 
 #[derive(Default)]
 pub struct Extras {
@@ -11,4 +11,5 @@ pub struct Extras {
     pub dnd: super::dnd::Dnd,
     pub screen: super::screen::Screen,
     pub audio: super::audio_share::AudioShare,
+    pub sync: super::folder_sync::FolderSync,
 }

@@ -222,6 +222,53 @@
         <item quantity="other">%1$d h ago</item>
     </plurals>
 
+    <!-- Synced folders (ui/SyncFoldersTile.kt, SyncFolders.kt) -->
+    <string name="sync_title">Synced folders</string>
+    <string name="sync_hint">Folders kept the same on this phone and a computer. Start one on the computer: open this phone’s page there and choose Sync a folder. They sync while my-domain runs and both are connected.</string>
+    <string name="sync_empty">No synced folders yet.</string>
+    <string name="sync_mode_both">Both ways</string>
+    <string name="sync_mode_send">Only send from this phone</string>
+    <string name="sync_mode_receive">Only receive on this phone</string>
+    <string name="sync_state_invited">Waiting for your answer</string>
+    <string name="sync_state_pending">Waiting for %1$s to accept</string>
+    <string name="sync_state_paused">Paused</string>
+    <string name="sync_state_error">Problem: %1$s</string>
+    <plurals name="sync_state_syncing">
+        <item quantity="one">Syncing %1$d file</item>
+        <item quantity="other">Syncing %1$d files</item>
+    </plurals>
+    <string name="sync_state_waiting">Waiting for %1$s to connect</string>
+    <string name="sync_state_in_sync">In sync</string>
+    <plurals name="sync_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="sync_conflicts">
+        <item quantity="one">%1$d conflict copy</item>
+        <item quantity="other">%1$d conflict copies</item>
+    </plurals>
+    <plurals name="sync_skipped">
+        <item quantity="one">%1$d file left out</item>
+        <item quantity="other">%1$d files left out</item>
+    </plurals>
+    <string name="sync_last_synced">in sync %1$s</string>
+    <string name="sync_invited_line">%1$s wants to sync this folder with this phone (%2$s).</string>
+    <string name="sync_accept">Accept</string>
+    <string name="sync_decline">Decline</string>
+    <string name="sync_where">Where should it go on this phone?</string>
+    <string name="sync_where_downloads">Downloads/my-domain/Sync/%1$s</string>
+    <string name="sync_where_app">The app’s own storage (Sync/%1$s)</string>
+    <string name="sync_where_hint">Files already in the other device’s folder come here. In Downloads, files other apps add to the folder may not be readable by my-domain; those are left out, never deleted.</string>
+    <string name="sync_accepted">Syncing “%1$s” with %2$s.</string>
+    <string name="sync_pause">Pause</string>
+    <string name="sync_resume">Resume</string>
+    <string name="sync_now">Sync now</string>
+    <string name="sync_remove">Remove</string>
+    <string name="sync_remove_confirm">Stop syncing “%1$s” with %2$s? The files stay on both devices.</string>
+    <string name="sync_removed">Stopped syncing “%1$s”. Its files stay where they are.</string>
+    <string name="sync_invite_title">%1$s wants to sync a folder</string>
+    <string name="sync_invite_body">“%1$s”: open Settings in my-domain to accept or decline.</string>
+
     <!-- Activity feed (core/Core.kt, NetService) -->
     <string name="a_device">a device</string>
     <string name="act_connected">Connected to %1$s</string>

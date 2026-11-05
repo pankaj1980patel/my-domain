@@ -21,6 +21,7 @@ import { WebhookSetting } from "../components/WebhookSetting";
 import { CallsSetting } from "../components/CallsSetting";
 import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
+import { SyncSetting } from "../components/SyncSetting";
 import { t, tRich, type Key } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -246,6 +247,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <ComputerNotifsSetting />
 
       <FileManagerSetting />
+
+      <SyncSetting />
 
       <ShellCommandsSetting />
 

@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type TransportKind } from "../bindings";
+import { commands, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
@@ -17,6 +17,8 @@ export type Peer = Peer_Serialize;
 /** What you call a device here: nickname, icon, colour (this computer only). */
 export type DeviceLabel = DeviceLabel_Serialize;
 export type Identity = Identity_Serialize;
+/** A synced folder (`features::folder_sync`). */
+export type SyncPair = SyncPairView_Serialize;
 
 export type ChatMessage = {
   id: number;
@@ -128,6 +130,8 @@ export type DeviceStatus = {
   uptimeS?: number;
   /** Commands its owner lets your devices run there (the `run` action). */
   commands?: { id: string; name: string }[];
+  /** Its app can sync folders (`sync` in its status). */
+  sync?: boolean;
   /** How the last command run there went. */
   lastRun?: LastRun;
   ts: number;
@@ -275,6 +279,8 @@ type State = {
   /** This computer's sound on your phones (`computer-audio`): where it
    *  plays and who was asked; null until known. */
   computerAudio: ComputerAudioStatus_Serialize | null;
+  /** Synced folders on this computer, invitations included. */
+  syncPairs: SyncPair[];
   devLog: DevEvent[];
 };
 
@@ -298,6 +304,7 @@ export const [state, setState] = createStore<State>({
   labels: {},
   screenOffers: {},
   computerAudio: null,
+  syncPairs: [],
   devLog: [],
 });
 
@@ -486,6 +493,8 @@ export async function startEvents() {
     // This computer's sound on a phone: started, asked, stopped. The
     // sidebar's Stop and the phone's tile follow it.
     on<ComputerAudioStatus_Serialize>("computer-audio", (s) => setState("computerAudio", reconcile(s))),
+    // Synced folders: the whole list, whenever any of them changes.
+    on<{ pairs: SyncPair[] }>("sync-pairs", ({ pairs }) => setState("syncPairs", reconcile(pairs ?? []))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
     on<{ from: string; action: string }>("clipboard-event", (c) =>
       addActivity({ icon: "📋", tone: "info", text: c.action === "pushed" ? t("activity.clipboardReceived") : t("activity.clipboardSynced") }),
@@ -527,6 +536,7 @@ export async function startEvents() {
         ram: spaceOf(status?.ram),
         cpu: typeof status?.cpu === "number" ? Math.min(100, Math.max(0, Math.round(status.cpu))) : undefined,
         uptimeS: typeof status?.uptime_s === "number" ? Math.round(status.uptime_s) : undefined,
+        sync: typeof status?.sync === "number" && status.sync >= 1,
         commands: commandsOf(status?.commands),
         lastRun: lastRunOf(status?.last_run),
         radioDirect: Array.isArray(status?.radio_direct)
@@ -642,6 +652,7 @@ export async function loadAll() {
   ]);
   setState("labels", reconcile(labels));
   commands.computerAudioStatus().then((s) => setState("computerAudio", reconcile(s)), () => {});
+  commands.syncPairs().then((p) => setState("syncPairs", reconcile(p)), () => {});
   setState({
     me,
     peers,
@@ -911,6 +922,39 @@ export async function pickAndSendFolder(node: string): Promise<number> {
 }
 
 /** Stop a transfer; the core answers with file-failed ("cancelled"). */
+// --- synced folders ---
+
+/** Pick a folder on this computer (null: cancelled). */
+export function pickFolder(): Promise<string | null> {
+  return commands.pickFolder();
+}
+
+/** Sync the folder at `path` with `node`; the other device is asked. */
+export async function syncCreate(node: string, path: string, mode: string): Promise<string> {
+  return unwrap(commands.syncCreate(node, path, mode));
+}
+
+export async function syncAccept(id: string, path: string) {
+  await unwrap(commands.syncAccept(id, path));
+}
+
+/** Stop syncing on both devices (or decline an invitation); files stay. */
+export async function syncRemove(id: string) {
+  await unwrap(commands.syncRemove(id));
+}
+
+export async function syncPause(id: string, paused: boolean) {
+  await unwrap(commands.syncPause(id, paused));
+}
+
+export async function syncNow(id: string) {
+  await unwrap(commands.syncNow(id));
+}
+
+export async function syncOpenFolder(id: string) {
+  await unwrap(commands.syncOpenFolder(id));
+}
+
 export async function cancelFile(id: string) {
   await commands.cancelFile(id);
 }

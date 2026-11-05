@@ -154,6 +154,9 @@ object FileActions {
         val name = o.optString("name")
         val from = Core.peerName(o.optString("from"))
         end(ctx, id)
+        // A synced folder's file is already in its place (SyncFolders):
+        // it stays there, without a notice.
+        if (o.optBoolean("sync")) return
         val saved = save(ctx, File(o.optString("path")), name) ?: return
         val (uri, mime) = saved
         Core.fileSaved(id, uri, mime)

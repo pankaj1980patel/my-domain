@@ -88,6 +88,7 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
                 transport::outbox::retry_due(&ctx);
                 crate::features::files::resume_paused(&ctx);
                 crate::features::backup::on_timer(&ctx);
+                crate::features::folder_sync::on_timer(&ctx);
             }
         });
     }

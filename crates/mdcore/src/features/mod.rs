@@ -22,6 +22,7 @@ pub mod device;
 pub mod dnd;
 pub mod extras;
 pub mod files;
+pub mod folder_sync;
 pub mod folders;
 pub mod gallery;
 pub mod input;
@@ -108,8 +109,10 @@ impl<P: Platform> ControlRegistry<P> {
     /// platform provides a `Clipboard`: when it doesn't (e.g. android handles
     /// clipboard in its host layer), the clipboard handler is left unregistered
     /// so those control messages pass through to the host instead of being
-    /// swallowed here.
-    pub fn with_defaults(has_clipboard: bool) -> Self {
+    /// swallowed here. `folder_sync`: this device syncs folders
+    /// (`CoreConfig::folder_sync`); without it the `sync_*` messages aren't
+    /// known here, as in an app from before.
+    pub fn with_defaults(has_clipboard: bool, folder_sync: bool) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
         };
@@ -135,6 +138,9 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(dnd::DndHandler));
         r.register(Arc::new(screen::ScreenHandler));
         r.register(Arc::new(audio_share::AudioShareHandler));
+        if folder_sync {
+            r.register(Arc::new(folder_sync::FolderSyncHandler));
+        }
         r
     }
 

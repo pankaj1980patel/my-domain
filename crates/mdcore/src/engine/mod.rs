@@ -44,6 +44,7 @@ pub(crate) use peers::{emit_peers, learn_unknown};
 mod session;
 mod sharing;
 mod signaling;
+mod sync;
 
 pub(crate) use signaling::handle_signal;
 pub use signaling::FirewallStatus;
@@ -323,6 +324,7 @@ impl<P: Platform> Engine<P> {
         let clip_pending: ClipPending = Arc::new(Mutex::new(HashMap::new()));
         let control = Arc::new(ControlRegistry::with_defaults(
             platform.clipboard().is_some(),
+            config.folder_sync,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

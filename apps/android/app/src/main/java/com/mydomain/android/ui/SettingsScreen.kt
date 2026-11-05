@@ -320,6 +320,7 @@ fun SettingsScreen(
         AutomationAppsTile()
 
         PhotosTile()
+        SyncFoldersTile()
         TouchpadSettingsTile()
         LocationSettingsTile()
         HelperSettingsTile()

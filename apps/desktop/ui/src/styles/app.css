@@ -2606,3 +2606,90 @@ input[type="checkbox"][role="switch"]:not(:checked) {
   margin: 0;
   color: var(--danger);
 }
+
+/* --- Synced folders (screens/device/SyncTile.tsx, components/SyncPairRow.tsx,
+   components/SyncSetting.tsx) --- */
+.sync-pairs {
+  list-style: none;
+  margin: 0 0 var(--s-3);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sync-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.sync-pair p {
+  margin: 0;
+}
+.sync-pair-problem {
+  border-color: var(--danger);
+}
+.sync-pair-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sync-pair-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.sync-pair-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync-badge {
+  flex-shrink: 0;
+  font-size: var(--text-sm);
+  padding: 2px 8px;
+  border-radius: var(--r-full);
+  background: var(--accent-bg);
+  color: var(--text);
+}
+.sync-badge-in_sync {
+  background: var(--success-soft);
+}
+.sync-badge-paused,
+.sync-badge-pending,
+.sync-badge-invited,
+.sync-badge-waiting {
+  background: var(--warning-soft);
+}
+.sync-badge-error {
+  background: var(--danger-soft);
+}
+.sync-actions {
+  margin-top: 4px;
+}
+.sync-remove {
+  color: var(--danger);
+}
+.sync-confirm p {
+  margin: 0;
+}
+.sync-new {
+  gap: 8px;
+}
+.sync-modes {
+  border: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sync-modes legend {
+  padding: 0;
+  margin-bottom: 4px;
+}

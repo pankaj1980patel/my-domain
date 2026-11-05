@@ -355,6 +355,8 @@ class NetService : Service() {
                         "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject(), Core.peerName(o.optString("from")))
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
+                        // A computer asks to sync a folder: say so.
+                        "sync_pairs" -> SyncFolders.onPairs(this@NetService, Core.engine()?.syncPairs().orEmpty())
                         "file_failed" -> FileActions.onFailed(this@NetService, o)
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)

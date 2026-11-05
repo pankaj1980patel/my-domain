@@ -35,6 +35,11 @@
 //!
 //! Your own devices are trusted, so offers are accepted without asking
 //! (Phase 4's grants add an `ask`).
+//!
+//! A file of a synced folder (`"sync": {"pair"}` in the offer, see
+//! `features::folder_sync`) goes the same way, but into that folder's
+//! `.mydomain-sync` (partial file included, so the final move is a rename
+//! on the same disk); the sync feature then puts it in its place.
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -147,6 +152,8 @@ struct Incoming {
     last_seen: Instant,
     /// It carried on from a partial file at least once.
     resumed: bool,
+    /// A synced folder's file: the pair it belongs to.
+    sync: Option<String>,
 }
 
 /// Transfers in progress, both ways.
@@ -452,7 +459,9 @@ fn offer_msg(me: &str, id: &str, t: &Outgoing) -> serde_json::Value {
 /// A folder's and a backup's files are restarted by their own feature, so
 /// only other transfers outlive a restart here.
 fn persists(extra: Option<&serde_json::Value>) -> bool {
-    extra.is_none_or(|e| e.get("folder").is_none() && e.get("backup").is_none())
+    extra.is_none_or(|e| {
+        e.get("folder").is_none() && e.get("backup").is_none() && e.get("sync").is_none()
+    })
 }
 
 /// Write the transfers worth resuming after a restart to the platform's
@@ -756,6 +765,7 @@ fn failed<P: Platform>(
         super::backup::outgoing_ended(ctx, id, Some(why));
         super::folders::outgoing_ended(ctx, id, Some(why));
     }
+    super::folder_sync::transfer_ended(ctx, id, Some(why), incoming);
 }
 
 /// Drop an outgoing transfer without a word to anyone: its sender stops,
@@ -1023,23 +1033,40 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         }
         return reply(done);
     }
-    let Some(dir) = ctx.files.download_dir.lock().clone() else {
-        return reject("this device can't receive files");
-    };
-    let mut dest = super::backup::offer_dest(&dir, msg);
-    // A file of a folder: into its subfolder (a backup has its own).
-    if let Some(folder) = msg.json("folder").as_str().filter(|_| dest == dir) {
-        let Some(sub) = safe_folder(folder) else {
-            return reject("the folder name isn't allowed");
+    // A synced folder's file: received inside that folder.
+    let sync = msg
+        .json("sync")
+        .get("pair")
+        .and_then(|p| p.as_str())
+        .map(str::to_string);
+    let (dir, dest) = if let Some(pair) = &sync {
+        match super::folder_sync::offer_dir(ctx, from, pair) {
+            Ok(dir) => {
+                let dest = dir.join("in");
+                (dir, dest)
+            }
+            Err(why) => return reject(why),
+        }
+    } else {
+        let Some(dir) = ctx.files.download_dir.lock().clone() else {
+            return reject("this device can't receive files");
         };
-        dest = dir.join(sub);
-    }
-    // A backup of a photo that's already here (the phone forgot it sent
-    // it): done, without sending it again.
-    if dest != dir && super::backup::already_there(&dest, &name, size, &sha) {
-        ctx.files.finished(ctx, &id, None);
-        return reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": true }));
-    }
+        let mut dest = super::backup::offer_dest(&dir, msg);
+        // A file of a folder: into its subfolder (a backup has its own).
+        if let Some(folder) = msg.json("folder").as_str().filter(|_| dest == dir) {
+            let Some(sub) = safe_folder(folder) else {
+                return reject("the folder name isn't allowed");
+            };
+            dest = dir.join(sub);
+        }
+        // A backup of a photo that's already here (the phone forgot it
+        // sent it): done, without sending it again.
+        if dest != dir && super::backup::already_there(&dest, &name, size, &sha) {
+            ctx.files.finished(ctx, &id, None);
+            return reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": true }));
+        }
+        (dir, dest)
+    };
 
     let legacy = ctx
         .files
@@ -1141,6 +1168,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                     progress_at: None,
                     last_seen: Instant::now(),
                     resumed: len > 0,
+                    sync,
                 },
             );
             (len, len > 0)
@@ -1263,14 +1291,20 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     ctx.files.finished(ctx, id, why);
     if moved {
         let path = dest.unwrap_or_default();
-        ctx.sink.emit(CoreEvent::FileReceived {
-            id: id.to_string(),
-            from: t.from.clone(),
-            name: t.name.clone(),
-            path: path.to_string_lossy().into_owned(),
-            size: t.size,
-            clipboard: t.clipboard,
-        });
+        if let Some(pair) = &t.sync {
+            // Into its place in the synced folder (which then says so).
+            super::folder_sync::received(ctx, pair, id, path, &t.from, &t.name, t.size, &t.sha);
+        } else {
+            ctx.sink.emit(CoreEvent::FileReceived {
+                id: id.to_string(),
+                from: t.from.clone(),
+                name: t.name.clone(),
+                path: path.to_string_lossy().into_owned(),
+                size: t.size,
+                clipboard: t.clipboard,
+                sync: false,
+            });
+        }
         let _ = send(
             ctx,
             &t.from,
@@ -1407,6 +1441,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     });
                     super::backup::outgoing_ended(ctx, &id, None);
                     super::folders::outgoing_ended(ctx, &id, None);
+                    super::folder_sync::transfer_ended(ctx, &id, None, false);
                 } else {
                     failed(ctx, &id, &from, &t.name, false, &msg.str("error"));
                 }

@@ -120,6 +120,14 @@ pub struct CoreConfig {
     /// On by default; off behaves like an app from before (tests use it to
     /// play an older peer).
     pub bin_media: bool,
+    /// Synced folders (`features::folder_sync`): this end says `sync` in
+    /// its status and understands the `sync_*` messages. On by default;
+    /// off behaves like an app from before (tests use it to play an older
+    /// peer).
+    pub folder_sync: bool,
+    /// How often a synced folder is scanned and compared with the other
+    /// device while there's a link to it.
+    pub sync_every: std::time::Duration,
 }
 
 impl Default for CoreConfig {
@@ -141,6 +149,8 @@ impl Default for CoreConfig {
             signal_channel: false,
             idle_close_after: Some(std::time::Duration::from_secs(180)),
             bin_media: true,
+            folder_sync: true,
+            sync_every: std::time::Duration::from_secs(30),
         }
     }
 }

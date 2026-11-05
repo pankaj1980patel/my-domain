@@ -244,6 +244,52 @@ pub struct BackupInfo {
     pub last_sent_at: u64,
 }
 
+/// A synced folder (`sync_pairs`, and `sync-pairs` events with the same
+/// fields under `pairs`).
+#[derive(uniffi::Record)]
+pub struct SyncPairInfo {
+    /// The same id on both devices.
+    pub id: String,
+    /// The other device (node id).
+    pub peer: String,
+    pub name: String,
+    /// The folder on this phone ("" while an invitation waits here).
+    pub path: String,
+    /// "both", "send" or "receive": this phone's part.
+    pub mode: String,
+    pub paused: bool,
+    /// "invited", "pending", "paused", "error", "syncing", "in_sync" or
+    /// "waiting".
+    pub state: String,
+    pub syncing: u32,
+    pub files: u32,
+    pub conflicts: u32,
+    pub skipped: u32,
+    /// Unix seconds, 0 = never.
+    pub last_synced: u64,
+    pub error: Option<String>,
+}
+
+impl From<mdcore::model::SyncPair> for SyncPairInfo {
+    fn from(p: mdcore::model::SyncPair) -> Self {
+        SyncPairInfo {
+            id: p.id,
+            peer: p.peer,
+            name: p.name,
+            path: p.path,
+            mode: p.mode,
+            paused: p.paused,
+            state: p.state,
+            syncing: p.syncing,
+            files: p.files,
+            conflicts: p.conflicts,
+            skipped: p.skipped,
+            last_synced: p.last_synced,
+            error: p.error,
+        }
+    }
+}
+
 /// Battery alerts this phone sends your other devices.
 #[derive(uniffi::Record)]
 pub struct BatteryAlertConfig {
@@ -776,6 +822,50 @@ impl MdEngine {
     /// "cancelled" follows; the other device is told).
     pub fn cancel_file(&self, id: String) {
         self.inner.cancel_file(&id);
+    }
+
+    // --- synced folders (mdcore features::folder_sync) ---
+
+    /// Every synced folder here, invitations included.
+    pub fn sync_pairs(&self) -> Vec<SyncPairInfo> {
+        self.inner
+            .sync_pairs()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    /// Sync the folder at `path` with `node_id` (`mode`: "both", "send" or
+    /// "receive", this phone's part). The other device is asked. Returns
+    /// the pair id.
+    pub fn sync_create(&self, node_id: String, path: String, mode: String) -> MdResult<String> {
+        Ok(self.inner.sync_create(&node_id, &path, &mode)?)
+    }
+
+    /// Accept invitation `id`, keeping the folder at `path` on this phone
+    /// (made if it isn't there).
+    pub fn sync_accept(&self, id: String, path: String) -> MdResult<()> {
+        Ok(self.inner.sync_accept(&id, &path)?)
+    }
+
+    /// Stop syncing on both devices, or decline an invitation. Files stay.
+    pub fn sync_remove(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.sync_remove(&id)?)
+    }
+
+    /// Pause or resume a synced folder on this phone.
+    pub fn sync_pause(&self, id: String, paused: bool) -> MdResult<()> {
+        Ok(self.inner.sync_pause(&id, paused)?)
+    }
+
+    /// Compare with the other device now.
+    pub fn sync_now(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.sync_now(&id)?)
+    }
+
+    /// Device `node_id`'s app can sync folders (it said so in its status).
+    pub fn sync_supported(&self, node_id: String) -> bool {
+        self.inner.sync_supported(&node_id)
     }
 
     // --- now playing ---

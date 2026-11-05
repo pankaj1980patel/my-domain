@@ -359,6 +359,42 @@ pub struct BackupItem {
     pub month: Option<String>,
 }
 
+/// A synced folder: one folder kept the same on this device and another
+/// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
+/// event whenever any of them changes.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SyncPair {
+    /// The pair's id: the same on both devices.
+    pub id: String,
+    /// The other device (node id).
+    pub peer: String,
+    /// The folder's name (the creator's folder name).
+    pub name: String,
+    /// The folder on this device ("" while an invitation waits for an
+    /// answer here).
+    pub path: String,
+    /// This device's part: "both", "send" (only sends its changes) or
+    /// "receive" (only takes the other's).
+    pub mode: String,
+    pub paused: bool,
+    /// "invited" (the other device asks; accept or decline here),
+    /// "pending" (waiting for the other device to accept), "paused",
+    /// "error" (see `error`), "syncing", "in_sync", or "waiting" (not
+    /// compared with the other device yet: no link).
+    pub state: String,
+    /// Files on their way, either way (or still different).
+    pub syncing: u32,
+    /// Files in the folder that are synced.
+    pub files: u32,
+    /// Conflict copies in the folder ("name (conflict from ...)").
+    pub conflicts: u32,
+    /// Files left out: bigger than the size limit, or unreadable.
+    pub skipped: u32,
+    /// When both sides last held the same (unix seconds, 0 = never).
+    pub last_synced: u64,
+    pub error: Option<String>,
+}
+
 /// Where the photo backup stands (`Engine::backup_state`, and the
 /// `BackupState` event whenever it changes).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]

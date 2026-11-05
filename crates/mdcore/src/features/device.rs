@@ -19,7 +19,8 @@
 //!
 //! The core adds to every status reply: `platform`, `now_playing` (if
 //! something plays) and `shared_folders`, how many folders this device lets
-//! the others browse (`features::browse`; absent from older versions).
+//! the others browse (`features::browse`; absent from older versions), and
+//! `sync: 1` when it syncs folders (`features::folder_sync`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -68,6 +69,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 }
                 // Whether it plays or sends a phone's audio.
                 super::audio_share::extend_status(ctx, &mut status);
+                // Whether it syncs folders.
+                super::folder_sync::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;
@@ -86,6 +89,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::wake::remember(ctx, &from, &status);
                 // Whether it plays or sends a phone's audio.
                 super::audio_share::remember(ctx, &from, &status);
+                super::folder_sync::remember(ctx, &from, &status);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

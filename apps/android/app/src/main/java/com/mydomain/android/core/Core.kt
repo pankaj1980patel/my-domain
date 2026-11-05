@@ -222,6 +222,10 @@ object Core {
     /** Where this phone's photo backup stands (`backup_state` events). */
     var backup by mutableStateOf<com.mydomain.android.ffi.BackupInfo?>(null); private set
 
+    /** Synced folders on this phone, invitations included (`sync_pairs`
+     *  events). */
+    val syncPairs = mutableStateListOf<com.mydomain.android.ffi.SyncPairInfo>()
+
     /** Recent clipboard values, newest first (memory only, never saved). */
     val clipHistory = mutableStateListOf<ClipEntry>()
 
@@ -404,6 +408,7 @@ object Core {
         val kind = o.optString("kind")
         val peersNow = if (kind == "peers_updated") engine()?.peers() else null
         if (kind == "backup_state") engine()?.let { e -> runCatching { e.backupState() }.getOrNull()?.let { s -> onMain { backup = s } } }
+        if (kind == "sync_pairs") refreshSync()
         // An outgoing transfer ended: its cache copy can go (a folder's, once
         // the whole folder is done).
         if (kind == "file_sent" || (kind == "file_failed" && !o.optBoolean("incoming"))) {
@@ -571,7 +576,8 @@ object Core {
                 updateTransfer(o.optString("id"), { Transfer(it, from, name, true) }) {
                     it.copy(state = TransferState.Done, done = o.optLong("size"), total = o.optLong("size"))
                 }
-                addActivity(str(R.string.act_file_saved, name, peerName(from)), Tone.Ok)
+                // A synced folder's files come by themselves, often many.
+                if (!o.optBoolean("sync")) addActivity(str(R.string.act_file_saved, name, peerName(from)), Tone.Ok)
             }
             "file_sent" -> {
                 val name = o.optString("name")
@@ -893,6 +899,36 @@ object Core {
     /** Fetch a listed photo or video from [node]; it arrives like any file. */
     suspend fun downloadGalleryItem(node: String, id: String, name: String): String =
         call { it.downloadGalleryItem(node, id, name) }
+
+    // --- synced folders (SyncFolders.kt) ---
+
+    /** Read the synced folders now (also kept current from events). */
+    fun refreshSync() {
+        val list = runCatching { engine()?.syncPairs() }.getOrNull() ?: return
+        onMain {
+            syncPairs.clear()
+            syncPairs.addAll(list)
+        }
+    }
+
+    /** Accept invitation [id], keeping the folder at [path] on this phone. */
+    suspend fun syncAccept(id: String, path: String) {
+        call { it.syncAccept(id, path) }
+        refreshSync()
+    }
+
+    /** Stop syncing on both devices (or decline an invitation); files stay. */
+    suspend fun syncRemove(id: String) {
+        call { it.syncRemove(id) }
+        refreshSync()
+    }
+
+    suspend fun syncPause(id: String, paused: Boolean) {
+        call { it.syncPause(id, paused) }
+        refreshSync()
+    }
+
+    suspend fun syncNow(id: String) = call { it.syncNow(id) }
 
     /** Read the backup state now (also kept current from events). */
     fun refreshBackup() {

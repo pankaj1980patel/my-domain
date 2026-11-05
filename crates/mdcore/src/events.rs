@@ -158,6 +158,9 @@ pub enum CoreEvent {
         /// A copied picture from the other device's clipboard: put it on
         /// this one's clipboard too.
         clipboard: bool,
+        /// A file of a synced folder (`features::folder_sync`), already in
+        /// its place there: no notice, and the host leaves it where it is.
+        sync: bool,
     },
     /// The other device confirmed it saved our file.
     FileSent {
@@ -231,6 +234,9 @@ pub enum CoreEvent {
     },
     /// Where this device's photo backup stands (sent when it changes).
     BackupState(crate::model::BackupStatus),
+    /// The synced folders, after any of them changed (state, counts, a new
+    /// invitation, one removed).
+    SyncPairs { pairs: Vec<crate::model::SyncPair> },
     /// Another device's battery is low (`alert` "low"), finished charging
     /// ("full") or reached the level chosen for it ("charged"), at `level`
     /// percent.
@@ -329,6 +335,7 @@ impl CoreEvent {
             CoreEvent::GalleryListing { .. } => "gallery-listing",
             CoreEvent::GalleryThumb { .. } => "gallery-thumb",
             CoreEvent::BackupState(_) => "backup-state",
+            CoreEvent::SyncPairs { .. } => "sync-pairs",
             CoreEvent::BatteryAlert { .. } => "battery-alert",
             CoreEvent::Input { .. } => "input-event",
             CoreEvent::Dnd { .. } => "dnd-changed",

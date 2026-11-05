@@ -444,6 +444,29 @@ export const commands = {
 	 *  (Windows) or the file manager's menus (Linux).
 	 */
 	setFileManagerMenu: (on: boolean) => typedError<FileManagerMenu, string>(__TAURI_INVOKE("set_file_manager_menu", { on })),
+	/**  Every synced folder on this computer. */
+	syncPairs: () => __TAURI_INVOKE<SyncPairView_Serialize[]>("sync_pairs"),
+	/**
+	 *  Sync the folder at `path` with `node_id` (`mode`: "both", "send" or
+	 *  "receive"). The other device is asked. Returns the pair id.
+	 */
+	syncCreate: (nodeId: string, path: string, mode: string) => typedError<string, string>(__TAURI_INVOKE("sync_create", { nodeId, path, mode })),
+	/**  Accept an invitation, keeping the folder at `path` here. */
+	syncAccept: (id: string, path: string) => typedError<null, string>(__TAURI_INVOKE("sync_accept", { id, path })),
+	/**  Stop syncing (both devices), or decline an invitation. Files stay. */
+	syncRemove: (id: string) => typedError<null, string>(__TAURI_INVOKE("sync_remove", { id })),
+	/**  Pause or resume a synced folder on this computer. */
+	syncPause: (id: string, paused: boolean) => typedError<null, string>(__TAURI_INVOKE("sync_pause", { id, paused })),
+	/**  Compare with the other device now. */
+	syncNow: (id: string) => typedError<null, string>(__TAURI_INVOKE("sync_now", { id })),
+	/**  The size limit for synced files, in MB. */
+	syncMaxSizeMb: () => __TAURI_INVOKE<number | null>("sync_max_size_mb"),
+	syncSetMaxSizeMb: (mb: number) => typedError<null, string>(__TAURI_INVOKE("sync_set_max_size_mb", { mb })),
+	/**
+	 *  Open a synced folder in the file manager (only a synced folder's own
+	 *  path: the UI can't open anything else through this).
+	 */
+	syncOpenFolder: (id: string) => typedError<null, string>(__TAURI_INVOKE("sync_open_folder", { id })),
 };
 
 /* Types */
@@ -1474,6 +1497,55 @@ export type ShortcutView_Serialize = {
  *  to stay compatible with the existing frontend / Kotlin JSON.
  */
 export type Source = "registry" | "lan" | "manual";
+
+/**  One synced folder, as the UI shows it (the core's `SyncPair`). */
+export type SyncPairView = SyncPairView_Serialize | SyncPairView_Deserialize;
+
+/**  One synced folder, as the UI shows it (the core's `SyncPair`). */
+export type SyncPairView_Deserialize = {
+	id: string,
+	peer: string,
+	name: string,
+	path: string,
+	/**  "both", "send" or "receive" (this computer's part). */
+	mode: string,
+	paused: boolean,
+	/**
+	 *  "invited", "pending", "paused", "error", "syncing", "in_sync" or
+	 *  "waiting".
+	 */
+	state: string,
+	syncing: number,
+	files: number,
+	conflicts: number,
+	skipped: number,
+	/**  Unix seconds, 0 = never. */
+	last_synced: number | null,
+	error?: string | null,
+};
+
+/**  One synced folder, as the UI shows it (the core's `SyncPair`). */
+export type SyncPairView_Serialize = {
+	id: string,
+	peer: string,
+	name: string,
+	path: string,
+	/**  "both", "send" or "receive" (this computer's part). */
+	mode: string,
+	paused: boolean,
+	/**
+	 *  "invited", "pending", "paused", "error", "syncing", "in_sync" or
+	 *  "waiting".
+	 */
+	state: string,
+	syncing: number,
+	files: number,
+	conflicts: number,
+	skipped: number,
+	/**  Unix seconds, 0 = never. */
+	last_synced: number | null,
+	error: string | null,
+};
 
 /**  One transfer, either way. */
 export type TransferEntry = TransferEntry_Serialize | TransferEntry_Deserialize;

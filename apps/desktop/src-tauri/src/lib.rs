@@ -40,6 +40,7 @@ mod screen_share;
 mod send_to;
 mod shortcut;
 mod shortcuts;
+mod sync_folders;
 mod sysinfo;
 mod transfers;
 mod tray;
@@ -377,6 +378,8 @@ impl EventSink for TauriSink {
                 std::thread::spawn(move || computer_audio::on_listen(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
+            // A device asks to sync a folder: say so.
+            CoreEvent::SyncPairs { pairs } => sync_folders::on_pairs(&self.app, pairs),
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
             CoreEvent::MessageReceived(m) if m.ok => {
@@ -445,15 +448,17 @@ impl EventSink for TauriSink {
                 incoming,
                 reason,
             } => transfers::on_failed(&self.app, id, node_id, name, *incoming, reason),
-            // Photo backups arrive by themselves, often many: no notice each.
+            // Photo backups and synced folders' files arrive by themselves,
+            // often many: no notice each.
             CoreEvent::FileReceived {
                 id,
                 from,
                 name,
                 path,
                 size,
+                sync,
                 ..
-            } if is_backup(path) => {
+            } if *sync || is_backup(path) => {
                 transfers::on_received(&self.app, id, from, name, path, *size);
             }
             // A picture copied on another device: on this clipboard too.
@@ -464,6 +469,7 @@ impl EventSink for TauriSink {
                 path,
                 size,
                 clipboard: true,
+                ..
             } => {
                 transfers::on_received(&self.app, id, from, name, path, *size);
                 let (app, from, path) = (self.app.clone(), from.clone(), path.clone());
@@ -1518,7 +1524,16 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         send_to::take_send_request,
         send_to::send_paths,
         send_to::file_manager_menu,
-        send_to::set_file_manager_menu
+        send_to::set_file_manager_menu,
+        sync_folders::sync_pairs,
+        sync_folders::sync_create,
+        sync_folders::sync_accept,
+        sync_folders::sync_remove,
+        sync_folders::sync_pause,
+        sync_folders::sync_now,
+        sync_folders::sync_max_size_mb,
+        sync_folders::sync_set_max_size_mb,
+        sync_folders::sync_open_folder
     ])
 }
 
