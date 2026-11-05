@@ -3,6 +3,7 @@
 import { createResource, createSignal, For, Show } from "solid-js";
 import { commands } from "../bindings";
 import { refreshDevices, state, unwrap } from "../lib/core";
+import { diag, diagnose } from "../lib/diag";
 import { friendlyError } from "../lib/words";
 import { toast } from "../components/ui";
 
@@ -12,6 +13,9 @@ export default function Developer(props: { onBack: () => void }) {
   const [ip, setIp] = createSignal("");
   const [port, setPort] = createSignal("");
   const [filter, setFilter] = createSignal("");
+  // The raw connection report (the device page shows it in plain words).
+  const [diagNode, setDiagNode] = createSignal(Object.keys(diag.reports)[0] ?? "");
+  const [diagBusy, setDiagBusy] = createSignal(false);
 
   const events = () => state.devLog.filter((e) => !filter() || e.name.includes(filter())).slice(0, 200);
 
@@ -105,6 +109,38 @@ export default function Developer(props: { onBack: () => void }) {
             </For>
           </tbody>
         </table>
+      </article>
+
+      <article class="tile">
+        <h2>Connection report</h2>
+        <div class="row">
+          <select value={diagNode()} onChange={(e) => setDiagNode(e.currentTarget.value)} aria-label="Device">
+            <option value="">Choose a device…</option>
+            <For each={state.peers}>{(p) => <option value={p.node_id}>{p.name}</option>}</For>
+          </select>
+          <button
+            class="btn btn-ghost btn-sm"
+            disabled={!diagNode() || diagBusy()}
+            onClick={async () => {
+              setDiagBusy(true);
+              try {
+                await diagnose(diagNode());
+              } catch (e) {
+                toast(friendlyError(e), "error");
+              } finally {
+                setDiagBusy(false);
+              }
+            }}
+          >
+            {diagBusy() ? "Checking…" : "Run diagnose()"}
+          </button>
+        </div>
+        <Show when={diagNode() && diag.reports[diagNode()]} fallback={<p class="muted small">No report yet (Check connection on a device page, or run it here).</p>}>
+          <pre class="run-output">{JSON.stringify(diag.reports[diagNode()], null, 2)}</pre>
+        </Show>
+        <Show when={diagNode() && diag.speed[diagNode()]}>
+          <pre class="run-output">{JSON.stringify(diag.speed[diagNode()], null, 2)}</pre>
+        </Show>
       </article>
 
       <article class="tile">

@@ -4,6 +4,7 @@
 
 use super::signaling::{relay_target, send_signal_via};
 use super::*;
+use crate::features::diag;
 
 impl<P: Platform> Engine<P> {
     /// Kick off the connection ladder on a background thread (returns at once).
@@ -111,13 +112,19 @@ fn signaled_quic<P: Platform>(
         sid: sid.clone(),
         addrs: transport::quic::my_addrs(ctx),
     };
-    if send_signal_via(server_url, token, ctx, node_id, &offer).is_ok() {
-        if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
-            let targets = transport::quic::parse_addrs(&addrs);
-            let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+    match send_signal_via(server_url, token, ctx, node_id, &offer) {
+        Ok(()) => {
+            if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
+                let targets = transport::quic::parse_addrs(&addrs);
+                let _ = ctx.quic.connect_any(ctx.clone(), &targets);
+            } else if !is_live(ctx, node_id) {
+                // The push went (or a neighbour forwarded it); no answer.
+                diag::note(ctx, node_id, "no_answer", None);
+            }
+            // The peer dials us too, so a link may exist even if ours failed.
+            wait_direct(ctx, node_id, 3000);
         }
-        // The peer dials us too, so a link may exist even if ours failed.
-        wait_direct(ctx, node_id, 3000);
+        Err(e) => diag::note(ctx, node_id, "push_failed", Some(&e.to_string())),
     }
     ctx.quic_waiters.lock().remove(&sid);
 }
@@ -205,6 +212,7 @@ fn ladder_once<P: Platform>(
     retry_later: bool,
 ) {
     let emit = |stage: &str, detail: Option<String>| {
+        diag::note(&ctx, &node_id, stage, detail.as_deref());
         ctx.sink.emit(CoreEvent::ConnectProgress {
             node_id: node_id.clone(),
             stage: stage.into(),
@@ -293,7 +301,11 @@ fn ladder_once<P: Platform>(
                         &Signal::RelayOffer { sid },
                     );
                     transport::relay::send_hello(&ctx, &node_id);
-                    wait_live(&ctx, &node_id, 8000);
+                    if !wait_live(&ctx, &node_id, 8000) {
+                        diag::note(&ctx, &node_id, "relay_no_answer", None);
+                    }
+                } else {
+                    diag::note(&ctx, &node_id, "relay_unreachable", None);
                 }
             }
         }

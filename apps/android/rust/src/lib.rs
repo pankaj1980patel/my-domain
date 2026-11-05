@@ -666,6 +666,28 @@ impl MdEngine {
         Ok(self.inner.reconnect(&node_id)?)
     }
 
+    // --- check connection ---
+
+    /// The connection report for a device, as JSON (the core's
+    /// `Diagnosis`): the link, both ends' addresses and networks, round
+    /// trips measured now, recent connect attempts and the relay server.
+    /// Blocks for a few seconds: call off the main thread.
+    pub fn diagnose(&self, node_id: String) -> MdResult<String> {
+        let d = self.inner.diagnose(&node_id)?;
+        serde_json::to_string(&d).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// Start a speed test with a device (`bytes` each way, at most 32 MB).
+    /// Returns its id; progress and the result come as `speed_test` events.
+    pub fn speed_test(&self, node_id: String, bytes: u32) -> MdResult<String> {
+        Ok(self.inner.speed_test(&node_id, bytes)?)
+    }
+
+    /// Stop a running speed test; false if it isn't running.
+    pub fn cancel_speed_test(&self, id: String) -> bool {
+        self.inner.cancel_speed_test(&id)
+    }
+
     /// Quality of every live link (RTT and loss, rated by the core).
     pub fn link_stats(&self) -> Vec<LinkQuality> {
         self.inner

@@ -222,6 +222,8 @@ private fun deviceTiles(node: String, name: String, foundMessage: Long?, foundCl
         PageTile("info", R.string.info_title, available = st != null && hasInfo(st)) {
             st?.let { InfoTile(node, name, it) }
         },
+        // How this phone reaches the computer, and how fast.
+        PageTile("connection", R.string.conn_title, COMPUTER) { ConnectionTile(node, name) },
         // Commands its owner lets your devices run (it lists "run").
         PageTile("commands", R.string.run_title, available = st?.actions?.contains("run") == true) { CommandsTile(node, name) },
         // A computer that lets the phone control it (it lists "input").

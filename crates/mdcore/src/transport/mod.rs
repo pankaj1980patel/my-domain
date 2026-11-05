@@ -137,6 +137,9 @@ pub fn mark_live<P: Platform>(
         }
     };
     if newly {
+        let how = serde_json::to_value(kind).ok();
+        let how = how.as_ref().and_then(|v| v.as_str());
+        crate::features::diag::note(ctx, node_id, "link_up", how);
         ctx.sink.emit(CoreEvent::PeerConnected {
             node_id: node_id.to_string(),
             transport: kind,
@@ -212,6 +215,7 @@ pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
 pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let removed = ctx.p2p_conns.lock().remove(node_id).is_some();
     if removed {
+        crate::features::diag::note(ctx, node_id, "link_down", None);
         ctx.sink.emit(CoreEvent::PeerDisconnected {
             node_id: node_id.to_string(),
         });

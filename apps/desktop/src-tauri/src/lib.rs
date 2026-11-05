@@ -28,6 +28,7 @@ mod computer_audio;
 mod computer_notifs;
 mod device;
 mod device_labels;
+mod diagnostics;
 mod fcm;
 mod location;
 mod note_reminders;
@@ -1585,7 +1586,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         quick_panel::quick_panel_hide,
         quick_panel::quick_panel_open_main,
         quick_panel::quick_panel_action,
-        quick_panel::quick_panel_clips
+        quick_panel::quick_panel_clips,
+        diagnostics::diagnose,
+        diagnostics::speed_test,
+        diagnostics::cancel_speed_test
     ])
 }
 

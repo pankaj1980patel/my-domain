@@ -10,6 +10,7 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
+import { onSpeedEvent, type SpeedRun } from "./diag";
 import { niceName } from "./words";
 import { applyNotesChanged, loadNotes, onReminder, type Note } from "./notes";
 import { toast } from "../components/ui";
@@ -449,6 +450,8 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
     on<{ node_id: string; stage: string; detail?: string | null }>("connect-progress", ({ node_id, stage }) =>
       setState("progress", node_id, stage),
     ),
+    // A speed test from a device's Connection tile.
+    on<SpeedRun & { node_id: string }>("speed-test", onSpeedEvent),
     on<IncomingMessage>("message-received", (m) => {
       if (!m.ok) {
         addActivity({

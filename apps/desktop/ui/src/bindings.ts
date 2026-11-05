@@ -541,9 +541,83 @@ export const commands = {
 	quickPanelAction: (nodeId: string, action: string) => typedError<null, string>(__TAURI_INVOKE("quick_panel_action", { nodeId, action })),
 	/**  The last `limit` clips (sent and received, any device), newest first. */
 	quickPanelClips: (limit: number) => __TAURI_INVOKE<ClipRecord_Serialize[]>("quick_panel_clips", { limit }),
+	/**
+	 *  The connection report for a device. Takes a few seconds (it pings the
+	 *  device and checks the relay server), so it runs off the UI's thread.
+	 */
+	diagnose: (nodeId: string) => typedError<Diagnosis_Serialize, string>(__TAURI_INVOKE("diagnose", { nodeId })),
+	/**
+	 *  Start a speed test with a device (`bytes` each way, at most 32 MB).
+	 *  Returns its id; `speed-test` events follow.
+	 */
+	speedTest: (nodeId: string, bytes: number) => typedError<string, string>(__TAURI_INVOKE("speed_test", { nodeId, bytes })),
+	/**  Stop a running speed test. */
+	cancelSpeedTest: (id: string) => __TAURI_INVOKE<boolean>("cancel_speed_test", { id }),
 };
 
 /* Types */
+/**  Where a device says it can be reached. */
+export type Addresses = Addresses_Serialize | Addresses_Deserialize;
+
+/**  Where a device says it can be reached. */
+export type Addresses_Deserialize = {
+	ip: string,
+	ipv6?: string | null,
+	quic_port: number,
+	/**  The port its router forwards to it (UPnP / NAT-PMP). */
+	mapped_quic?: string | null,
+	/**  The public address the server saw it at (the other device only). */
+	public?: string | null,
+	/**  What its NAT does to outgoing traffic ("easy", "symmetric", "unknown"). */
+	nat: NatKind,
+};
+
+/**  Where a device says it can be reached. */
+export type Addresses_Serialize = {
+	ip: string,
+	ipv6: string | null,
+	quic_port: number,
+	/**  The port its router forwards to it (UPnP / NAT-PMP). */
+	mapped_quic: string | null,
+	/**  The public address the server saw it at (the other device only). */
+	public: string | null,
+	/**  What its NAT does to outgoing traffic ("easy", "symmetric", "unknown"). */
+	nat: NatKind,
+};
+
+/**  One thing that happened while connecting to a device. */
+export type Attempt = Attempt_Serialize | Attempt_Deserialize;
+
+/**  One thing that happened while connecting to a device. */
+export type Attempt_Deserialize = {
+	/**
+	 *  A ladder stage (`quic`, `signaled_quic`, `relay`, `punching`,
+	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
+	 *  adds: `push_failed` (the server couldn't send the push),
+	 *  `no_answer` (the push went, the device didn't answer),
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`.
+	 */
+	stage: string,
+	detail?: string | null,
+	/**  How long ago, in seconds. */
+	ago_s: number,
+};
+
+/**  One thing that happened while connecting to a device. */
+export type Attempt_Serialize = {
+	/**
+	 *  A ladder stage (`quic`, `signaled_quic`, `relay`, `punching`,
+	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
+	 *  adds: `push_failed` (the server couldn't send the push),
+	 *  `no_answer` (the push went, the device didn't answer),
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`.
+	 */
+	stage: string,
+	detail: string | null,
+	/**  How long ago, in seconds. */
+	ago_s: number,
+};
+
 /**  The audio devices on this computer (by name), for the pickers. */
 export type AudioDevices = AudioDevices_Serialize | AudioDevices_Deserialize;
 
@@ -1097,6 +1171,81 @@ export type DeviceLabel_Serialize = {
 	color?: string,
 };
 
+/**  "Check connection" for one device (`Engine::diagnose`). */
+export type Diagnosis = Diagnosis_Serialize | Diagnosis_Deserialize;
+
+/**  "Check connection" for one device (`Engine::diagnose`). */
+export type Diagnosis_Deserialize = {
+	node_id: string,
+	name: string,
+	/**
+	 *  In one word, for the apps' plain-language line: "lan", "direct",
+	 *  "punched", "webrtc", "relay", "ble" (connected that way), or
+	 *  "unreachable" (tried, no link) or "not_connected" (not tried).
+	 */
+	verdict: string,
+	/**
+	 *  Why it's unreachable, from the last attempt: "push_failed",
+	 *  "no_answer", "relay_no_answer", "relay_unreachable", "no_path",
+	 *  "dropped".
+	 */
+	reason?: string | null,
+	/**  Seconds since the last connect attempt or link change. */
+	last_try_ago_s?: number | null,
+	link?: LinkInfo_Deserialize | null,
+	/**  It answers pings (its app is new enough), and what they measured. */
+	ping_supported: boolean,
+	rtt?: RttStats_Deserialize | null,
+	this_device: Addresses_Deserialize,
+	peer: Addresses_Deserialize,
+	/**  Where this device heard of it: "registry", "lan", "manual". */
+	source: Source,
+	/**
+	 *  Both ends behind symmetric NATs: only the relay can join them
+	 *  across the internet.
+	 */
+	both_symmetric: boolean,
+	relay: RelayInfo_Deserialize,
+	/**  What connecting did, oldest first. */
+	attempts: Attempt_Deserialize[],
+};
+
+/**  "Check connection" for one device (`Engine::diagnose`). */
+export type Diagnosis_Serialize = {
+	node_id: string,
+	name: string,
+	/**
+	 *  In one word, for the apps' plain-language line: "lan", "direct",
+	 *  "punched", "webrtc", "relay", "ble" (connected that way), or
+	 *  "unreachable" (tried, no link) or "not_connected" (not tried).
+	 */
+	verdict: string,
+	/**
+	 *  Why it's unreachable, from the last attempt: "push_failed",
+	 *  "no_answer", "relay_no_answer", "relay_unreachable", "no_path",
+	 *  "dropped".
+	 */
+	reason: string | null,
+	/**  Seconds since the last connect attempt or link change. */
+	last_try_ago_s: number | null,
+	link: LinkInfo_Serialize | null,
+	/**  It answers pings (its app is new enough), and what they measured. */
+	ping_supported: boolean,
+	rtt: RttStats_Serialize | null,
+	this_device: Addresses_Serialize,
+	peer: Addresses_Serialize,
+	/**  Where this device heard of it: "registry", "lan", "manual". */
+	source: Source,
+	/**
+	 *  Both ends behind symmetric NATs: only the relay can join them
+	 *  across the internet.
+	 */
+	both_symmetric: boolean,
+	relay: RelayInfo_Serialize,
+	/**  What connecting did, oldest first. */
+	attempts: Attempt_Serialize[],
+};
+
 /**  The "Send from the file manager" setting. */
 export type FileManagerMenu = {
 	/**  "macos", "windows" or "linux". */
@@ -1225,6 +1374,43 @@ export type LayoutScope =
 "kind" | 
 /**  This device's own layout ("Only for this device"). */
 "device";
+
+/**  The live link, as the report shows it. */
+export type LinkInfo = LinkInfo_Serialize | LinkInfo_Deserialize;
+
+/**  The live link, as the report shows it. */
+export type LinkInfo_Deserialize = {
+	transport: TransportKind,
+	/**  Peer to peer (not the relay or Bluetooth). */
+	direct: boolean,
+	/**  The other end's address is on the local network. */
+	lan: boolean,
+	/**  The other end's address, when the link has one (QUIC, punched). */
+	remote?: string | null,
+	/**  QUIC's own round-trip and loss figures (QUIC links only). */
+	quic_rtt_ms?: number | null,
+	loss_pct?: number | null,
+	/**  Seconds since the link last heard from it / last carried a message. */
+	heard_ago_s: number,
+	used_ago_s: number,
+};
+
+/**  The live link, as the report shows it. */
+export type LinkInfo_Serialize = {
+	transport: TransportKind,
+	/**  Peer to peer (not the relay or Bluetooth). */
+	direct: boolean,
+	/**  The other end's address is on the local network. */
+	lan: boolean,
+	/**  The other end's address, when the link has one (QUIC, punched). */
+	remote: string | null,
+	/**  QUIC's own round-trip and loss figures (QUIC links only). */
+	quic_rtt_ms: number | null,
+	loss_pct: number | null,
+	/**  Seconds since the link last heard from it / last carried a message. */
+	heard_ago_s: number,
+	used_ago_s: number,
+};
 
 /**  One live link, as the UI and the path-choosing logic see it. */
 export type LinkStats = LinkStats_Serialize | LinkStats_Deserialize;
@@ -1539,6 +1725,60 @@ export type PhoneAudioStatus_Serialize = {
 export type Quality = "excellent" | "good" | "weak" | 
 /**  Not measured on this kind of link. */
 "unknown";
+
+/**  The relay server, the fallback when no direct path works. */
+export type RelayInfo = RelayInfo_Serialize | RelayInfo_Deserialize;
+
+/**  The relay server, the fallback when no direct path works. */
+export type RelayInfo_Deserialize = {
+	/**  Signed in to a server (no server: no relay, no push). */
+	signed_in: boolean,
+	/**  This device has a relay connection open now. */
+	connected: boolean,
+	/**  The relay answered a connection just now (`None`: not checked). */
+	reachable?: boolean | null,
+	error?: string | null,
+};
+
+/**  The relay server, the fallback when no direct path works. */
+export type RelayInfo_Serialize = {
+	/**  Signed in to a server (no server: no relay, no push). */
+	signed_in: boolean,
+	/**  This device has a relay connection open now. */
+	connected: boolean,
+	/**  The relay answered a connection just now (`None`: not checked). */
+	reachable: boolean | null,
+	error: string | null,
+};
+
+/**  Round trips measured with pings, in milliseconds. */
+export type RttStats = RttStats_Serialize | RttStats_Deserialize;
+
+/**  Round trips measured with pings, in milliseconds. */
+export type RttStats_Deserialize = {
+	/**  Pings answered ... */
+	samples: number,
+	/**  ... and not answered in time. */
+	lost: number,
+	min_ms?: number | null,
+	avg_ms?: number | null,
+	max_ms?: number | null,
+	/**  Mean difference between one round trip and the next. */
+	jitter_ms?: number | null,
+};
+
+/**  Round trips measured with pings, in milliseconds. */
+export type RttStats_Serialize = {
+	/**  Pings answered ... */
+	samples: number,
+	/**  ... and not answered in time. */
+	lost: number,
+	min_ms: number | null,
+	avg_ms: number | null,
+	max_ms: number | null,
+	/**  Mean difference between one round trip and the next. */
+	jitter_ms: number | null,
+};
 
 /**  How a run went. */
 export type RunOutcome = RunOutcome_Serialize | RunOutcome_Deserialize;

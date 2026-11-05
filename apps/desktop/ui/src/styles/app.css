@@ -3465,3 +3465,56 @@ html.qp-window body {
 .qp-foot-row .btn {
   flex: 1;
 }
+
+/* --- Check connection: a device's Connection tile (screens/device/ConnectionTile.tsx) --- */
+.conn-report {
+  gap: var(--s-2);
+}
+.conn-verdict {
+  margin: 0;
+  font-weight: 600;
+  color: var(--success);
+}
+.conn-verdict.conn-slow {
+  color: var(--warning);
+}
+.conn-verdict.conn-bad {
+  color: var(--danger);
+}
+.conn-sub {
+  margin: var(--s-2) 0 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+.conn-attempts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-sm);
+}
+.conn-attempts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-1) 0;
+  border-bottom: 1px solid var(--border);
+}
+.conn-attempts li:last-child {
+  border-bottom: none;
+}
+.conn-speed {
+  gap: var(--s-1);
+}
+.conn-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+}
+.conn-result {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.conn-result strong {
+  font-size: var(--text-lg);
+}

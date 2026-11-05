@@ -268,6 +268,21 @@ pub enum CoreEvent {
         notes: Vec<crate::model::Note>,
         removed: Vec<String>,
     },
+    /// How a speed test started with `Engine::speed_test` is going
+    /// (`features::diag`). `phase`: "ping", "upload", "download" (with
+    /// `done` of `total` bytes), then "done" (with `result`), "failed"
+    /// (with `error`) or "cancelled".
+    SpeedTest {
+        node_id: String,
+        id: String,
+        phase: String,
+        done: u64,
+        total: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        result: Option<crate::features::diag::SpeedResult>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
     /// Another of your devices started (`on`) or stopped watching this
     /// screen: while any does (`Engine::screen_watchers`), send snapshots
     /// with `Engine::screen_frame`.
@@ -355,6 +370,7 @@ impl CoreEvent {
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
+            CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
             CoreEvent::ScreenOffer { .. } => "screen-offer",

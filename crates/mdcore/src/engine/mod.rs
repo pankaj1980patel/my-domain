@@ -32,6 +32,7 @@ mod background;
 mod ble;
 pub use ble::BleSender;
 mod control;
+mod diag;
 mod labels;
 mod ladder;
 mod media;
@@ -329,6 +330,7 @@ impl<P: Platform> Engine<P> {
             config.folder_sync,
             config.shared_labels,
             config.notes,
+            config.diag,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

@@ -61,6 +61,7 @@ import { foundId, foundTarget, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
+import ConnectionTile from "./device/ConnectionTile";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
 
@@ -78,6 +79,7 @@ const TILES: TileDef[] = [
   { id: "sync", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
   { id: "control", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
   { id: "info", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
+  { id: "connection", title: () => t("conn.title"), wide: true, render: (n) => <ConnectionTile node={n} /> },
   { id: "schedules", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
   {
     id: "commands",

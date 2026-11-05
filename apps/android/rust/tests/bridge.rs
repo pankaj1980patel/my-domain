@@ -173,6 +173,16 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     assert!(q.rtt_ms.is_some());
     assert_eq!(q.quality, "excellent");
     assert_eq!(listed.name, "Desk");
+    // "Check connection": the report comes as JSON for Kotlin to read.
+    let report: serde_json::Value =
+        serde_json::from_str(&phone.diagnose(desktop.node_id()).unwrap()).unwrap();
+    assert_eq!(report["verdict"], "lan");
+    assert_eq!(report["link"]["transport"], "quic");
+    assert!(matches!(
+        phone.diagnose("nobody".into()),
+        Err(MdError::PeerNotFound)
+    ));
+    assert!(!phone.cancel_speed_test("none".into()));
 
     // And the phone answers over the same link.
     assert_eq!(

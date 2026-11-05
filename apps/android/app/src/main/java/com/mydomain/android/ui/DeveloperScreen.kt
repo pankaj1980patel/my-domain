@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mydomain.android.core.ConnCheck
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.timeAgo
@@ -86,6 +87,16 @@ fun DeveloperScreen(onBack: () -> Unit) {
                 if (Core.peers.isEmpty()) Muted("No devices.")
                 Core.peers.forEach { p ->
                     Kv(p.name, "${Core.links[p.nodeId] ?: "—"} · ${p.ip}:${p.quicPort} · ${p.source}")
+                }
+            }
+        }
+        // The raw connection reports (a computer's Connection tile shows
+        // them in plain words).
+        if (ConnCheck.reports.isNotEmpty()) item {
+            Tile(title = "Connection reports") {
+                ConnCheck.reports.forEach { (node, r) ->
+                    Text(Core.peers.find { it.nodeId == node }?.name ?: node, style = MaterialTheme.typography.labelMedium, color = T.text)
+                    Text(r.json.toString(2), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2)
                 }
             }
         }

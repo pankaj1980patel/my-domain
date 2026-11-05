@@ -470,6 +470,8 @@ object Core {
                 addActivity(str(R.string.act_disconnected, peerName(node)))
             }
             "connect_progress" -> progress[node] = o.optString("stage")
+            // A speed test from a computer's Connection tile.
+            "speed_test" -> ConnCheck.onSpeedEvent(o)
             "message_delivered" -> {
                 val id = o.optString("id")
                 messages.replaceAll { if (!it.incoming && it.msgId == id) it.copy(delivered = true) else it }

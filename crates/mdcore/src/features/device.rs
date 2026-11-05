@@ -22,7 +22,8 @@
 //! the others browse (`features::browse`; absent from older versions), and
 //! `sync: 1` when it syncs folders (`features::folder_sync`), and
 //! `labels: 1` when it shares device labels (`features::labels`), and
-//! `notes: 1` when it shares notes (`features::notes`).
+//! `notes: 1` when it shares notes (`features::notes`), and
+//! `ping: 1` when it answers pings and speed tests (`features::diag`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -77,6 +78,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::labels::extend_status(ctx, &mut status);
                 // Whether it shares notes.
                 super::notes::extend_status(ctx, &mut status);
+                // Whether it answers pings and speed tests.
+                super::diag::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;
@@ -98,6 +101,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::folder_sync::remember(ctx, &from, &status);
                 super::labels::remember(ctx, &from, &status[super::labels::FLAG]);
                 super::notes::remember(ctx, &from, &status[super::notes::FLAG]);
+                super::diag::remember(ctx, &from, &status[super::diag::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

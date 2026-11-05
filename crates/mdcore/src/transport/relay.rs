@@ -105,6 +105,26 @@ fn relay_hostport(url: &str) -> Option<String> {
     })
 }
 
+/// Whether the relay at `url` takes connections: its name resolves and a
+/// TCP connection opens within `timeout` (nothing is sent; for the
+/// connection check, `features::diag`).
+pub fn probe(url: &str, timeout: Duration) -> Result<(), String> {
+    let hostport = relay_hostport(url).ok_or_else(|| format!("bad relay url: {url}"))?;
+    let addr: SocketAddr = hostport
+        .to_socket_addrs()
+        .map_err(|e| format!("relay host did not resolve: {e}"))?
+        .next()
+        .ok_or("relay host did not resolve")?;
+    TcpStream::connect_timeout(&addr, timeout)
+        .map(drop)
+        .map_err(|e| format!("relay connect failed: {e}"))
+}
+
+/// Whether this engine's relay socket is open now.
+pub fn is_open<P: Platform>(ctx: &NetCtx<P>) -> bool {
+    ctx.relay.lock().is_some()
+}
+
 /// Open the relay connection if it isn't already. Blocks for the WebSocket
 /// handshake and the server's auth reply (a few seconds at most).
 pub fn ensure_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result<(), String> {

@@ -19,6 +19,7 @@ pub mod call_notification;
 pub mod clipboard;
 pub mod code;
 pub mod device;
+pub mod diag;
 pub mod dnd;
 pub mod extras;
 pub mod files;
@@ -114,13 +115,15 @@ impl<P: Platform> ControlRegistry<P> {
     /// swallowed here. `folder_sync`: this device syncs folders
     /// (`CoreConfig::folder_sync`); without it the `sync_*` messages aren't
     /// known here, as in an app from before; likewise `labels` and the
-    /// `labels` message (`CoreConfig::shared_labels`), and `notes` and the
-    /// `notes*` messages (`CoreConfig::notes`).
+    /// `labels` message (`CoreConfig::shared_labels`), `notes` and the
+    /// `notes*` messages (`CoreConfig::notes`), and `ping` with the ping
+    /// and speed-test messages (`CoreConfig::diag`).
     pub fn with_defaults(
         has_clipboard: bool,
         folder_sync: bool,
         labels: bool,
         notes: bool,
+        diag: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -155,6 +158,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if notes {
             r.register(Arc::new(notes::NotesHandler));
+        }
+        if diag {
+            r.register(Arc::new(diag::DiagHandler));
         }
         r
     }
