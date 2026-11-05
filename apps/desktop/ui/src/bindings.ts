@@ -1519,6 +1519,11 @@ export type SyncPairView_Deserialize = {
 	files: number,
 	conflicts: number,
 	skipped: number,
+	/**
+	 *  The other device's files kept here under another name: theirs
+	 *  differs from another file's only by letter case.
+	 */
+	renamed: number,
 	/**  Unix seconds, 0 = never. */
 	last_synced: number | null,
 	error?: string | null,
@@ -1542,6 +1547,11 @@ export type SyncPairView_Serialize = {
 	files: number,
 	conflicts: number,
 	skipped: number,
+	/**
+	 *  The other device's files kept here under another name: theirs
+	 *  differs from another file's only by letter case.
+	 */
+	renamed: number,
 	/**  Unix seconds, 0 = never. */
 	last_synced: number | null,
 	error: string | null,

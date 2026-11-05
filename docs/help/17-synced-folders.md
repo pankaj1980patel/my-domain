@@ -1,6 +1,6 @@
 ---
 title: Synced folders
-keywords: sync, synced, synchronise, synchronize, mirror, folder, notes, documents, two-way, both ways, conflict, trash, pause
+keywords: sync, synced, case, capital letters, uppercase, lowercase, case conflict, synchronise, synchronize, mirror, folder, notes, documents, two-way, both ways, conflict, trash, pause
 platforms: desktop, android
 ---
 A synced folder is kept the same on two of your devices, for example **Documents/Notes** on your computer and a folder on your phone. Change, add or delete a file on one and the other follows. The files go straight between your devices, encrypted like everything else: nothing is stored on a server or in a cloud.
@@ -26,11 +26,19 @@ About every 30 seconds while both devices are connected to each other, and right
 
 - A file deleted on one device is moved to the hidden **.mydomain-trash** folder inside the synced folder on the other, and kept there for 7 days.
 - If a file was changed on both devices before they synced, both versions are kept: the one changed last keeps the name, the other is saved next to it as **name (conflict from <device> <date>)**, on both devices. Open both, keep what you want, delete the other.
-- A file renamed on one device is deleted and added on the other.
+- A file renamed on one device is deleted and added on the other. A rename that only changes capital letters (**Notes.txt** to **notes.txt**) is just a rename on the other device too.
 
 ## What isn’t synced
 
 Hidden and system files (names starting with a dot, **.DS_Store**, **Thumbs.db**, **desktop.ini**), Office lock files (**~$…**), unfinished downloads (**.part**), links, and files over the size limit (1 GB unless you change it in Settings → **Synced folders**). A folder holds at most 20,000 files.
+
+## Names that differ only by capital letters
+
+Linux and an Android app’s own storage keep **Notes.txt** and **notes.txt** as two files; a Mac (as it comes), Windows and a phone’s shared storage take them for one. my-domain checks this once for each synced folder, and on a computer or phone that can’t tell them apart it never overwrites or deletes a file because of it:
+
+- A file whose name differs from another file’s there only by capital letters is saved as **name (case conflict from <device>)**. The folder’s line in Settings → **Synced folders** says how many: “2 files couldn’t keep their names on this computer”. They still sync both ways: edit or delete one and the other device follows. Once the other file is gone, it takes its own name again.
+- A file in a folder whose name differs only by capital letters (**Docs** and **docs**) goes in the folder as it’s already spelled there, and is counted the same way.
+- To fix it for good, rename one of the two files on the device that has both.
 
 ## Pause and remove
 

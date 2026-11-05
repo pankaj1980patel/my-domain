@@ -4,6 +4,8 @@
 //
 // Numbers go to the UI as f64 (TypeScript has no u64).
 
+use std::path::PathBuf;
+
 use mdcore::model::SyncPair;
 use mdcore::CoreError;
 use tauri::{AppHandle, State};
@@ -27,6 +29,9 @@ pub struct SyncPairView {
     pub files: u32,
     pub conflicts: u32,
     pub skipped: u32,
+    /// The other device's files kept here under another name: theirs
+    /// differs from another file's only by letter case.
+    pub renamed: u32,
     /// Unix seconds, 0 = never.
     pub last_synced: f64,
     pub error: Option<String>,
@@ -46,6 +51,7 @@ impl From<SyncPair> for SyncPairView {
             files: p.files,
             conflicts: p.conflicts,
             skipped: p.skipped,
+            renamed: p.renamed,
             last_synced: p.last_synced as f64,
             error: p.error,
         }
@@ -129,6 +135,33 @@ pub fn sync_open_folder(id: String, app: AppHandle, engine: State<Eng>) -> Resul
         .map_err(|e| CoreError::Other(e.to_string()))
 }
 
+/// The folders of the synced folders that sync (accepted on both sides,
+/// paused or not): files in them may be opened and revealed.
+pub fn synced_roots(pairs: &[SyncPair]) -> Vec<PathBuf> {
+    pairs
+        .iter()
+        .filter(|p| !p.path.is_empty() && p.state != "invited" && p.state != "pending")
+        .map(|p| PathBuf::from(&p.path))
+        .collect()
+}
+
+/// `path` as a file inside one of `roots`, after resolving links and `..`
+/// on both (so a link inside a root that leads out of it is refused): the
+/// UI may only open or reveal files this app saved or syncs.
+pub fn openable_file(path: &str, roots: &[PathBuf]) -> Result<PathBuf, CoreError> {
+    let bad = || CoreError::InvalidInput("not a received file".into());
+    let file = std::fs::canonicalize(path).map_err(|_| bad())?;
+    let inside = |root: &PathBuf| {
+        !root.as_os_str().is_empty()
+            && std::fs::canonicalize(root).is_ok_and(|r| file.starts_with(&r))
+    };
+    if file.is_file() && roots.iter().any(inside) {
+        Ok(file)
+    } else {
+        Err(bad())
+    }
+}
+
 /// Invitations already announced (once each per run).
 static ANNOUNCED: std::sync::Mutex<Vec<String>> = std::sync::Mutex::new(Vec::new());
 
@@ -162,4 +195,105 @@ pub fn on_pairs(app: &AppHandle, pairs: &[SyncPair]) {
             );
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    fn temp(name: &str) -> PathBuf {
+        let d = std::env::temp_dir().join(format!("md-open-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        d
+    }
+
+    fn pair(path: &Path, state: &str) -> SyncPair {
+        SyncPair {
+            id: "p".into(),
+            path: path.to_string_lossy().into_owned(),
+            state: state.into(),
+            ..SyncPair::default()
+        }
+    }
+
+    #[test]
+    fn only_synced_folders_that_sync_are_roots() {
+        let (a, b, c) = (Path::new("/a"), Path::new("/b"), Path::new("/c"));
+        let pairs = [
+            pair(a, "in_sync"),
+            pair(b, "paused"),
+            pair(c, "pending"),
+            pair(Path::new(""), "invited"),
+            pair(Path::new("/d"), "invited"),
+        ];
+        assert_eq!(synced_roots(&pairs), [a.to_path_buf(), b.to_path_buf()]);
+    }
+
+    #[test]
+    fn files_open_only_inside_the_downloads_or_a_synced_folder() {
+        let base = temp("roots");
+        let (downloads, synced, outside) = (
+            base.join("Downloads"),
+            base.join("Notes"),
+            base.join("Private"),
+        );
+        for d in [&downloads, &synced, &outside] {
+            std::fs::create_dir_all(d.join("sub")).unwrap();
+            std::fs::write(d.join("sub").join("f.txt"), b"x").unwrap();
+        }
+        let roots = vec![downloads.clone(), synced.clone()];
+        let s = |p: &Path| p.to_string_lossy().into_owned();
+        for ok in [downloads.join("sub/f.txt"), synced.join("sub/f.txt")] {
+            let got = openable_file(&s(&ok), &roots).unwrap();
+            assert_eq!(got, std::fs::canonicalize(&ok).unwrap());
+        }
+        for bad in [
+            outside.join("sub/f.txt"),
+            // Out through "..".
+            synced.join("sub/../../Private/sub/f.txt"),
+            // A folder, not a file.
+            synced.join("sub"),
+            // Not there.
+            synced.join("nope.txt"),
+            PathBuf::from(""),
+        ] {
+            assert!(openable_file(&s(&bad), &roots).is_err(), "{bad:?}");
+        }
+        // A synced folder that went: nothing under it opens.
+        assert!(openable_file(&s(&synced.join("sub/f.txt")), &roots[..1]).is_err());
+        // An empty root (a pair with no folder) allows nothing.
+        assert!(openable_file(&s(&outside.join("sub/f.txt")), &[PathBuf::new()]).is_err());
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_out_of_a_synced_folder_is_refused() {
+        let base = temp("link");
+        let (synced, outside) = (base.join("Notes"), base.join("Private"));
+        std::fs::create_dir_all(&synced).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.txt"), b"x").unwrap();
+        std::os::unix::fs::symlink(outside.join("secret.txt"), synced.join("link.txt")).unwrap();
+        std::os::unix::fs::symlink(&outside, synced.join("dir")).unwrap();
+        let roots = vec![synced.clone()];
+        for p in [
+            synced.join("link.txt"),
+            synced.join("dir").join("secret.txt"),
+        ] {
+            assert!(
+                openable_file(&p.to_string_lossy(), &roots).is_err(),
+                "{p:?}"
+            );
+        }
+        // A synced folder reached through a link still works.
+        let alias = base.join("alias");
+        std::os::unix::fs::symlink(&synced, &alias).unwrap();
+        std::fs::write(synced.join("ok.txt"), b"x").unwrap();
+        assert!(openable_file(&alias.join("ok.txt").to_string_lossy(), &roots).is_ok());
+        assert!(openable_file(&synced.join("ok.txt").to_string_lossy(), &[alias]).is_ok());
+        let _ = std::fs::remove_dir_all(&base);
+    }
 }

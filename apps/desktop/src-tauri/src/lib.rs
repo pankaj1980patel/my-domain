@@ -1308,17 +1308,16 @@ async fn pick_folder(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().into_owned())
 }
 
-/// A received file, checked to be inside the downloads folder: the UI may
-/// only open or reveal what this app saved.
-fn received_file(path: &str, dir: &DownloadDir) -> Result<std::path::PathBuf, CoreError> {
-    let bad = || CoreError::InvalidInput("not a received file".into());
-    let file = std::fs::canonicalize(path).map_err(|_| bad())?;
-    let dir = std::fs::canonicalize(&dir.0).map_err(|_| bad())?;
-    if file.starts_with(&dir) && file.is_file() {
-        Ok(file)
-    } else {
-        Err(bad())
-    }
+/// A file the UI may open or reveal: one this app saved, in the downloads
+/// folder or a synced folder (`sync_folders::openable_file`).
+fn received_file(
+    path: &str,
+    dir: &DownloadDir,
+    engine: &Eng,
+) -> Result<std::path::PathBuf, CoreError> {
+    let mut roots = vec![dir.0.clone()];
+    roots.extend(sync_folders::synced_roots(&engine.sync_pairs()));
+    sync_folders::openable_file(path, &roots)
 }
 
 /// Open a map at a device's reported position (OpenStreetMap in the
@@ -1341,9 +1340,14 @@ fn open_map(lat: f64, lon: f64, app: AppHandle) -> Result<(), CoreError> {
 /// Show a received file in Finder / Explorer / the file manager.
 #[tauri::command]
 #[specta::specta]
-fn reveal_file(path: String, app: AppHandle, dir: State<DownloadDir>) -> Result<(), CoreError> {
+fn reveal_file(
+    path: String,
+    app: AppHandle,
+    dir: State<DownloadDir>,
+    engine: State<Eng>,
+) -> Result<(), CoreError> {
     use tauri_plugin_opener::OpenerExt;
-    let file = received_file(&path, &dir)?;
+    let file = received_file(&path, &dir, &engine)?;
     app.opener()
         .reveal_item_in_dir(file)
         .map_err(|e| CoreError::Other(e.to_string()))
@@ -1352,9 +1356,14 @@ fn reveal_file(path: String, app: AppHandle, dir: State<DownloadDir>) -> Result<
 /// Open a received file with its default app.
 #[tauri::command]
 #[specta::specta]
-fn open_file(path: String, app: AppHandle, dir: State<DownloadDir>) -> Result<(), CoreError> {
+fn open_file(
+    path: String,
+    app: AppHandle,
+    dir: State<DownloadDir>,
+    engine: State<Eng>,
+) -> Result<(), CoreError> {
     use tauri_plugin_opener::OpenerExt;
-    let file = received_file(&path, &dir)?;
+    let file = received_file(&path, &dir, &engine)?;
     app.opener()
         .open_path(file.to_string_lossy(), None::<&str>)
         .map_err(|e| CoreError::Other(e.to_string()))

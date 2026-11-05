@@ -50,7 +50,26 @@
 //!   ever silently overwritten: an incoming file that would replace one
 //!   changed here since the decision goes in as a conflict copy instead.
 //!   Deleted on one side and edited on the other: the edit wins.
-//! - a rename is a delete and an add.
+//! - a rename is a delete and an add; one that only changes the letter
+//!   case of the name (`Notes.txt` -> `notes.txt`), of a file the other
+//!   side still has as it was, is just a rename there.
+//!
+//! **Letter case**: "Notes.txt" and "notes.txt" are two files on Linux and
+//! in an Android app's own storage, but one on a Mac (APFS as it comes),
+//! on Windows and in Android's shared storage. Each side asks its disk
+//! once per folder (a file made in `.mydomain-sync`, looked up by its
+//! upper-case name; `CoreConfig::sync_fold_case` says yes without asking).
+//! Where the disk can't tell them apart, a fetched file whose path differs
+//! only by case from another file here (or from another one fetched in
+//! the same round) is saved as "name (case conflict from <device>).ext",
+//! and one whose folder is spelled differently here goes in that folder as
+//! it's spelled here. The index marks it (`Entry::a`) as holding the other
+//! side's path: this side's manifest lists it under that path, so it's
+//! neither fetched again every round nor sent back as a new file, and its
+//! edits and deletes go both ways like any file's. Once its name is free
+//! here (the other file went), it takes it. Nothing is deleted or
+//! overwritten because of case: what's in the way stays, and an incoming
+//! file that would replace it goes in as a conflict copy.
 //!
 //! **Left out**: hidden and system files (`.DS_Store`, `.git`, anything
 //! starting with a dot, `Thumbs.db`, `desktop.ini`, `~$...` lock files,
@@ -120,6 +139,8 @@ const STAGE_KEEP: Duration = Duration::from_secs(25 * 60 * 60);
 const EXCLUDED: &str = "-";
 /// What's in a conflict copy's name.
 const CONFLICT_MARK: &str = " (conflict from ";
+/// What's in the name of a file kept under another name for letter case.
+const CASE_MARK: &str = " (case conflict from ";
 
 const PAIRS_KEY: &str = "sync_pairs";
 const MAX_SIZE_KEY: &str = "sync_max_size";
@@ -214,6 +235,11 @@ pub(crate) struct Entry {
     /// When it went missing (unix seconds; tombstones only).
     #[serde(default, skip_serializing_if = "is_zero")]
     pub(crate) t: u64,
+    /// This file is the other side's file of this path, kept here under
+    /// another name: its own differs only by letter case from another
+    /// file's, and this disk can't tell them apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) a: Option<String>,
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -253,6 +279,10 @@ pub(crate) struct Pull {
     s: u64,
     m: u64,
     how: How,
+    /// It goes in under another name than `src` because of letter case
+    /// (`Entry::a`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    alias: bool,
     /// When it was last asked for (unix seconds).
     #[serde(default)]
     at: u64,
@@ -510,7 +540,7 @@ fn scan(
         if h == EXCLUDED {
             counts.skipped += 1;
         }
-        let b = old.and_then(|e| e.b);
+        let (b, a) = old.map(|e| (e.b, e.a)).unwrap_or_default();
         entries.insert(
             rel,
             Entry {
@@ -519,6 +549,7 @@ fn scan(
                 h,
                 b,
                 t: 0,
+                a,
             },
         );
     }
@@ -570,6 +601,347 @@ fn walk(
     Ok(())
 }
 
+// --- letter case ---------------------------------------------------------------
+
+/// `rel` as a disk that ignores letter case compares it.
+fn fold_key(rel: &str) -> String {
+    rel.to_lowercase()
+}
+
+/// (folder, name) of a relative path ("" for the top).
+fn split_rel(rel: &str) -> (&str, &str) {
+    rel.rsplit_once('/').unwrap_or(("", rel))
+}
+
+/// The disk under `root` takes names that differ only by letter case for
+/// one file: a file made in the state folder is looked up by its
+/// upper-case name.
+fn disk_folds_case(root: &Path) -> bool {
+    let dir = root.join(STATE_DIR);
+    let name = format!("case-probe-{}", crate::transport::outbox::new_id());
+    let lower = dir.join(&name);
+    let made = std::fs::create_dir_all(&dir).is_ok()
+        && std::fs::File::options()
+            .write(true)
+            .create_new(true)
+            .open(&lower)
+            .is_ok();
+    if !made {
+        // Can't tell: what these systems' disks usually do.
+        return cfg!(any(target_os = "macos", target_os = "windows"));
+    }
+    let folds = std::fs::symlink_metadata(dir.join(name.to_uppercase())).is_ok();
+    let _ = std::fs::remove_file(&lower);
+    folds
+}
+
+/// Whether the folder at `root` (pair `slot`'s) can't tell letter case
+/// apart (its disk is asked once).
+fn folds_case<P: Platform>(ctx: &NetCtx<P>, slot: &Slot, root: &Path) -> bool {
+    if ctx.config.sync_fold_case {
+        return true;
+    }
+    *slot
+        .folds
+        .lock()
+        .get_or_insert_with(|| disk_folds_case(root))
+}
+
+/// "dir/name (case conflict from <device>).ext" for `rel` (`n` > 1: with
+/// the number too, "... <device> 2).ext").
+pub(crate) fn case_name(rel: &str, device: &str, n: u32) -> String {
+    let (dir, name) = split_rel(rel);
+    let (stem, ext) = match name.rfind('.') {
+        Some(i) if i > 0 => (&name[..i], &name[i..]),
+        _ => (name, ""),
+    };
+    let device = safe_name(device);
+    let num = if n > 1 {
+        format!(" {n}")
+    } else {
+        String::new()
+    };
+    let file = safe_name(&format!("{stem}{CASE_MARK}{device}{num}){ext}"));
+    if dir.is_empty() {
+        file
+    } else {
+        format!("{dir}/{file}")
+    }
+}
+
+/// The index as the other side knows it: a file kept here under another
+/// name for letter case (`Entry::a`) stands under the other side's path
+/// (unless a file of that very name is here). Returns that view, and for
+/// those files, the other side's path -> the path here.
+pub(crate) fn local_view(
+    entries: &BTreeMap<String, Entry>,
+) -> (BTreeMap<String, Entry>, HashMap<String, String>) {
+    let mut view: BTreeMap<String, Entry> = entries
+        .iter()
+        .filter(|(_, e)| e.a.is_none())
+        .map(|(k, e)| (k.clone(), e.clone()))
+        .collect();
+    let mut keys = HashMap::new();
+    for (k, e) in entries {
+        let Some(p) = &e.a else { continue };
+        let free = !keys.contains_key(p) && view.get(p).is_none_or(|r| r.h.is_empty());
+        if p != k && rel_ok(p) && free {
+            view.insert(p.clone(), e.clone());
+            keys.insert(p.clone(), k.clone());
+        }
+    }
+    (view, keys)
+}
+
+/// Where the other side's `src` is here: the file kept under another name
+/// for it (`keys`, from `local_view`), or the file of that name.
+fn local_key(
+    entries: &BTreeMap<String, Entry>,
+    keys: &HashMap<String, String>,
+    src: &str,
+) -> Option<String> {
+    match keys.get(src) {
+        Some(k) => Some(k.clone()),
+        None => entries
+            .get(src)
+            .is_some_and(|e| e.a.is_none())
+            .then(|| src.to_string()),
+    }
+}
+
+/// Every folder the index knows, as it's spelled here, by its folded
+/// spelling.
+fn dir_map(entries: &BTreeMap<String, Entry>) -> HashMap<String, String> {
+    let mut dirs = HashMap::new();
+    for (k, _) in entries.iter().filter(|(_, e)| !e.h.is_empty()) {
+        for (i, _) in k.match_indices('/') {
+            let prefix = &k[..i];
+            dirs.entry(fold_key(prefix))
+                .or_insert_with(|| prefix.to_string());
+        }
+    }
+    dirs
+}
+
+/// `rel` with its folders spelled as they are here (a disk that ignores
+/// case puts a file for "docs/a.txt" into "Docs" if that's there): from
+/// `dirs` (what's known, and decided this round), else the disk; folders
+/// not here yet keep `rel`'s spelling and go into `dirs`.
+fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>) -> String {
+    let (dir, name) = split_rel(rel);
+    if dir.is_empty() {
+        return rel.to_string();
+    }
+    let mut actual = String::new();
+    for part in dir.split('/') {
+        let wanted = if actual.is_empty() {
+            part.to_string()
+        } else {
+            format!("{actual}/{part}")
+        };
+        let key = fold_key(&wanted);
+        let got = match dirs.get(&key) {
+            Some(a) => a.clone(),
+            None => {
+                let names: Vec<String> = std::fs::read_dir(root.join(&actual))
+                    .map(|rd| {
+                        rd.flatten()
+                            .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+                            .map(|e| e.file_name().to_string_lossy().into_owned())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let folded = fold_key(part);
+                let here = names
+                    .iter()
+                    .find(|n| *n == part)
+                    .or_else(|| names.iter().find(|n| fold_key(n) == folded))
+                    .map_or(part, String::as_str);
+                let a = if actual.is_empty() {
+                    here.to_string()
+                } else {
+                    format!("{actual}/{here}")
+                };
+                dirs.insert(key, a.clone());
+                a
+            }
+        };
+        actual = got;
+    }
+    format!("{actual}/{name}")
+}
+
+/// Rename `from` to `to` in the same folder, if `from` is still the file
+/// `e` knows and no other file there has `to`'s name in any case (so
+/// nothing is ever renamed over, whether the disk tells case apart or
+/// not).
+fn rename_in_place(root: &Path, from: &str, to: &str, e: &Entry) -> bool {
+    let ((dir, from_name), (to_dir, to_name)) = (split_rel(from), split_rel(to));
+    if dir != to_dir || from == to {
+        return false;
+    }
+    let src = root.join(from);
+    let Ok(meta) = std::fs::symlink_metadata(&src) else {
+        return false;
+    };
+    if !meta.is_file() || meta.len() != e.s || mtime_ms(&meta) != e.m {
+        return false;
+    }
+    let Ok(names) = std::fs::read_dir(root.join(dir)) else {
+        return false;
+    };
+    let folded = fold_key(to_name);
+    let in_the_way = names.flatten().any(|n| {
+        let n = n.file_name().to_string_lossy().into_owned();
+        n != from_name && fold_key(&n) == folded
+    });
+    !in_the_way && std::fs::rename(&src, root.join(to)).is_ok()
+}
+
+/// Files kept under another name for letter case take their own name once
+/// it's free here.
+fn settle_names(root: &Path, entries: &mut BTreeMap<String, Entry>) {
+    let kept: Vec<(String, String)> = entries
+        .iter()
+        .filter(|(_, e)| !e.h.is_empty())
+        .filter_map(|(k, e)| e.a.clone().map(|p| (k.clone(), p)))
+        .collect();
+    for (k, p) in kept {
+        let folded = fold_key(&p);
+        let taken = entries
+            .iter()
+            .any(|(o, e)| *o != k && !e.h.is_empty() && fold_key(o) == folded);
+        let Some(e) = entries.get(&k).cloned() else {
+            continue;
+        };
+        if taken || !rel_ok(&p) || !rename_in_place(root, &k, &p, &e) {
+            continue;
+        }
+        entries.remove(&k);
+        entries.insert(p, Entry { a: None, ..e });
+    }
+}
+
+/// A file renamed there only in letter case (gone under one name, come
+/// under the other with the same content) that's here as it was under the
+/// old name: renamed here too, instead of going to the trash while the
+/// same file is fetched again. With `dirs` (a disk that ignores case) the
+/// new name's folders are spelled as they are here; when that leaves the
+/// path as it is (only a folder's case changed there), the file just
+/// stands for the new path.
+fn case_renames(
+    root: &Path,
+    entries: &mut BTreeMap<String, Entry>,
+    trash: &mut Vec<String>,
+    pulls: &mut Vec<(String, Pull)>,
+    mut dirs: Option<&mut HashMap<String, String>>,
+) {
+    trash.retain(|from| {
+        let Some(e) = entries
+            .get(from)
+            .filter(|e| e.a.is_none() && is_sha(&e.h))
+            .cloned()
+        else {
+            return true;
+        };
+        let folded = fold_key(from);
+        let Some(i) = pulls.iter().position(|(t, p)| {
+            !p.alias
+                && *t == p.src
+                && p.how == How::Replace { expect: None }
+                && p.sha == e.h
+                && fold_key(t) == folded
+        }) else {
+            return true;
+        };
+        let target = pulls[i].0.clone();
+        let dest = match dirs.as_deref_mut() {
+            Some(d) => resolve_dirs(root, &target, d),
+            None => target.clone(),
+        };
+        if dest != *from && !rename_in_place(root, from, &dest, &e) {
+            return true;
+        }
+        entries.remove(from);
+        let h = e.h.clone();
+        entries.insert(
+            dest.clone(),
+            Entry {
+                b: Some(h),
+                t: 0,
+                a: (dest != target).then_some(target),
+                ..e
+            },
+        );
+        pulls.remove(i);
+        false
+    });
+}
+
+/// On a disk that ignores letter case: a file coming to a path that's new
+/// here, which differs only by case from a file here (or from one coming
+/// this round), goes in as "name (case conflict from <device>).ext"; one
+/// whose folder is spelled differently here goes in that folder as it's
+/// spelled here. Either way it's marked as standing for the other side's
+/// path. What's on its way already keeps where it goes; a file no free
+/// name can be found for isn't fetched.
+fn make_room(
+    root: &Path,
+    idx: &Index,
+    pulls: Vec<(String, Pull)>,
+    dirs: &mut HashMap<String, String>,
+    peer: &str,
+) -> Vec<(String, Pull)> {
+    let is_new =
+        |t: &str, p: &Pull| !p.alias && t == p.src && p.how == How::Replace { expect: None };
+    let going = |t: &str, p: &Pull| {
+        idx.pulls
+            .get(t)
+            .is_some_and(|q| q.src == p.src && q.sha == p.sha && q.alias == p.alias)
+    };
+    let mut taken: HashSet<String> = idx
+        .entries
+        .iter()
+        .filter(|(_, e)| !e.h.is_empty())
+        .map(|(k, _)| fold_key(k))
+        .collect();
+    for (t, p) in &pulls {
+        if !is_new(t, p) || going(t, p) {
+            taken.insert(fold_key(t));
+        }
+    }
+    let mut out = Vec::with_capacity(pulls.len());
+    for (mut t, mut p) in pulls {
+        if is_new(&t, &p) && !going(&t, &p) {
+            let kept = idx
+                .pulls
+                .iter()
+                .find(|(_, q)| q.alias && q.src == p.src && q.sha == p.sha)
+                .map(|(k, _)| k.clone());
+            if let Some(k) = kept {
+                t = k;
+                p.alias = true;
+            } else {
+                let at = resolve_dirs(root, &t, dirs);
+                if taken.contains(&fold_key(&at)) {
+                    let free = (1..1000)
+                        .map(|n| case_name(&at, peer, n))
+                        .find(|c| !taken.contains(&fold_key(c)) && !root.join(c).exists());
+                    let Some(free) = free else { continue };
+                    t = free;
+                    p.alias = true;
+                } else if at != t {
+                    t = at;
+                    p.alias = true;
+                }
+            }
+            taken.insert(fold_key(&t));
+        }
+        out.push((t, p));
+    }
+    out
+}
+
 // --- state ---------------------------------------------------------------------
 
 /// Per pair, in memory.
@@ -579,6 +951,9 @@ struct Slot {
     /// round, so rounds and arriving files of one pair take turns.
     work: Mutex<Option<Index>>,
     live: Mutex<Live>,
+    /// Names that differ only by letter case are one file on the folder's
+    /// disk (`None` until asked).
+    folds: Mutex<Option<bool>>,
 }
 
 #[derive(Default)]
@@ -588,6 +963,7 @@ struct Live {
     files: u32,
     skipped: u32,
     conflicts: u32,
+    renamed: u32,
     differing: u32,
     pulls: u32,
     /// Transfers sending this pair's files to the other side.
@@ -825,6 +1201,7 @@ fn status_of(cfg: &PairCfg, live: &Live) -> SyncPair {
         files: live.files,
         conflicts: live.conflicts,
         skipped: live.skipped,
+        renamed: live.renamed,
         last_synced: cfg.last_synced,
         error: live.error.clone(),
     }
@@ -1134,14 +1511,21 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
         }
     };
     clean_up(&root, now);
+    let folds = folds_case(ctx, &slot, &root);
+    if folds {
+        settle_names(&root, &mut idx.entries);
+    }
     let (my_node, my_name) = me(ctx);
     let peer = peer_name(ctx, &c.peer);
     let mut gets: Vec<(String, String, String)> = Vec::new();
     let mut cancel: Vec<String> = Vec::new();
     let mut differing = None;
     if let Some((remote, _)) = &remote {
+        // Files kept under another name for letter case stand under the
+        // other side's path; what's decided for it is done to them.
+        let (view, keys) = local_view(&idx.entries);
         let plan = plan(
-            &idx.entries,
+            &view,
             remote,
             c.mode.takes(),
             Side {
@@ -1153,10 +1537,13 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                 name: &peer,
             },
         );
-        let mut wanted: BTreeMap<String, Pull> = BTreeMap::new();
+        let here = |p: String| keys.get(&p).cloned().unwrap_or(p);
+        let mut trash: Vec<String> = Vec::new();
+        let mut pulls: Vec<(String, Pull)> = Vec::new();
         for act in plan.acts {
             match act {
                 Act::Agree { path, base } => {
+                    let path = here(path);
                     if let Some(e) = idx.entries.get_mut(&path) {
                         if base.is_empty() && e.h.is_empty() {
                             idx.entries.remove(&path);
@@ -1165,11 +1552,7 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                         }
                     }
                 }
-                Act::Trash { path } => {
-                    if to_trash(&root, &path, idx.entries.get(&path), now) {
-                        idx.entries.remove(&path);
-                    }
-                }
+                Act::Trash { path } => trash.push(here(path)),
                 Act::Pull {
                     target,
                     src,
@@ -1179,6 +1562,7 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                     how,
                 } => {
                     if rel_ok(&target) && rel_ok(&src) && is_sha(&sha) {
+                        let kept = keys.get(&target).cloned();
                         let pull = Pull {
                             id: String::new(),
                             src,
@@ -1186,19 +1570,37 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                             s,
                             m,
                             how,
+                            alias: kept.is_some(),
                             at: 0,
                         };
-                        wanted.insert(target, pull);
+                        pulls.push((kept.unwrap_or(target), pull));
                     }
                 }
             }
         }
+        let mut dirs = dir_map(&idx.entries);
+        case_renames(
+            &root,
+            &mut idx.entries,
+            &mut trash,
+            &mut pulls,
+            folds.then_some(&mut dirs),
+        );
+        for path in trash {
+            if to_trash(&root, &path, idx.entries.get(&path), now) {
+                idx.entries.remove(&path);
+            }
+        }
+        if folds {
+            pulls = make_room(&root, idx, pulls, &mut dirs, &peer);
+        }
+        let wanted: BTreeMap<String, Pull> = pulls.into_iter().collect();
         // What's no longer wanted stops; what's new is asked for; what's
         // been on its way too long is asked for again (same id: resumes).
         idx.pulls.retain(|target, p| {
-            let keep = wanted
-                .get(target)
-                .is_some_and(|w| w.src == p.src && w.sha == p.sha && w.how == p.how);
+            let keep = wanted.get(target).is_some_and(|w| {
+                w.src == p.src && w.sha == p.sha && w.how == p.how && w.alias == p.alias
+            });
             if !keep {
                 cancel.push(p.id.clone());
             }
@@ -1238,14 +1640,19 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
             .iter()
             .filter(|(p, e)| !e.h.is_empty() && p.contains(CONFLICT_MARK))
             .count() as u32;
+        live.renamed = idx
+            .entries
+            .values()
+            .filter(|e| !e.h.is_empty() && e.a.is_some())
+            .count() as u32;
         live.pulls = pulls;
         if let Some(d) = differing {
             live.differing = d;
         }
     }
     save_index(&root, id, idx);
-    let manifest: Vec<Value> = idx
-        .entries
+    let manifest: Vec<Value> = local_view(&idx.entries)
+        .0
         .iter()
         .filter(|(_, e)| !e.h.is_empty())
         .map(|(p, e)| json!([p, e.s, e.m, e.h]))
@@ -1536,6 +1943,7 @@ fn place<P: Platform>(
                             h,
                             b: None,
                             t: 0,
+                            a: None,
                         },
                     );
                 }
@@ -1554,6 +1962,17 @@ fn place<P: Platform>(
         let path = inside(&root, &dest)?;
         std::fs::rename(staged, &path).ok()?;
         let meta = std::fs::metadata(&path).ok()?;
+        // Kept under another name for letter case: it stands for the other
+        // side's path (whose old tombstone here, if any, it replaces).
+        let kept = pull.alias && dest == target;
+        if kept
+            && idx
+                .entries
+                .get(&pull.src)
+                .is_some_and(|e| e.h.is_empty() && e.a.is_none())
+        {
+            idx.entries.remove(&pull.src);
+        }
         idx.entries.insert(
             dest,
             Entry {
@@ -1562,6 +1981,7 @@ fn place<P: Platform>(
                 h: sha.to_string(),
                 b: agreed.then(|| sha.to_string()),
                 t: 0,
+                a: kept.then(|| pull.src.clone()),
             },
         );
         Some(path)
@@ -1722,6 +2142,7 @@ fn on_get<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
         {
             let mut work = slot.work.lock();
             let idx = work.get_or_insert_with(|| load_index(&root, &c.id));
+            let (_, keys) = local_view(&idx.entries);
             for f in files.iter().take(GET_PAGE) {
                 let (Some(src), Some(sha), Some(tid)) = (
                     f.get(0).and_then(Value::as_str),
@@ -1733,9 +2154,15 @@ fn on_get<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
                 if !is_transfer_id(tid) {
                     continue;
                 }
-                let path = root.join(src);
+                // The file of that name, or the one kept under another
+                // name for it (letter case).
+                let Some(key) = local_key(&idx.entries, &keys, src) else {
+                    nope.push(tid.to_string());
+                    continue;
+                };
+                let path = root.join(&key);
                 let ok = rel_ok(src)
-                    && idx.entries.get(src).is_some_and(|e| {
+                    && idx.entries.get(&key).is_some_and(|e| {
                         e.h == sha
                             && std::fs::symlink_metadata(&path)
                                 .is_ok_and(|m| m.is_file() && m.len() == e.s && mtime_ms(&m) == e.m)
@@ -1915,6 +2342,7 @@ mod tests {
             h: h.to_string(),
             b: b.map(str::to_string),
             t: 0,
+            a: None,
         }
     }
 
@@ -2202,6 +2630,272 @@ mod tests {
             "Makefile (conflict from Mac 1970-01-01)"
         );
         assert!(rel_ok(&conflict_name("a/b.txt", "x:y", 0)));
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("md-sync-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    fn new_pull(path: &str, sha: &str) -> (String, Pull) {
+        let p = Pull {
+            id: String::new(),
+            src: path.into(),
+            sha: sha.into(),
+            s: 1,
+            m: 1,
+            how: How::Replace { expect: None },
+            alias: false,
+            at: 0,
+        };
+        (path.into(), p)
+    }
+
+    #[test]
+    fn case_conflict_names_keep_the_folder_and_extension() {
+        assert_eq!(
+            case_name("Notes/todo.md", "Pankaj’s Phone", 1),
+            "Notes/todo (case conflict from Pankaj’s Phone).md"
+        );
+        assert_eq!(
+            case_name("README", "x:y", 2),
+            "README (case conflict from xy 2)"
+        );
+        assert!(rel_ok(&case_name("a/b.txt", "Linux", 3)));
+        assert!(!case_name("a.txt", "Mac", 1).contains(CONFLICT_MARK));
+    }
+
+    #[test]
+    fn a_file_kept_under_another_name_stands_for_the_other_sides_path() {
+        let mut kept = entry(A, Some(A), 1);
+        kept.a = Some("notes.txt".into());
+        let local: BTreeMap<String, Entry> = [
+            ("Notes.txt".to_string(), entry(B, Some(B), 1)),
+            ("notes (case conflict from Phone).txt".to_string(), kept),
+        ]
+        .into();
+        let (view, keys) = local_view(&local);
+        assert_eq!(
+            view.keys().map(String::as_str).collect::<Vec<_>>(),
+            ["Notes.txt", "notes.txt"]
+        );
+        assert_eq!(keys["notes.txt"], "notes (case conflict from Phone).txt");
+        assert_eq!(
+            local_key(&local, &keys, "notes.txt").as_deref(),
+            Some("notes (case conflict from Phone).txt")
+        );
+        assert_eq!(
+            local_key(&local, &keys, "Notes.txt").as_deref(),
+            Some("Notes.txt")
+        );
+        assert_eq!(local_key(&local, &keys, "nope.txt"), None);
+        // The same on both sides: nothing to fetch, nothing differs.
+        let remote: BTreeMap<String, Remote> = [
+            ("Notes.txt".to_string(), remote(B, 1)),
+            ("notes.txt".to_string(), remote(A, 1)),
+        ]
+        .into();
+        assert_eq!(plan(&view, &remote, true, me(), peer()), Plan::default());
+        // A file of that very name here wins.
+        let mut both = local.clone();
+        both.insert("notes.txt".into(), entry(C, None, 1));
+        let (view, keys) = local_view(&both);
+        assert_eq!(view["notes.txt"].h, C);
+        assert!(keys.is_empty());
+    }
+
+    #[test]
+    fn folders_are_spelled_as_they_are_here() {
+        let root = temp("dirs");
+        std::fs::create_dir_all(root.join("Docs").join("Old")).unwrap();
+        let mut dirs = HashMap::new();
+        assert_eq!(
+            resolve_dirs(&root, "docs/old/a.txt", &mut dirs),
+            "Docs/Old/a.txt"
+        );
+        assert_eq!(
+            resolve_dirs(&root, "Docs/Old/b.txt", &mut dirs),
+            "Docs/Old/b.txt"
+        );
+        // A folder decided this round is used for the next file too.
+        assert_eq!(resolve_dirs(&root, "New/a.txt", &mut dirs), "New/a.txt");
+        assert_eq!(resolve_dirs(&root, "NEW/b.txt", &mut dirs), "New/b.txt");
+        assert_eq!(resolve_dirs(&root, "top.txt", &mut dirs), "top.txt");
+        let known: BTreeMap<String, Entry> =
+            [("Photos/2024/a.jpg".to_string(), entry(A, None, 1))].into();
+        let mut dirs = dir_map(&known);
+        assert_eq!(
+            resolve_dirs(&root, "photos/2024/b.jpg", &mut dirs),
+            "Photos/2024/b.jpg"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_new_file_whose_name_differs_only_by_case_gets_a_name_of_its_own() {
+        let root = temp("room");
+        let mut idx = Index::default();
+        idx.entries.insert("Notes.txt".into(), entry(A, Some(A), 1));
+        idx.entries
+            .insert("Docs/x.txt".into(), entry(A, Some(A), 1));
+        let mut dirs = dir_map(&idx.entries);
+        let pulls = vec![
+            new_pull("NOTES.TXT", B),
+            new_pull("docs/y.txt", B),
+            new_pull("Two.txt", B),
+            new_pull("two.txt", C),
+            new_pull("fine.txt", C),
+        ];
+        let out = make_room(&root, &idx, pulls, &mut dirs, "Phone");
+        let got: Vec<(&str, &str, bool)> = out
+            .iter()
+            .map(|(t, p)| (t.as_str(), p.src.as_str(), p.alias))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                ("NOTES (case conflict from Phone).TXT", "NOTES.TXT", true),
+                ("Docs/y.txt", "docs/y.txt", true),
+                ("Two.txt", "Two.txt", false),
+                ("two (case conflict from Phone).txt", "two.txt", true),
+                ("fine.txt", "fine.txt", false),
+            ]
+        );
+        // On its way already under a name of its own: it keeps that name
+        // next round.
+        let mut idx2 = Index {
+            entries: idx.entries.clone(),
+            ..Index::default()
+        };
+        for (t, p) in out {
+            idx2.pulls.insert(t, p);
+        }
+        let again = make_room(
+            &root,
+            &idx2,
+            vec![new_pull("NOTES.TXT", B), new_pull("two.txt", C)],
+            &mut dir_map(&idx2.entries),
+            "Phone",
+        );
+        assert_eq!(again[0].0, "NOTES (case conflict from Phone).TXT");
+        assert_eq!(again[1].0, "two (case conflict from Phone).txt");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn file(root: &Path, rel: &str, body: &[u8]) -> Entry {
+        let path = root.join(rel);
+        std::fs::write(&path, body).unwrap();
+        let meta = std::fs::metadata(&path).unwrap();
+        Entry {
+            s: meta.len(),
+            m: mtime_ms(&meta),
+            h: sha256_file(&path).unwrap(),
+            b: None,
+            t: 0,
+            a: None,
+        }
+    }
+
+    fn names(root: &Path) -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(root)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| !n.starts_with('.'))
+            .collect();
+        v.sort();
+        v
+    }
+
+    #[test]
+    fn a_rename_only_in_case_there_is_a_rename_here() {
+        let root = temp("case-rename");
+        let e = file(&root, "Notes.txt", b"notes");
+        let agreed = Entry {
+            b: Some(e.h.clone()),
+            ..e.clone()
+        };
+        let mut entries: BTreeMap<String, Entry> = [("Notes.txt".to_string(), agreed)].into();
+        let mut trash = vec!["Notes.txt".to_string()];
+        let mut pulls = vec![new_pull("notes.txt", &e.h)];
+        case_renames(&root, &mut entries, &mut trash, &mut pulls, None);
+        assert!(trash.is_empty() && pulls.is_empty());
+        assert_eq!(names(&root), ["notes.txt"]);
+        assert_eq!(std::fs::read(root.join("notes.txt")).unwrap(), b"notes");
+        assert_eq!(entries["notes.txt"].b.as_deref(), Some(e.h.as_str()));
+        assert!(!entries.contains_key("Notes.txt"));
+        // Different content: not a rename (it's fetched as usual).
+        let mut trash = vec!["notes.txt".to_string()];
+        let mut pulls = vec![new_pull("NOTES.txt", B)];
+        case_renames(&root, &mut entries, &mut trash, &mut pulls, None);
+        assert_eq!((trash.len(), pulls.len()), (1, 1));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_folder_renamed_only_in_case_there_stays_as_it_is_here() {
+        let root = temp("dir-rename");
+        std::fs::create_dir_all(root.join("Docs")).unwrap();
+        let e = file(&root, "Docs/a.txt", b"a");
+        let mut entries: BTreeMap<String, Entry> = [("Docs/a.txt".to_string(), e.clone())].into();
+        let mut dirs = dir_map(&entries);
+        let mut trash = vec!["Docs/a.txt".to_string()];
+        let mut pulls = vec![new_pull("docs/a.txt", &e.h)];
+        case_renames(&root, &mut entries, &mut trash, &mut pulls, Some(&mut dirs));
+        assert!(trash.is_empty() && pulls.is_empty());
+        assert_eq!(entries["Docs/a.txt"].a.as_deref(), Some("docs/a.txt"));
+        assert!(root.join("Docs").join("a.txt").is_file());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn nothing_is_renamed_over_another_file() {
+        let root = temp("in-the-way");
+        let e = file(&root, "a.txt", b"a");
+        file(&root, "b.txt", b"b");
+        // "B.txt" is "b.txt" on a disk that ignores case.
+        assert!(!rename_in_place(&root, "a.txt", "B.txt", &e));
+        assert!(!rename_in_place(&root, "a.txt", "b.txt", &e));
+        // Changed since it was scanned: left alone.
+        let stale = Entry { s: 99, ..e.clone() };
+        assert!(!rename_in_place(&root, "a.txt", "A.txt", &stale));
+        assert!(rename_in_place(&root, "a.txt", "A.txt", &e));
+        assert_eq!(names(&root), ["A.txt", "b.txt"]);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_kept_file_takes_its_own_name_once_free() {
+        let root = temp("settle");
+        let mut kept = file(&root, "n (case conflict from Phone).txt", b"n");
+        kept.a = Some("n.txt".into());
+        let other = file(&root, "N.txt", b"N");
+        let mut entries: BTreeMap<String, Entry> = [
+            ("n (case conflict from Phone).txt".to_string(), kept),
+            ("N.txt".to_string(), other),
+        ]
+        .into();
+        settle_names(&root, &mut entries);
+        assert!(entries.contains_key("n (case conflict from Phone).txt"));
+        // The other file went: the name is free.
+        std::fs::remove_file(root.join("N.txt")).unwrap();
+        entries.get_mut("N.txt").unwrap().h.clear();
+        settle_names(&root, &mut entries);
+        assert_eq!(entries["n.txt"].a, None);
+        assert_eq!(names(&root), ["n.txt"]);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_disk_is_asked_whether_it_ignores_case() {
+        let root = temp("probe");
+        std::fs::write(root.join("x"), b"x").unwrap();
+        assert_eq!(disk_folds_case(&root), root.join("X").exists());
+        // The probe leaves nothing behind.
+        assert_eq!(std::fs::read_dir(root.join(STATE_DIR)).unwrap().count(), 0);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

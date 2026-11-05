@@ -97,6 +97,10 @@ export function SyncPairRow(props: { pair: SyncPair; showDevice?: boolean }) {
               <Show when={p().files > 0}> · {tn("sync.files", p().files)}</Show>
               <Show when={p().conflicts > 0}> · {tn("sync.conflicts", p().conflicts)}</Show>
               <Show when={p().skipped > 0}> · {tn("sync.skipped", p().skipped)}</Show>
+              <Show when={p().renamed > 0}>
+                {" · "}
+                <span title={t("sync.renamedHint")}>{tn("sync.renamed", p().renamed)}</span>
+              </Show>
               <Show when={(p().last_synced ?? 0) > 0}> · {t("sync.lastSynced", { when: timeAgo((p().last_synced ?? 0) * 1000) })}</Show>
             </p>
           </>

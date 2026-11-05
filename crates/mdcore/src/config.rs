@@ -128,6 +128,11 @@ pub struct CoreConfig {
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
+    /// Treat every synced folder's disk as one where names that differ
+    /// only by letter case are the same file, without asking the disk
+    /// (tests: a Linux temp folder tells them apart, a Mac's doesn't).
+    /// Off: each folder's disk is asked once.
+    pub sync_fold_case: bool,
 }
 
 impl Default for CoreConfig {
@@ -151,6 +156,7 @@ impl Default for CoreConfig {
             bin_media: true,
             folder_sync: true,
             sync_every: std::time::Duration::from_secs(30),
+            sync_fold_case: false,
         }
     }
 }

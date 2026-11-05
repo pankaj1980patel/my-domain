@@ -390,6 +390,10 @@ pub struct SyncPair {
     pub conflicts: u32,
     /// Files left out: bigger than the size limit, or unreadable.
     pub skipped: u32,
+    /// The other device's files kept here under another name, because
+    /// this device's disk can't tell their names from another file's
+    /// (they differ only by letter case: "Notes.txt" and "notes.txt").
+    pub renamed: u32,
     /// When both sides last held the same (unix seconds, 0 = never).
     pub last_synced: u64,
     pub error: Option<String>,

@@ -951,6 +951,11 @@ export const en = {
   "sync.files": { one: "{count} file", other: "{count} files" },
   "sync.conflicts": { one: "{count} conflict copy", other: "{count} conflict copies" },
   "sync.skipped": { one: "{count} file left out", other: "{count} files left out" },
+  "sync.renamed": {
+    one: "{count} file couldn’t keep its name on this computer",
+    other: "{count} files couldn’t keep their names on this computer",
+  },
+  "sync.renamedHint": "Their names differ from another file’s only by capital letters, which this computer’s disk can’t tell apart. They’re saved as “name (case conflict from …)”, and still sync.",
   "sync.lastSynced": "in sync {when}",
   "sync.pause": "Pause",
   "sync.resume": "Resume",

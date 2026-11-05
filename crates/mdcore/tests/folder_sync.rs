@@ -1,7 +1,8 @@
 //! Synced folders between two engines over real links: the first sync
 //! both ways, an edit, a delete (to the trash), a rename, a conflict (both
-//! kept), a peer too old to sync (never sent a `sync_*` message), and a big
-//! file whose link drops half way (resumes).
+//! kept), a peer too old to sync (never sent a `sync_*` message), a big
+//! file whose link drops half way (resumes), and names that differ only by
+//! letter case on a disk that can't tell them apart.
 
 // Test-only file: helpers unwrap freely, a panic IS the failure report.
 #![allow(clippy::unwrap_used)]
@@ -402,6 +403,206 @@ fn a_big_file_resumes_after_the_link_drops() {
     };
     assert_eq!(when(&got), when(&da.join("movie.bin")));
     wait_in_sync(&a, &id);
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+// --- letter case ---------------------------------------------------------------
+//
+// A Mac's and Windows' disks take "Notes.txt" and "notes.txt" for one file,
+// Linux's don't. `sync_fold_case` makes a side behave as on such a disk
+// wherever the test runs (a Linux temp folder tells case apart; a Mac's
+// already doesn't, which the core finds out by itself).
+
+/// A synced-folder node whose disk is taken to ignore letter case.
+fn folding_node(id: &str) -> TestNode {
+    let cfg = CoreConfig {
+        sync_fold_case: true,
+        ..config(true)
+    };
+    TestNode::start_full(MockPlatform::new(id), cfg)
+}
+
+/// Two linked nodes; `fold_a` / `fold_b`: that side's disk ignores case.
+fn linked_case(test: &str, fold_a: bool, fold_b: bool) -> (TestNode, TestNode) {
+    let make = |side: &str, fold: bool| {
+        let id = format!("sync-{test}-{side}");
+        if fold {
+            folding_node(&id)
+        } else {
+            node(&id, true)
+        }
+    };
+    let (a, b) = (make("a", fold_a), make("b", fold_b));
+    TestNode::pair(&a, &b);
+    assert_eq!(learn_status(&a, &b)["sync"], 1);
+    (a, b)
+}
+
+/// This system's temp folder tells "x" from "X".
+fn temp_tells_case_apart() -> bool {
+    let d = temp_dir("case-probe");
+    std::fs::write(d.join("probe"), b"x").unwrap();
+    let apart = !d.join("PROBE").exists();
+    let _ = std::fs::remove_dir_all(&d);
+    apart
+}
+
+/// Synced files that arrived at `n` so far.
+fn received(n: &TestNode) -> usize {
+    n.sink
+        .all()
+        .iter()
+        .filter(|e| matches!(e, CoreEvent::FileReceived { sync: true, .. }))
+        .count()
+}
+
+fn wait_renamed(n: &TestNode, id: &str, want: u32) {
+    let ok = poll(WAIT, || {
+        pair_of(n, id).filter(|p| p.renamed == want && p.state == "in_sync")
+    });
+    assert!(
+        ok.is_some(),
+        "not in sync with {want} renamed: {:#?}",
+        pair_of(n, id)
+    );
+}
+
+#[test]
+fn names_that_differ_only_by_case_are_both_kept_on_a_disk_that_ignores_case() {
+    let (a, b) = linked_case("case", true, true);
+    let (da, db) = (temp_dir("case-a"), temp_dir("case-b"));
+    std::fs::write(da.join("notes.txt"), b"a's notes").unwrap();
+    std::fs::write(db.join("Notes.txt"), b"b's notes, longer").unwrap();
+    std::fs::create_dir_all(da.join("Docs")).unwrap();
+    std::fs::write(da.join("Docs").join("x.txt"), b"x").unwrap();
+    std::fs::create_dir_all(db.join("docs")).unwrap();
+    std::fs::write(db.join("docs").join("y.txt"), b"y").unwrap();
+    let id = start_pair(&a, &b, &da, &db, "both");
+
+    let (name_a, name_b) = (a.engine.identity().name, b.engine.identity().name);
+    let on_a = format!("Notes (case conflict from {name_b}).txt");
+    let on_b = format!("notes (case conflict from {name_a}).txt");
+    // Neither overwrote the other: each side keeps its own under its name
+    // and the other's under a name of its own; files in a folder spelled
+    // differently go in the folder as it's spelled there.
+    wait_content(&da.join(&on_a), b"b's notes, longer");
+    wait_content(&db.join(&on_b), b"a's notes");
+    wait_content(&da.join("Docs").join("y.txt"), b"y");
+    wait_content(&db.join("docs").join("x.txt"), b"x");
+    wait_renamed(&a, &id, 2);
+    wait_renamed(&b, &id, 2);
+    assert_eq!(std::fs::read(da.join("notes.txt")).unwrap(), b"a's notes");
+    assert_eq!(
+        std::fs::read(db.join("Notes.txt")).unwrap(),
+        b"b's notes, longer"
+    );
+    assert_eq!(
+        tree(&da),
+        ["Docs/x.txt", "Docs/y.txt", on_a.as_str(), "notes.txt"]
+    );
+    assert_eq!(
+        tree(&db),
+        ["Notes.txt", "docs/x.txt", "docs/y.txt", on_b.as_str()]
+    );
+    assert_eq!(pair_of(&a, &id).unwrap().conflicts, 0);
+
+    // Not fetched again every round.
+    let (got_a, got_b) = (received(&a), received(&b));
+    std::thread::sleep(Duration::from_secs(3)); // a few rounds
+    assert_eq!(
+        (received(&a), received(&b)),
+        (got_a, got_b),
+        "fetched again"
+    );
+
+    // An edit to the renamed copy goes back to the file it stands for.
+    std::fs::write(db.join(&on_b), b"a's notes, edited on b").unwrap();
+    wait_content(&da.join("notes.txt"), b"a's notes, edited on b");
+    // Both sides take it as agreed before the next edit (else that's a
+    // conflict, as for any file).
+    std::thread::sleep(Duration::from_secs(3));
+    // And the other way round.
+    std::fs::write(da.join("notes.txt"), b"edited on a again").unwrap();
+    wait_content(&db.join(&on_b), b"edited on a again");
+    std::thread::sleep(Duration::from_secs(3));
+
+    // The file in the way goes: the renamed copy takes its own name.
+    std::fs::remove_file(db.join("Notes.txt")).unwrap();
+    wait_gone(&da.join(&on_a));
+    assert!(trashed(&da, &on_a), "not in the trash");
+    wait_content(&db.join("notes.txt"), b"edited on a again");
+    wait_renamed(&a, &id, 1);
+    wait_renamed(&b, &id, 1);
+    assert_eq!(tree(&db), ["docs/x.txt", "docs/y.txt", "notes.txt"]);
+    assert_eq!(tree(&da), ["Docs/x.txt", "Docs/y.txt", "notes.txt"]);
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+fn two_files_from_a_disk_that_tells_case_apart_both_arrive() {
+    if !temp_tells_case_apart() {
+        // Can't hold both names here; the test above covers the rest.
+        eprintln!("skipped: this system's temp folder ignores case");
+        return;
+    }
+    let (a, b) = linked_case("both-names", false, true);
+    let (da, db) = (temp_dir("both-names-a"), temp_dir("both-names-b"));
+    std::fs::write(da.join("Notes.txt"), b"upper").unwrap();
+    std::fs::write(da.join("notes.txt"), b"lower").unwrap();
+    let id = start_pair(&a, &b, &da, &db, "both");
+
+    let kept = format!(
+        "notes (case conflict from {}).txt",
+        a.engine.identity().name
+    );
+    wait_content(&db.join("Notes.txt"), b"upper");
+    wait_content(&db.join(&kept), b"lower");
+    wait_renamed(&b, &id, 1);
+    wait_renamed(&a, &id, 0);
+    // The renamed copy isn't sent back as a new file.
+    assert_eq!(tree(&da), ["Notes.txt", "notes.txt"]);
+    assert_eq!(tree(&db), ["Notes.txt", kept.as_str()]);
+
+    // One of them goes there: the other takes its name here.
+    std::fs::remove_file(da.join("Notes.txt")).unwrap();
+    wait_content(&db.join("notes.txt"), b"lower");
+    wait_renamed(&b, &id, 0);
+    assert_eq!(tree(&db), ["notes.txt"]);
+    assert!(trashed(&db, "Notes.txt"));
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+fn a_rename_only_in_case_is_a_rename_on_a_disk_that_ignores_case() {
+    let (a, b) = linked_case("case-rename", false, true);
+    let (da, db) = (temp_dir("case-rename-a"), temp_dir("case-rename-b"));
+    std::fs::write(da.join("Notes.txt"), b"the only notes").unwrap();
+    let id = start_pair(&a, &b, &da, &db, "both");
+    wait_content(&db.join("Notes.txt"), b"the only notes");
+    wait_in_sync(&a, &id);
+    wait_in_sync(&b, &id);
+    let got = received(&b);
+
+    std::fs::rename(da.join("Notes.txt"), da.join("notes.txt")).unwrap();
+    let renamed = poll(WAIT, || (tree(&db) == ["notes.txt"]).then_some(()));
+    assert!(renamed.is_some(), "not renamed: {:?}", tree(&db));
+    wait_in_sync(&a, &id);
+    wait_in_sync(&b, &id);
+    assert_eq!(
+        std::fs::read(db.join("notes.txt")).unwrap(),
+        b"the only notes"
+    );
+    // Renamed in place: nothing fetched again, nothing in the trash.
+    assert_eq!(received(&b), got, "fetched again");
+    assert!(!trashed(&db, "Notes.txt") && !trashed(&db, "notes.txt"));
+    assert_eq!(tree(&da), ["notes.txt"]);
+    assert_eq!(pair_of(&b, &id).unwrap().renamed, 0);
     for d in [&da, &db] {
         let _ = std::fs::remove_dir_all(d);
     }
