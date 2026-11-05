@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mydomain.android.NoteReminders
+import com.mydomain.android.NotesWidget
 import com.mydomain.android.ffi.NoteItem
 import org.json.JSONObject
 import java.util.concurrent.Executors
@@ -28,6 +29,12 @@ object Notes {
     /** The longest body the core keeps, in bytes. */
     const val MAX_BODY = 64 * 1024
 
+    /** Asked of the Notes tab ([Core.showNote], NotesScreen's `openNote`)
+     *  instead of a note id: a new note, or the list. Neither is an id the
+     *  core makes. */
+    const val NEW = "\u0000new"
+    const val LIST = "\u0000list"
+
     val byId = mutableStateMapOf<String, NoteItem>()
     var loaded by mutableStateOf(false); private set
 
@@ -48,11 +55,16 @@ object Notes {
         }
     }
 
-    /** The notes changed here: their reminders too. Main thread. */
+    /** The notes changed here: their reminders and the widget too. Main
+     *  thread. */
     private fun reminders() {
         val all = byId.values.toList()
         val ctx = Core.app
-        reminderThread.execute { runCatching { NoteReminders.sync(ctx, all) } }
+        reminderThread.execute {
+            runCatching { NoteReminders.sync(ctx, all) }
+            // The Notes home-screen widget shows them too.
+            runCatching { NotesWidget.sync(ctx, all) }
+        }
     }
 
     /** A note saved outside the screens (a reminder's Done or Snooze).

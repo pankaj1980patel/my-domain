@@ -50,6 +50,17 @@ class ClipTileService : TileService() {
     }
 }
 
+/** Tile: open the app straight into a new note ([NotesWidget.newNoteIntent];
+ *  the widget's "+" and the launcher shortcut do the same). */
+class NewNoteTileService : TileService() {
+    override fun onClick() {
+        val open = NotesWidget.newNoteIntent(this)
+        // The app targets Android 9, so the Intent form is allowed.
+        @Suppress("DEPRECATION")
+        startActivityAndCollapse(open)
+    }
+}
+
 /** Tile: lock your computer. */
 class LockTileService : TileService() {
     override fun onClick() = QuickActions.lock(applicationContext)

@@ -62,7 +62,7 @@ class MainActivity : ComponentActivity() {
         askWifiScan(intent)
         openSettings(intent)
         openDevice(intent)
-        openNote(intent)
+        if (savedInstanceState == null) openNote(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -93,10 +93,18 @@ class MainActivity : ComponentActivity() {
         Core.showSettings = true
     }
 
-    /** A note reminder's notification ([NoteReminders]) asked for its note. */
+    /** A note reminder's notification ([NoteReminders]) asked for its note;
+     *  or the Notes widget, the New note tile or launcher shortcut
+     *  ([NotesWidget]) for a note, a new one or the list. Not again when
+     *  the app is reopened from Recents (the task still has this intent). */
     private fun openNote(intent: Intent?) {
-        val id = intent?.getStringExtra(NoteReminders.EXTRA_OPEN_NOTE) ?: return
+        if (intent == null) return
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val id = NotesWidget.noteRequest(intent) ?: intent.getStringExtra(NoteReminders.EXTRA_OPEN_NOTE) ?: return
         intent.removeExtra(NoteReminders.EXTRA_OPEN_NOTE)
+        when (intent.action) {
+            NotesWidget.ACTION_NEW_NOTE, NotesWidget.ACTION_SHOW_NOTES, NotesWidget.ACTION_OPEN_NOTE -> intent.action = null
+        }
         Core.showNote = id
     }
 

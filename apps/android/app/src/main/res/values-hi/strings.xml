@@ -947,4 +947,16 @@
     <string name="notes_conflict_tag">टकराव वाली कॉपी</string>
     <string name="notes_conflict_body">यह नोट %1$s पर और किसी दूसरे डिवाइस पर एक ही समय में बदला गया। यह %1$s का टेक्स्ट है, जिसे रखा गया है ताकि कुछ खो न जाए। जो चाहें वह रखें और दूसरा हटा दें।</string>
     <string name="notes_open_original">“%1$s” खोलें</string>
+
+    <!-- Notes at a glance: the Notes widget, the New note tile and shortcut -->
+    <string name="notes_widget_label">नोट्स</string>
+    <string name="notes_widget_description">एक नज़र में आपके नोट्स: पहले पिन किए हुए, फिर सबसे नए, और जिन पर रिमाइंडर है उन पर घंटी। खोलने के लिए किसी नोट पर टैप करें, या नए नोट के लिए +।</string>
+    <string name="notes_widget_empty">अभी कोई नोट नहीं है। लिखने के लिए + पर टैप करें।</string>
+    <string name="notes_widget_open_app">अपने नोट्स यहाँ दिखाने के लिए एक बार my-domain खोलें।</string>
+    <string name="notes_widget_preview_title_0">ख़रीदारी</string>
+    <string name="notes_widget_preview_line_0">दूध, अंडे, कॉफ़ी</string>
+    <string name="notes_widget_preview_title_1">यात्रा के आइडिया</string>
+    <string name="notes_widget_preview_line_1">शुक्रवार तक ट्रेन बुक करें</string>
+    <string name="qs_new_note_label">नया नोट</string>
+    <string name="shortcut_new_note_long">नया नोट लिखें</string>
 </resources>

@@ -1,7 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Direct Share (ShareTargets.kt): each of your devices is a target in the
-     share sheet, as a dynamic shortcut in this category. Android 10+. -->
+     share sheet, as a dynamic shortcut in this category. Android 10+.
+     And "New note" on a long press of the app icon (Android 7.1+): opens
+     the app on a new note (NotesWidget.ACTION_NEW_NOTE). ShareTargets leaves
+     room for it ([ShareTargets.STATIC_SHORTCUTS]). -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@drawable/shortcut_new_note"
+        android:shortcutId="new_note"
+        android:shortcutLongLabel="@string/shortcut_new_note_long"
+        android:shortcutShortLabel="@string/notes_new">
+        <intent
+            android:action="com.mydomain.android.NEW_NOTE"
+            android:targetClass="com.mydomain.android.MainActivity"
+            android:targetPackage="com.mydomain.android" />
+    </shortcut>
     <share-target android:targetClass="com.mydomain.android.MainActivity">
         <data android:mimeType="*/*" />
         <category android:name="com.mydomain.android.category.SHARE_TARGET" />

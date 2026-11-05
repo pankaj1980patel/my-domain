@@ -1000,4 +1000,18 @@
     <string name="note_reminder_done">Done</string>
     <string name="note_reminder_snooze_10m">Snooze 10 min</string>
     <string name="note_reminder_snooze_1h">Snooze 1 hour</string>
+
+    <!-- Notes at a glance: the Notes widget (NotesWidget.kt), the New note
+         Quick Settings tile and launcher shortcut -->
+    <string name="notes_widget_label">Notes</string>
+    <string name="notes_widget_description">Your notes at a glance: pinned ones first, then the latest, with a bell on those with a reminder. Tap one to open it, or + for a new note.</string>
+    <string name="notes_widget_plus" translatable="false">+</string>
+    <string name="notes_widget_empty">No notes yet. Tap + to write one.</string>
+    <string name="notes_widget_open_app">Open my-domain once to show your notes here.</string>
+    <string name="notes_widget_preview_title_0">Shopping</string>
+    <string name="notes_widget_preview_line_0">Milk, eggs, coffee</string>
+    <string name="notes_widget_preview_title_1">Trip ideas</string>
+    <string name="notes_widget_preview_line_1">Book the train by Friday</string>
+    <string name="qs_new_note_label">New note</string>
+    <string name="shortcut_new_note_long">Write a new note</string>
 </resources>

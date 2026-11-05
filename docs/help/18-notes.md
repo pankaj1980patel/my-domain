@@ -1,6 +1,6 @@
 ---
 title: Notes
-keywords: notes, note, notepad, memo, list, lists, checklist, shopping list, to do, todo, remember, pin, pinned, colour, color, search, conflict, conflict copy, undo, delete, sync, shared, reminder, reminders, remind me, alarm, alert, snooze, done, upcoming, due
+keywords: notes, note, notepad, memo, list, lists, checklist, shopping list, to do, todo, remember, pin, pinned, colour, color, search, conflict, conflict copy, undo, delete, sync, shared, reminder, reminders, remind me, alarm, alert, snooze, done, upcoming, due, widget, home screen, quick settings, tile, shortcut, new note
 platforms: desktop, android
 ---
 Notes is a small notepad that's the same on all your devices: quick notes, lists, things to remember. Write one on your computer and it's on your phone too. Notes go straight between your devices, encrypted like everything else: nothing is stored on a server or in a cloud.
@@ -8,13 +8,17 @@ Notes is a small notepad that's the same on all your devices: quick notes, lists
 ## Write a note
 
 - **On the computer:** choose **Notes** in the sidebar, then **New note**. Or press **Cmd+K** (**Ctrl+K** on Windows and Linux) and type **New note**; type **Notes:** and a title to open one.
-- **On the phone:** tap **Notes** in the bottom bar, then **New note**.
+- **On the phone:** tap **Notes** in the bottom bar, then **New note**. Or, without opening the app first: tap **+** on the Notes widget, the **New note** Quick Settings tile, or touch and hold the app icon and choose **New note**.
 
 A note saves itself a moment after you stop typing. There's no Save button.
 
 - **Pin** keeps a note at the top of the list. The others follow, most recently changed first.
 - **Colour** marks a note so you can spot it in the list.
 - **Search** looks in titles and text. Every word you type has to be in the note, in any order. Notes also come up when you search everything (the command palette or the Search screen on the computer, the search field on the phone’s home screen); picking one opens it here.
+
+## On the phone's home screen
+
+The **Notes** widget shows your pinned notes, then the latest ones, with their first line and a bell on those with a reminder to come. Tap one to open it, or **+** for a new note. It follows your changes on every device and works while the app isn't running. See [Widget and Quick Settings tiles](help:widget-tiles) to add it.
 
 ## Checklists
 

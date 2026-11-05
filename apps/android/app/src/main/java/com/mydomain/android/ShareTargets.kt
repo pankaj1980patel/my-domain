@@ -45,6 +45,10 @@ object ShareTargets {
     /** On MainActivity's intent: open this node's device screen. */
     const val EXTRA_OPEN_DEVICE = "com.mydomain.android.OPEN_DEVICE"
 
+    /** Static shortcuts in `res/xml/shortcuts.xml` ("New note"): they count
+     *  towards Android's per-activity limit too. */
+    const val STATIC_SHORTCUTS = 1
+
     private const val TAG = "ShareTargets"
     private const val GAP_MS = 2_000L
 
@@ -95,7 +99,7 @@ object ShareTargets {
 
     private fun push(app: Context, all: List<Target>) {
         runCatching {
-            val max = ShortcutManagerCompat.getMaxShortcutCountPerActivity(app).coerceAtLeast(1)
+            val max = (ShortcutManagerCompat.getMaxShortcutCountPerActivity(app) - STATIC_SHORTCUTS).coerceAtLeast(1)
             val targets = all.take(max)
             val signature = targets.map { "${it.node}|${it.name}|${it.icon}|${it.color}" }
             if (signature == pushed) return

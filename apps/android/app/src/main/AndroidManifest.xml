@@ -171,7 +171,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
-            <!-- Direct Share: each of your devices in the share sheet (ShareTargets.kt). -->
+            <!-- Direct Share: each of your devices in the share sheet (ShareTargets.kt),
+                 and the New note launcher shortcut. -->
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
@@ -253,6 +254,17 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Quick Settings tile (QuickTiles.kt): open the app on a new note. -->
+        <service
+            android:name=".NewNoteTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_note_add"
+            android:label="@string/qs_new_note_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <!-- Home-screen widget (HomeWidget.kt): the computer, with the same actions. -->
         <receiver
             android:name=".HomeWidget"
@@ -268,6 +280,18 @@
         <receiver
             android:name=".HomeWidgetActionReceiver"
             android:exported="false" />
+        <!-- Notes home-screen widget (NotesWidget.kt): pinned and recent notes, and "+". -->
+        <receiver
+            android:name=".NotesWidget"
+            android:exported="true"
+            android:label="@string/notes_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/notes_widget_info" />
+        </receiver>
         <activity
             android:name=".ClipSendActivity"
             android:excludeFromRecents="true"

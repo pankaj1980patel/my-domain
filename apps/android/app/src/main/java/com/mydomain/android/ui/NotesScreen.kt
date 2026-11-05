@@ -79,7 +79,7 @@ import java.util.Calendar
 private const val SAVE_AFTER_MS = 600L
 
 /** The open note when it's a new one (not saved yet). */
-private const val NEW = "\u0000new"
+private const val NEW = Notes.NEW
 
 /**
  * Notes (a bottom-bar tab): a small notepad that's the same on all your
@@ -92,8 +92,9 @@ private const val NEW = "\u0000new"
  * the reminder ([NoteReminders] here); a bell marks it in the list, and
  * "Upcoming" lists those still to come, soonest first.
  *
- * [openNote]: a note to open (a search result), once: [onOpened] says it
- * was, so the shell can forget it.
+ * [openNote]: a note to open (a search result, a reminder, the Notes
+ * widget), [Notes.NEW] for a new one or [Notes.LIST] for the list, once:
+ * [onOpened] says it was, so the shell can forget it.
  */
 @Composable
 fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}) {
@@ -107,7 +108,13 @@ fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Un
     }
     LaunchedEffect(openNote) {
         if (openNote != null) {
-            show(openNote)
+            when (openNote) {
+                // The widget's header: the list (an open note saves on leaving).
+                Notes.LIST -> open = null
+                // The widget's "+", the tile, the launcher shortcut.
+                Notes.NEW -> show(null)
+                else -> show(openNote)
+            }
             onOpened()
         }
     }
