@@ -873,9 +873,9 @@
     <!-- Search everything (SearchScreen.kt) -->
     <string name="search_screen_title">Search</string>
     <string name="search_open">Search everything on this phone</string>
-    <string name="search_field">Search devices, clips, files, settings…</string>
+    <string name="search_field">Search devices, messages, notes, files…</string>
     <string name="search_clear">Clear search</string>
-    <string name="search_intro">Finds your devices, this session’s messages, the clipboard history, transfers, synced folders, automations, Settings and Help. Only what’s on this phone; nothing is sent anywhere.</string>
+    <string name="search_intro">Finds your devices, messages, notes, the clipboard history, transfers, synced folders, automations, Settings and Help. Only what’s on this phone; nothing is sent anywhere.</string>
     <string name="search_none">Nothing on this phone matches “%1$s”.</string>
     <plurals name="search_results">
         <item quantity="one">%1$d result</item>
@@ -884,11 +884,12 @@
     <string name="search_group">%1$s · %2$d</string>
     <string name="search_show_all">Show all %1$d</string>
     <string name="search_show_fewer">Show fewer</string>
-    <string name="search_messages_session">Messages aren’t kept, so only this session’s are here.</string>
+    <string name="search_messages_session">Message history is off, so only this session’s messages are here.</string>
     <string name="search_tag_failed">Didn’t finish</string>
     <string name="search_kind_all">All</string>
     <string name="search_kind_devices">Devices</string>
     <string name="search_kind_messages">Messages</string>
+    <string name="search_kind_notes">Notes</string>
     <string name="search_kind_clipboard">Clipboard</string>
     <string name="search_kind_transfers">Transfers</string>
     <string name="search_kind_folders">Synced folders</string>

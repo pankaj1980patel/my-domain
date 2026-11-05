@@ -22,6 +22,7 @@ import Help from "./screens/Help";
 import Search from "./screens/Search";
 import { revealFound, type Found } from "./lib/search";
 import Notes, { type NoteRequest } from "./screens/Notes";
+import { notes } from "./lib/notes";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
@@ -95,12 +96,16 @@ export default function App() {
   };
   // A search result opens where it lives: a device's page with that
   // message, clip, notification or folder brought into view and marked;
-  // Transfers with that file; the Settings section; the Help topic.
+  // Notes with that note open; Transfers with that file; the Settings
+  // section; the Help topic.
   const openFound = (f: Found) => {
     const missing = () => toast(t("search.gone"));
     switch (f.kind) {
       case "devices":
         return go({ name: "device", node: f.id });
+      case "notes":
+        if (notes.loaded && !notes.byId[f.id]) return missing();
+        return go({ name: "notes", request: { id: f.id, at: Date.now() } });
       case "messages":
       case "clipboard":
       case "notifications":

@@ -14,7 +14,7 @@ A note saves itself a moment after you stop typing. There's no Save button.
 
 - **Pin** keeps a note at the top of the list. The others follow, most recently changed first.
 - **Colour** marks a note so you can spot it in the list.
-- **Search** looks in titles and text. Every word you type has to be in the note, in any order.
+- **Search** looks in titles and text. Every word you type has to be in the note, in any order. Notes also come up when you search everything (the command palette or the Search screen on the computer, the search field on the phone’s home screen); picking one opens it here.
 
 ## Checklists
 

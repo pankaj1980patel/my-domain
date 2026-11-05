@@ -3,7 +3,7 @@
 // saying whose it is and when.
 
 import { For, Show } from "solid-js";
-import { peerName } from "../lib/core";
+import { peerName, state } from "../lib/core";
 import { highlight, type Found } from "../lib/search";
 import { timeAgo } from "../lib/words";
 import { t, type Key } from "../i18n";
@@ -41,6 +41,11 @@ export function foundMeta(f: Found): string {
       if (f.tag) parts.push(f.tag);
       if (name) parts.push(name);
       break;
+    case "notes":
+      if (f.tag === "conflict") parts.push(t("notes.conflictTag"));
+      // The device that last changed it (not when it was this computer).
+      if (f.node && state.peers.some((p) => p.node_id === f.node)) parts.push(t("search.changedOn", { name }));
+      break;
     case "settings":
       parts.push(t("nav.settings"));
       break;
@@ -57,9 +62,9 @@ export function foundMeta(f: Found): string {
   return parts.join(" · ");
 }
 
-/** Kinds whose text says more than the title (a notification's text, a
- *  file's folder). */
-const WITH_DETAIL = new Set<Found["kind"]>(["notifications", "transfers", "folders"]);
+/** Kinds whose text says more than the title (a notification's or a
+ *  note's text, a file's folder). */
+const WITH_DETAIL = new Set<Found["kind"]>(["notes", "notifications", "transfers", "folders"]);
 
 /** The result's two lines. `title` empty: the text's snippet is the line. */
 export function FoundText(props: { f: Found; words: string[]; class?: string }) {

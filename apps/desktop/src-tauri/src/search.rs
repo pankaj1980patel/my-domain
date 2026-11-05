@@ -2,7 +2,8 @@
 // palette and the Search screen.
 //
 //  - devices (their names and the nicknames you gave them), the saved
-//    messages (chat_history.rs), the clipboard history (clip_history.rs),
+//    messages (chat_history.rs), the notes (the core's notepad; deleted
+//    ones are never listed), the clipboard history (clip_history.rs),
 //    the notification history (notif_history.rs),
 //    transfers (transfers.rs), synced folders (their names and folders),
 //    automations, schedules and keyboard shortcuts;
@@ -29,6 +30,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use mdcore::model::Note;
 use tauri::{AppHandle, Manager};
 
 use crate::automations::Automation;
@@ -42,9 +44,10 @@ use crate::sync_folders::SyncPairView;
 use crate::transfers::{TransferEntry, TransferState};
 
 /// What can be searched here (`kinds`), in the order the groups come back.
-pub const KINDS: [&str; 9] = [
+pub const KINDS: [&str; 10] = [
     "devices",
     "messages",
+    "notes",
     "clipboard",
     "notifications",
     "transfers",
@@ -96,7 +99,8 @@ pub struct SearchHit {
     pub ts: Option<f64>,
     /// A kind's own short note: a clip's way ("in" / "out"), a
     /// notification's app, a transfer's state ("active" / "done" /
-    /// "failed"), a folder's state, a shortcut's keys.
+    /// "failed"), a folder's state, a shortcut's keys, "conflict" for a
+    /// note that's a conflict copy.
     pub tag: Option<String>,
     pub score: f64,
 }
@@ -404,6 +408,8 @@ pub struct Sources {
     pub devices: Vec<DeviceRow>,
     pub labels: BTreeMap<String, DeviceLabel>,
     pub messages: Vec<ChatRecord>,
+    /// The notes (`Engine::notes`: deleted ones aren't in it).
+    pub notes: Vec<Note>,
     pub clips: Vec<ClipRecord>,
     pub notifications: Vec<HistoryEntry>,
     pub transfers: Vec<TransferEntry>,
@@ -411,6 +417,38 @@ pub struct Sources {
     pub automations: Vec<Automation>,
     pub schedules: Vec<Schedule>,
     pub shortcuts: Vec<ShortcutView>,
+}
+
+/// A note's name in a list: its title, else its text's first line.
+pub fn note_title(n: &Note) -> &str {
+    if !n.title.trim().is_empty() {
+        return n.title.trim();
+    }
+    n.body
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or("")
+}
+
+/// Notes as candidates: found by title and text, dated by their last
+/// change, belonging to the device that made it; conflict copies tagged.
+fn note_candidates(notes: &[Note]) -> impl Iterator<Item = Candidate<'_>> {
+    notes.iter().map(|n| {
+        let title = note_title(n);
+        Candidate {
+            id: Cow::Borrowed(&n.id),
+            node: (!n.by.is_empty()).then_some(n.by.as_str()),
+            ts: (n.updated_at > 0).then_some(n.updated_at as f64),
+            fields: Fields {
+                title,
+                secondary: "",
+                body: &n.body,
+            },
+            title: Cow::Borrowed(title),
+            tag: n.conflict_of.is_some().then_some(Cow::Borrowed("conflict")),
+        }
+    })
 }
 
 fn non_empty<'a>(a: &'a str, b: &'a str) -> &'a str {
@@ -493,6 +531,7 @@ pub fn run(
                     tag: Some(Cow::Borrowed(if m.incoming() { "in" } else { "out" })),
                 }),
             ),
+            "notes" => rank(kind, &q, filter, limit, now, note_candidates(&src.notes)),
             "clipboard" => rank(
                 kind,
                 &q,
@@ -661,6 +700,11 @@ fn gather(app: &AppHandle, kinds: &[String]) -> Sources {
     if wanted("messages") {
         if let Some(h) = app.try_state::<crate::chat_history::ChatHistory>() {
             src.messages = h.snapshot();
+        }
+    }
+    if wanted("notes") {
+        if let Some(engine) = app.try_state::<crate::Eng>() {
+            src.notes = engine.notes();
         }
     }
     if wanted("clipboard") {
@@ -907,6 +951,7 @@ mod tests {
             ],
             labels,
             messages: Vec::new(),
+            notes: Vec::new(),
             clips: vec![
                 clip(
                     3,
@@ -1215,6 +1260,88 @@ mod tests {
         let r = run(&src, "dinner", 10, &["messages".into()], &on_m, NOW);
         assert_eq!(r.groups[0].total, 1);
         assert_eq!(r.groups[0].hits[0].id, "b");
+    }
+
+    fn a_note(id: &str, title: &str, body: &str, by: &str, at: f64) -> Note {
+        Note {
+            id: id.into(),
+            title: title.into(),
+            body: body.into(),
+            created_at: at as u64,
+            updated_at: at as u64,
+            by: by.into(),
+            by_name: by.into(),
+            ..Note::default()
+        }
+    }
+
+    #[test]
+    fn notes_are_found_by_title_and_text() {
+        let mut src = seeded();
+        let mut conflict = a_note(
+            "n3",
+            "Groceries (conflict from Pixel 8)",
+            "milk\neggs",
+            "p",
+            NOW - DAY_MS,
+        );
+        conflict.conflict_of = Some("n1".into());
+        // What `Engine::notes` hands over (deleted ones never are).
+        src.notes = vec![
+            a_note(
+                "n1",
+                "Groceries",
+                "milk\nbread\nCafé beans",
+                "m",
+                NOW - 2.0 * DAY_MS,
+            ),
+            a_note("n2", "  ", "\n  Trip plan\nbook the café", "p", NOW),
+            conflict,
+        ];
+        let none = SearchFilter::default();
+
+        // A title word: both titled notes, the newer (the conflict copy)
+        // first, tagged; the text around the match as the detail.
+        let r = run(&src, "groceries", 10, &[], &none, NOW);
+        assert_eq!(kinds_of(&r), ["notes"]);
+        let g = &r.groups[0];
+        let ids: Vec<&str> = g.hits.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, ["n3", "n1"]);
+        assert_eq!(g.hits[0].tag.as_deref(), Some("conflict"));
+        assert_eq!(g.hits[1].tag, None);
+        assert_eq!(g.hits[1].title, "Groceries");
+        assert_eq!(g.hits[1].detail, "milk bread Café beans");
+        assert_eq!(g.hits[1].ts, Some(NOW - 2.0 * DAY_MS));
+        assert_eq!(g.hits[1].node.as_deref(), Some("m"));
+
+        // No title: the text's first line stands in, and counts as one.
+        let r = run(&src, "trip", 10, &["notes".into()], &none, NOW);
+        assert_eq!(r.groups[0].hits[0].id, "n2");
+        assert_eq!(r.groups[0].hits[0].title, "Trip plan");
+
+        // Text only, accents ignored; a title match ranks above a text one.
+        let r = run(&src, "cafe", 10, &["notes".into()], &none, NOW);
+        let ids: Vec<&str> = r.groups[0].hits.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, ["n2", "n1"]);
+        let r = run(&src, "plan", 10, &["notes".into()], &none, NOW);
+        assert_eq!(r.groups[0].total, 1);
+
+        // By the device that last changed it, and by when.
+        let on_m = SearchFilter {
+            node: Some("m".into()),
+            ..SearchFilter::default()
+        };
+        let r = run(&src, "milk", 10, &["notes".into()], &on_m, NOW);
+        assert_eq!(r.groups[0].total, 1);
+        assert_eq!(r.groups[0].hits[0].id, "n1");
+        let today = SearchFilter {
+            since: Some(NOW - DAY_MS / 2.0),
+            ..SearchFilter::default()
+        };
+        let r = run(&src, "", 10, &["notes".into()], &today, NOW);
+        assert_eq!(r.groups[0].hits.len(), 1);
+        assert_eq!(r.groups[0].hits[0].id, "n2");
+        assert!(run(&src, "nothing", 10, &[], &none, NOW).groups.is_empty());
     }
 
     #[test]

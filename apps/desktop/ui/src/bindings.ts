@@ -1595,7 +1595,8 @@ export type SearchHit_Deserialize = {
 	/**
 	 *  A kind's own short note: a clip's way ("in" / "out"), a
 	 *  notification's app, a transfer's state ("active" / "done" /
-	 *  "failed"), a folder's state, a shortcut's keys.
+	 *  "failed"), a folder's state, a shortcut's keys, "conflict" for a
+	 *  note that's a conflict copy.
 	 */
 	tag?: string | null,
 	score: number | null,
@@ -1619,7 +1620,8 @@ export type SearchHit_Serialize = {
 	/**
 	 *  A kind's own short note: a clip's way ("in" / "out"), a
 	 *  notification's app, a transfer's state ("active" / "done" /
-	 *  "failed"), a folder's state, a shortcut's keys.
+	 *  "failed"), a folder's state, a shortcut's keys, "conflict" for a
+	 *  note that's a conflict copy.
 	 */
 	tag: string | null,
 	score: number | null,

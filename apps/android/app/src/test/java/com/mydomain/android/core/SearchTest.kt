@@ -231,4 +231,109 @@ class SearchTest {
         val text = "😀 HELLO"
         assertEquals(listOf(MatchSpan(3, 8)), Search.matchRanges(text, listOf("hello")))
     }
+
+    // --- sources ---
+
+    private fun entry(id: String, node: String, incoming: Boolean, text: String, at: Long) = ChatEntry(
+        id, if (incoming) node else null, if (incoming) null else node, text, false, at,
+        if (incoming) ChatStatus.Received else ChatStatus.Delivered,
+    )
+
+    @Test
+    fun messagesMergeSavedAndSessionById() {
+        val saved = listOf(
+            entry("a", "p", false, "dinner at the café?", now - 3 * day),
+            entry("b", "p", true, "Cafe is fine", now - day),
+        )
+        // "b" is also on screen this session: its live bubble wins. The
+        // other live one isn't saved.
+        val live = listOf(
+            SessionMessage(7, "b", "p", true, "Cafe is fine", now - day),
+            SessionMessage(8, null, "m", false, "café later", now),
+        )
+        val items = Search.messageFindables(saved, live, sent = "Sent", received = "Received")
+        assertEquals(3, items.size)
+        assertTrue(items.all { it.kind == FoundKind.MESSAGES && it.title.isEmpty() })
+        val a = items.single { it.body.startsWith("dinner") }
+        assertEquals(saved[0].bubble.toString(), a.id)
+        assertEquals("p", a.node)
+        assertEquals("Sent", a.tag)
+        assertEquals(now - 3 * day, a.ts)
+        assertEquals(listOf("7", "8"), items.filter { it.body != a.body }.map { it.id })
+        assertEquals("Received", items.single { it.id == "7" }.tag)
+
+        val g = Search.search("cafe", items, now = now).single()
+        assertEquals(3, g.total)
+        assertEquals(listOf("8", "7", a.id), g.hits.map { it.item.id })
+        // The text is the line (no title).
+        assertEquals("café later", g.hits[0].title)
+    }
+
+    @Test
+    fun messagesWithNoHistoryAreTheSessionOnes() {
+        val items = Search.messageFindables(
+            emptyList(), listOf(SessionMessage(1, "x", "", true, "hi", now)), sent = "S", received = "R",
+        )
+        assertEquals(listOf("1"), items.map { it.id })
+        assertNull(items[0].node)
+    }
+
+    @Test
+    fun savedBubbleIdIsStable() {
+        val e = entry("msg-42", "p", true, "x", now)
+        assertEquals(e.bubble, e.copy(text = "y").bubble)
+        assertEquals("msg-42".hashCode().toLong(), e.bubble)
+    }
+
+    @Test
+    fun noteTitleFallsBackToFirstLine() {
+        assertEquals("Groceries", Search.noteTitle("  Groceries ", "milk"))
+        assertEquals("Trip plan", Search.noteTitle(" ", "\n   \n  Trip plan  \nbook"))
+        assertEquals("", Search.noteTitle("", "  \n "))
+    }
+
+    @Test
+    fun notesMapAndRank() {
+        val notes = listOf(
+            NoteSource("n1", "Groceries", "milk\nbread\nCafé beans", now - 2 * day, by = "m"),
+            NoteSource("n2", "", "Trip plan\nbook the café", now),
+            NoteSource("n3", "Groceries (conflict from Pixel)", "milk\neggs", now - day, by = "p", conflict = true),
+            NoteSource("n4", "Blank", "", 0),
+        )
+        val items = Search.noteFindables(notes, conflictTag = "Conflict copy")
+        assertEquals(listOf("n1", "n2", "n3", "n4"), items.map { it.id })
+        assertTrue(items.all { it.kind == FoundKind.NOTES })
+        assertEquals("Trip plan", items[1].title)
+        assertEquals("m", items[0].node)
+        assertNull(items[1].node)
+        assertEquals(now - 2 * day, items[0].ts)
+        assertNull(items[3].ts)
+        assertNull(items[0].tag)
+        assertEquals("Conflict copy", items[2].tag)
+
+        // Title words first, newer first among equals; the text as detail.
+        val g = Search.search("groceries", items, now = now).single()
+        assertEquals(FoundKind.NOTES, g.kind)
+        assertEquals(listOf("n3", "n1"), g.hits.map { it.item.id })
+        assertEquals("milk bread Café beans", g.hits[1].detail)
+        // In the text, accents ignored.
+        assertEquals(listOf("n2", "n1"), Search.search("cafe", items, now = now).single().hits.map { it.item.id })
+        // A first line standing in for the title counts as a title.
+        val trip = Search.search("trip", items, now = now).single().hits.single()
+        assertEquals("Trip plan", trip.title)
+        assertEquals("Trip plan book the café", trip.detail)
+    }
+
+    @Test
+    fun notesGroupComesAfterMessages() {
+        val items = listOf(
+            item(FoundKind.CLIPBOARD, "c", body = "plan"),
+            item(FoundKind.NOTES, "n", title = "plan"),
+            item(FoundKind.MESSAGES, "m", body = "plan"),
+        )
+        assertEquals(
+            listOf(FoundKind.MESSAGES, FoundKind.NOTES, FoundKind.CLIPBOARD),
+            Search.search("plan", items, now = now).map { it.kind },
+        )
+    }
 }

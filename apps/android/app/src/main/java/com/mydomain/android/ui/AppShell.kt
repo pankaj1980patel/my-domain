@@ -122,15 +122,19 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var foundTransfer by rememberSaveable { mutableStateOf<String?>(null) }
     var foundAutomation by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
-    // A result opened a Settings tile (a tab, not a pushed screen): Back
-    // goes back to Search. And Help opened from Search closes in one Back.
+    var foundNote by rememberSaveable { mutableStateOf<String?>(null) }
+    // A result opened a Settings tile or a note (a tab, not a pushed
+    // screen): Back goes back to Search. And Help opened from Search closes
+    // in one Back.
     var settingsFromSearch by rememberSaveable { mutableStateOf(false) }
+    var notesFromSearch by rememberSaveable { mutableStateOf(false) }
     var helpFromSearch by rememberSaveable { mutableStateOf(false) }
 
     /** Leave Search and everything it opened (another way in took over). */
     val leaveSearch = {
         search = false
         settingsFromSearch = false
+        notesFromSearch = false
         helpFromSearch = false
         settingsFocus = null
     }
@@ -142,6 +146,12 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             FoundKind.TRANSFERS -> { foundTransfer = f.id; transfers = true }
             FoundKind.AUTOMATIONS -> { foundAutomation = f.id; automations = true }
             FoundKind.HELP -> { helpFromSearch = true; openHelp(f.id) }
+            FoundKind.NOTES -> {
+                foundNote = f.id
+                notesFromSearch = true
+                search = false
+                tab = Tab.Notes
+            }
             FoundKind.FOLDERS, FoundKind.AUTOMATION_APPS, FoundKind.SETTINGS -> {
                 settingsFocus = when (f.kind) {
                     FoundKind.FOLDERS -> "sync"
@@ -160,6 +170,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     val closeHelp = { help = false; helpFromSearch = false }
     val backToSearch = {
         settingsFromSearch = false
+        notesFromSearch = false
         settingsFocus = null
         tab = Tab.Devices
         search = true
@@ -205,7 +216,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     }
 
     val pushed = help || device != null || developer || automations || transfers || setup || search
-    BackHandler(enabled = pushed || settingsFromSearch || tab != Tab.Devices) {
+    BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
         when {
             help && helpTopic != null && !helpFromSearch -> helpTopic = null
             help -> closeHelp()
@@ -216,6 +227,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             setup -> setup = false
             search -> search = false
             settingsFromSearch && tab == Tab.Settings -> backToSearch()
+            notesFromSearch && tab == Tab.Notes -> backToSearch()
             else -> tab = Tab.Devices
         }
     }
@@ -232,6 +244,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                             onClick = {
                                 // Picking a tab leaves what Search opened.
                                 settingsFromSearch = false
+                                notesFromSearch = false
                                 settingsFocus = null
                                 tab = t
                             },
@@ -276,7 +289,11 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onBack = { search = false },
                 )
                 tab == Tab.Devices -> HomeScreen(onOpen = { deviceFocus = null; device = it }, onSetup = { setup = true }, onSearch = { search = true })
-                tab == Tab.Notes -> NotesScreen(onHelp = { openHelp("notes") })
+                tab == Tab.Notes -> NotesScreen(
+                    onHelp = { openHelp("notes") },
+                    openNote = foundNote,
+                    onOpened = { foundNote = null },
+                )
                 tab == Tab.Activity -> ActivityScreen(onTransfers = { foundTransfer = null; transfers = true })
                 else -> SettingsScreen(
                     prefs,

@@ -1,6 +1,6 @@
 // Search everything: one query over what this computer keeps. The backend
 // (search.rs, the `search` command) looks through devices, the saved
-// messages, the clipboard and notification histories, transfers, synced
+// messages, the notes, the clipboard and notification histories, transfers, synced
 // folders, automations, schedules and shortcuts; this file adds what only the
 // window has (this session's messages that weren't saved, the Help topics,
 // the Settings sections) with the same rules, and
@@ -22,6 +22,7 @@ import { state } from "./core";
 export const FOUND_KINDS = [
   "devices",
   "messages",
+  "notes",
   "clipboard",
   "notifications",
   "transfers",
@@ -35,11 +36,12 @@ export const FOUND_KINDS = [
 export type FoundKind = (typeof FOUND_KINDS)[number];
 
 /** The kinds the backend searches. */
-const BACKEND: FoundKind[] = ["devices", "messages", "clipboard", "notifications", "transfers", "folders", "automations", "schedules", "shortcuts"];
+const BACKEND: FoundKind[] = ["devices", "messages", "notes", "clipboard", "notifications", "transfers", "folders", "automations", "schedules", "shortcuts"];
 
 export const KIND_LABEL: Record<FoundKind, Key> = {
   devices: "search.kind.devices",
   messages: "search.kind.messages",
+  notes: "search.kind.notes",
   clipboard: "search.kind.clipboard",
   notifications: "search.kind.notifications",
   transfers: "search.kind.transfers",
@@ -60,7 +62,8 @@ export type Found = {
   node?: string;
   ts?: number;
   /** Per kind: a clip's way, a notification's app, a transfer's state, a
-   *  shortcut's keys, a schedule's time. */
+   *  shortcut's keys, a schedule's time, "conflict" for a note that's a
+   *  conflict copy. */
   tag?: string;
   score: number;
 };

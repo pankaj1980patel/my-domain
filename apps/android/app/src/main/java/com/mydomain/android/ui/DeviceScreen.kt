@@ -210,7 +210,7 @@ private fun ChatTile(node: String, found: Long? = null) {
     val liveIds = live.mapNotNull { it.msgId }.toHashSet()
     val older = saved.entries.filter { it.id !in liveIds }.map {
         ChatMessage(
-            it.id.hashCode().toLong(), it.node, it.incoming, it.text, it.at, it.id,
+            it.bubble, it.node, it.incoming, it.text, it.at, it.id,
             delivered = it.status == ChatStatus.Delivered,
             failed = it.status == ChatStatus.Failed,
             fromHistory = true,

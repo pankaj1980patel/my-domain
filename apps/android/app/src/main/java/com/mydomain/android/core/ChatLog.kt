@@ -35,6 +35,9 @@ data class ChatEntry(
 
     /** The other device: where it came from or went to. */
     val node: String get() = (if (incoming) fromNode else toNode) ?: ""
+
+    /** Its bubble's id in a chat (one this session didn't show itself). */
+    val bubble: Long get() = id.hashCode().toLong()
 }
 
 /** One page of a device's chat: oldest first, whether older ones are kept,

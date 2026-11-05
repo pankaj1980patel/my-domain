@@ -10,7 +10,7 @@
 // show greyed with the reason. The last few run come first.
 //
 // Below the actions, what you typed is also searched across what this
-// computer keeps (lib/search.ts): messages, clipboard, notifications, files,
+// computer keeps (lib/search.ts): messages, notes, clipboard, notifications, files,
 // synced folders, Help and more, a few per group, with the words marked.
 // Enter on one opens it where it lives; the last option opens the Search
 // screen with every result.
@@ -67,9 +67,11 @@ const SEARCH_DELAY = 120;
 /** One row of the list: an action, a search result, or "see all". */
 type Entry = { type: "cmd"; cmd: Cmd } | { type: "hit"; hit: Found } | { type: "all" };
 
-/** The palette action a result would repeat (devices, Help, Settings). */
+/** The palette action a result would repeat (devices, notes, Help,
+ *  Settings). */
 function sameAs(f: Found): string | null {
   if (f.kind === "devices") return `open:${f.id}`;
+  if (f.kind === "notes") return `note.${f.id}`;
   if (f.kind === "help") return `place.help.${f.id}`;
   if (f.kind === "settings") return `place.settings.${f.id}`;
   return null;

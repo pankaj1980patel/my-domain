@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.AutomationAppsGate
 import com.mydomain.android.PhoneAutomations
 import com.mydomain.android.R
+import com.mydomain.android.core.ChatHistory
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.Findable
@@ -72,7 +73,10 @@ import com.mydomain.android.core.FoundGroup
 import com.mydomain.android.core.FoundKind
 import com.mydomain.android.core.HelpMarkdown
 import com.mydomain.android.core.HelpTopic
+import com.mydomain.android.core.NoteSource
+import com.mydomain.android.core.Notes
 import com.mydomain.android.core.Search
+import com.mydomain.android.core.SessionMessage
 import com.mydomain.android.core.TransferLog
 import com.mydomain.android.core.TransferState
 import com.mydomain.android.core.niceName
@@ -84,7 +88,8 @@ import kotlinx.coroutines.withContext
 
 /*
  * Search everything on the phone: one query over what my-domain keeps here
- * (devices, this session's messages, the clipboard history, transfers,
+ * (devices, the saved messages and this session's, notes, the clipboard
+ * history, transfers,
  * synced folders, automations, the automation apps' history, Settings and
  * Help), with the desktop's rules (core/Search.kt). Read through each
  * store's own lists; nothing is indexed or saved, and nothing leaves the
@@ -96,6 +101,7 @@ import kotlinx.coroutines.withContext
 fun kindLabel(kind: FoundKind): Int = when (kind) {
     FoundKind.DEVICES -> R.string.search_kind_devices
     FoundKind.MESSAGES -> R.string.search_kind_messages
+    FoundKind.NOTES -> R.string.search_kind_notes
     FoundKind.CLIPBOARD -> R.string.search_kind_clipboard
     FoundKind.TRANSFERS -> R.string.search_kind_transfers
     FoundKind.FOLDERS -> R.string.search_kind_folders
@@ -159,9 +165,6 @@ private fun staticFindables(ctx: Context, topics: List<HelpTopic>): List<Findabl
 /**
  * Everything the phone can find, read from each store's own list (copies;
  * no storage changes). Recomposes when a store changes.
- *
- * TODO(notes): once Notes are in the app, add them here as
- * `Findable(FoundKind.NOTES, note.id, note.title, body = note.text, ts = note.updated)`.
  */
 @Composable
 private fun rememberFindables(ctx: Context): List<Findable> {
@@ -176,9 +179,13 @@ private fun rememberFindables(ctx: Context): List<Findable> {
     val received = stringResource(R.string.transfers_dir_received)
     val underWay = stringResource(R.string.transfers_active)
     val failed = stringResource(R.string.search_tag_failed)
+    val conflict = stringResource(R.string.notes_conflict_tag)
 
     val peers = Core.peers
+    // The saved history (empty with it off) and this session's chat.
+    val saved = ChatHistory.snapshot()
     val messages = Core.messages.toList()
+    val notes = Notes.byId.values.toList()
     val clips = ClipLog.list
     val transfers = TransferLog.list
     val folders = Core.syncPairs.toList()
@@ -187,20 +194,19 @@ private fun rememberFindables(ctx: Context): List<Findable> {
     // Names can change (a nickname): part of the key.
     val names = peers.map { Core.peerName(it.nodeId) }
 
-    return remember(peers, names, messages, clips, transfers, folders, automations, runs, fixed) {
+    return remember(peers, names, saved, messages, notes, clips, transfers, folders, automations, runs, fixed) {
         buildList {
             peers.forEachIndexed { i, p ->
                 add(Findable(FoundKind.DEVICES, p.nodeId, names[i], niceName(p.name), node = p.nodeId))
             }
-            // This session's chat only: messages aren't kept after the app stops.
-            messages.forEach { m ->
-                add(
-                    Findable(
-                        FoundKind.MESSAGES, m.id.toString(), "", body = m.text, node = m.node, ts = m.ts,
-                        tag = if (m.incoming) received else sent,
-                    ),
-                )
+            val live = messages.map { SessionMessage(it.id, it.msgId, it.node, it.incoming, it.text, it.ts) }
+            addAll(Search.messageFindables(saved, live, sent, received))
+            val known = peers.mapTo(HashSet()) { it.nodeId }
+            // Named by the device that last changed it (not when that's this phone).
+            val sources = notes.map { n ->
+                NoteSource(n.id, n.title, n.body, n.updatedAt, n.by.takeIf { it in known }, n.conflictOf != null)
             }
+            addAll(Search.noteFindables(sources, conflict))
             clips.forEach { c ->
                 add(
                     Findable(
@@ -395,8 +401,8 @@ private fun GroupHead(g: FoundGroup) {
             Modifier.semantics { heading() },
             style = MaterialTheme.typography.titleSmall, color = T.text2,
         )
-        // Say so: messages aren't kept, so only this session's are here.
-        if (g.kind == FoundKind.MESSAGES) Muted(stringResource(R.string.search_messages_session))
+        // Say so: with the history off, only this session's messages are here.
+        if (g.kind == FoundKind.MESSAGES && !ChatHistory.enabled) Muted(stringResource(R.string.search_messages_session))
     }
 }
 

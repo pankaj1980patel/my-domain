@@ -5,17 +5,14 @@ import java.text.Normalizer
 /**
  * What the phone's search can find, in the order the groups show.
  *
- * Messages are this session's chat only ([Core.messages] is kept in memory,
- * never saved), so they're gone after the app restarts.
+ * Messages are the saved history ([ChatHistory]) and this session's chat
+ * ([Core.messages]) together; with "Keep message history" off, only this
+ * session's. Notes are the notepad's ([Notes]; deleted ones aren't there).
  */
 enum class FoundKind {
     DEVICES,
     MESSAGES,
-    // TODO(notes): a NOTES kind plugs in here once Notes land in mdcore and
-    // the app (another change adds them). It needs a source in the search
-    // screen's `rememberFindables` (title = the note's title, body = its
-    // text, ts = when it changed), a label in `kindLabel`, and where a note
-    // opens in the shell's `openFound`.
+    NOTES,
     CLIPBOARD,
     TRANSFERS,
     FOLDERS,
@@ -41,6 +38,29 @@ data class Findable(
     val node: String? = null,
     val ts: Long? = null,
     val tag: String? = null,
+)
+
+/** A message this session shows in a chat ([Core.messages]): [bubble] is
+ *  its id there (what the chat marks), [msgId] the id it's saved under. */
+data class SessionMessage(
+    val bubble: Long,
+    val msgId: String?,
+    val node: String,
+    val incoming: Boolean,
+    val text: String,
+    val ts: Long,
+)
+
+/** A note as searched (the core's note): [updatedAt] when it last changed,
+ *  [by] the device that changed it (null: none to name, e.g. this phone),
+ *  [conflict] whether it's a conflict copy. */
+data class NoteSource(
+    val id: String,
+    val title: String,
+    val body: String,
+    val updatedAt: Long,
+    val by: String? = null,
+    val conflict: Boolean = false,
 )
 
 /** One result: what to show as its [title] and [detail] (a line of the
@@ -248,6 +268,50 @@ object Search {
         if (ts == null || ts <= 0) return 0.0
         val days = maxOf(0.0, (now - ts) / DAY_MS)
         return 1.0 / (1.0 + days / 7.0)
+    }
+
+    // --- sources -------------------------------------------------------------
+
+    /**
+     * Messages as searched: the [saved] history merged with this session's
+     * [live] chat by message id (the live copy wins: it has the bubble the
+     * chat shows). A result's id is its bubble's id in the chat
+     * ([ChatEntry.bubble] for a saved one), tagged [sent] or [received].
+     */
+    fun messageFindables(
+        saved: List<ChatEntry>,
+        live: List<SessionMessage>,
+        sent: String,
+        received: String,
+    ): List<Findable> {
+        val liveIds = live.mapNotNullTo(HashSet()) { it.msgId }
+        val older = saved.filter { it.id !in liveIds }.map { e ->
+            Findable(
+                FoundKind.MESSAGES, e.bubble.toString(), "", body = e.text, node = e.node.ifEmpty { null }, ts = e.at,
+                tag = if (e.incoming) received else sent,
+            )
+        }
+        val now = live.map { m ->
+            Findable(
+                FoundKind.MESSAGES, m.bubble.toString(), "", body = m.text, node = m.node.ifEmpty { null }, ts = m.ts,
+                tag = if (m.incoming) received else sent,
+            )
+        }
+        return older + now
+    }
+
+    /** A note's name in a list: its title, else its text's first line. */
+    fun noteTitle(title: String, body: String): String =
+        title.trim().ifEmpty { body.lineSequence().map { it.trim() }.firstOrNull { it.isNotEmpty() } ?: "" }
+
+    /** Notes as searched: by title (or first line) and text, dated by their
+     *  last change; conflict copies tagged [conflictTag]. */
+    fun noteFindables(notes: List<NoteSource>, conflictTag: String): List<Findable> = notes.map { n ->
+        Findable(
+            FoundKind.NOTES, n.id, noteTitle(n.title, n.body), body = n.body,
+            node = n.by?.ifEmpty { null }, ts = n.updatedAt.takeIf { it > 0 },
+            tag = if (n.conflict) conflictTag else null,
+        )
     }
 
     // --- ranking -------------------------------------------------------------

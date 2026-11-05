@@ -78,9 +78,12 @@ private const val NEW = "\u0000new"
  * editor, which saves itself a moment after you stop typing. Delete has an
  * Undo on the snackbar. A note changed on two devices at once keeps both
  * texts: the one that lost is a separate note, marked as a conflict copy.
+ *
+ * [openNote]: a note to open (a search result), once: [onOpened] says it
+ * was, so the shell can forget it.
  */
 @Composable
-fun NotesScreen(onHelp: () -> Unit) {
+fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}) {
     // The open note's id (NEW: a new one; null: the list). `opened` changes
     // only when you pick one, so a new note getting its id keeps the editor.
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -88,6 +91,12 @@ fun NotesScreen(onHelp: () -> Unit) {
     val show = { id: String? ->
         open = id ?: NEW
         opened++
+    }
+    LaunchedEffect(openNote) {
+        if (openNote != null) {
+            show(openNote)
+            onOpened()
+        }
     }
     val o = open
     if (o == null) {
