@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Settings
@@ -15,8 +16,10 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -41,13 +44,18 @@ import kotlinx.coroutines.launch
 /** Show a short message at the bottom of the screen. */
 val LocalToast = staticCompositionLocalOf<(String) -> Unit> { {} }
 
+/** Show a message with an action (e.g. Undo): (message, action label,
+ *  what the action does). */
+val LocalUndo = staticCompositionLocalOf<(String, String, () -> Unit) -> Unit> { { _, _, _ -> } }
+
 private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
     Devices(R.string.tab_devices, Icons.Filled.Home),
+    Notes(R.string.tab_notes, Icons.Filled.Edit),
     Activity(R.string.tab_activity, Icons.Filled.List),
     Settings(R.string.tab_settings, Icons.Filled.Settings),
 }
 
-/** Sign-in until ready; then tabs (Devices, Activity, Settings) plus the
+/** Sign-in until ready; then tabs (Devices, Notes, Activity, Settings) plus the
  *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
  *  this phone and Help screens. */
 @Composable
@@ -63,7 +71,14 @@ fun App(prefs: SharedPreferences) {
         }
     }
 
-    CompositionLocalProvider(LocalToast provides toast) {
+    val undo: (String, String, () -> Unit) -> Unit = { msg, label, action ->
+        scope.launch {
+            snack.currentSnackbarData?.dismiss()
+            if (snack.showSnackbar(msg, actionLabel = label, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) action()
+        }
+    }
+
+    CompositionLocalProvider(LocalToast provides toast, LocalUndo provides undo) {
         if (!Core.ready) {
             Scaffold(snackbarHost = { SnackbarHost(snack) }, containerColor = Color.Transparent) { inner ->
                 Box(Modifier.padding(inner)) { SignInScreen(prefs) }
@@ -174,6 +189,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
                 transfers -> TransfersScreen(onBack = { transfers = false }, onOpenDevice = { device = it })
                 tab == Tab.Devices -> HomeScreen(onOpen = { device = it }, onSetup = { setup = true })
+                tab == Tab.Notes -> NotesScreen(onHelp = { openHelp("notes") })
                 tab == Tab.Activity -> ActivityScreen(onTransfers = { transfers = true })
                 else -> SettingsScreen(
                     prefs,

@@ -2832,3 +2832,218 @@ input[type="checkbox"][role="switch"]:not(:checked) {
 .search-more {
   color: var(--accent-fg);
 }
+
+/* --- Notes: a notepad that's the same on all your devices ------------------ */
+
+.notes-page {
+  max-width: 1120px;
+}
+.notes-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 300px) 1fr;
+  gap: var(--s-4);
+  align-items: start;
+}
+.notes-side {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+}
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+}
+.notes-none {
+  margin: 0;
+}
+.note-item {
+  width: 100%;
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  padding: var(--s-3);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--label, var(--border));
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.note-item:hover {
+  border-color: var(--accent);
+}
+.note-item-on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.note-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.note-item-title {
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-item-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.note-pin {
+  flex: none;
+  color: var(--accent);
+  font-size: var(--text-xs);
+}
+.note-conflict-tag {
+  justify-self: start;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--warning-soft);
+  color: var(--text);
+  font-weight: 650;
+}
+.notes-main {
+  min-width: 0;
+}
+.note-editor {
+  display: grid;
+  gap: var(--s-3);
+  padding: var(--s-5);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--label, var(--border));
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+}
+.note-title-input {
+  font-size: var(--text-lg);
+  font-weight: 650;
+}
+.note-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.note-tools .btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent-fg);
+  background: var(--accent-bg);
+}
+.note-colors {
+  display: flex;
+  gap: 6px;
+}
+.note-swatch {
+  width: 22px;
+  height: 22px;
+}
+.note-delete {
+  margin-left: auto;
+  color: var(--danger);
+}
+.note-body {
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+  font: inherit;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-md);
+  padding: 10px 12px;
+}
+.note-body:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), 0 0 0 4px var(--accent-bg);
+}
+.note-body::placeholder {
+  color: var(--text-3);
+}
+.note-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.note-check label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-2);
+  cursor: pointer;
+}
+.note-check input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+.note-check-done span {
+  color: var(--text-3);
+  text-decoration: line-through;
+}
+.note-line {
+  white-space: pre-wrap;
+  min-height: 1em;
+}
+.note-add {
+  display: flex;
+  gap: var(--s-2);
+}
+.note-as-text {
+  justify-self: start;
+}
+.note-conflict {
+  display: grid;
+  gap: var(--s-1);
+  justify-items: start;
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--warning-soft);
+  border-left: 4px solid var(--warning);
+}
+.note-conflict p {
+  margin: 0;
+}
+.note-error {
+  margin: 0;
+  color: var(--danger);
+}
+.note-foot {
+  margin: 0;
+}
+.toast-with-action {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.toast-action {
+  flex: none;
+  font: inherit;
+  font-weight: 700;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: var(--r-md);
+  padding: 2px 10px;
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .notes-layout {
+    grid-template-columns: 1fr;
+  }
+  .notes-list {
+    max-height: 40vh;
+  }
+}

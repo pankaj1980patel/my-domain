@@ -29,6 +29,7 @@ mod device;
 mod device_labels;
 mod fcm;
 mod location;
+mod notes;
 mod notif_history;
 mod notify;
 mod phone_audio;
@@ -269,6 +270,11 @@ impl Platform for DesktopPlatform {
                 eprintln!("[kv] failed to save {key}: {e}");
             }
         }
+    }
+
+    // Notes (`notes.json`) beside the session file, in the app data dir.
+    fn data_file(&self, name: &str) -> Option<std::path::PathBuf> {
+        Some(self.kv.as_ref()?.path().with_file_name(name))
     }
 
     fn fcm_token(&self) -> Option<String> {
@@ -1494,6 +1500,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         device_labels::set_device_label,
         device_labels::labels_share,
         device_labels::set_labels_share,
+        notes::notes_list,
+        notes::note_save,
+        notes::note_delete,
         dnd_devices,
         quiet::phone_quiet,
         remote_input_allowed,

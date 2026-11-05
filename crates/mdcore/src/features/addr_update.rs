@@ -5,8 +5,9 @@
 //! entry (and so its peer cache), so the next reconnect can go direct.
 //!
 //! It also says `labels: 1` when this device shares device labels
-//! (`features::labels`), so each end of a new link learns that at once;
-//! older apps ignore the field.
+//! (`features::labels`) and `notes: 1` when it shares notes
+//! (`features::notes`), so each end of a new link learns that at once;
+//! older apps ignore the fields.
 //!
 //! Only peers we already know are updated: this message can't create one.
 //! It arrives end-to-end encrypted with the shared key, like every message.
@@ -36,6 +37,9 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         });
         if ctx.config.shared_labels {
             msg[super::labels::FLAG] = 1.into();
+        }
+        if ctx.config.notes {
+            msg[super::notes::FLAG] = 1.into();
         }
         msg.to_string()
     };
@@ -82,6 +86,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
             *p != before
         };
         super::labels::remember(ctx, &from, &msg.json(super::labels::FLAG));
+        super::notes::remember(ctx, &from, &msg.json(super::notes::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();
             ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });

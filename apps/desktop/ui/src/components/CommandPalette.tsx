@@ -2,8 +2,8 @@
 // opens a search box over everything you can do. For each paired device:
 // open its page, ring it, send it the clipboard or a file, and the actions it
 // lists in its status (the device page's buttons); this computer's own
-// actions; and the app's places (Settings and its sections, Help and each
-// of its topics).
+// actions; your notes ("New note", and each note by its title); and the
+// app's places (Settings and its sections, Help and each of its topics).
 //
 // Actions that need more from you (a number to call, a lost-mode message)
 // open the device's page instead of running blind. Ones that can't run now
@@ -35,6 +35,7 @@ import {
   type Radio,
 } from "../lib/core";
 import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../lib/presets";
+import { sortedNotes } from "../lib/notes";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { TOPICS } from "../help/topics";
@@ -42,7 +43,7 @@ import { KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup } from "
 import { FoundText } from "./Found";
 import { t, tn, type Key } from "../i18n";
 
-export type Place = "home" | "activity" | "transfers" | "settings" | "help";
+export type Place = "home" | "notes" | "activity" | "transfers" | "settings" | "help";
 
 type Cmd = {
   /** Stable across openings: the recents list keeps these. */
@@ -235,6 +236,8 @@ export default function CommandPalette(props: {
   onFound: (f: Found) => void;
   /** The Search screen, with this query. */
   onSearch: (query: string) => void;
+  /** Open a note (`id` null: a new one). */
+  onNote: (id: string | null) => void;
 }) {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
@@ -301,6 +304,7 @@ export default function CommandPalette(props: {
     });
     return [
       { id: "place.home", label: t("palette.devices"), group, run: go("home") },
+      { id: "place.notes", label: t("palette.notes"), group, run: go("notes") },
       { id: "place.activity", label: t("palette.activity"), group, run: go("activity") },
       { id: "place.transfers", label: t("palette.transfers"), group, run: go("transfers") },
       { id: "place.settings", label: t("palette.settings"), group, run: go("settings") },
@@ -339,10 +343,24 @@ export default function CommandPalette(props: {
     });
   };
 
+  /** "New note", and each note by its title. */
+  const noteCommands = (): Cmd[] => {
+    const group = t("palette.notesGroup");
+    return [
+      { id: "note.new", label: t("palette.newNote"), group, run: () => props.onNote(null) },
+      ...sortedNotes().map((n) => ({
+        id: `note.${n.id}`,
+        label: t("palette.note", { title: n.title || t("notes.untitled") }),
+        group,
+        run: () => props.onNote(n.id),
+      })),
+    ];
+  };
+
   const all = createMemo(() => {
     if (!open()) return [] as Cmd[];
     const devices = state.peers.flatMap((p) => deviceCommands(p.node_id, peerName(p.node_id), props.onDevice));
-    return [...devices, ...localCommands(), ...places()];
+    return [...devices, ...localCommands(), ...noteCommands(), ...places()];
   });
 
   /** Matches, the recent ones first (newest first), then in list order. */

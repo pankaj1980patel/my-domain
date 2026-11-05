@@ -85,6 +85,11 @@ impl Platform for AndroidPlatform {
         }
     }
 
+    // Notes (`notes.json`) beside the session file, in the app's files.
+    fn data_file(&self, name: &str) -> Option<std::path::PathBuf> {
+        Some(self.kv.as_ref()?.path().with_file_name(name))
+    }
+
     fn secret_get(&self, key: &str) -> Option<String> {
         self.secrets.get(key.to_string())
     }
@@ -291,6 +296,47 @@ impl From<mdcore::model::SyncPair> for SyncPairInfo {
             renamed: p.renamed,
             last_synced: p.last_synced,
             error: p.error,
+        }
+    }
+}
+
+/// A note in the notepad shared with your other devices (`notes_list`,
+/// and `notes_changed` events with the same fields under `notes`).
+#[derive(uniffi::Record)]
+pub struct NoteItem {
+    pub id: String,
+    pub title: String,
+    /// Plain text, up to 64 KB.
+    pub body: String,
+    pub pinned: bool,
+    /// Lines starting with "[ ] " / "[x] " are drawn as checkboxes.
+    pub checklist: bool,
+    pub color: Option<String>,
+    /// Unix ms.
+    pub created_at: i64,
+    /// Unix ms.
+    pub updated_at: i64,
+    /// The device that last changed it (node id) and its name then.
+    pub by: String,
+    pub by_name: String,
+    /// A conflict copy: the note it split from.
+    pub conflict_of: Option<String>,
+}
+
+impl From<mdcore::model::Note> for NoteItem {
+    fn from(n: mdcore::model::Note) -> Self {
+        NoteItem {
+            id: n.id,
+            title: n.title,
+            body: n.body,
+            pinned: n.pinned,
+            checklist: n.checklist,
+            color: n.color,
+            created_at: i64::try_from(n.created_at).unwrap_or(i64::MAX),
+            updated_at: i64::try_from(n.updated_at).unwrap_or(i64::MAX),
+            by: n.by,
+            by_name: n.by_name,
+            conflict_of: n.conflict_of,
         }
     }
 }
@@ -1279,5 +1325,43 @@ impl MdEngine {
             icon.as_deref(),
             color.as_deref(),
         )
+    }
+
+    // --- notes shared with your other devices (mdcore features::notes) ---
+
+    /// Every note, pinned first, then the most recently changed. Notes
+    /// changed on your other devices arrive as `notes_changed` events.
+    pub fn notes_list(&self) -> Vec<NoteItem> {
+        self.inner.notes().into_iter().map(Into::into).collect()
+    }
+
+    /// Save a note (`id` none: a new one; a deleted one comes back, which
+    /// is how Undo works). Goes to your other devices. Answers with it as
+    /// saved.
+    pub fn note_save(
+        &self,
+        id: Option<String>,
+        title: String,
+        body: String,
+        pinned: bool,
+        checklist: bool,
+        color: Option<String>,
+    ) -> MdResult<NoteItem> {
+        Ok(self
+            .inner
+            .save_note(
+                id.as_deref(),
+                &title,
+                &body,
+                pinned,
+                checklist,
+                color.as_deref(),
+            )?
+            .into())
+    }
+
+    /// Delete a note on all your devices.
+    pub fn note_delete(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.delete_note(&id)?)
     }
 }

@@ -10,6 +10,7 @@
     <string name="tab_devices">Devices</string>
     <string name="tab_activity">Activity</string>
     <string name="tab_settings">Settings</string>
+    <string name="tab_notes">Notes</string>
 
     <!-- Shared -->
     <string name="back">Back</string>
@@ -873,4 +874,40 @@
     <string name="a11y_battery_chart_charging">Charging now.</string>
     <string name="a11y_touchpad">Touchpad. With TalkBack on, use the click, key and swipe buttons instead.</string>
     <string name="a11y_key_hidden">Key hidden</string>
+
+    <!-- Notes: a notepad that’s the same on all your devices (ui/NotesScreen.kt) -->
+    <string name="notes_title">Notes</string>
+    <string name="notes_subtitle">The same on all your devices, sent straight between them, encrypted. Nothing is kept in a cloud.</string>
+    <string name="notes_new">New note</string>
+    <string name="notes_search">Search notes</string>
+    <string name="notes_empty_title">No notes yet</string>
+    <string name="notes_empty_body">Write one and it shows up on your other devices too.</string>
+    <string name="notes_no_match">No note has “%1$s”.</string>
+    <string name="notes_untitled">Untitled</string>
+    <string name="notes_pinned">Pinned</string>
+    <string name="notes_progress">%1$d of %2$d done</string>
+    <string name="notes_title_label">Title</string>
+    <string name="notes_body_label">Note</string>
+    <string name="notes_pin">Pin</string>
+    <string name="notes_unpin">Unpin</string>
+    <string name="notes_checklist">Checklist</string>
+    <string name="notes_checklist_hint">Lines starting with “[ ] ” are boxes; “[x] ” is a ticked one.</string>
+    <string name="notes_as_text">Edit as text</string>
+    <string name="notes_as_list">Show as checklist</string>
+    <string name="notes_add_item">Add an item</string>
+    <string name="notes_add">Add</string>
+    <string name="notes_color">Colour</string>
+    <string name="notes_no_color">No colour</string>
+    <string name="notes_delete">Delete</string>
+    <string name="notes_deleted">Deleted “%1$s”</string>
+    <string name="notes_undo">Undo</string>
+    <string name="notes_deleted_elsewhere">That note was deleted on another of your devices.</string>
+    <string name="notes_saving">Saving…</string>
+    <string name="notes_not_saved">Saved when you start typing.</string>
+    <string name="notes_saved_by">Saved on %1$s, %2$s</string>
+    <string name="notes_another_device">another device</string>
+    <string name="notes_too_long">This note is longer than 64 KB, so it isn’t saved. Split it into two notes.</string>
+    <string name="notes_conflict_tag">Conflict copy</string>
+    <string name="notes_conflict_body">This note was changed on %1$s and on another device at the same time. This is the text from %1$s, kept so nothing is lost. Keep what you want and delete the other.</string>
+    <string name="notes_open_original">Open “%1$s”</string>
 </resources>

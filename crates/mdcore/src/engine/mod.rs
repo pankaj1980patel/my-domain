@@ -35,6 +35,7 @@ mod control;
 mod labels;
 mod ladder;
 mod media;
+mod notes;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
@@ -327,6 +328,7 @@ impl<P: Platform> Engine<P> {
             platform.clipboard().is_some(),
             config.folder_sync,
             config.shared_labels,
+            config.notes,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

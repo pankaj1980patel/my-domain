@@ -28,6 +28,7 @@ pub mod gallery;
 pub mod input;
 pub mod labels;
 pub mod media;
+pub mod notes;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
@@ -113,8 +114,14 @@ impl<P: Platform> ControlRegistry<P> {
     /// swallowed here. `folder_sync`: this device syncs folders
     /// (`CoreConfig::folder_sync`); without it the `sync_*` messages aren't
     /// known here, as in an app from before; likewise `labels` and the
-    /// `labels` message (`CoreConfig::shared_labels`).
-    pub fn with_defaults(has_clipboard: bool, folder_sync: bool, labels: bool) -> Self {
+    /// `labels` message (`CoreConfig::shared_labels`), and `notes` and the
+    /// `notes*` messages (`CoreConfig::notes`).
+    pub fn with_defaults(
+        has_clipboard: bool,
+        folder_sync: bool,
+        labels: bool,
+        notes: bool,
+    ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
         };
@@ -145,6 +152,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if labels {
             r.register(Arc::new(labels::LabelsHandler));
+        }
+        if notes {
+            r.register(Arc::new(notes::NotesHandler));
         }
         r
     }

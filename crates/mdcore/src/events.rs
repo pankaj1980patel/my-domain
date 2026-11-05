@@ -261,6 +261,13 @@ pub enum CoreEvent {
     LabelsChanged {
         labels: Vec<crate::model::SharedLabel>,
     },
+    /// Notes changed by your other devices (`features::notes`): the
+    /// changed or new ones (conflict copies included) and the ids of ones
+    /// deleted. Saving a note here makes no event.
+    NotesChanged {
+        notes: Vec<crate::model::Note>,
+        removed: Vec<String>,
+    },
     /// Another of your devices started (`on`) or stopped watching this
     /// screen: while any does (`Engine::screen_watchers`), send snapshots
     /// with `Engine::screen_frame`.
@@ -347,6 +354,7 @@ impl CoreEvent {
             CoreEvent::Input { .. } => "input-event",
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
+            CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
             CoreEvent::ScreenOffer { .. } => "screen-offer",

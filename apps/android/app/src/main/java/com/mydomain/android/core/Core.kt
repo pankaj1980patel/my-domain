@@ -339,6 +339,7 @@ object Core {
             HomeWidget.refresh(app)
             ShareTargets.refresh(app)
         }
+        Notes.refresh()
     }
 
     /** Re-read every live link's quality (called every few seconds while
@@ -446,6 +447,8 @@ object Core {
                 HomeWidget.refresh(app)
                 ShareTargets.refresh(app)
             }
+            // Notes changed on your other devices (and ones deleted there).
+            "notes_changed" -> Notes.applyChanged(o)
             "peer_connected" -> {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")

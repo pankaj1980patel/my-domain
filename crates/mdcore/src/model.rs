@@ -385,6 +385,34 @@ impl SharedLabel {
     }
 }
 
+/// A note in the notepad shared between your devices (`features::notes`):
+/// `Engine::notes`, and the `NotesChanged` event.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: String,
+    pub title: String,
+    /// Plain text, up to 64 KB.
+    pub body: String,
+    /// Shown first.
+    pub pinned: bool,
+    /// Draw lines starting with `[ ] ` / `[x] ` as checkboxes (the text
+    /// stays plain).
+    pub checklist: bool,
+    /// An accent colour name (the apps' fixed set); none: the default.
+    pub color: Option<String>,
+    /// Unix ms.
+    pub created_at: u64,
+    /// Unix ms, when it last changed ...
+    pub updated_at: u64,
+    /// ... and on which device (node id) ...
+    pub by: String,
+    /// ... called what then.
+    pub by_name: String,
+    /// A conflict copy: the note it split from, when it was changed on two
+    /// devices at once and this text lost (its title says so).
+    pub conflict_of: Option<String>,
+}
+
 /// A synced folder: one folder kept the same on this device and another
 /// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
 /// event whenever any of them changes.

@@ -11,6 +11,7 @@ import { commands, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, 
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
+import { applyNotesChanged, loadNotes, type Note } from "./notes";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
@@ -496,6 +497,8 @@ export async function startEvents() {
     on<ComputerAudioStatus_Serialize>("computer-audio", (s) => setState("computerAudio", reconcile(s))),
     // Device labels set on your other devices (shared): every label here.
     on<Record<string, DeviceLabel>>("device-labels", (labels) => setState("labels", reconcile(labels ?? {}))),
+    // Notes changed on your other devices (and ones deleted there).
+    on<{ notes: Note[]; removed: string[] }>("notes-changed", applyNotesChanged),
     // Synced folders: the whole list, whenever any of them changes.
     on<{ pairs: SyncPair[] }>("sync-pairs", ({ pairs }) => setState("syncPairs", reconcile(pairs ?? []))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
@@ -656,6 +659,7 @@ export async function loadAll() {
   setState("labels", reconcile(labels));
   commands.computerAudioStatus().then((s) => setState("computerAudio", reconcile(s)), () => {});
   commands.syncPairs().then((p) => setState("syncPairs", reconcile(p)), () => {});
+  loadNotes().catch(() => {});
   setState({
     me,
     peers,

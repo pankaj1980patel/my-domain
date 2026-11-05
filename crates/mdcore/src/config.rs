@@ -130,6 +130,11 @@ pub struct CoreConfig {
     /// understands the `labels` message. On by default; off behaves like
     /// an app from before (tests use it to play an older peer).
     pub shared_labels: bool,
+    /// The notepad shared between your devices (`features::notes`): this
+    /// end says `notes` in its status and understands the `notes` and
+    /// `notes_digest` messages. On by default; off behaves like an app
+    /// from before (tests use it to play an older peer).
+    pub notes: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -167,6 +172,7 @@ impl Default for CoreConfig {
             bin_media: true,
             folder_sync: true,
             shared_labels: true,
+            notes: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

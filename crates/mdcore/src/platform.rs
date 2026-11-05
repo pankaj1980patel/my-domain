@@ -78,6 +78,11 @@ pub trait Platform: Send + Sync + 'static {
         None
     }
     fn kv_set(&self, _key: &str, _value: &str) {}
+    /// Where a feature keeps a file of its own too big for `kv` (e.g.
+    /// `notes.json`), beside the kv store. `None`: it goes in `kv`.
+    fn data_file(&self, _name: &str) -> Option<std::path::PathBuf> {
+        None
+    }
 
     // --- secrets (session token, derived device key) ---
     /// Read a secret from the OS secure store (Keychain, Android Keystore,

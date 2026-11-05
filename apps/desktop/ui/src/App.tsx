@@ -1,4 +1,4 @@
-// App shell: sign in first, then a sidebar with Devices / Activity /
+// App shell: sign in first, then a sidebar with Devices / Notes / Activity /
 // Transfers / Search / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
@@ -21,12 +21,22 @@ import Developer from "./screens/Developer";
 import Help from "./screens/Help";
 import Search from "./screens/Search";
 import { revealFound, type Found } from "./lib/search";
+import Notes, { type NoteRequest } from "./screens/Notes";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 
-type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string } | { name: "search"; query?: string };
+type View =
+  | { name: "home" }
+  | { name: "device"; node: string }
+  | { name: "notes"; request?: NoteRequest }
+  | { name: "activity" }
+  | { name: "transfers" }
+  | { name: "settings" }
+  | { name: "developer" }
+  | { name: "help"; topic?: string }
+  | { name: "search"; query?: string };
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -44,6 +54,7 @@ export default function App() {
   const titles: Record<View["name"], Key> = {
     home: "nav.devices",
     device: "nav.devices",
+    notes: "nav.notes",
     activity: "nav.activity",
     transfers: "nav.transfers",
     settings: "nav.settings",
@@ -110,6 +121,8 @@ export default function App() {
         return go({ name: "help", topic: f.id });
     }
   };
+  // A note (or a new one, `id` null) from the command palette.
+  const openNote = (id: string | null) => go({ name: "notes", request: { id, at: Date.now() } });
   // A "?" next to a setting opens its Help topic.
   setHelpOpener((topic) => go({ name: "help", topic }));
   // The tray's "Open" on a device jumps to that device's page.
@@ -152,6 +165,15 @@ export default function App() {
                     </span>
                     <span class="sr-only">, {tn("a11y.devicesConnected", connected())}</span>
                   </Show>
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("notes") ? "active" : ""}`}
+                  aria-current={is("notes") ? "page" : undefined}
+                  onClick={() => go({ name: "notes" })}
+                >
+                  {t("nav.notes")}
                 </button>
               </li>
               <li>
@@ -241,6 +263,9 @@ export default function App() {
               <Match when={view().name === "device" && view()}>
                 {(v) => <Device node={(v() as { node: string }).node} onBack={() => go({ name: "home" })} />}
               </Match>
+              <Match when={view().name === "notes" && view()}>
+                {(v) => <Notes request={(v() as { request?: NoteRequest }).request} />}
+              </Match>
               <Match when={view().name === "activity"}>
                 <Activity />
               </Match>
@@ -267,6 +292,7 @@ export default function App() {
           onPlace={goPlace}
           onFound={openFound}
           onSearch={(query) => go({ name: "search", query })}
+          onNote={openNote}
         />
         <CallOverlay />
         <SendToPicker />

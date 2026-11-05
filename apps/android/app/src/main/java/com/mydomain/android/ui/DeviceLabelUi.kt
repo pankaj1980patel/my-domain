@@ -77,7 +77,7 @@ private fun iconName(id: String): String = when (id) {
 }
 
 @Composable
-private fun colorName(id: String): String = when (id) {
+internal fun colorName(id: String): String = when (id) {
     "cyan" -> stringResource(R.string.label_color_cyan)
     "blue" -> stringResource(R.string.label_color_blue)
     "sky" -> stringResource(R.string.label_color_sky)
@@ -218,7 +218,7 @@ private fun Choice(on: Boolean, name: String, onClick: () -> Unit, content: @Com
 /** A colour choice: a round swatch (none: an empty one with a slash), with
  *  a ring in the focus colour when chosen. */
 @Composable
-private fun Swatch(fill: Color?, on: Boolean, name: String, onClick: () -> Unit) {
+internal fun Swatch(fill: Color?, on: Boolean, name: String, onClick: () -> Unit) {
     Box(
         Modifier.size(48.dp).clip(CircleShape)
             .border(BorderStroke(2.dp, if (on) T.accent else Color.Transparent), CircleShape)

@@ -24,14 +24,41 @@ export function Gate(props: { reason?: string; children: JSX.Element }) {
 
 // --- toasts -------------------------------------------------------------------
 
-type Toast = { id: number; text: string; tone: "ok" | "error" | "info" };
+/** A button on a toast (e.g. Undo): pressing it runs `run` and closes it. */
+type ToastAction = { label: string; run: () => void };
+type Toast = { id: number; text: string; tone: "ok" | "error" | "info"; action?: ToastAction };
 const [toasts, setToasts] = createSignal<Toast[]>([]);
 let toastSeq = 0;
 
-export function toast(text: string, tone: Toast["tone"] = "info") {
+const dropToast = (id: number) => setToasts((t) => t.filter((x) => x.id !== id));
+
+export function toast(text: string, tone: Toast["tone"] = "info", action?: ToastAction) {
   const id = ++toastSeq;
-  setToasts((t) => [...t, { id, text, tone }]);
-  setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), tone === "error" ? 6000 : 3500);
+  setToasts((t) => [...t, { id, text, tone, action }]);
+  // One with a button stays longer: time to reach it.
+  setTimeout(() => dropToast(id), action ? 8000 : tone === "error" ? 6000 : 3500);
+}
+
+function ToastView(props: { toast: Toast }) {
+  return (
+    <div class={`toast toast-${props.toast.tone}`} classList={{ "toast-with-action": !!props.toast.action }}>
+      <span>{props.toast.text}</span>
+      <Show when={props.toast.action}>
+        {(a) => (
+          <button
+            type="button"
+            class="toast-action"
+            onClick={() => {
+              dropToast(props.toast.id);
+              a().run();
+            }}
+          >
+            {a().label}
+          </button>
+        )}
+      </Show>
+    </div>
+  );
 }
 
 /** Two live regions, always on the page so screen readers hear what's added:
@@ -41,10 +68,10 @@ export function Toasts() {
   return (
     <div class="toasts">
       <div class="toast-region" role="alert" aria-live="assertive" aria-relevant="additions">
-        <For each={of(true)}>{(x) => <div class={`toast toast-${x.tone}`}>{x.text}</div>}</For>
+        <For each={of(true)}>{(x) => <ToastView toast={x} />}</For>
       </div>
       <div class="toast-region" role="status" aria-live="polite" aria-relevant="additions">
-        <For each={of(false)}>{(x) => <div class={`toast toast-${x.tone}`}>{x.text}</div>}</For>
+        <For each={of(false)}>{(x) => <ToastView toast={x} />}</For>
       </div>
     </div>
   );

@@ -319,6 +319,15 @@ export const commands = {
 	 */
 	labelsShare: () => __TAURI_INVOKE<boolean>("labels_share"),
 	setLabelsShare: (on: boolean) => __TAURI_INVOKE<void>("set_labels_share", { on }),
+	/**  Every note, pinned first, then the most recently changed. */
+	notesList: () => __TAURI_INVOKE<NoteView_Serialize[]>("notes_list"),
+	/**
+	 *  Save a note (`id` null: a new one; a deleted one comes back, which is
+	 *  how Undo works). Goes to your other devices. Answers with it as saved.
+	 */
+	noteSave: (id: string | null, title: string, body: string, pinned: boolean, checklist: boolean, color: string | null) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_save", { id, title, body, pinned, checklist, color })),
+	/**  Delete a note on all your devices. */
+	noteDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("note_delete", { id })),
 	/**
 	 *  Your phones on Do Not Disturb right now (node ids; a live link and a
 	 *  fresh word from each, see `quiet`), whether or not this computer stays
@@ -1173,6 +1182,49 @@ export type NewShellCommand = {
 	name: string,
 	command: string,
 	enabled: boolean,
+};
+
+/**  One note, as the UI shows it (the core's `Note`). */
+export type NoteView = NoteView_Serialize | NoteView_Deserialize;
+
+/**  One note, as the UI shows it (the core's `Note`). */
+export type NoteView_Deserialize = {
+	id: string,
+	title: string,
+	body: string,
+	pinned: boolean,
+	/**  Lines starting with "[ ] " / "[x] " are drawn as checkboxes. */
+	checklist: boolean,
+	color?: string | null,
+	/**  Unix ms. */
+	created_at: number | null,
+	/**  Unix ms. */
+	updated_at: number | null,
+	/**  The device that last changed it (node id) and its name then. */
+	by: string,
+	by_name: string,
+	/**  A conflict copy: the note it split from. */
+	conflict_of?: string | null,
+};
+
+/**  One note, as the UI shows it (the core's `Note`). */
+export type NoteView_Serialize = {
+	id: string,
+	title: string,
+	body: string,
+	pinned: boolean,
+	/**  Lines starting with "[ ] " / "[x] " are drawn as checkboxes. */
+	checklist: boolean,
+	color: string | null,
+	/**  Unix ms. */
+	created_at: number | null,
+	/**  Unix ms. */
+	updated_at: number | null,
+	/**  The device that last changed it (node id) and its name then. */
+	by: string,
+	by_name: string,
+	/**  A conflict copy: the note it split from. */
+	conflict_of: string | null,
 };
 
 /**  An app seen showing notifications here. */
