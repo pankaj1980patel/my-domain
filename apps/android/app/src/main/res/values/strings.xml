@@ -871,7 +871,7 @@
     <string name="automation_apps_pending">Sent; no answer yet</string>
     <string name="automation_apps_failed">Couldn’t do it: %1$s</string>
     <!-- Search everything (SearchScreen.kt) -->
-    <string name="search_title">Search</string>
+    <string name="search_screen_title">Search</string>
     <string name="search_open">Search everything on this phone</string>
     <string name="search_field">Search devices, clips, files, settings…</string>
     <string name="search_clear">Clear search</string>

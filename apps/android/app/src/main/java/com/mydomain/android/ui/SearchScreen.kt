@@ -291,7 +291,7 @@ fun SearchScreen(
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
             Text(
-                stringResource(R.string.search_title), Modifier.semantics { heading() },
+                stringResource(R.string.search_screen_title), Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall, color = T.text,
             )
         }
