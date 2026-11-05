@@ -945,4 +945,30 @@
     <string name="notes_conflict_tag">Conflict copy</string>
     <string name="notes_conflict_body">This note was changed on %1$s and on another device at the same time. This is the text from %1$s, kept so nothing is lost. Keep what you want and delete the other.</string>
     <string name="notes_open_original">Open “%1$s”</string>
+
+    <!-- Arranging a device screen (DeviceScreen, PageLayoutStore) -->
+    <string name="layout_arrange">Arrange</string>
+    <string name="layout_done">Done</string>
+    <string name="layout_title">Arrange this screen</string>
+    <string name="layout_hint">Move tiles up or down, or hide the ones you don’t use. Hidden tiles are listed at the bottom. Changes are saved as you go. Tip: long-press a tile to arrange.</string>
+    <string name="layout_only_this">Only for this device</string>
+    <string name="layout_only_this_on">This layout is only for %1$s.</string>
+    <string name="layout_all_phones">This layout is used for all your phones.</string>
+    <string name="layout_all_computers">This layout is used for all your computers.</string>
+    <string name="layout_reset">Reset to default</string>
+    <string name="layout_reset_done">Layout reset</string>
+    <string name="layout_up">Move up</string>
+    <string name="layout_down">Move down</string>
+    <string name="layout_up_label">Move %1$s up</string>
+    <string name="layout_down_label">Move %1$s down</string>
+    <string name="layout_hide">Hide</string>
+    <string name="layout_hide_label">Hide %1$s</string>
+    <string name="layout_hidden">Hidden</string>
+    <string name="layout_show">Show</string>
+    <string name="layout_show_label">Show %1$s</string>
+    <string name="layout_not_now">Appears when %1$s offers it</string>
+    <string name="layout_moved_to">%1$s: position %2$d of %3$d</string>
+    <string name="layout_hidden_now">%1$s hidden</string>
+    <string name="layout_shown_now">%1$s shown</string>
+    <string name="layout_all_hidden">Every tile on this screen is hidden. Tap Arrange to show some.</string>
 </resources>

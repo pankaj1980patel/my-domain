@@ -61,6 +61,62 @@ import { foundId, foundTarget, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
+import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
+import type { PageLayoutView } from "../bindings";
+
+/** Every tile a device's page can show, in default order. A new tile is one
+ *  entry here (its `id` is kept in saved layouts: never rename one); a saved
+ *  layout that predates it shows it at this place. */
+const TILES: TileDef[] = [
+  { id: "chat", title: () => t("chat.title"), wide: true, render: (n) => <ChatTile node={n} /> },
+  { id: "notifications", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
+  { id: "notification-history", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
+  { id: "clipboard", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
+  { id: "clipboard-history", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
+  { id: "files", title: () => t("files.title"), render: (n) => <FilesTile node={n} /> },
+  { id: "browse", title: () => t("browse.title"), wide: true, render: (n) => <BrowseTile node={n} /> },
+  { id: "sync", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
+  { id: "control", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
+  { id: "info", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
+  { id: "schedules", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
+  {
+    id: "commands",
+    title: () => t("run.title"),
+    available: (n) => !!state.status[n]?.actions.includes("run"),
+    render: (n) => <CommandsTile node={n} />,
+  },
+  {
+    id: "screen",
+    title: (n) => (state.status[n]?.platform === "android" ? t("phoneScreen.title") : t("screen.title")),
+    available: (n) => !!state.status[n]?.actions.includes("screen"),
+    render: (n) => <ScreenTile node={n} />,
+  },
+  {
+    id: "phone-audio",
+    title: () => t("phoneAudio.title"),
+    kinds: ["phone"],
+    available: (n) => !!state.status[n]?.audioSource && state.status[n]?.platform === "android",
+    render: (n) => <PhoneAudioTile node={n} />,
+  },
+  {
+    // A phone that plays this computer's sound (it says audio_sink).
+    id: "computer-audio",
+    title: () => t("computerAudio.title"),
+    kinds: ["phone"],
+    available: (n) => !!state.status[n]?.audioSink && state.status[n]?.platform === "android",
+    render: (n) => <ComputerAudioTile node={n} />,
+  },
+  {
+    id: "photos",
+    title: () => t("photos.title"),
+    wide: true,
+    available: (n) => !!state.status[n]?.actions.includes("gallery"),
+    render: (n) => <PhotosTile node={n} />,
+  },
+  { id: "lost-mode", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
+  { id: "notify", title: () => t("notify.title"), render: () => <NotifyTile /> },
+  { id: "apps", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
+];
 
 export default function Device(props: { node: string; onBack: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
@@ -68,6 +124,30 @@ export default function Device(props: { node: string; onBack: () => void }) {
   const [editing, setEditing] = createSignal(false);
   // Another device's page: close the form.
   createEffect(on(() => props.node, () => setEditing(false), { defer: true }));
+
+  // The page's arrangement ("Edit page"): its tiles in the saved order,
+  // for this kind of device or this device alone.
+  const [arranging, setArranging] = createSignal(false);
+  const [layout, setLayout] = createSignal<PageLayoutView | null>(null);
+  const kind = createMemo(() => pageKind(props.node));
+  const kindTiles = createMemo(() => TILES.filter((d) => !d.kinds || d.kinds.includes(kind())));
+  createEffect(on(() => props.node, () => setArranging(false), { defer: true }));
+  createEffect(
+    on([() => props.node, kind, kindTiles], ([node, k, tiles]) => {
+      setLayout(null);
+      commands
+        .getPageLayout(k, node, tiles.map((d) => d.id))
+        .then((v) => node === props.node && k === kind() && setLayout(v))
+        .catch(() => {});
+    }),
+  );
+  // Until the saved layout is read: the default order.
+  const shownTiles = createMemo(() => {
+    const l = layout();
+    const byId = new Map(kindTiles().map((d) => [d.id, d]));
+    if (!l) return kindTiles();
+    return l.order.filter((id) => !l.hidden.includes(id)).flatMap((id) => byId.get(id) ?? []);
+  });
   // Ask for its battery whenever this page opens (answer: device-status-event).
   // Asked only over a live link (and again when one comes up): asking a
   // device that isn't connected would wake it by push just to show this.
@@ -110,6 +190,14 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 >
                   {t("label.edit")}
                 </button>
+                <button
+                  class="btn btn-ghost btn-sm"
+                  title={t("layout.editHint")}
+                  aria-pressed={arranging()}
+                  onClick={() => setArranging((v) => !v)}
+                >
+                  {arranging() ? t("layout.done") : t("layout.edit")}
+                </button>
               </div>
               <StatusPill node={props.node} />
               <Show when={s() === "connecting" || s() === "failed"}>
@@ -147,42 +235,273 @@ export default function Device(props: { node: string; onBack: () => void }) {
             <DeviceLabelForm node={props.node} onClose={() => setEditing(false)} />
           </Show>
 
-          <div class="tiles">
-            <ChatTile node={props.node} />
-            <NotificationsTile node={props.node} />
-            <NotificationHistory node={props.node} />
-            <ClipboardTile node={props.node} />
-            <ClipHistoryTile node={props.node} />
-            <FilesTile node={props.node} />
-            <DropToSend node={props.node} />
-            <BrowseTile node={props.node} />
-            <SyncTile node={props.node} />
-            <ControlTile node={props.node} />
-            <InfoTile node={props.node} />
-            <ScheduleTile node={props.node} />
-            <Show when={state.status[props.node]?.actions.includes("run")}>
-              <CommandsTile node={props.node} />
-            </Show>
-            <Show when={state.status[props.node]?.actions.includes("screen")}>
-              <ScreenTile node={props.node} />
-            </Show>
-            <Show when={state.status[props.node]?.audioSource && state.status[props.node]?.platform === "android"}>
-              <PhoneAudioTile node={props.node} />
-            </Show>
-            {/* A phone that plays this computer's sound (it says audio_sink). */}
-            <Show when={state.status[props.node]?.audioSink && state.status[props.node]?.platform === "android"}>
-              <ComputerAudioTile node={props.node} />
-            </Show>
-            <Show when={state.status[props.node]?.actions.includes("gallery")}>
-              <PhotosTile node={props.node} />
-            </Show>
-            <LostModeTile node={props.node} />
-            <NotifyTile />
-            <AppsTile node={props.node} />
-          </div>
+          <DropToSend node={props.node} />
+          <Show
+            when={arranging()}
+            fallback={
+              <div class="tiles">
+                <For each={shownTiles()}>
+                  {(d) => <Show when={d.available?.(props.node) ?? true}>{d.render(props.node)}</Show>}
+                </For>
+                <Show when={layout() && shownTiles().length === 0}>
+                  <p class="muted small">{t("layout.allHidden")}</p>
+                </Show>
+              </div>
+            }
+          >
+            <ArrangePage
+              node={props.node}
+              kind={kind()}
+              tiles={kindTiles()}
+              layout={layout()}
+              onLayout={setLayout}
+              onDone={() => setArranging(false)}
+            />
+          </Show>
         </section>
       )}
     </Show>
+  );
+}
+
+/** "Edit page": each shown tile as a card to drag by its handle (or move
+ *  with Move up / Move down, or the arrow keys on the handle), and hide;
+ *  hidden tiles listed below to show again. Saved as it changes (a drag
+ *  when it's dropped), for every device of this kind or this one alone. */
+function ArrangePage(props: {
+  node: string;
+  kind: PageKind;
+  tiles: TileDef[];
+  layout: PageLayoutView | null;
+  onLayout: (v: PageLayoutView) => void;
+  onDone: () => void;
+}) {
+  const ids = () => props.tiles.map((d) => d.id);
+  const view = (): PageLayoutView => props.layout ?? { order: ids(), hidden: [], scope: "default" };
+  const byId = createMemo(() => new Map(props.tiles.map((d) => [d.id, d])));
+  const title = (id: string) => byId().get(id)?.title(props.node) ?? id;
+  const shownIds = createMemo(() => view().order.filter((id) => !view().hidden.includes(id)));
+  const hiddenIds = createMemo(() => view().order.filter((id) => view().hidden.includes(id)));
+  const onlyThis = () => view().scope === "device";
+  const name = () => peerName(props.node);
+  const [announce, setAnnounce] = createSignal("");
+  const [dragging, setDragging] = createSignal<string | null>(null);
+  let grid: HTMLOListElement | undefined;
+  let hiddenList: HTMLUListElement | undefined;
+
+  // Only the newest answer counts (several saves can be on their way).
+  let asked = 0;
+  const save = (only: boolean, l: { order: string[]; hidden: string[] } | null) => {
+    const mine = ++asked;
+    return commands
+      .setPageLayout(props.kind, props.node, only, l, ids())
+      .then((v) => mine === asked && props.onLayout(v))
+      .catch((e) => toast(friendlyError(e), "error"));
+  };
+  /** Shown at once; saved unless a drag is still going. */
+  const change = (order: string[], hidden: string[], commit = true) => {
+    props.onLayout({ order, hidden, scope: view().scope });
+    if (commit) save(onlyThis(), { order, hidden });
+  };
+  const focusIn = (id: string, sel: string) =>
+    queueMicrotask(() => {
+      const card = grid?.querySelector<HTMLElement>(`[data-tile="${CSS.escape(id)}"]`);
+      const el = card?.querySelector<HTMLButtonElement>(sel);
+      (el && !el.disabled ? el : card?.querySelector<HTMLElement>(".arrange-handle"))?.focus();
+    });
+  const sayWhere = (id: string) => {
+    const shown = shownIds();
+    setAnnounce(t("layout.movedTo", { tile: title(id), n: shown.indexOf(id) + 1, total: shown.length }));
+  };
+
+  const step = (id: string, s: -1 | 1, refocus: string) => {
+    const v = view();
+    const order = moveStep(v.order, v.hidden, id, s);
+    if (order === v.order) return;
+    change(order, v.hidden);
+    sayWhere(id);
+    focusIn(id, refocus);
+  };
+  const hide = (id: string) => {
+    const v = view();
+    const next = shownIds()[shownIds().indexOf(id) + 1] ?? shownIds()[shownIds().indexOf(id) - 1];
+    change(v.order, [...v.hidden, id]);
+    setAnnounce(t("layout.hiddenNow", { tile: title(id) }));
+    if (next) focusIn(next, ".arrange-hide");
+    else queueMicrotask(() => hiddenList?.querySelector<HTMLElement>("button")?.focus());
+  };
+  const show = (id: string) => {
+    const v = view();
+    change(
+      v.order,
+      v.hidden.filter((x) => x !== id),
+    );
+    setAnnounce(t("layout.shownNow", { tile: title(id) }));
+    focusIn(id, ".arrange-handle");
+  };
+
+  // Dragging: the handle keeps the pointer; the card under it takes the
+  // dragged tile's place as it passes. Saved when dropped.
+  const down = (id: string) => (e: PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    setDragging(id);
+  };
+  const drag = (e: PointerEvent) => {
+    const id = dragging();
+    if (!id) return;
+    const card = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>("[data-tile]");
+    const over = card?.dataset.tile;
+    if (!over || over === id) return;
+    const v = view();
+    change(moveOnto(v.order, id, over), v.hidden, false);
+  };
+  const drop = () => {
+    const id = dragging();
+    if (!id) return;
+    setDragging(null);
+    const v = view();
+    save(onlyThis(), { order: v.order, hidden: v.hidden });
+    sayWhere(id);
+  };
+  const handleKey = (id: string) => (e: KeyboardEvent) => {
+    const s = e.key === "ArrowUp" || e.key === "ArrowLeft" ? -1 : e.key === "ArrowDown" || e.key === "ArrowRight" ? 1 : 0;
+    if (!s) return;
+    e.preventDefault();
+    step(id, s, ".arrange-handle");
+  };
+
+  const setOnlyThis = (on: boolean) => {
+    const v = view();
+    // On: this device keeps what it shows now as its own. Off: it follows
+    // its kind's layout again.
+    save(true, on ? { order: v.order, hidden: v.hidden } : null);
+  };
+  const reset = () => {
+    save(onlyThis(), null).then(() => setAnnounce(t("layout.resetDone")));
+  };
+  const allOfKind = () => (props.kind === "phone" ? t("layout.allPhones") : t("layout.allComputers"));
+
+  return (
+    <div class="arrange">
+      <div class="arrange-bar">
+        <h2>{t("layout.title")}</h2>
+        <p class="muted small">{t("layout.hint")}</p>
+        <label class="switch-row">
+          <span>{t("layout.onlyThis")}</span>
+          <input type="checkbox" role="switch" checked={onlyThis()} onChange={(e) => setOnlyThis(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{onlyThis() ? t("layout.onlyThisOn", { name: name() }) : allOfKind()}</p>
+        <div class="row">
+          <button
+            class="btn btn-ghost btn-sm"
+            title={onlyThis() ? t("layout.resetDeviceHint", { name: name() }) : t("layout.resetHint")}
+            disabled={view().scope === "default"}
+            onClick={reset}
+          >
+            {t("layout.reset")}
+          </button>
+          <span class="grow" />
+          <button class="btn btn-primary btn-sm" onClick={props.onDone}>
+            {t("layout.done")}
+          </button>
+        </div>
+      </div>
+      <ol class="tiles arrange-grid" ref={grid} aria-label={t("layout.listLabel", { name: name() })}>
+        <For each={shownIds()}>
+          {(id) => {
+            const d = () => byId().get(id);
+            const at = () => shownIds().indexOf(id);
+            return (
+              <li
+                class="tile arrange-card"
+                classList={{ "tile-wide": !!d()?.wide, "arrange-dragging": dragging() === id }}
+                data-tile={id}
+              >
+                <div class="row">
+                  <button
+                    class="arrange-handle"
+                    aria-label={t("layout.handle", { tile: title(id) })}
+                    title={t("layout.handleHint")}
+                    onPointerDown={down(id)}
+                    onPointerMove={drag}
+                    onPointerUp={drop}
+                    onPointerCancel={drop}
+                    onKeyDown={handleKey(id)}
+                  >
+                    <svg width="14" height="20" viewBox="0 0 14 20" aria-hidden="true">
+                      <For each={[3, 10, 17]}>
+                        {(y) => (
+                          <>
+                            <circle cx="4" cy={y} r="1.6" fill="currentColor" />
+                            <circle cx="10" cy={y} r="1.6" fill="currentColor" />
+                          </>
+                        )}
+                      </For>
+                    </svg>
+                  </button>
+                  <strong class="grow">{title(id)}</strong>
+                </div>
+                <Show when={!(d()?.available?.(props.node) ?? true)}>
+                  <p class="muted small">{t("layout.notNow", { name: name() })}</p>
+                </Show>
+                <div class="row">
+                  <button
+                    class="btn btn-ghost btn-sm arrange-up"
+                    disabled={at() === 0}
+                    aria-label={t("layout.upLabel", { tile: title(id) })}
+                    onClick={() => step(id, -1, ".arrange-up")}
+                  >
+                    {t("layout.up")}
+                  </button>
+                  <button
+                    class="btn btn-ghost btn-sm arrange-down"
+                    disabled={at() === shownIds().length - 1}
+                    aria-label={t("layout.downLabel", { tile: title(id) })}
+                    onClick={() => step(id, 1, ".arrange-down")}
+                  >
+                    {t("layout.down")}
+                  </button>
+                  <span class="grow" />
+                  <button
+                    class="btn btn-ghost btn-sm arrange-hide"
+                    aria-label={t("layout.hideLabel", { tile: title(id) })}
+                    onClick={() => hide(id)}
+                  >
+                    {t("layout.hide")}
+                  </button>
+                </div>
+              </li>
+            );
+          }}
+        </For>
+      </ol>
+      <Show when={hiddenIds().length}>
+        <div class="arrange-hidden">
+          <span class="small">{t("layout.hidden")}</span>
+          <ul ref={hiddenList}>
+            <For each={hiddenIds()}>
+              {(id) => (
+                <li>
+                  <span>{title(id)}</span>
+                  <button
+                    class="btn btn-ghost btn-sm"
+                    aria-label={t("layout.showLabel", { tile: title(id) })}
+                    onClick={() => show(id)}
+                  >
+                    {t("layout.show")}
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </div>
+      </Show>
+      <p class="sr-only" role="status" aria-live="polite">
+        {announce()}
+      </p>
+    </div>
   );
 }
 

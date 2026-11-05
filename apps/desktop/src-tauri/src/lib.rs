@@ -33,6 +33,7 @@ mod location;
 mod notes;
 mod notif_history;
 mod notify;
+mod page_layout;
 mod phone_audio;
 mod phone_screen;
 mod quiet;
@@ -1513,6 +1514,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         device_labels::set_device_label,
         device_labels::labels_share,
         device_labels::set_labels_share,
+        page_layout::get_page_layout,
+        page_layout::set_page_layout,
         notes::notes_list,
         notes::note_save,
         notes::note_delete,
@@ -1616,6 +1619,7 @@ pub fn run() {
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));
+            app.manage(page_layout::PageLayouts::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
             app.manage(automations::Automations::load(&handle));

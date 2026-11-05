@@ -333,6 +333,19 @@ export const commands = {
 	 */
 	labelsShare: () => __TAURI_INVOKE<boolean>("labels_share"),
 	setLabelsShare: (on: boolean) => __TAURI_INVOKE<void>("set_labels_share", { on }),
+	/**
+	 *  How `node`'s page (a device of `kind`: "phone" or "computer") is
+	 *  arranged: `tiles` (every tile it has, in default order) in the saved
+	 *  order, the hidden ones, and whether that's its own layout, its kind's,
+	 *  or the default.
+	 */
+	getPageLayout: (kind: string, node: string, tiles: string[]) => __TAURI_INVOKE<PageLayoutView>("get_page_layout", { kind, node, tiles }),
+	/**
+	 *  Save `node`'s page arrangement for it alone (`only_this`) or for every
+	 *  device of its `kind`; `layout` null resets (see `Saved::apply`). Answers
+	 *  with what the page shows now.
+	 */
+	setPageLayout: (kind: string, node: string, onlyThis: boolean, layout: PageLayout_Deserialize | null, tiles: string[]) => __TAURI_INVOKE<PageLayoutView>("set_page_layout", { kind, node, onlyThis, layout, tiles }),
 	/**  Every note, pinned first, then the most recently changed. */
 	notesList: () => __TAURI_INVOKE<NoteView_Serialize[]>("notes_list"),
 	/**
@@ -1179,6 +1192,15 @@ export type Identity_Serialize = {
 	mapped_quic?: string,
 };
 
+/**  Where the layout a page shows came from. */
+export type LayoutScope = 
+/**  Nothing saved: the page's own order. */
+"default" | 
+/**  The layout for every device of this kind. */
+"kind" | 
+/**  This device's own layout ("Only for this device"). */
+"device";
+
 /**  One live link, as the UI and the path-choosing logic see it. */
 export type LinkStats = LinkStats_Serialize | LinkStats_Deserialize;
 
@@ -1328,6 +1350,31 @@ export type NotifApp = {
 	name: string,
 	/**  Its notifications stay on this computer. */
 	muted: boolean,
+};
+
+/**  A page's arrangement: tile ids in order, and the hidden ones. */
+export type PageLayout = PageLayout_Serialize | PageLayout_Deserialize;
+
+/**
+ *  What a device's page shows: every tile it passed, in order, the hidden
+ *  ones, and where that came from.
+ */
+export type PageLayoutView = {
+	order: string[],
+	hidden: string[],
+	scope: LayoutScope,
+};
+
+/**  A page's arrangement: tile ids in order, and the hidden ones. */
+export type PageLayout_Deserialize = {
+	order?: string[],
+	hidden?: string[],
+};
+
+/**  A page's arrangement: tile ids in order, and the hidden ones. */
+export type PageLayout_Serialize = {
+	order: string[],
+	hidden: string[],
 };
 
 /**

@@ -257,6 +257,7 @@ object Core {
         ClipLog.load(app)
         ChatHistory.load(app)
         DeviceLabels.load(app)
+        PageLayoutStore.load(app)
         TransferLog.load(app)
     }
 

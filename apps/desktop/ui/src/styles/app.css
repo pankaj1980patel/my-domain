@@ -3075,3 +3075,80 @@ html:lang(hi) body {
   justify-content: space-between;
   margin-top: var(--s-4);
 }
+
+/* --- Arranging a device's page ("Edit page", Device.tsx ArrangePage) --- */
+.arrange {
+  display: grid;
+  gap: var(--s-4);
+}
+.arrange-bar {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.arrange-bar h2,
+.arrange-bar p {
+  margin: 0;
+}
+.arrange-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.arrange-card {
+  border-style: dashed;
+}
+.arrange-dragging {
+  opacity: 0.55;
+  border-color: var(--focus);
+}
+.arrange-handle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin-right: var(--s-2);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  cursor: grab;
+  touch-action: none;
+}
+.arrange-handle:hover {
+  border-color: var(--border-strong);
+}
+.arrange-handle:active {
+  cursor: grabbing;
+}
+.arrange-handle:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.arrange-hidden {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.arrange-hidden ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.arrange-hidden li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px 2px 2px var(--s-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}

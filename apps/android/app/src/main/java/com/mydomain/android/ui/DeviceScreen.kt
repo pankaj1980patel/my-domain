@@ -4,6 +4,17 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.lazy.LazyListScope
+import com.mydomain.android.core.DeviceLabels
+import com.mydomain.android.core.LayoutScope
+import com.mydomain.android.core.PageArrangement
+import com.mydomain.android.core.PageLayout
+import com.mydomain.android.core.PageLayoutStore
+import com.mydomain.android.core.PageLayoutView
 import androidx.compose.ui.platform.LocalContext
 import android.net.Uri
 import android.content.Intent
@@ -75,9 +86,18 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
     LaunchedEffect(node, focus) {
         when {
             foundMessage != null -> list.scrollToKey("chat")
-            foundClip != null -> list.scrollToKey("clip-history")
+            foundClip != null -> list.scrollToKey("clipboard-history")
         }
     }
+    // Arrange (a long press on a tile, or the button by its name): the
+    // screen's tiles in the saved order, for this kind of device or this
+    // device alone (PageLayoutStore).
+    var arranging by remember(node) { mutableStateOf(false) }
+    var said by remember(node) { mutableStateOf("") }
+    val kind = pageKind(node)
+    val tiles = deviceTiles(node, Core.peerName(node), foundMessage, foundClip).filter { kind in it.kinds }
+    val layout = PageLayoutStore.view(kind, node, tiles.map { it.id })
+    val arrangeLabel = stringResource(R.string.layout_arrange)
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -111,6 +131,12 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
                             )
                             Spacer(Modifier.width(8.dp))
                             GhostButton(stringResource(R.string.label_edit), { editing = !editing }, small = true)
+                            Spacer(Modifier.width(6.dp))
+                            GhostButton(
+                                stringResource(if (arranging) R.string.layout_done else R.string.layout_arrange),
+                                { arranging = !arranging; said = "" },
+                                small = true,
+                            )
                         }
                         StatusPill(node)
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
@@ -147,45 +173,197 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
                 }
             }
             if (editing) item { DeviceLabelEditor(node) { editing = false } }
-            item(key = "chat") { ChatTile(node, foundMessage) }
-            item { FilesTile(node) }
-            // Its shared folders, for a device that can be browsed.
-            if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, name) }
-            item { FindTile(node, name) }
-            // What it said about itself: battery, storage, memory, processor, uptime.
-            Core.deviceStatus[node]?.takeIf { hasInfo(it) }?.let { st ->
-                item { InfoTile(node, name, st) }
+            if (arranging) {
+                arrangeItems(node, name, kind, tiles, layout, said, { said = it }) { arranging = false }
+            } else {
+                val shown = layout.shown.mapNotNull { id -> tiles.firstOrNull { it.id == id } }.filter { it.available }
+                for (t in shown) item(key = t.id) {
+                    Box(Modifier.longPressToArrange(node, arrangeLabel) { arranging = true }) { t.content() }
+                }
+                if (layout.shown.isEmpty()) item { Muted(stringResource(R.string.layout_all_hidden)) }
             }
-            // Commands its owner lets your devices run (it lists "run").
-            if (Core.deviceStatus[node]?.actions?.contains("run") == true) {
-                item { CommandsTile(node, name) }
+        }
+    }
+}
+
+/** "phone" or "computer": which layout [node]'s screen uses. Its own report
+ *  first, then the icon you gave it here; a computer when nothing says. */
+private fun pageKind(node: String): String {
+    Core.deviceStatus[node]?.platform?.let { return if (it == "android") "phone" else "computer" }
+    val icon = DeviceLabels.labels[node]?.icon
+    return if (icon == "phone" || icon == "tablet" || icon == "watch") "phone" else "computer"
+}
+
+private val BOTH = setOf("phone", "computer")
+private val COMPUTER = setOf("computer")
+
+/** One tile a device's screen can show: [id] is kept in saved layouts
+ *  (never rename one); [available]: the device offers it now (else it's
+ *  left out, and listed as such in Arrange). */
+private class PageTile(
+    val id: String,
+    val title: Int,
+    val kinds: Set<String> = BOTH,
+    val available: Boolean = true,
+    val content: @Composable () -> Unit,
+)
+
+/** Every tile a device's screen can show, in default order. A new tile is
+ *  one entry here; a saved layout that predates it shows it at this place. */
+private fun deviceTiles(node: String, name: String, foundMessage: Long?, foundClip: Long?): List<PageTile> {
+    val st = Core.deviceStatus[node]
+    return listOf(
+        PageTile("chat", R.string.chat_title) { ChatTile(node, foundMessage) },
+        PageTile("files", R.string.files_title) { FilesTile(node) },
+        // Its shared folders, for a device that can be browsed.
+        PageTile("browse", R.string.browse_title, available = st?.sharedFolders != null) { BrowseTile(node, name) },
+        PageTile("control", R.string.find_title) { FindTile(node, name) },
+        // What it said about itself: battery, storage, memory, processor, uptime.
+        PageTile("info", R.string.info_title, available = st != null && hasInfo(st)) {
+            st?.let { InfoTile(node, name, it) }
+        },
+        // Commands its owner lets your devices run (it lists "run").
+        PageTile("commands", R.string.run_title, available = st?.actions?.contains("run") == true) { CommandsTile(node, name) },
+        // A computer that lets the phone control it (it lists "input").
+        PageTile("touchpad", R.string.touchpad_title, COMPUTER, available = st?.actions?.contains("input") == true) {
+            st?.let { TouchpadTile(node, it) }
+        },
+        // A computer that can show this phone's screen (it says screen_view).
+        PageTile("screen-share", R.string.screen_share_title, COMPUTER, available = st?.screenView == true) {
+            ShareScreenTile(node, name)
+        },
+        // A computer that plays this phone's audio (it says audio_sink),
+        // from a phone that can capture it (Android 10 or later).
+        // (Phones say audio_sink too now, for a computer's sound: only
+        // a computer's page offers this.)
+        PageTile(
+            "phone-audio", R.string.audio_tile_title, COMPUTER,
+            available = st != null && st.audioSink && st.platform != "android" && PhoneAudio.supported,
+        ) { PhoneAudioTile(node, name) },
+        // A computer that plays its sound here (it says audio_source).
+        PageTile(
+            "computer-audio", R.string.caudio_tile_title, COMPUTER,
+            available = st != null && st.audioSource && st.platform != "android",
+        ) { ComputerAudioTile(node, name) },
+        // A computer that can show its own notifications here (it says notif_share).
+        PageTile("computer-notifs", R.string.computer_notifs_title, COMPUTER, available = st?.notifShare != null) {
+            st?.notifShare?.let { ComputerNotifsTile(node, name, it) }
+        },
+        PageTile("clipboard", R.string.clipboard_title) { ClipboardTile(node) },
+        // Text sent to it and from it as clipboard, kept on this phone.
+        PageTile("clipboard-history", R.string.clip_history_title, available = ClipLog.enabled) {
+            ClipHistoryTile(node, name, foundClip)
+        },
+        PageTile("notify", R.string.notify_title) { NotifyTile() },
+        PageTile("apps", R.string.apps_title) { AppsTile(node) },
+    )
+}
+
+/** A long press on a tile (not on a button in it) starts Arrange; TalkBack
+ *  offers it as the tile's long-press action. */
+private fun Modifier.longPressToArrange(node: String, label: String, onArrange: () -> Unit): Modifier = this
+    .pointerInput(node) { detectTapGestures(onLongPress = { onArrange() }) }
+    .semantics { onLongClick(label) { onArrange(); true } }
+
+/** Arrange: each shown tile as a card with Move up / Move down / Hide, the
+ *  hidden ones listed after to show again, "Only for this device" and
+ *  Reset. Saved as it changes. */
+private fun LazyListScope.arrangeItems(
+    node: String,
+    name: String,
+    kind: String,
+    tiles: List<PageTile>,
+    layout: PageLayoutView,
+    said: String,
+    say: (String) -> Unit,
+    onDone: () -> Unit,
+) {
+    val onlyThis = layout.scope == LayoutScope.DEVICE
+    val byId = tiles.associateBy { it.id }
+    val shown = layout.shown
+    item(key = "arrange-bar") {
+        val ctx = LocalContext.current
+        Tile(title = stringResource(R.string.layout_title)) {
+            Muted(stringResource(R.string.layout_hint))
+            SwitchRow(stringResource(R.string.layout_only_this), onlyThis) { on ->
+                // On: this device keeps what it shows now as its own. Off: it
+                // follows its kind's layout again.
+                PageLayoutStore.set(ctx, kind, node, true, if (on) PageLayout(layout.order, layout.hidden) else null)
             }
-            // A computer that lets the phone control it (it lists "input").
-            Core.deviceStatus[node]?.takeIf { "input" in it.actions }?.let { st ->
-                item { TouchpadTile(node, st) }
+            Muted(
+                when {
+                    onlyThis -> stringResource(R.string.layout_only_this_on, name)
+                    kind == "phone" -> stringResource(R.string.layout_all_phones)
+                    else -> stringResource(R.string.layout_all_computers)
+                },
+            )
+            val resetDone = stringResource(R.string.layout_reset_done)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (layout.scope != LayoutScope.DEFAULT) {
+                    GhostButton(stringResource(R.string.layout_reset), {
+                        PageLayoutStore.set(ctx, kind, node, onlyThis, null)
+                        say(resetDone)
+                    })
+                }
+                Spacer(Modifier.weight(1f))
+                PrimaryButton(stringResource(R.string.layout_done), onDone)
             }
-            // A computer that can show this phone's screen (it says screen_view).
-            if (Core.deviceStatus[node]?.screenView == true) item { ShareScreenTile(node, name) }
-            // A computer that plays this phone's audio (it says audio_sink),
-            // from a phone that can capture it (Android 10 or later).
-            // (Phones say audio_sink too now, for a computer's sound: only
-            // a computer's page offers this.)
-            Core.deviceStatus[node]?.takeIf { it.audioSink && it.platform != "android" && PhoneAudio.supported }?.let {
-                item { PhoneAudioTile(node, name) }
+            if (said.isNotEmpty()) Muted(said, Modifier.announce())
+        }
+    }
+    for (id in shown) item(key = "arrange:$id") {
+        val t = byId[id] ?: return@item
+        val ctx = LocalContext.current
+        val title = stringResource(t.title)
+        val at = shown.indexOf(id)
+        val upLabel = stringResource(R.string.layout_up_label, title)
+        val downLabel = stringResource(R.string.layout_down_label, title)
+        val hideLabel = stringResource(R.string.layout_hide_label, title)
+        val hiddenNow = stringResource(R.string.layout_hidden_now, title)
+        val res = ctx.resources
+        fun step(s: Int) {
+            val order = PageArrangement.moveStep(layout.order, layout.hidden, id, s)
+            if (order === layout.order) return
+            PageLayoutStore.set(ctx, kind, node, onlyThis, PageLayout(order, layout.hidden))
+            val now = order.filter { it !in layout.hidden }
+            say(res.getString(R.string.layout_moved_to, title, now.indexOf(id) + 1, now.size))
+        }
+        Tile(title = title) {
+            if (!t.available) Muted(stringResource(R.string.layout_not_now, name))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SoftButton(
+                    stringResource(R.string.layout_up), { step(-1) },
+                    Modifier.semantics { contentDescription = upLabel }, enabled = at > 0,
+                )
+                SoftButton(
+                    stringResource(R.string.layout_down), { step(1) },
+                    Modifier.semantics { contentDescription = downLabel }, enabled = at < shown.size - 1,
+                )
+                Spacer(Modifier.weight(1f))
+                GhostButton(stringResource(R.string.layout_hide), {
+                    PageLayoutStore.set(ctx, kind, node, onlyThis, PageLayout(layout.order, layout.hidden + id))
+                    say(hiddenNow)
+                }, Modifier.semantics { contentDescription = hideLabel }, small = true)
             }
-            // A computer that plays its sound here (it says audio_source).
-            Core.deviceStatus[node]?.takeIf { it.audioSource && it.platform != "android" }?.let {
-                item { ComputerAudioTile(node, name) }
+        }
+    }
+    val hidden = layout.order.filter { it in layout.hidden }
+    if (hidden.isNotEmpty()) item(key = "arrange-hidden") {
+        val ctx = LocalContext.current
+        Tile(title = stringResource(R.string.layout_hidden)) {
+            for (id in hidden) {
+                val t = byId[id] ?: continue
+                val title = stringResource(t.title)
+                val showLabel = stringResource(R.string.layout_show_label, title)
+                val shownNow = stringResource(R.string.layout_shown_now, title)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(title, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = T.text)
+                    GhostButton(stringResource(R.string.layout_show), {
+                        PageLayoutStore.set(ctx, kind, node, onlyThis, PageLayout(layout.order, layout.hidden - id))
+                        say(shownNow)
+                    }, Modifier.semantics { contentDescription = showLabel }, small = true)
+                }
             }
-            // A computer that can show its own notifications here (it says notif_share).
-            Core.deviceStatus[node]?.notifShare?.let { sharing ->
-                item { ComputerNotifsTile(node, name, sharing) }
-            }
-            item { ClipboardTile(node) }
-            // Text sent to it and from it as clipboard, kept on this phone.
-            if (ClipLog.enabled) item(key = "clip-history") { ClipHistoryTile(node, name, foundClip) }
-            item { NotifyTile() }
-            item { AppsTile(node) }
         }
     }
 }
