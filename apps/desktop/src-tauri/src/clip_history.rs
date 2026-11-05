@@ -298,6 +298,16 @@ pub fn on_sent(app: &AppHandle, to: &str, text: &str) {
 
 /// The last `n` clips received (from any device), newest first.
 pub fn recent_received(app: &AppHandle, n: usize) -> Vec<ClipRecord> {
+    newest(app, n, true)
+}
+
+/// The last `n` clips either way (any device), newest first: the quick
+/// panel's "Recent".
+pub fn recent(app: &AppHandle, n: usize) -> Vec<ClipRecord> {
+    newest(app, n, false)
+}
+
+fn newest(app: &AppHandle, n: usize, received_only: bool) -> Vec<ClipRecord> {
     let Some(h) = app.try_state::<ClipHistory>() else {
         return Vec::new();
     };
@@ -306,7 +316,7 @@ pub fn recent_received(app: &AppHandle, n: usize) -> Vec<ClipRecord> {
         .map(|i| {
             i.list
                 .iter()
-                .filter(|e| e.direction == ClipDirection::In)
+                .filter(|e| !received_only || e.direction == ClipDirection::In)
                 .take(n)
                 .cloned()
                 .collect()

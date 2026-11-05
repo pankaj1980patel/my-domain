@@ -878,7 +878,7 @@ fn say(app: &AppHandle, title: &str, body: &str) {
 
 /// An action sent to a device: say it's done, or that it goes once the
 /// device is reachable.
-fn sent(app: &AppHandle, what: &str, name: &str, result: Result<String, CoreError>) {
+pub(crate) fn sent(app: &AppHandle, what: &str, name: &str, result: Result<String, CoreError>) {
     match result {
         Ok(via) if via == "queued" => say(
             app,

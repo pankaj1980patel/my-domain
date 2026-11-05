@@ -77,3 +77,14 @@ export function setTheme(id: ThemeId) {
 export function initTheme() {
   apply(current());
 }
+
+/** Another window (the quick panel follows the main one) picked a theme:
+ *  apply it here too. */
+export function followThemeChanges() {
+  window.addEventListener("storage", (e) => {
+    if (e.key === STORAGE_KEY && isTheme(e.newValue)) {
+      setCurrent(e.newValue);
+      apply(e.newValue);
+    }
+  });
+}

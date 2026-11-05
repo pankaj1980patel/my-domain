@@ -3,7 +3,7 @@
 // is hidden.
 
 import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
-import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
+import { dismissRing, onOpenDevice, onQuickOpen, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { toast, Toasts } from "./components/ui";
@@ -134,6 +134,15 @@ export default function App() {
   // The tray's "Open" on a device jumps to that device's page.
   onMount(() => {
     const off = onOpenDevice((node) => go({ name: "device", node }));
+    onCleanup(() => off.then((f) => f()));
+  });
+  // The quick panel's footer: Settings, or Search with what was typed there
+  // ("Open my-domain" just brings the window forward as it is).
+  onMount(() => {
+    const off = onQuickOpen((place, query) => {
+      if (place === "settings") go({ name: "settings" });
+      else if (place === "search") go({ name: "search", query: query ?? undefined });
+    });
     onCleanup(() => off.then((f) => f()));
   });
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");

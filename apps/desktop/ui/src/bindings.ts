@@ -521,6 +521,26 @@ export const commands = {
 	 *  narrows to a device and a time span. Only local data is read.
 	 */
 	search: (query: string, limitPerKind: number, kinds: string[] | null, filter: SearchFilter_Deserialize | null) => __TAURI_INVOKE<SearchResults_Serialize>("search", { query, limitPerKind, kinds, filter }),
+	/**  Whether a left click on the menu-bar icon opens the quick panel. */
+	quickPanelEnabled: () => __TAURI_INVOKE<boolean>("quick_panel_enabled"),
+	/**  Turn the quick panel on the icon's left click on or off (off: the menu). */
+	setQuickPanelEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_quick_panel_enabled", { on }),
+	/**  Hide the quick panel (Esc, or after it opened something). */
+	quickPanelHide: () => __TAURI_INVOKE<void>("quick_panel_hide"),
+	/**
+	 *  The panel's footer: bring the main window forward at `place` ("home",
+	 *  "settings" or "search", with `query`), and hide the panel.
+	 */
+	quickPanelOpenMain: (place: string, query: string | null) => __TAURI_INVOKE<void>("quick_panel_open_main", { place, query }),
+	/**
+	 *  A device's quick button: "ring", "clipboard" (send this computer's
+	 *  clipboard), "send_file" (pick one; the panel hides for the dialog),
+	 *  "locate" (phones) or "lock" (computers). Done the tray's way: a
+	 *  notification says how it went.
+	 */
+	quickPanelAction: (nodeId: string, action: string) => typedError<null, string>(__TAURI_INVOKE("quick_panel_action", { nodeId, action })),
+	/**  The last `limit` clips (sent and received, any device), newest first. */
+	quickPanelClips: (limit: number) => __TAURI_INVOKE<ClipRecord_Serialize[]>("quick_panel_clips", { limit }),
 };
 
 /* Types */

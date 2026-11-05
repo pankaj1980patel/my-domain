@@ -37,6 +37,7 @@ mod notify;
 mod page_layout;
 mod phone_audio;
 mod phone_screen;
+mod quick_panel;
 mod quiet;
 mod remote_input;
 mod schedule;
@@ -1578,7 +1579,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync_folders::sync_max_size_mb,
         sync_folders::sync_set_max_size_mb,
         sync_folders::sync_open_folder,
-        search::search
+        search::search,
+        quick_panel::quick_panel_enabled,
+        quick_panel::set_quick_panel_enabled,
+        quick_panel::quick_panel_hide,
+        quick_panel::quick_panel_open_main,
+        quick_panel::quick_panel_action,
+        quick_panel::quick_panel_clips
     ])
 }
 
@@ -1634,6 +1641,7 @@ pub fn run() {
             app.manage(webhooks::Webhooks::load(&handle));
             app.manage(calls::CallsPrefs::load(&handle));
             app.manage(computer_notifs::ComputerNotifs::load(&handle));
+            app.manage(quick_panel::QuickPanelPref::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -1710,13 +1718,21 @@ pub fn run() {
             Ok(())
         })
         // Closing the window hides it to the tray; the tray's "Quit" exits.
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" && !tray::quitting() {
+        // The quick panel hides when it loses focus, and on a close.
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                if window.label() == quick_panel::LABEL {
+                    api.prevent_close();
+                    quick_panel::hide(window.app_handle());
+                } else if window.label() == "main" && !tray::quitting() {
                     api.prevent_close();
                     let _ = window.hide();
                 }
             }
+            tauri::WindowEvent::Focused(false) if window.label() == quick_panel::LABEL => {
+                quick_panel::hide(window.app_handle());
+            }
+            _ => {}
         })
         .invoke_handler(commands.invoke_handler())
         .build(tauri::generate_context!())

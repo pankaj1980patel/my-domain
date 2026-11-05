@@ -401,6 +401,9 @@ type IncomingMessage = { from: string; node_id?: string; ip: string; protocol: s
 
 let listening = false;
 let qualityTimer: ReturnType<typeof setInterval> | undefined;
+/** Set in the quick panel's window: the main window already rings, shows
+ *  the toasts and measures the links, so the panel only keeps the store. */
+let secondary = false;
 
 /** Re-read every live link's quality (RTT + loss, rated by the core). */
 async function pollQuality() {
@@ -408,12 +411,17 @@ async function pollQuality() {
   setState("quality", Object.fromEntries(stats.map((s) => [s.node_id, s.quality])));
 }
 
-/** Subscribe to the core's events once; the store updates itself after. */
-export async function startEvents() {
+/** Subscribe to the core's events once; the store updates itself after.
+ *  `panel`: the quick panel's window (no ring sound, toasts or link
+ *  measuring of its own). */
+export async function startEvents(opts: { panel?: boolean } = {}) {
   if (listening) return;
   listening = true;
-  pollQuality();
-  qualityTimer ??= setInterval(pollQuality, 5000);
+  secondary = !!opts.panel;
+  if (!secondary) {
+    pollQuality();
+    qualityTimer ??= setInterval(pollQuality, 5000);
+  }
 
   const on = <T>(name: string, f: (p: T) => void) =>
     listen<T>(name, (e) => {
@@ -484,7 +492,7 @@ export async function startEvents() {
     on<{ from: string; code: string; app?: string | null }>("code-copied", ({ from, app }) => {
       const device = peerName(from);
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.codeCopied", { device }) });
-      toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
+      if (!secondary) toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
     }),
     on<null>("clip-history-changed", () => setClipTick((x) => x + 1)),
     // A phone shares its screen with this computer (the backend brings
@@ -568,6 +576,7 @@ export async function startEvents() {
     // The backend brings the window forward and shows the OS notification;
     // the sound and the banner are here.
     on<{ from: string }>("ring-event", ({ from }) => {
+      if (secondary) return;
       setState("ringing", { from });
       startRing(() => setState("ringing", null));
       addActivity({ icon: "", tone: "warn", node: from, text: t("activity.ringing", { name: peerName(from) }) });
@@ -621,7 +630,7 @@ export async function startEvents() {
       });
       const device = peerName(from);
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.fileSaved", { name, device }) });
-      toast(t("files.savedToast", { name, device }), "ok");
+      if (!secondary) toast(t("files.savedToast", { name, device }), "ok");
     }),
     on<{ id: string; node_id: string; name: string }>("file-sent", ({ id, node_id, name }) => {
       const cur = state.transfers[id];
@@ -678,6 +687,24 @@ export async function loadAll() {
     account: { username: info.username ?? "", server: info.server_url ?? "" },
     clipSync: clip,
   });
+}
+
+/** What the quick panel shows, read fresh each time it opens: your devices,
+ *  their live links, labels and statuses (asked again), and whether a
+ *  phone keeps this computer quiet. */
+export async function loadPanel() {
+  const [peers, links, labels, quiet] = await Promise.all([
+    commands.getPeers(),
+    commands.linkStats().catch(() => []),
+    commands.getDeviceLabels(),
+    commands.phoneQuiet().catch(() => [] as string[]),
+  ]);
+  setState("labels", reconcile(labels));
+  setState("links", reconcile(Object.fromEntries(links.map((l) => [l.node_id, l.transport]))));
+  setState("quality", reconcile(Object.fromEntries(links.map((l) => [l.node_id, l.quality]))));
+  setState({ peers, quietPhones: quiet });
+  // Battery and the rest arrive as device-status-event.
+  for (const l of links) commands.requestStatus(l.node_id).catch(() => {});
 }
 
 export async function refreshDevices() {
@@ -1046,6 +1073,12 @@ export async function openFile(path: string) {
  *  unsubscribe function. */
 export function onOpenDevice(cb: (node: string) => void): Promise<() => void> {
   return listen<{ node_id: string }>("open-device", (e) => cb(e.payload.node_id));
+}
+
+/** The quick panel's footer opened this window at a place: "home",
+ *  "settings" or "search" (with the query typed there). */
+export function onQuickOpen(cb: (place: string, query: string | null) => void): Promise<() => void> {
+  return listen<{ place: string; query?: string | null }>("quick-open", (e) => cb(e.payload.place, e.payload.query ?? null));
 }
 
 export function dismissRing() {

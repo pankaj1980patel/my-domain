@@ -20,6 +20,11 @@
 // During a call taken on this Mac (`calls`), the menu starts with Answer /
 // Decline, or Hang up and "Use phone / this Mac for audio". While this
 // computer's sound plays on a phone (`computer_audio`), a Stop for it.
+//
+// A left click opens the quick panel (`quick_panel`) instead of the menu
+// while its Settings switch is on (macOS and Windows; Linux trays report
+// no clicks, so the menu's "Quick panel" item opens it there). A right
+// click shows the menu.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,9 +32,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::quick_panel::{self, Anchor, Area};
 use crate::{notify, shortcut, Eng};
 
 const TRAY_ID: &str = "main";
@@ -39,6 +45,7 @@ const LOCATE_WAIT_SECS: u64 = 5 * 60;
 
 // Menu labels (the Rust side has no i18n).
 const LABEL_OPEN_APP: &str = "Open my-domain";
+const LABEL_QUICK_PANEL: &str = "Quick panel";
 const LABEL_RING: &str = "Ring";
 const LABEL_SEND: &str = "Send a file…";
 const LABEL_SEND_FOLDER: &str = "Send a folder…";
@@ -58,6 +65,7 @@ const CLIP_PREVIEW: usize = 40;
 
 // Menu item ids; device items are `<action>:<node_id>`.
 const ID_OPEN_APP: &str = "app:open";
+const ID_QUICK_PANEL: &str = "app:panel";
 const ID_QUIT: &str = "app:quit";
 const ID_NONE: &str = "app:none";
 
@@ -103,13 +111,54 @@ pub fn init(app: &AppHandle) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)
         .menu(&menu)
         .tooltip("my-domain")
-        .show_menu_on_left_click(true)
-        .on_menu_event(|app, ev| on_menu(app, ev.id().as_ref()));
+        .show_menu_on_left_click(!quick_panel::enabled(app))
+        .on_menu_event(|app, ev| on_menu(app, ev.id().as_ref()))
+        .on_tray_icon_event(|tray, ev| on_click(tray.app_handle(), ev));
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }
     tray.build(app)?;
     Ok(())
+}
+
+/// A click on the icon: the left button's release opens or closes the quick
+/// panel while its switch is on (the menu shows by itself otherwise).
+fn on_click(app: &AppHandle, ev: TrayIconEvent) {
+    if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        rect,
+        position,
+        ..
+    } = ev
+    {
+        if !quick_panel::enabled(app) {
+            return;
+        }
+        let p = rect.position.to_physical::<f64>(1.0);
+        let s = rect.size.to_physical::<f64>(1.0);
+        let anchor = if s.width > 0.0 && s.height > 0.0 {
+            Anchor::Icon(Area {
+                x: p.x,
+                y: p.y,
+                w: s.width,
+                h: s.height,
+            })
+        } else {
+            Anchor::Point(position.x, position.y)
+        };
+        quick_panel::toggle(app, anchor);
+    }
+}
+
+/// A left click shows the menu (`true`) or leaves it to the quick panel.
+/// Linux trays always show the menu.
+pub fn set_left_click_menu(app: &AppHandle, on: bool) {
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        if let Err(e) = tray.set_show_menu_on_left_click(on) {
+            eprintln!("[tray] couldn't change the left click: {e}");
+        }
+    }
 }
 
 /// Whether "Quit" was chosen (the window's close then isn't intercepted).
@@ -324,7 +373,10 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     if !sound.is_empty() {
         menu = menu.separator();
     }
-    let mut menu = menu.text(ID_OPEN_APP, LABEL_OPEN_APP).separator();
+    let mut menu = menu
+        .text(ID_QUICK_PANEL, LABEL_QUICK_PANEL)
+        .text(ID_OPEN_APP, LABEL_OPEN_APP)
+        .separator();
     let devices = devices(app);
     if devices.is_empty() {
         let none = MenuItemBuilder::with_id(ID_NONE, LABEL_NO_DEVICES)
@@ -395,6 +447,12 @@ fn clip_label(text: &str, device: &str) -> String {
 fn on_menu(app: &AppHandle, id: &str) {
     match id {
         ID_OPEN_APP => show_window(app),
+        ID_QUICK_PANEL => {
+            let icon = app
+                .tray_by_id(TRAY_ID)
+                .and_then(|t| t.rect().ok().flatten());
+            quick_panel::show(app, quick_panel::menu_anchor(app, icon));
+        }
         ID_QUIT => {
             QUITTING.store(true, Ordering::Relaxed);
             app.exit(0);
@@ -442,8 +500,8 @@ pub(crate) fn ring(app: &AppHandle, node: &str) {
     });
 }
 
-/// Send this computer's clipboard to a phone; off the main thread.
-fn send_clipboard(app: &AppHandle, node: &str) {
+/// Send this computer's clipboard to a device; off the main thread.
+pub(crate) fn send_clipboard(app: &AppHandle, node: &str) {
     let (app, node) = (app.clone(), node.to_string());
     std::thread::spawn(move || {
         if let Some(engine) = app.try_state::<Eng>() {
