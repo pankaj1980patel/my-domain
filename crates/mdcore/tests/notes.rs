@@ -253,10 +253,12 @@ fn remind(node: &TestNode, id: Option<&str>, title: &str, body: &str, at: u64, d
         .unwrap()
 }
 
-/// Wait for a `NotesChanged` on `node` with note `id` matching `f`.
+/// Wait for a `NotesChanged` on `node` with note `id` matching `f`. Longer
+/// than `WAIT`: a reminder can take a digest round trip, which ran past 5 s
+/// once with the whole suite running at the same time.
 fn wait_change(node: &TestNode, id: &str, f: impl Fn(&Note) -> bool) -> Note {
     node.sink
-        .wait_until(WAIT, |e| match e {
+        .wait_until(WAIT * 3, |e| match e {
             CoreEvent::NotesChanged { notes, .. } => {
                 notes.iter().find(|n| n.id == id && f(n)).cloned()
             }
