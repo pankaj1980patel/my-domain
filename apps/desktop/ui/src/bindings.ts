@@ -79,6 +79,20 @@ export const commands = {
 	/**  Replace the muted list; returns it tidied (see `tidy_muted`). */
 	setMutedApps: (apps: string[]) => __TAURI_INVOKE<string[]>("set_muted_apps", { apps }),
 	/**
+	 *  Device `node_id`'s kept messages before message `before` (the newest
+	 *  without it): the last `limit`, oldest first.
+	 */
+	chatHistory: (nodeId: string, before: string | null, limit: number) => __TAURI_INVOKE<ChatPage_Serialize>("chat_history", { nodeId, before, limit }),
+	/**  Forget device `node_id`'s kept messages (on the disk too, in a moment). */
+	clearChatHistory: (nodeId: string) => __TAURI_INVOKE<void>("clear_chat_history", { nodeId }),
+	/**  Whether messages are kept ("Keep message history" in Settings). */
+	chatHistoryEnabled: () => __TAURI_INVOKE<boolean>("chat_history_enabled"),
+	/**
+	 *  Turn the history on or off; off also forgets everything kept, on the
+	 *  disk too, now.
+	 */
+	setChatHistoryEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_chat_history_enabled", { on }),
+	/**
 	 *  Device `node_id`'s kept clips (sent and received), newest first: the
 	 *  first `limit` matching `query` (every word in the text, ignoring case).
 	 */
@@ -785,6 +799,82 @@ export type CallsStatus_Serialize = {
 	/**  "macos", "linux", ... (the Settings wording differs a little). */
 	os: string,
 };
+
+/**
+ *  One page of a device's chat: oldest first, whether older ones are kept,
+ *  and how many this device has kept in all.
+ */
+export type ChatPage = ChatPage_Serialize | ChatPage_Deserialize;
+
+/**
+ *  One page of a device's chat: oldest first, whether older ones are kept,
+ *  and how many this device has kept in all.
+ */
+export type ChatPage_Deserialize = {
+	entries: ChatRecord_Deserialize[],
+	more: boolean,
+	kept: number,
+};
+
+/**
+ *  One page of a device's chat: oldest first, whether older ones are kept,
+ *  and how many this device has kept in all.
+ */
+export type ChatPage_Serialize = {
+	entries: ChatRecord_Serialize[],
+	more: boolean,
+	kept: number,
+};
+
+/**  One message as kept. */
+export type ChatRecord = ChatRecord_Serialize | ChatRecord_Deserialize;
+
+/**  One message as kept. */
+export type ChatRecord_Deserialize = {
+	/**  The message's id (shared with the core and the device). */
+	id: string,
+	/**  The device it came from (node id), for one received. */
+	from_node?: string | null,
+	/**  The device it went to (node id), for one sent. */
+	to_node?: string | null,
+	/**  Up to `MAX_TEXT` bytes of it. */
+	text: string,
+	/**  The text was longer and was cut. */
+	truncated?: boolean,
+	/**  When, in milliseconds since 1970. */
+	at: number | null,
+	status: ChatStatus,
+};
+
+/**  One message as kept. */
+export type ChatRecord_Serialize = {
+	/**  The message's id (shared with the core and the device). */
+	id: string,
+	/**  The device it came from (node id), for one received. */
+	from_node: string | null,
+	/**  The device it went to (node id), for one sent. */
+	to_node: string | null,
+	/**  Up to `MAX_TEXT` bytes of it. */
+	text: string,
+	/**  The text was longer and was cut. */
+	truncated: boolean,
+	/**  When, in milliseconds since 1970. */
+	at: number | null,
+	status: ChatStatus,
+};
+
+/**  Where a message stands. */
+export type ChatStatus = 
+/**  Sent from here; handed to a link, not confirmed yet. */
+"sent" | 
+/**  Sent from here with no link yet: goes out once there is one. */
+"queued" | 
+/**  Sent from here, and the device confirmed it arrived. */
+"delivered" | 
+/**  Sent from here, and the send failed. */
+"failed" | 
+/**  Another device sent it here. */
+"received";
 
 /**  Keys that were checked: as kept, and for people. */
 export type CheckedKeys = {

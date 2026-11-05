@@ -36,15 +36,19 @@ import org.json.JSONObject
  * One chat bubble. Outgoing messages carry [msgId] (sent to the core) and stay
  * [pending] until the peer acknowledges it (`message_delivered` with that id).
  * [queued]: there was no link when it was sent, so the core holds it until
- * the device is connected.
+ * the device is connected. [failed]: the send failed. Incoming ones carry the
+ * sender’s id in [msgId] (one made here when it gave none). Older ones come from
+ * [ChatHistory] ([fromHistory]: no live state, so no "sending" marker).
  */
 data class ChatMessage(
     val id: Long, val node: String, val incoming: Boolean, val text: String, val ts: Long,
     val msgId: String? = null,
     val queued: Boolean = false,
     val delivered: Boolean = false,
+    val failed: Boolean = false,
+    val fromHistory: Boolean = false,
 ) {
-    val pending: Boolean get() = !incoming && !delivered
+    val pending: Boolean get() = !incoming && !delivered && !failed && !fromHistory
 }
 
 enum class Tone { Info, Ok, Warn, Error }
@@ -251,6 +255,7 @@ object Core {
         app = context.applicationContext
         BatteryLog.load(app)
         ClipLog.load(app)
+        ChatHistory.load(app)
         DeviceLabels.load(app)
         TransferLog.load(app)
     }
@@ -464,6 +469,7 @@ object Core {
             "message_delivered" -> {
                 val id = o.optString("id")
                 messages.replaceAll { if (!it.incoming && it.msgId == id) it.copy(delivered = true) else it }
+                ChatHistory.delivered(id)
             }
             "message_received" -> {
                 if (!o.optBoolean("ok", true)) {
@@ -473,7 +479,10 @@ object Core {
                 val text = o.optString("text")
                 if (ClipboardSync.isControl(text)) return
                 val from = node.ifEmpty { peers.firstOrNull { it.ip == o.optString("ip") }?.nodeId ?: "" }
-                messages.add(ChatMessage(++seq, from, true, text, System.currentTimeMillis()))
+                // One without an id (an old sender) gets one here, the same in the history.
+                val msgId = o.optString("id").ifEmpty { java.util.UUID.randomUUID().toString() }
+                messages.add(ChatMessage(++seq, from, true, text, System.currentTimeMillis(), msgId))
+                if (from.isNotEmpty()) ChatHistory.received(from, msgId, text)
                 addActivity(str(R.string.act_message, peerName(from), text))
             }
             "notification" -> {
@@ -695,12 +704,17 @@ object Core {
     suspend fun sendMessage(node: String, text: String): String {
         val msgId = java.util.UUID.randomUUID().toString()
         onMain { messages.add(ChatMessage(++seq, node, false, text, System.currentTimeMillis(), msgId)) }
+        // Kept before it goes, so a fast receipt finds it in the history.
+        ChatHistory.sending(node, msgId, text)
         val via = try {
             call { it.sendWithId(node, text, msgId) }
         } catch (e: Exception) {
-            onMain { messages.removeAll { it.msgId == msgId } }
+            // Kept (marked) as it is in the history.
+            onMain { messages.replaceAll { if (it.msgId == msgId) it.copy(failed = true) else it } }
+            ChatHistory.sendResult(msgId, ChatStatus.Failed)
             throw e
         }
+        ChatHistory.sendResult(msgId, if (via == "queued") ChatStatus.Queued else ChatStatus.Sent)
         if (via == "queued") {
             onMain { messages.replaceAll { if (it.msgId == msgId) it.copy(queued = true) else it } }
         }
@@ -723,9 +737,11 @@ object Core {
         call { it.reconnect(node) }
     }
 
-    /** Forget the chat with [node], on this phone only. */
+    /** Forget the chat with [node], on this phone only (its saved history
+     *  too). */
     fun clearChat(node: String) {
         messages.removeAll { it.node == node }
+        ChatHistory.clear(node)
     }
 
     /** Ask a device for its clipboard; NetService applies the reply. */

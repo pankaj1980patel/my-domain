@@ -33,6 +33,7 @@ import com.mydomain.android.core.DeviceStatus
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -46,6 +47,10 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.ComputerNotifs
 import com.mydomain.android.PhoneAudio
 import com.mydomain.android.R
+import com.mydomain.android.core.ChatHistory
+import com.mydomain.android.core.ChatMessage
+import com.mydomain.android.core.ChatPage
+import com.mydomain.android.core.ChatStatus
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.LinkState
@@ -185,6 +190,9 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
     }
 }
 
+/** Saved messages a chat shows at first, and adds per step back. */
+private const val CHAT_PAGE = 100
+
 /** The chat with [node]; [found]: a message a search opened (marked). */
 @Composable
 private fun ChatTile(node: String, found: Long? = null) {
@@ -192,11 +200,34 @@ private fun ChatTile(node: String, found: Long? = null) {
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    val thread = Core.messages.filter { it.node == node }.takeLast(50)
+    // The newest [CHAT_PAGE] saved messages ([ChatHistory]), [CHAT_PAGE]
+    // more per "Show older messages".
+    var shown by remember(node) { mutableIntStateOf(CHAT_PAGE) }
+    val keep = ChatHistory.enabled
+    val saved = if (keep) ChatHistory.page(node, null, shown) else ChatPage(emptyList(), false, 0)
+    val live = Core.messages.filter { it.node == node }
+    // This session's bubbles carry the live state; a saved copy of one is left out.
+    val liveIds = live.mapNotNull { it.msgId }.toHashSet()
+    val older = saved.entries.filter { it.id !in liveIds }.map {
+        ChatMessage(
+            it.id.hashCode().toLong(), it.node, it.incoming, it.text, it.at, it.id,
+            delivered = it.status == ChatStatus.Delivered,
+            failed = it.status == ChatStatus.Failed,
+            fromHistory = true,
+        )
+    }
+    val merged = (older + live).sortedBy { it.ts }
+    val thread = merged.takeLast(if (keep) shown else 50)
+    val more = keep && (saved.more || merged.size > shown)
 
     Tile(title = stringResource(R.string.chat_title)) {
         if (thread.isEmpty()) {
             Muted(stringResource(R.string.chat_empty), Modifier.fillMaxWidth().padding(vertical = 8.dp), center = true)
+        }
+        if (more) {
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                GhostButton(stringResource(R.string.chat_older), { shown += CHAT_PAGE }, small = true)
+            }
         }
         thread.forEach { m ->
             val waiting = m.queued && m.pending
@@ -215,6 +246,9 @@ private fun ChatTile(node: String, found: Long? = null) {
                     if (waiting) {
                         Text(stringResource(R.string.chat_sends_when_connected), color = T.onPrimary, style = MaterialTheme.typography.labelMedium)
                     }
+                    if (m.failed) {
+                        Text(stringResource(R.string.chat_failed), color = T.onPrimary, style = MaterialTheme.typography.labelMedium)
+                    }
                 }
             }
         }
@@ -223,6 +257,7 @@ private fun ChatTile(node: String, found: Long? = null) {
                 GhostButton(stringResource(R.string.chat_clear), { Core.clearChat(node) }, small = true)
             }
         }
+        if (keep) Muted(stringResource(R.string.chat_kept))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(text, { text = it }, stringResource(R.string.chat_hint), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))

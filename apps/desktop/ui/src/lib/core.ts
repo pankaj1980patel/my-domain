@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
+import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
@@ -35,6 +35,11 @@ export type ChatMessage = {
   pending?: boolean;
   /** Set when the receipt arrives. */
   delivered?: boolean;
+  /** Sent from here, and the send failed. */
+  failed?: boolean;
+  /** Kept in the message history (chat_history.rs) too, so search finds it
+   *  there: false while "Keep message history" is off. */
+  saved?: boolean;
 };
 
 export type ActivityItem = {
@@ -416,6 +421,7 @@ export async function startEvents() {
       f(e.payload);
     });
 
+  loadChatKeep().catch(() => {});
   await Promise.all([
     on<Peer[]>("peers-updated", (peers) => setState("peers", peers)),
     on<{ node_id: string; transport: TransportKind }>("peer-connected", ({ node_id, transport }) => {
@@ -446,9 +452,13 @@ export async function startEvents() {
         return;
       }
       const node = m.node_id ?? state.peers.find((p) => p.ip === m.ip)?.node_id ?? "";
+      // The backend kept it (when it knows the device and the history is on).
+      const saved = chatKeep() && !!m.node_id;
       setState(
         "messages",
-        produce((list) => list.push({ id: ++seq, node, dir: "in", text: m.text, ts: now(), via: m.protocol })),
+        produce((list) =>
+          list.push({ id: ++seq, node, dir: "in", text: m.text, ts: now(), via: m.protocol, mid: m.id ?? undefined, saved }),
+        ),
       );
       addActivity({ icon: "💬", tone: "info", node, text: t("activity.message", { name: peerName(node), text: m.text }) });
     }),
@@ -699,13 +709,15 @@ export async function sendMessage(node: string, text: string): Promise<string> {
   // until then. The bubble goes in first so a fast receipt can't beat it.
   const mid = crypto.randomUUID();
   const id = ++seq;
-  setState("messages", produce((list) => list.push({ id, node, dir: "out", text, ts: now(), mid, pending: true })));
+  const saved = chatKeep();
+  setState("messages", produce((list) => list.push({ id, node, dir: "out", text, ts: now(), mid, pending: true, saved })));
   try {
     const via = await unwrap(commands.sendMessage(node, text, mid));
     setState("messages", (m) => m.id === id, "via", via);
     return via;
   } catch (e) {
-    setState("messages", (list) => list.filter((m) => m.id !== id));
+    // Kept (marked) as it is in the history.
+    setState("messages", (m) => m.id === id, { pending: false, failed: true });
     throw e;
   }
 }
@@ -726,9 +738,60 @@ export async function reconnect(node: string) {
   await unwrap(commands.reconnect(node));
 }
 
-/** Forget the chat with a device, on this computer only. */
-export function clearChat(node: string) {
+/** Forget the chat with a device, on this computer only (its saved
+ *  history too). */
+export async function clearChat(node: string) {
   setState("messages", (list) => list.filter((m) => m.node !== node));
+  await commands.clearChatHistory(node);
+  setChatTick((x) => x + 1);
+}
+
+// --- message history (chat_history.rs) ------------------------------------------
+
+/** "Keep message history" (Settings); on by default. */
+const [chatKeep, setChatKeepSignal] = createSignal(true);
+/** Bumped when saved messages were cleared: chats reload. */
+const [chatTick, setChatTick] = createSignal(0);
+export { chatKeep, chatTick };
+
+/** Read the "Keep message history" setting. */
+export async function loadChatKeep() {
+  setChatKeepSignal(await commands.chatHistoryEnabled());
+}
+
+/** Turn the message history on or off; off forgets what was saved. */
+export async function setChatKeep(on: boolean) {
+  await commands.setChatHistoryEnabled(on);
+  setChatKeepSignal(on);
+  if (!on) {
+    setState("messages", {}, "saved", false);
+    setChatTick((x) => x + 1);
+  }
+}
+
+/** A saved message as a chat bubble. */
+function bubbleOf(r: ChatRecord_Serialize): ChatMessage {
+  const incoming = r.status === "received";
+  return {
+    id: ++seq,
+    node: (incoming ? r.from_node : r.to_node) ?? "",
+    dir: incoming ? "in" : "out",
+    text: r.text,
+    ts: r.at ?? 0,
+    mid: r.id,
+    // This session's own bubbles carry the live state (sending, queued);
+    // one saved earlier that never got its receipt just shows no marker.
+    delivered: r.status === "delivered",
+    failed: r.status === "failed",
+    saved: true,
+  };
+}
+
+/** A device's saved messages before message `before` (the newest without
+ *  it): the last `limit`, oldest first, and whether older ones are kept. */
+export async function chatPage(node: string, before: string | null, limit: number): Promise<{ messages: ChatMessage[]; more: boolean }> {
+  const p = await commands.chatHistory(node, before, limit);
+  return { messages: p.entries.map(bubbleOf), more: p.more };
 }
 
 export async function setClipSync(on: boolean) {

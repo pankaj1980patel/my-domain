@@ -1,11 +1,20 @@
 ---
 title: Messages, clipboard and clipboard history
-keywords: chat, message, text, copy, paste, clipboard, sync, history, clips, link, open link, verification code, otp, code
+keywords: chat, message, text, message history, chat history, saved messages, copy, paste, clipboard, sync, history, clips, link, open link, verification code, otp, code
 platforms: desktop, android
 ---
 ## Messages
 
-Each device's page has a chat. Messages go straight to that device, end-to-end encrypted. You can clear a chat from its page.
+Each device's page has a chat. Messages go straight to that device, end-to-end encrypted.
+
+### Message history
+
+Your chats are kept on each device, so they're still there after a restart: the newest 2,000 messages per device (20,000 in all), up to 64 KB each. The newest 100 show first; scroll up (or tap **Show older messages**) for older ones. On the computer, search finds saved messages too.
+
+The history stays on that device only. It's never synced to your other devices or the server.
+
+- **Clear** on a chat forgets that chat on this device, saved messages included.
+- Turn **Keep message history** off in Settings to stop saving and forget everything kept.
 
 ## Clipboard
 

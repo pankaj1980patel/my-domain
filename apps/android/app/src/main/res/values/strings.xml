@@ -96,6 +96,9 @@
     <string name="chat_empty">Say hi. Messages go straight to this device, encrypted.</string>
     <string name="chat_sends_when_connected">Sends when connected</string>
     <string name="chat_hint">Write a message</string>
+    <string name="chat_failed">Not sent</string>
+    <string name="chat_older">Show older messages</string>
+    <string name="chat_kept">Messages are kept on this phone only. Turn it off in Settings.</string>
     <string name="clipboard_title">Clipboard</string>
     <string name="clipboard_body">Copy something there, paste it here.</string>
     <string name="clipboard_getting">Getting it…</string>
@@ -157,6 +160,8 @@
     <string name="settings_clip_sync">Keep clipboards in sync with my devices</string>
     <string name="settings_share_codes">Send verification codes to my computers</string>
     <string name="settings_clip_history">Keep a clipboard history</string>
+    <string name="settings_chat_history">Keep message history</string>
+    <string name="settings_chat_history_hint">Chats with your devices are kept on this phone (the newest 2,000 per device), so they’re still there after a restart. Never synced. Turning this off forgets them all.</string>
     <string name="settings_share_labels">Share names and icons with my other devices</string>
     <string name="settings_share_labels_hint">A nickname, icon or colour you give a device here shows up on your other devices too, and ones set there show up here. The newest change wins. Off: this phone keeps its own and ignores theirs.</string>
     <string name="settings_clip_history_hint">Text sent between your devices as clipboard is kept on this phone (the last 200), on each device’s screen. Turning this off forgets it all.</string>

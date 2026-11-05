@@ -5,6 +5,9 @@ import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
 import {
   cancelFile,
+  chatKeep,
+  chatPage,
+  chatTick,
   clearChat,
   clearClipHistory,
   connect,
@@ -31,6 +34,7 @@ import {
   state,
   toggleApp,
   RADIOS,
+  type ChatMessage,
   type DeviceStatus,
   type PhoneNotification,
   type Radio,
@@ -53,7 +57,7 @@ import ScheduleTile from "./device/ScheduleTile";
 import CommandsTile from "./device/CommandsTile";
 import LostModeTile from "./device/LostModeTile";
 import NotificationHistory from "./device/NotificationHistory";
-import { foundId, isFound } from "../lib/search";
+import { foundId, foundTarget, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
@@ -182,13 +186,86 @@ export default function Device(props: { node: string; onBack: () => void }) {
   );
 }
 
+/** Saved messages loaded at first, and per step back. */
+const CHAT_PAGE = 100;
+
 function ChatTile(props: { node: string }) {
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const thread = () => state.messages.filter((m) => m.node === props.node);
+  // Saved messages (chat_history.rs) from before this session's own,
+  // oldest first; more of them as the chat is scrolled up.
+  const [saved, setSaved] = createSignal<ChatMessage[]>([]);
+  const [more, setMore] = createSignal(false);
+  const [loading, setLoading] = createSignal(false);
+  let asked = 0;
+  let firstPage: Promise<void> = Promise.resolve();
+  const live = () => state.messages.filter((m) => m.node === props.node);
+  // This session's bubbles carry the live state; a saved copy of one is left out.
+  const thread = createMemo(() => {
+    const mine = live();
+    const ids = new Set(mine.map((m) => m.mid).filter(Boolean));
+    const older = saved().filter((m) => !ids.has(m.mid));
+    return [...older, ...mine].sort((a, b) => a.ts - b.ts);
+  });
   // Only the newest delivered message of ours gets the marker.
   const lastDelivered = () => thread().filter((m) => m.dir === "out" && m.delivered).pop()?.id;
   let list: HTMLDivElement | undefined;
+  const toBottom = () => queueMicrotask(() => list?.scrollTo({ top: list.scrollHeight }));
+
+  // The newest saved page, for this device (again after a clear or the
+  // setting changing).
+  createEffect(
+    on([() => props.node, chatTick, chatKeep], ([node, , keep]) => {
+      const mine = ++asked;
+      setSaved([]);
+      setMore(false);
+      if (!keep) return;
+      firstPage = chatPage(node, null, CHAT_PAGE)
+        .then((p) => {
+          if (mine !== asked) return;
+          setSaved(p.messages);
+          setMore(p.more);
+          toBottom();
+        })
+        .catch(() => {});
+    }),
+  );
+
+  /** One step further back; keeps what's on screen where it was. */
+  const loadOlder = async () => {
+    const first = saved()[0]?.mid;
+    if (loading() || !more() || !first) return false;
+    setLoading(true);
+    const mine = asked;
+    try {
+      const p = await chatPage(props.node, first, CHAT_PAGE);
+      if (mine !== asked) return false;
+      const height = list?.scrollHeight ?? 0;
+      setSaved((s) => [...p.messages, ...s]);
+      setMore(p.more);
+      queueMicrotask(() => {
+        if (list) list.scrollTop += list.scrollHeight - height;
+      });
+      return p.messages.length > 0;
+    } catch {
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+  const onScroll = () => {
+    if (list && list.scrollTop < 40) loadOlder();
+  };
+  // A message opened from a search: step back until it's in the chat.
+  createEffect(
+    on(foundTarget, async (x) => {
+      if (x?.kind !== "messages" || x.node !== props.node) return;
+      await firstPage;
+      while (!thread().some((m) => String(m.mid ?? m.id) === x.id)) {
+        if (!(await loadOlder())) break;
+      }
+    }),
+  );
 
   const send = async (e: Event) => {
     e.preventDefault();
@@ -198,7 +275,7 @@ function ChatTile(props: { node: string }) {
     try {
       await sendMessage(props.node, t);
       setText("");
-      queueMicrotask(() => list?.scrollTo({ top: list.scrollHeight }));
+      toBottom();
     } catch (err) {
       toast(friendlyError(err), "error");
     } finally {
@@ -211,24 +288,36 @@ function ChatTile(props: { node: string }) {
       <div class="tile-head">
         <h2>{t("chat.title")}</h2>
         <Show when={thread().length > 0}>
-          <button class="btn btn-ghost btn-sm" title={t("chat.clearHint")} onClick={() => clearChat(props.node)}>
+          <button class="btn btn-ghost btn-sm" title={t("chat.clearHint")} onClick={() => clearChat(props.node).catch(() => {})}>
             {t("chat.clear")}
           </button>
         </Show>
       </div>
-      <div class="thread" ref={list} role="log" aria-label={t("a11y.chatLog", { name: peerName(props.node) })} tabIndex={0}>
+      <div class="thread" ref={list} onScroll={onScroll} role="log" aria-label={t("a11y.chatLog", { name: peerName(props.node) })} tabIndex={0}>
+        <Show when={more()}>
+          <button class="btn btn-ghost btn-sm chat-older" disabled={loading()} onClick={() => loadOlder()}>
+            {loading() ? t("chat.loadingOlder") : t("chat.older")}
+          </button>
+        </Show>
         <Show when={thread().length > 0} fallback={<p class="muted small center">{t("chat.empty")}</p>}>
           <For each={thread()}>
             {(m) => (
               <div
-                id={foundId("messages", m.id)}
+                id={foundId("messages", m.mid ?? m.id)}
                 tabIndex={-1}
                 class={`bubble bubble-${m.dir}`}
-                classList={{ "bubble-pending": !!m.pending, "found-target": isFound("messages", m.id) }}
+                classList={{
+                  "bubble-pending": !!m.pending,
+                  "bubble-failed": !!m.failed,
+                  "found-target": isFound("messages", m.mid ?? m.id),
+                }}
               >
                 <span>{m.text}</span>
                 <Show when={m.pending}>
                   <small class="bubble-note">{m.via === "queued" ? t("chat.queued") : t("chat.sending")}</small>
+                </Show>
+                <Show when={m.failed}>
+                  <small class="bubble-note">{t("chat.failed")}</small>
                 </Show>
                 <Show when={m.delivered && m.id === lastDelivered()}>
                   <small class="bubble-note">{t("chat.delivered")}</small>
@@ -238,6 +327,9 @@ function ChatTile(props: { node: string }) {
           </For>
         </Show>
       </div>
+      <Show when={chatKeep()}>
+        <p class="muted small chat-kept">{t("chat.kept")}</p>
+      </Show>
       <form class="composer" onSubmit={send}>
         <input
           placeholder={t("chat.placeholder")}

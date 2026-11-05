@@ -8,7 +8,7 @@ import {
   type BatteryAlertSettings_Serialize as BatteryAlertSettings,
   type LocalActions,
 } from "../bindings";
-import { setClipSync, signOut, state, unwrap } from "../lib/core";
+import { chatKeep, setChatKeep, setClipSync, signOut, state, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
@@ -154,6 +154,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={clipHistory()} onChange={(e) => toggleClipHistory(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.clipHistoryHint")}</p>
+        <label class="switch-row">
+          <span>{t("settings.chatHistory")}</span>
+          <input type="checkbox" role="switch" checked={chatKeep()} onChange={(e) => setChatKeep(e.currentTarget.checked).catch(() => {})} />
+        </label>
+        <p class="muted small">{t("settings.chatHistoryHint")}</p>
         <label class="switch-row">
           <span>{t("settings.notifications")}</span>
           <input type="checkbox" role="switch" checked={notifs()} onChange={(e) => toggleNotifs(e.currentTarget.checked)} />

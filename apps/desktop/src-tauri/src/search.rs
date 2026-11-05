@@ -1,14 +1,16 @@
 // Search: one query over what this computer already keeps, for the command
 // palette and the Search screen.
 //
-//  - devices (their names and the nicknames you gave them), the clipboard
-//    history (clip_history.rs), the notification history (notif_history.rs),
+//  - devices (their names and the nicknames you gave them), the saved
+//    messages (chat_history.rs), the clipboard history (clip_history.rs),
+//    the notification history (notif_history.rs),
 //    transfers (transfers.rs), synced folders (their names and folders),
 //    automations, schedules and keyboard shortcuts;
 //  - read through each module's own accessors, as copies: nothing is
-//    indexed and no file format changes. Messages, Help topics and Settings
-//    sections live in the window, which searches those itself with the same
-//    rules (ui/src/lib/search.ts);
+//    indexed and no file format changes. Help topics, Settings sections and
+//    messages not saved (with "Keep message history" off) live in the
+//    window, which searches those itself with the same rules
+//    (ui/src/lib/search.ts);
 //  - every word of the query must be somewhere in an item, ignoring case
 //    and accents ("cafe" finds "Café", "CAFÉ" and "café" spelled with a
 //    combining accent). A word in the title counts most, then in the
@@ -30,6 +32,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Manager};
 
 use crate::automations::Automation;
+use crate::chat_history::ChatRecord;
 use crate::clip_history::{ClipDirection, ClipRecord};
 use crate::device_labels::DeviceLabel;
 use crate::notif_history::HistoryEntry;
@@ -39,8 +42,9 @@ use crate::sync_folders::SyncPairView;
 use crate::transfers::{TransferEntry, TransferState};
 
 /// What can be searched here (`kinds`), in the order the groups come back.
-pub const KINDS: [&str; 8] = [
+pub const KINDS: [&str; 9] = [
     "devices",
+    "messages",
     "clipboard",
     "notifications",
     "transfers",
@@ -399,6 +403,7 @@ pub struct DeviceRow {
 pub struct Sources {
     pub devices: Vec<DeviceRow>,
     pub labels: BTreeMap<String, DeviceLabel>,
+    pub messages: Vec<ChatRecord>,
     pub clips: Vec<ClipRecord>,
     pub notifications: Vec<HistoryEntry>,
     pub transfers: Vec<TransferEntry>,
@@ -470,6 +475,24 @@ pub fn run(
                     }),
                 )
             }
+            "messages" => rank(
+                kind,
+                &q,
+                filter,
+                limit,
+                now,
+                src.messages.iter().map(|m| Candidate {
+                    id: Cow::Borrowed(&m.id),
+                    node: Some(m.node()),
+                    ts: Some(m.at),
+                    fields: Fields {
+                        body: &m.text,
+                        ..Fields::default()
+                    },
+                    title: Cow::Borrowed(""),
+                    tag: Some(Cow::Borrowed(if m.incoming() { "in" } else { "out" })),
+                }),
+            ),
             "clipboard" => rank(
                 kind,
                 &q,
@@ -633,6 +656,11 @@ fn gather(app: &AppHandle, kinds: &[String]) -> Sources {
         }
         if let Some(labels) = app.try_state::<crate::device_labels::DeviceLabels>() {
             src.labels = crate::device_labels::get_device_labels(labels);
+        }
+    }
+    if wanted("messages") {
+        if let Some(h) = app.try_state::<crate::chat_history::ChatHistory>() {
+            src.messages = h.snapshot();
         }
     }
     if wanted("clipboard") {
@@ -878,6 +906,7 @@ mod tests {
                 },
             ],
             labels,
+            messages: Vec::new(),
             clips: vec![
                 clip(
                     3,
@@ -1128,6 +1157,64 @@ mod tests {
         );
         let ids: Vec<&str> = r.groups[0].hits.iter().map(|h| h.id.as_str()).collect();
         assert_eq!(ids, ["2", "1"]);
+    }
+
+    #[test]
+    fn saved_messages_are_found() {
+        use crate::chat_history::{ChatStatus, Store};
+        let mut store = Store::default();
+        let mut out = |id: &str, to: &str, text: &str, at: f64, status: ChatStatus| {
+            store.add(ChatRecord {
+                id: id.into(),
+                from_node: None,
+                to_node: Some(to.into()),
+                text: text.into(),
+                truncated: false,
+                at,
+                status,
+            });
+        };
+        out(
+            "a",
+            "p",
+            "Dinner at the café?",
+            NOW - DAY_MS,
+            ChatStatus::Delivered,
+        );
+        out(
+            "b",
+            "m",
+            "dinner moved",
+            NOW - 30.0 * DAY_MS,
+            ChatStatus::Sent,
+        );
+        store.add(ChatRecord {
+            id: "c".into(),
+            from_node: Some("p".into()),
+            to_node: None,
+            text: "Cafe is fine".into(),
+            truncated: false,
+            at: NOW,
+            status: ChatStatus::Received,
+        });
+        let mut src = seeded();
+        // What `ChatHistory::snapshot` hands over.
+        src.messages = store.to_list();
+        let none = SearchFilter::default();
+        let r = run(&src, "cafe", 10, &[], &none, NOW);
+        assert_eq!(kinds_of(&r)[0], "messages");
+        let ids: Vec<&str> = r.groups[0].hits.iter().map(|h| h.id.as_str()).collect();
+        assert_eq!(ids, ["c", "a"]);
+        assert_eq!(r.groups[0].hits[0].tag.as_deref(), Some("in"));
+        assert_eq!(r.groups[0].hits[1].tag.as_deref(), Some("out"));
+        assert_eq!(r.groups[0].hits[1].node.as_deref(), Some("p"));
+        let on_m = SearchFilter {
+            node: Some("m".into()),
+            ..SearchFilter::default()
+        };
+        let r = run(&src, "dinner", 10, &["messages".into()], &on_m, NOW);
+        assert_eq!(r.groups[0].total, 1);
+        assert_eq!(r.groups[0].hits[0].id, "b");
     }
 
     #[test]

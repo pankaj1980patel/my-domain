@@ -20,6 +20,7 @@ mod automations;
 mod away_lock;
 mod battery_log;
 mod calls;
+mod chat_history;
 mod clip_history;
 mod clip_image;
 mod commands_run;
@@ -391,7 +392,11 @@ impl EventSink for TauriSink {
             CoreEvent::SyncPairs { pairs } => sync_folders::on_pairs(&self.app, pairs),
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
+            // Kept in the chat history too (`chat_history`).
             CoreEvent::MessageReceived(m) if m.ok => {
+                if let Some(node) = &m.node_id {
+                    chat_history::on_received(&self.app, node, m.id.as_deref(), &m.text);
+                }
                 let app = self.app.clone();
                 let (node, from, text) = (m.node_id.clone(), m.from.clone(), m.text.clone());
                 std::thread::spawn(move || {
@@ -402,6 +407,7 @@ impl EventSink for TauriSink {
                     notify::post_if_away(&app, &title, &text);
                 });
             }
+            CoreEvent::MessageDelivered { id, .. } => chat_history::on_delivered(&self.app, id),
             CoreEvent::CodeCopied { from, app: src, .. } => {
                 let (app, from, src) = (self.app.clone(), from.clone(), src.clone());
                 std::thread::spawn(move || {
@@ -728,13 +734,16 @@ fn send_message(
     node_id: String,
     text: String,
     id: Option<String>,
+    app: AppHandle,
     engine: State<Eng>,
 ) -> Result<String, CoreError> {
     // The UI picks the id so it can match the delivery receipt to its bubble.
-    match id {
-        Some(id) => engine.send_with_id(&node_id, &text, &id),
-        None => engine.send(&node_id, &text),
-    }
+    let id = id.unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    // Kept before it goes, so a fast receipt finds it in the history.
+    chat_history::on_sending(&app, &node_id, &id, &text);
+    let result = engine.send_with_id(&node_id, &text, &id);
+    chat_history::on_send_result(&app, &id, &result);
+    result
 }
 
 #[tauri::command]
@@ -1427,6 +1436,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notif_history::clear_notification_history,
         notif_history::muted_apps,
         notif_history::set_muted_apps,
+        chat_history::chat_history,
+        chat_history::clear_chat_history,
+        chat_history::chat_history_enabled,
+        chat_history::set_chat_history_enabled,
         clip_history::clip_history,
         clip_history::clear_clip_history,
         clip_history::clip_history_enabled,
@@ -1599,6 +1612,7 @@ pub fn run() {
             app.manage(quiet::Quiet::default());
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
+            app.manage(chat_history::ChatHistory::load(&handle));
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));

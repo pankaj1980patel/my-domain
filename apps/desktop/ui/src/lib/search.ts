@@ -1,8 +1,9 @@
 // Search everything: one query over what this computer keeps. The backend
-// (search.rs, the `search` command) looks through devices, the clipboard and
-// notification histories, transfers, synced folders, automations, schedules
-// and shortcuts; this file adds what only the window has (this session's
-// messages, the Help topics, the Settings sections) with the same rules, and
+// (search.rs, the `search` command) looks through devices, the saved
+// messages, the clipboard and notification histories, transfers, synced
+// folders, automations, schedules and shortcuts; this file adds what only the
+// window has (this session's messages that weren't saved, the Help topics,
+// the Settings sections) with the same rules, and
 // the pieces the palette and the Search screen share: folding, highlighting,
 // and where a result opens.
 //
@@ -34,7 +35,7 @@ export const FOUND_KINDS = [
 export type FoundKind = (typeof FOUND_KINDS)[number];
 
 /** The kinds the backend searches. */
-const BACKEND: FoundKind[] = ["devices", "clipboard", "notifications", "transfers", "folders", "automations", "schedules", "shortcuts"];
+const BACKEND: FoundKind[] = ["devices", "messages", "clipboard", "notifications", "transfers", "folders", "automations", "schedules", "shortcuts"];
 
 export const KIND_LABEL: Record<FoundKind, Key> = {
   devices: "search.kind.devices",
@@ -244,12 +245,14 @@ function searchLocal(kind: FoundKind, words: string[], o: SearchOptions, now: nu
   const inSpan = (ts: number) => (o.since == null || ts >= o.since) && (o.until == null || ts <= o.until);
   const out: Found[] = [];
   if (kind === "messages") {
+    // The saved ones the backend finds.
     for (const m of state.messages) {
+      if (m.saved) continue;
       if (o.node && m.node !== o.node) continue;
       if (dated && !inSpan(m.ts)) continue;
       const s = scoreFields(words, { title: "", body: m.text });
       if (s === null) continue;
-      out.push({ kind, id: String(m.id), title: "", detail: snippet(m.text, words), node: m.node, ts: m.ts, tag: m.dir, score: s + recency(m.ts, now) });
+      out.push({ kind, id: String(m.mid ?? m.id), title: "", detail: snippet(m.text, words), node: m.node, ts: m.ts, tag: m.dir, score: s + recency(m.ts, now) });
     }
   } else if (kind === "help" || kind === "settings") {
     // Not a device's, and no time: a device or a span leaves them out.
@@ -302,14 +305,18 @@ export async function searchAll(query: string, o: SearchOptions): Promise<FoundG
     .filter(wanted)
     .map((k) => searchLocal(k, words, o, now))
     .filter((g): g is FoundGroup => g !== null);
-  const groups: FoundGroup[] = [
-    ...local,
-    ...(await remote).groups.map((g) => ({
-      kind: g.kind as FoundKind,
-      total: g.total,
-      hits: g.hits.map((h) => fromBackend(g.kind as FoundKind, h)),
-    })),
-  ];
+  const groups: FoundGroup[] = [];
+  // Messages come from both sides (saved, and not saved): one group.
+  const add = (g: FoundGroup) => {
+    const same = groups.find((x) => x.kind === g.kind);
+    if (!same) return groups.push(g);
+    same.total += g.total;
+    same.hits = [...same.hits, ...g.hits].sort((a, b) => b.score - a.score || (b.ts ?? 0) - (a.ts ?? 0)).slice(0, o.limit);
+  };
+  local.forEach(add);
+  for (const g of (await remote).groups) {
+    add({ kind: g.kind as FoundKind, total: g.total, hits: g.hits.map((h) => fromBackend(g.kind as FoundKind, h)) });
+  }
   return groups
     .filter((g) => FOUND_KINDS.includes(g.kind))
     .sort((a, b) => FOUND_KINDS.indexOf(a.kind) - FOUND_KINDS.indexOf(b.kind));

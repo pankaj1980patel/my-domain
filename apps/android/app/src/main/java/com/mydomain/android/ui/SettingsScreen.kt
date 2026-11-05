@@ -38,6 +38,7 @@ import com.mydomain.android.PhoneLocation
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
 import com.mydomain.android.SetupState
+import com.mydomain.android.core.ChatHistory
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
@@ -66,6 +67,15 @@ fun ShareCodesSwitch() {
         prefs.edit().putBoolean(NotifListener.PREF_SHARE_CODES, it).apply()
     }
     Muted(stringResource(R.string.settings_share_codes_hint))
+}
+
+/** "Keep message history" ([ChatHistory]): on by default; turning it off
+ *  forgets every message kept and stops saving. */
+@Composable
+fun ChatHistorySwitch() {
+    val ctx = LocalContext.current
+    SwitchRow(stringResource(R.string.settings_chat_history), ChatHistory.enabled) { ChatHistory.setEnabled(ctx, it) }
+    Muted(stringResource(R.string.settings_chat_history_hint))
 }
 
 /** "Keep a clipboard history" ([ClipLog]): on by default; turning it off
@@ -325,6 +335,7 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
             )
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
+            ChatHistorySwitch()
             ClipHistorySwitch()
             ShareCodesSwitch()
             ShareLabelsSwitch()
