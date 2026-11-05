@@ -90,6 +90,11 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/desktop/ui/package-lock.json
+      # Translations (desktop and Android): placeholder/format-arg mismatches,
+      # bad plurals, bare quotes and broken XML fail; untranslated strings are
+      # warnings, caught up now and then (see the script's header).
+      - name: Check translations
+        run: python3 scripts/check-translations.py --allow-missing
       - run: npm ci
         working-directory: apps/desktop/ui
       - run: npm run build

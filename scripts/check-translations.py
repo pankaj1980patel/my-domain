@@ -15,6 +15,13 @@ Usage: scripts/check-translations.py [--allow-missing]
   --allow-missing  report keys a language lacks (they show in English) as
                    warnings, not errors; other problems still fail.
 Exit status 0 when clean, 1 otherwise.
+
+CI (.github/workflows/ci.yml, desktop UI job) runs it with --allow-missing,
+so a new English string doesn't block a feature PR on its translation: missing
+keys are only warnings there, while format-arg/placeholder mismatches, bad
+plurals, bare quotes and XML that doesn't parse still fail the build. Run it
+without the flag now and then and catch the translations up until it ends
+with 0 errors.
 """
 
 import re
