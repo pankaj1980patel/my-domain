@@ -2,7 +2,8 @@
 //! both ways, an edit, a delete (to the trash), a rename, a conflict (both
 //! kept), a peer too old to sync (never sent a `sync_*` message), a big
 //! file whose link drops half way (resumes), and names that differ only by
-//! letter case on a disk that can't tell them apart.
+//! letter case (or only by Unicode spelling) on a disk that can't tell
+//! them apart.
 
 // Test-only file: helpers unwrap freely, a panic IS the failure report.
 #![allow(clippy::unwrap_used)]
@@ -603,6 +604,134 @@ fn a_rename_only_in_case_is_a_rename_on_a_disk_that_ignores_case() {
     assert!(!trashed(&db, "Notes.txt") && !trashed(&db, "notes.txt"));
     assert_eq!(tree(&da), ["notes.txt"]);
     assert_eq!(pair_of(&b, &id).unwrap().renamed, 0);
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+// --- Unicode spelling ------------------------------------------------------------
+//
+// "café.txt" can be spelled with "é" as one character (NFC) or as "e" and
+// an accent (NFD). A Mac's disk takes both for one name; Linux's and
+// Windows' keep them apart. `sync_fold_norm` makes a side behave as on a
+// Mac's disk wherever the test runs.
+
+const CAFE_NFC: &str = "caf\u{e9}.txt";
+const CAFE_NFD: &str = "cafe\u{301}.txt";
+const CV_NFC: &str = "R\u{e9}sum\u{e9}/cv.txt";
+const CV_NFD: &str = "Re\u{301}sume\u{301}/cv.txt";
+
+/// Two linked nodes; `b`'s disk is taken to merge the two spellings.
+fn linked_norm(test: &str) -> (TestNode, TestNode) {
+    let a = node(&format!("sync-{test}-a"), true);
+    let cfg = CoreConfig {
+        sync_fold_norm: true,
+        ..config(true)
+    };
+    let b = TestNode::start_full(MockPlatform::new(&format!("sync-{test}-b")), cfg);
+    TestNode::pair(&a, &b);
+    assert_eq!(learn_status(&a, &b)["sync"], 1);
+    (a, b)
+}
+
+fn trash_is_empty(root: &Path) -> bool {
+    let trash = root.join(".mydomain-trash");
+    !trash.exists() || tree(&trash).is_empty()
+}
+
+#[test]
+fn a_name_spelled_two_ways_is_one_file_on_both_sides() {
+    let (a, b) = linked_norm("nfd");
+    let (da, db) = (temp_dir("nfd-a"), temp_dir("nfd-b"));
+    std::fs::write(da.join(CAFE_NFD), b"the same").unwrap();
+    std::fs::write(db.join(CAFE_NFC), b"the same").unwrap();
+    std::fs::create_dir_all(da.join("Re\u{301}sume\u{301}")).unwrap();
+    std::fs::write(da.join(CV_NFD), b"cv").unwrap();
+    let id = start_pair(&a, &b, &da, &db, "both");
+
+    // The file only on a arrives under its name in NFC; the one both have
+    // is neither fetched nor sent to the trash on either side.
+    wait_content(&db.join(CV_NFC), b"cv");
+    wait_renamed(&a, &id, 0);
+    wait_renamed(&b, &id, 0);
+    assert_eq!(tree(&da), [CV_NFD, CAFE_NFD]);
+    assert_eq!(tree(&db), [CV_NFC, CAFE_NFC]);
+    let (got_a, got_b) = (received(&a), received(&b));
+    assert_eq!((got_a, got_b), (0, 1));
+    std::thread::sleep(Duration::from_secs(3)); // a few rounds
+    assert_eq!(
+        (received(&a), received(&b)),
+        (got_a, got_b),
+        "fetched again"
+    );
+    assert!(trash_is_empty(&da) && trash_is_empty(&db));
+    assert_eq!(pair_of(&a, &id).unwrap().conflicts, 0);
+
+    // Edits go both ways, each side keeping its own spelling.
+    std::fs::write(db.join(CAFE_NFC), b"edited on b").unwrap();
+    wait_content(&da.join(CAFE_NFD), b"edited on b");
+    std::thread::sleep(Duration::from_secs(3));
+    std::fs::write(da.join(CAFE_NFD), b"edited on a").unwrap();
+    wait_content(&db.join(CAFE_NFC), b"edited on a");
+    std::fs::write(da.join(CV_NFD), b"cv, edited on a").unwrap();
+    wait_content(&db.join(CV_NFC), b"cv, edited on a");
+    wait_in_sync(&a, &id);
+    wait_in_sync(&b, &id);
+    assert_eq!(tree(&da), [CV_NFD, CAFE_NFD]);
+    assert_eq!(tree(&db), [CV_NFC, CAFE_NFC]);
+    assert!(trash_is_empty(&da) && trash_is_empty(&db));
+
+    // A delete too.
+    std::fs::remove_file(da.join(CAFE_NFD)).unwrap();
+    wait_gone(&db.join(CAFE_NFC));
+    assert!(trashed(&db, CAFE_NFC), "not in the trash");
+    wait_in_sync(&a, &id);
+    wait_in_sync(&b, &id);
+    assert_eq!(tree(&db), [CV_NFC]);
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
+#[test]
+fn two_names_one_in_nfc_both_arrive_where_the_disk_takes_them_for_one() {
+    let (a, b) = linked_norm("nfc-twins");
+    let (da, db) = (temp_dir("nfc-twins-a"), temp_dir("nfc-twins-b"));
+    std::fs::write(da.join(CAFE_NFC), b"one character").unwrap();
+    std::fs::write(da.join(CAFE_NFD), b"e and an accent").unwrap();
+    if tree(&da).len() < 2 {
+        // Can't hold both names here; the test above covers the rest.
+        eprintln!("skipped: this system's temp folder takes both spellings for one name");
+        let _ = std::fs::remove_dir_all(&da);
+        return;
+    }
+    let id = start_pair(&a, &b, &da, &db, "both");
+
+    let kept = format!(
+        "caf\u{e9} (case conflict from {}).txt",
+        a.engine.identity().name
+    );
+    // The NFC one keeps the name, the other gets one of its own: neither
+    // overwrites the other.
+    wait_content(&db.join(CAFE_NFC), b"one character");
+    wait_content(&db.join(&kept), b"e and an accent");
+    wait_renamed(&b, &id, 1);
+    wait_renamed(&a, &id, 0);
+    let mut want = vec![kept.clone(), CAFE_NFC.to_string()];
+    want.sort();
+    assert_eq!(tree(&db), want);
+    let mut both = vec![CAFE_NFC.to_string(), CAFE_NFD.to_string()];
+    both.sort();
+    assert_eq!(tree(&da), both, "the renamed copy came back");
+
+    // Not fetched again every round; an edit to the renamed copy goes
+    // back to the file it stands for.
+    let got = received(&b);
+    std::thread::sleep(Duration::from_secs(3));
+    assert_eq!(received(&b), got, "fetched again");
+    std::fs::write(db.join(&kept), b"accent, edited on b").unwrap();
+    wait_content(&da.join(CAFE_NFD), b"accent, edited on b");
+    assert_eq!(std::fs::read(da.join(CAFE_NFC)).unwrap(), b"one character");
     for d in [&da, &db] {
         let _ = std::fs::remove_dir_all(d);
     }

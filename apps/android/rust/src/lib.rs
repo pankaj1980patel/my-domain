@@ -265,6 +265,10 @@ pub struct SyncPairInfo {
     pub files: u32,
     pub conflicts: u32,
     pub skipped: u32,
+    /// Files kept on this phone under another name: theirs differs from
+    /// another file's only by letter case (or by how an accent is
+    /// written), which the folder's storage can't tell apart.
+    pub renamed: u32,
     /// Unix seconds, 0 = never.
     pub last_synced: u64,
     pub error: Option<String>,
@@ -284,6 +288,7 @@ impl From<mdcore::model::SyncPair> for SyncPairInfo {
             files: p.files,
             conflicts: p.conflicts,
             skipped: p.skipped,
+            renamed: p.renamed,
             last_synced: p.last_synced,
             error: p.error,
         }

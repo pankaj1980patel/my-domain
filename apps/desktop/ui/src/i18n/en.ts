@@ -955,7 +955,7 @@ export const en = {
     one: "{count} file couldn’t keep its name on this computer",
     other: "{count} files couldn’t keep their names on this computer",
   },
-  "sync.renamedHint": "Their names differ from another file’s only by capital letters, which this computer’s disk can’t tell apart. They’re saved as “name (case conflict from …)”, and still sync.",
+  "sync.renamedHint": "Their names differ from another file’s only by capital letters or by how an accent is written, which this computer’s disk can’t tell apart. They’re saved as “name (case conflict from …)”, and still sync.",
   "sync.lastSynced": "in sync {when}",
   "sync.pause": "Pause",
   "sync.resume": "Resume",

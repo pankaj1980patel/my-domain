@@ -39,6 +39,9 @@ uuid = { version = "1", features = ["v4"] }
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 sha2 = "0.10"
+# Synced folders compare names in NFC (a Mac's disk takes "é" as one
+# character or as "e" + accent for the same name).
+unicode-normalization = "=0.1.26"
 base64 = "0.22"
 rand_core = { version = "0.6", features = ["getrandom"] }
 # "tls" pulls in the rustls backend + bundled webpki roots so HTTPS works (e.g.

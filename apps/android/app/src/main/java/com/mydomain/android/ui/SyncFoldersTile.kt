@@ -128,6 +128,11 @@ private fun SyncPairRow(p: SyncPairInfo) {
         } else {
             if (p.path.isNotEmpty()) Muted(p.path)
             Muted(details(p))
+            val renamed = p.renamed.toInt()
+            if (renamed > 0) {
+                Muted(pluralStringResource(R.plurals.sync_renamed, renamed, renamed))
+                Muted(stringResource(R.string.sync_renamed_hint))
+            }
             if (!confirming) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (p.state != "pending") {

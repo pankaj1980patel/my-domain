@@ -251,6 +251,11 @@
         <item quantity="one">%1$d file left out</item>
         <item quantity="other">%1$d files left out</item>
     </plurals>
+    <plurals name="sync_renamed">
+        <item quantity="one">%1$d file couldn’t keep its name on this phone</item>
+        <item quantity="other">%1$d files couldn’t keep their names on this phone</item>
+    </plurals>
+    <string name="sync_renamed_hint">Their names differ from another file’s only by capital letters or by how an accent is written, which this folder can’t tell apart. They’re saved as “name (case conflict from …)” and still sync.</string>
     <string name="sync_last_synced">in sync %1$s</string>
     <string name="sync_invited_line">%1$s wants to sync this folder with this phone (%2$s).</string>
     <string name="sync_accept">Accept</string>

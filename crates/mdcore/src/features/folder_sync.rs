@@ -71,6 +71,23 @@
 //! overwritten because of case: what's in the way stays, and an incoming
 //! file that would replace it goes in as a conflict copy.
 //!
+//! **Unicode spelling**: "é" can be one character (NFC) or "e" and an
+//! accent (NFD). A Mac's disk takes both for one name and may list a file
+//! under either; Linux, Android and Windows keep them as two names. Names
+//! are always compared in NFC (and in lower case where the disk ignores
+//! case) and sent in NFC: a file whose name is spelled another way here is
+//! marked (`Entry::a`) as holding its NFC path, so the other side's
+//! "café.txt" is this side's "cafe\u{301}.txt", neither fetched again nor
+//! sent to the trash, and its edits go both ways; a file listed under the
+//! other spelling than at the last scan is the same file. Only where a
+//! file of the NFC name is here too does the other keep its own spelling
+//! on the wire. Each side asks its disk once per folder whether it takes
+//! the two spellings for one name (`CoreConfig::sync_fold_norm` says yes
+//! without asking); where it does, two incoming names that are one in NFC
+//! are kept apart as for letter case ("name (case conflict from
+//! <device>).ext"), never one over the other. A file kept under its own
+//! name spelled another way isn't counted as renamed.
+//!
 //! **Left out**: hidden and system files (`.DS_Store`, `.git`, anything
 //! starting with a dot, `Thumbs.db`, `desktop.ini`, `~$...` lock files,
 //! `*.part`, the `.mydomain-*` folders), symlinks, names another system
@@ -99,6 +116,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use unicode_normalization::{is_nfc, UnicodeNormalization};
 
 use crate::engine::NetCtx;
 use crate::events::CoreEvent;
@@ -237,9 +255,19 @@ pub(crate) struct Entry {
     pub(crate) t: u64,
     /// This file is the other side's file of this path, kept here under
     /// another name: its own differs only by letter case from another
-    /// file's, and this disk can't tell them apart.
+    /// file's, and this disk can't tell them apart (or by Unicode
+    /// spelling); or its name here is just spelled another way than the
+    /// NFC path it's sent under.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) a: Option<String>,
+}
+
+impl Entry {
+    /// Kept here (at `key`) under a name of its own for the other side's
+    /// path, not just under the same name spelled another way.
+    fn renamed(&self, key: &str) -> bool {
+        self.a.as_deref().is_some_and(|p| nfc(p) != nfc(key))
+    }
 }
 
 fn is_zero(n: &u64) -> bool {
@@ -521,15 +549,50 @@ fn scan(
     if found.len() > MAX_FILES {
         return Err(format!("the folder has more than {MAX_FILES} files"));
     }
+    let seen: HashSet<String> = found.iter().map(|f| f.0.clone()).collect();
+    // What the index knows that isn't listed now, by its name in NFC: a
+    // file listed under that name spelled another way is the same file.
+    let mut gone: HashMap<String, String> = entries
+        .keys()
+        .filter(|k| !seen.contains(*k))
+        .map(|k| (nfc(k), k.clone()))
+        .collect();
+    // The paths the other side knows the files here by.
+    let mut wires: HashSet<String> = entries
+        .iter()
+        .map(|(k, e)| e.a.clone().unwrap_or_else(|| k.clone()))
+        .collect();
     let mut counts = ScanCounts::default();
-    let mut seen = HashSet::new();
     for (rel, path, size, mtime) in found {
-        seen.insert(rel.clone());
-        let old = entries.get(&rel).cloned();
+        let mut old = entries.get(&rel).cloned();
+        if old.is_none() {
+            let n = nfc(&rel);
+            let moved = gone
+                .remove(&n)
+                .and_then(|k| entries.remove(&k).map(|e| (k, e)));
+            if let Some((k, e)) = moved {
+                // The same file: it keeps the path it's known by.
+                let wire = e.a.clone().unwrap_or(k);
+                old = Some(Entry {
+                    a: (wire != rel).then_some(wire),
+                    ..e
+                });
+            } else if n != rel && !wires.contains(&n) && !seen.contains(&n) {
+                // Spelled otherwise than in NFC: sent under its NFC name.
+                old = Some(Entry {
+                    a: Some(n.clone()),
+                    ..Entry::default()
+                });
+                wires.insert(n);
+            }
+        }
         let same = old
             .as_ref()
             .is_some_and(|e| e.s == size && e.m == mtime && !e.h.is_empty() && e.h != EXCLUDED);
         if same && size <= max_size {
+            if let Some(e) = old {
+                entries.insert(rel, e);
+            }
             continue;
         }
         let h = if size > max_size {
@@ -565,6 +628,39 @@ fn scan(
         // what both last agreed on.
         e.b.as_deref().is_some_and(|b| !b.is_empty())
     });
+    // A file standing for another path, once a file of that very name is
+    // here too: that file takes the path (and what both last agreed it
+    // holds), and this one goes by its own name from now on.
+    let taken: Vec<(String, String)> = entries
+        .iter()
+        .filter_map(|(k, e)| {
+            let p = e.a.as_ref()?;
+            let plain = entries
+                .get(p)
+                .is_some_and(|o| o.a.is_none() && !o.h.is_empty());
+            (p != k && plain).then(|| (k.clone(), p.clone()))
+        })
+        .collect();
+    for (k, p) in taken {
+        let Some(e) = entries.remove(&k) else {
+            continue;
+        };
+        if let Some(o) = entries.get_mut(&p) {
+            if o.b.is_none() {
+                o.b.clone_from(&e.b);
+            }
+        }
+        if !e.h.is_empty() {
+            entries.insert(
+                k,
+                Entry {
+                    a: None,
+                    b: None,
+                    ..e
+                },
+            );
+        }
+    }
     Ok(counts)
 }
 
@@ -603,9 +699,55 @@ fn walk(
 
 // --- letter case ---------------------------------------------------------------
 
-/// `rel` as a disk that ignores letter case compares it.
-fn fold_key(rel: &str) -> String {
-    rel.to_lowercase()
+/// `s` in NFC ("é" as one character), as names are sent.
+pub(crate) fn nfc(s: &str) -> String {
+    if is_nfc(s) {
+        s.to_string()
+    } else {
+        s.nfc().collect()
+    }
+}
+
+/// How names are compared: always in NFC, and in lower case where the
+/// disk ignores letter case.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Fold {
+    case: bool,
+}
+
+impl Fold {
+    /// The loosest: names any disk may take for one file.
+    const LOOSE: Fold = Fold { case: true };
+
+    /// `rel` as compared.
+    fn key(self, rel: &str) -> String {
+        let n = nfc(rel);
+        if self.case {
+            n.to_lowercase()
+        } else {
+            n
+        }
+    }
+}
+
+/// What the disk of a synced folder takes for one name.
+#[derive(Clone, Copy, Debug, Default)]
+struct Disk {
+    /// Names that differ only by letter case.
+    case: bool,
+    /// Names that differ only by Unicode spelling (NFC / NFD).
+    norm: bool,
+}
+
+impl Disk {
+    /// Two different names can be one file here.
+    fn merges(self) -> bool {
+        self.case || self.norm
+    }
+
+    fn fold(self) -> Fold {
+        Fold { case: self.case }
+    }
 }
 
 /// (folder, name) of a relative path ("" for the top).
@@ -613,38 +755,54 @@ fn split_rel(rel: &str) -> (&str, &str) {
     rel.rsplit_once('/').unwrap_or(("", rel))
 }
 
-/// The disk under `root` takes names that differ only by letter case for
-/// one file: a file made in the state folder is looked up by its
-/// upper-case name.
-fn disk_folds_case(root: &Path) -> bool {
+/// The disk under `root` takes `made` and `other` for one file: a file
+/// made in the state folder as `made` is looked up as `other` (`guess`
+/// if it can't be made).
+fn same_file(root: &Path, made: &str, other: &str, guess: bool) -> bool {
     let dir = root.join(STATE_DIR);
-    let name = format!("case-probe-{}", crate::transport::outbox::new_id());
-    let lower = dir.join(&name);
-    let made = std::fs::create_dir_all(&dir).is_ok()
+    let path = dir.join(made);
+    let ok = std::fs::create_dir_all(&dir).is_ok()
         && std::fs::File::options()
             .write(true)
             .create_new(true)
-            .open(&lower)
+            .open(&path)
             .is_ok();
-    if !made {
-        // Can't tell: what these systems' disks usually do.
-        return cfg!(any(target_os = "macos", target_os = "windows"));
+    if !ok {
+        return guess;
     }
-    let folds = std::fs::symlink_metadata(dir.join(name.to_uppercase())).is_ok();
-    let _ = std::fs::remove_file(&lower);
-    folds
+    let same = std::fs::symlink_metadata(dir.join(other)).is_ok();
+    let _ = std::fs::remove_file(&path);
+    same
 }
 
-/// Whether the folder at `root` (pair `slot`'s) can't tell letter case
-/// apart (its disk is asked once).
-fn folds_case<P: Platform>(ctx: &NetCtx<P>, slot: &Slot, root: &Path) -> bool {
-    if ctx.config.sync_fold_case {
-        return true;
-    }
-    *slot
-        .folds
-        .lock()
-        .get_or_insert_with(|| disk_folds_case(root))
+/// The disk under `root` takes names that differ only by letter case for
+/// one file.
+fn disk_folds_case(root: &Path) -> bool {
+    let name = format!("case-probe-{}", crate::transport::outbox::new_id());
+    // Can't tell: what these systems' disks usually do.
+    let guess = cfg!(any(target_os = "macos", target_os = "windows"));
+    same_file(root, &name, &name.to_uppercase(), guess)
+}
+
+/// The disk under `root` takes "é" as one character and as "e" and an
+/// accent for one name.
+fn disk_folds_norm(root: &Path) -> bool {
+    let id = crate::transport::outbox::new_id();
+    let (made, other) = (
+        format!("norm-probe-{id}-\u{e9}"),
+        format!("norm-probe-{id}-e\u{301}"),
+    );
+    same_file(root, &made, &other, cfg!(target_os = "macos"))
+}
+
+/// What the disk of the folder at `root` (pair `slot`'s) takes for one
+/// name (asked once).
+fn disk_of<P: Platform>(ctx: &NetCtx<P>, slot: &Slot, root: &Path) -> Disk {
+    let c = &ctx.config;
+    *slot.disk.lock().get_or_insert_with(|| Disk {
+        case: c.sync_fold_case || disk_folds_case(root),
+        norm: c.sync_fold_norm || disk_folds_norm(root),
+    })
 }
 
 /// "dir/name (case conflict from <device>).ext" for `rel` (`n` > 1: with
@@ -711,12 +869,12 @@ fn local_key(
 
 /// Every folder the index knows, as it's spelled here, by its folded
 /// spelling.
-fn dir_map(entries: &BTreeMap<String, Entry>) -> HashMap<String, String> {
+fn dir_map(entries: &BTreeMap<String, Entry>, fold: Fold) -> HashMap<String, String> {
     let mut dirs = HashMap::new();
     for (k, _) in entries.iter().filter(|(_, e)| !e.h.is_empty()) {
         for (i, _) in k.match_indices('/') {
             let prefix = &k[..i];
-            dirs.entry(fold_key(prefix))
+            dirs.entry(fold.key(prefix))
                 .or_insert_with(|| prefix.to_string());
         }
     }
@@ -724,10 +882,11 @@ fn dir_map(entries: &BTreeMap<String, Entry>) -> HashMap<String, String> {
 }
 
 /// `rel` with its folders spelled as they are here (a disk that ignores
-/// case puts a file for "docs/a.txt" into "Docs" if that's there): from
-/// `dirs` (what's known, and decided this round), else the disk; folders
-/// not here yet keep `rel`'s spelling and go into `dirs`.
-fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>) -> String {
+/// case puts a file for "docs/a.txt" into "Docs" if that's there, a Mac's
+/// one for "cafe\u{301}/a.txt" into "café"): from `dirs` (what's known,
+/// and decided this round), else the disk; folders not here yet keep
+/// `rel`'s spelling and go into `dirs`.
+fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>, fold: Fold) -> String {
     let (dir, name) = split_rel(rel);
     if dir.is_empty() {
         return rel.to_string();
@@ -739,7 +898,7 @@ fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>) -> S
         } else {
             format!("{actual}/{part}")
         };
-        let key = fold_key(&wanted);
+        let key = fold.key(&wanted);
         let got = match dirs.get(&key) {
             Some(a) => a.clone(),
             None => {
@@ -751,11 +910,11 @@ fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>) -> S
                             .collect()
                     })
                     .unwrap_or_default();
-                let folded = fold_key(part);
+                let folded = fold.key(part);
                 let here = names
                     .iter()
                     .find(|n| *n == part)
-                    .or_else(|| names.iter().find(|n| fold_key(n) == folded))
+                    .or_else(|| names.iter().find(|n| fold.key(n) == folded))
                     .map_or(part, String::as_str);
                 let a = if actual.is_empty() {
                     here.to_string()
@@ -772,9 +931,9 @@ fn resolve_dirs(root: &Path, rel: &str, dirs: &mut HashMap<String, String>) -> S
 }
 
 /// Rename `from` to `to` in the same folder, if `from` is still the file
-/// `e` knows and no other file there has `to`'s name in any case (so
-/// nothing is ever renamed over, whether the disk tells case apart or
-/// not).
+/// `e` knows and no other file there has `to`'s name in any case or
+/// Unicode spelling (so nothing is ever renamed over, whatever the disk
+/// takes for one name).
 fn rename_in_place(root: &Path, from: &str, to: &str, e: &Entry) -> bool {
     let ((dir, from_name), (to_dir, to_name)) = (split_rel(from), split_rel(to));
     if dir != to_dir || from == to {
@@ -790,27 +949,29 @@ fn rename_in_place(root: &Path, from: &str, to: &str, e: &Entry) -> bool {
     let Ok(names) = std::fs::read_dir(root.join(dir)) else {
         return false;
     };
-    let folded = fold_key(to_name);
+    let folded = Fold::LOOSE.key(to_name);
     let in_the_way = names.flatten().any(|n| {
         let n = n.file_name().to_string_lossy().into_owned();
-        n != from_name && fold_key(&n) == folded
+        n != from_name && Fold::LOOSE.key(&n) == folded
     });
     !in_the_way && std::fs::rename(&src, root.join(to)).is_ok()
 }
 
-/// Files kept under another name for letter case take their own name once
-/// it's free here.
-fn settle_names(root: &Path, entries: &mut BTreeMap<String, Entry>) {
+/// Files kept under another name for letter case (or Unicode spelling)
+/// take their own name once it's free here. One whose name here is just
+/// its own spelled another way stays as it is: the disk may well list it
+/// so whatever it's called.
+fn settle_names(root: &Path, entries: &mut BTreeMap<String, Entry>, fold: Fold) {
     let kept: Vec<(String, String)> = entries
         .iter()
-        .filter(|(_, e)| !e.h.is_empty())
+        .filter(|(k, e)| !e.h.is_empty() && e.renamed(k))
         .filter_map(|(k, e)| e.a.clone().map(|p| (k.clone(), p)))
         .collect();
     for (k, p) in kept {
-        let folded = fold_key(&p);
+        let folded = fold.key(&p);
         let taken = entries
             .iter()
-            .any(|(o, e)| *o != k && !e.h.is_empty() && fold_key(o) == folded);
+            .any(|(o, e)| *o != k && !e.h.is_empty() && fold.key(o) == folded);
         let Some(e) = entries.get(&k).cloned() else {
             continue;
         };
@@ -822,12 +983,13 @@ fn settle_names(root: &Path, entries: &mut BTreeMap<String, Entry>) {
     }
 }
 
-/// A file renamed there only in letter case (gone under one name, come
-/// under the other with the same content) that's here as it was under the
-/// old name: renamed here too, instead of going to the trash while the
-/// same file is fetched again. With `dirs` (a disk that ignores case) the
-/// new name's folders are spelled as they are here; when that leaves the
-/// path as it is (only a folder's case changed there), the file just
+/// A file renamed there only in letter case or Unicode spelling (gone
+/// under one name, come under the other with the same content) that's
+/// here as it was under the old name: renamed here too, instead of going
+/// to the trash while the same file is fetched again. With `dirs` (a disk
+/// that takes different names for one) the new name's folders are
+/// spelled as they are here (compared as `fold` says); when that leaves
+/// the path as it is (only a folder's case changed there), the file just
 /// stands for the new path.
 fn case_renames(
     root: &Path,
@@ -835,6 +997,7 @@ fn case_renames(
     trash: &mut Vec<String>,
     pulls: &mut Vec<(String, Pull)>,
     mut dirs: Option<&mut HashMap<String, String>>,
+    fold: Fold,
 ) {
     trash.retain(|from| {
         let Some(e) = entries
@@ -844,19 +1007,19 @@ fn case_renames(
         else {
             return true;
         };
-        let folded = fold_key(from);
+        let folded = Fold::LOOSE.key(from);
         let Some(i) = pulls.iter().position(|(t, p)| {
             !p.alias
                 && *t == p.src
                 && p.how == How::Replace { expect: None }
                 && p.sha == e.h
-                && fold_key(t) == folded
+                && Fold::LOOSE.key(t) == folded
         }) else {
             return true;
         };
         let target = pulls[i].0.clone();
         let dest = match dirs.as_deref_mut() {
-            Some(d) => resolve_dirs(root, &target, d),
+            Some(d) => resolve_dirs(root, &target, d, fold),
             None => target.clone(),
         };
         if dest != *from && !rename_in_place(root, from, &dest, &e) {
@@ -878,19 +1041,22 @@ fn case_renames(
     });
 }
 
-/// On a disk that ignores letter case: a file coming to a path that's new
-/// here, which differs only by case from a file here (or from one coming
+/// On a disk that takes different names for one file (letter case,
+/// Unicode spelling: compared as `fold` says): a file coming to a path
+/// that's new here, which is one with a file here (or with one coming
 /// this round), goes in as "name (case conflict from <device>).ext"; one
 /// whose folder is spelled differently here goes in that folder as it's
 /// spelled here. Either way it's marked as standing for the other side's
-/// path. What's on its way already keeps where it goes; a file no free
-/// name can be found for isn't fetched.
+/// path. Names in NFC come first, so of two that differ only by Unicode
+/// spelling the NFC one keeps it. What's on its way already keeps where it
+/// goes; a file no free name can be found for isn't fetched.
 fn make_room(
     root: &Path,
     idx: &Index,
-    pulls: Vec<(String, Pull)>,
+    mut pulls: Vec<(String, Pull)>,
     dirs: &mut HashMap<String, String>,
     peer: &str,
+    fold: Fold,
 ) -> Vec<(String, Pull)> {
     let is_new =
         |t: &str, p: &Pull| !p.alias && t == p.src && p.how == How::Replace { expect: None };
@@ -899,15 +1065,16 @@ fn make_room(
             .get(t)
             .is_some_and(|q| q.src == p.src && q.sha == p.sha && q.alias == p.alias)
     };
+    pulls.sort_by_key(|(t, _)| !is_nfc(t));
     let mut taken: HashSet<String> = idx
         .entries
         .iter()
         .filter(|(_, e)| !e.h.is_empty())
-        .map(|(k, _)| fold_key(k))
+        .map(|(k, _)| fold.key(k))
         .collect();
     for (t, p) in &pulls {
         if !is_new(t, p) || going(t, p) {
-            taken.insert(fold_key(t));
+            taken.insert(fold.key(t));
         }
     }
     let mut out = Vec::with_capacity(pulls.len());
@@ -922,11 +1089,18 @@ fn make_room(
                 t = k;
                 p.alias = true;
             } else {
-                let at = resolve_dirs(root, &t, dirs);
-                if taken.contains(&fold_key(&at)) {
+                let at = resolve_dirs(root, &t, dirs, fold);
+                if taken.contains(&fold.key(&at)) {
+                    // Its own name in NFC, in the folder as it's here.
+                    let (dir, name) = split_rel(&at);
+                    let at = if dir.is_empty() {
+                        nfc(name)
+                    } else {
+                        format!("{dir}/{}", nfc(name))
+                    };
                     let free = (1..1000)
                         .map(|n| case_name(&at, peer, n))
-                        .find(|c| !taken.contains(&fold_key(c)) && !root.join(c).exists());
+                        .find(|c| !taken.contains(&fold.key(c)) && !root.join(c).exists());
                     let Some(free) = free else { continue };
                     t = free;
                     p.alias = true;
@@ -935,7 +1109,7 @@ fn make_room(
                     p.alias = true;
                 }
             }
-            taken.insert(fold_key(&t));
+            taken.insert(fold.key(&t));
         }
         out.push((t, p));
     }
@@ -951,9 +1125,8 @@ struct Slot {
     /// round, so rounds and arriving files of one pair take turns.
     work: Mutex<Option<Index>>,
     live: Mutex<Live>,
-    /// Names that differ only by letter case are one file on the folder's
-    /// disk (`None` until asked).
-    folds: Mutex<Option<bool>>,
+    /// What the folder's disk takes for one name (`None` until asked).
+    disk: Mutex<Option<Disk>>,
 }
 
 #[derive(Default)]
@@ -1511,9 +1684,10 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
         }
     };
     clean_up(&root, now);
-    let folds = folds_case(ctx, &slot, &root);
-    if folds {
-        settle_names(&root, &mut idx.entries);
+    let disk = disk_of(ctx, &slot, &root);
+    let (merges, fold) = (disk.merges(), disk.fold());
+    if merges {
+        settle_names(&root, &mut idx.entries, fold);
     }
     let (my_node, my_name) = me(ctx);
     let peer = peer_name(ctx, &c.peer);
@@ -1578,21 +1752,22 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                 }
             }
         }
-        let mut dirs = dir_map(&idx.entries);
+        let mut dirs = dir_map(&idx.entries, fold);
         case_renames(
             &root,
             &mut idx.entries,
             &mut trash,
             &mut pulls,
-            folds.then_some(&mut dirs),
+            merges.then_some(&mut dirs),
+            fold,
         );
         for path in trash {
             if to_trash(&root, &path, idx.entries.get(&path), now) {
                 idx.entries.remove(&path);
             }
         }
-        if folds {
-            pulls = make_room(&root, idx, pulls, &mut dirs, &peer);
+        if merges {
+            pulls = make_room(&root, idx, pulls, &mut dirs, &peer, fold);
         }
         let wanted: BTreeMap<String, Pull> = pulls.into_iter().collect();
         // What's no longer wanted stops; what's new is asked for; what's
@@ -1642,8 +1817,8 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
             .count() as u32;
         live.renamed = idx
             .entries
-            .values()
-            .filter(|e| !e.h.is_empty() && e.a.is_some())
+            .iter()
+            .filter(|(k, e)| !e.h.is_empty() && e.renamed(k))
             .count() as u32;
         live.pulls = pulls;
         if let Some(d) = differing {
@@ -2712,22 +2887,31 @@ mod tests {
         std::fs::create_dir_all(root.join("Docs").join("Old")).unwrap();
         let mut dirs = HashMap::new();
         assert_eq!(
-            resolve_dirs(&root, "docs/old/a.txt", &mut dirs),
+            resolve_dirs(&root, "docs/old/a.txt", &mut dirs, Fold::LOOSE),
             "Docs/Old/a.txt"
         );
         assert_eq!(
-            resolve_dirs(&root, "Docs/Old/b.txt", &mut dirs),
+            resolve_dirs(&root, "Docs/Old/b.txt", &mut dirs, Fold::LOOSE),
             "Docs/Old/b.txt"
         );
         // A folder decided this round is used for the next file too.
-        assert_eq!(resolve_dirs(&root, "New/a.txt", &mut dirs), "New/a.txt");
-        assert_eq!(resolve_dirs(&root, "NEW/b.txt", &mut dirs), "New/b.txt");
-        assert_eq!(resolve_dirs(&root, "top.txt", &mut dirs), "top.txt");
+        assert_eq!(
+            resolve_dirs(&root, "New/a.txt", &mut dirs, Fold::LOOSE),
+            "New/a.txt"
+        );
+        assert_eq!(
+            resolve_dirs(&root, "NEW/b.txt", &mut dirs, Fold::LOOSE),
+            "New/b.txt"
+        );
+        assert_eq!(
+            resolve_dirs(&root, "top.txt", &mut dirs, Fold::LOOSE),
+            "top.txt"
+        );
         let known: BTreeMap<String, Entry> =
             [("Photos/2024/a.jpg".to_string(), entry(A, None, 1))].into();
-        let mut dirs = dir_map(&known);
+        let mut dirs = dir_map(&known, Fold::LOOSE);
         assert_eq!(
-            resolve_dirs(&root, "photos/2024/b.jpg", &mut dirs),
+            resolve_dirs(&root, "photos/2024/b.jpg", &mut dirs, Fold::LOOSE),
             "Photos/2024/b.jpg"
         );
         std::fs::remove_dir_all(&root).unwrap();
@@ -2740,7 +2924,7 @@ mod tests {
         idx.entries.insert("Notes.txt".into(), entry(A, Some(A), 1));
         idx.entries
             .insert("Docs/x.txt".into(), entry(A, Some(A), 1));
-        let mut dirs = dir_map(&idx.entries);
+        let mut dirs = dir_map(&idx.entries, Fold::LOOSE);
         let pulls = vec![
             new_pull("NOTES.TXT", B),
             new_pull("docs/y.txt", B),
@@ -2748,7 +2932,7 @@ mod tests {
             new_pull("two.txt", C),
             new_pull("fine.txt", C),
         ];
-        let out = make_room(&root, &idx, pulls, &mut dirs, "Phone");
+        let out = make_room(&root, &idx, pulls, &mut dirs, "Phone", Fold::LOOSE);
         let got: Vec<(&str, &str, bool)> = out
             .iter()
             .map(|(t, p)| (t.as_str(), p.src.as_str(), p.alias))
@@ -2776,8 +2960,9 @@ mod tests {
             &root,
             &idx2,
             vec![new_pull("NOTES.TXT", B), new_pull("two.txt", C)],
-            &mut dir_map(&idx2.entries),
+            &mut dir_map(&idx2.entries, Fold::LOOSE),
             "Phone",
+            Fold::LOOSE,
         );
         assert_eq!(again[0].0, "NOTES (case conflict from Phone).TXT");
         assert_eq!(again[1].0, "two (case conflict from Phone).txt");
@@ -2820,7 +3005,14 @@ mod tests {
         let mut entries: BTreeMap<String, Entry> = [("Notes.txt".to_string(), agreed)].into();
         let mut trash = vec!["Notes.txt".to_string()];
         let mut pulls = vec![new_pull("notes.txt", &e.h)];
-        case_renames(&root, &mut entries, &mut trash, &mut pulls, None);
+        case_renames(
+            &root,
+            &mut entries,
+            &mut trash,
+            &mut pulls,
+            None,
+            Fold::LOOSE,
+        );
         assert!(trash.is_empty() && pulls.is_empty());
         assert_eq!(names(&root), ["notes.txt"]);
         assert_eq!(std::fs::read(root.join("notes.txt")).unwrap(), b"notes");
@@ -2829,7 +3021,14 @@ mod tests {
         // Different content: not a rename (it's fetched as usual).
         let mut trash = vec!["notes.txt".to_string()];
         let mut pulls = vec![new_pull("NOTES.txt", B)];
-        case_renames(&root, &mut entries, &mut trash, &mut pulls, None);
+        case_renames(
+            &root,
+            &mut entries,
+            &mut trash,
+            &mut pulls,
+            None,
+            Fold::LOOSE,
+        );
         assert_eq!((trash.len(), pulls.len()), (1, 1));
         std::fs::remove_dir_all(&root).unwrap();
     }
@@ -2840,10 +3039,17 @@ mod tests {
         std::fs::create_dir_all(root.join("Docs")).unwrap();
         let e = file(&root, "Docs/a.txt", b"a");
         let mut entries: BTreeMap<String, Entry> = [("Docs/a.txt".to_string(), e.clone())].into();
-        let mut dirs = dir_map(&entries);
+        let mut dirs = dir_map(&entries, Fold::LOOSE);
         let mut trash = vec!["Docs/a.txt".to_string()];
         let mut pulls = vec![new_pull("docs/a.txt", &e.h)];
-        case_renames(&root, &mut entries, &mut trash, &mut pulls, Some(&mut dirs));
+        case_renames(
+            &root,
+            &mut entries,
+            &mut trash,
+            &mut pulls,
+            Some(&mut dirs),
+            Fold::LOOSE,
+        );
         assert!(trash.is_empty() && pulls.is_empty());
         assert_eq!(entries["Docs/a.txt"].a.as_deref(), Some("docs/a.txt"));
         assert!(root.join("Docs").join("a.txt").is_file());
@@ -2877,12 +3083,12 @@ mod tests {
             ("N.txt".to_string(), other),
         ]
         .into();
-        settle_names(&root, &mut entries);
+        settle_names(&root, &mut entries, Fold::LOOSE);
         assert!(entries.contains_key("n (case conflict from Phone).txt"));
         // The other file went: the name is free.
         std::fs::remove_file(root.join("N.txt")).unwrap();
         entries.get_mut("N.txt").unwrap().h.clear();
-        settle_names(&root, &mut entries);
+        settle_names(&root, &mut entries, Fold::LOOSE);
         assert_eq!(entries["n.txt"].a, None);
         assert_eq!(names(&root), ["n.txt"]);
         std::fs::remove_dir_all(&root).unwrap();
@@ -2895,6 +3101,166 @@ mod tests {
         assert_eq!(disk_folds_case(&root), root.join("X").exists());
         // The probe leaves nothing behind.
         assert_eq!(std::fs::read_dir(root.join(STATE_DIR)).unwrap().count(), 0);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    // "café.txt" with "é" as one character, and as "e" and an accent.
+    const CAFE_NFC: &str = "caf\u{e9}.txt";
+    const CAFE_NFD: &str = "cafe\u{301}.txt";
+
+    #[test]
+    fn names_are_compared_in_nfc_and_in_lower_case_only_where_the_disk_ignores_it() {
+        let exact = Fold { case: false };
+        assert_eq!(nfc(CAFE_NFD), CAFE_NFC);
+        assert_eq!(nfc(CAFE_NFC), CAFE_NFC);
+        assert_eq!(exact.key(CAFE_NFD), exact.key(CAFE_NFC));
+        assert_eq!(exact.key("Docs/Cafe\u{301}"), "Docs/Caf\u{e9}");
+        assert_ne!(exact.key("Notes.txt"), exact.key("notes.txt"));
+        assert_eq!(Fold::LOOSE.key("CAFE\u{301}.TXT"), CAFE_NFC);
+        assert_eq!(Disk::default().fold(), exact);
+        assert!(!Disk::default().merges());
+        let mac = Disk {
+            case: true,
+            norm: true,
+        };
+        assert!(mac.merges() && mac.fold() == Fold::LOOSE);
+        let renamed = |k: &str, a: &str| {
+            Entry {
+                a: Some(a.into()),
+                ..Entry::default()
+            }
+            .renamed(k)
+        };
+        assert!(!renamed(CAFE_NFD, CAFE_NFC));
+        assert!(renamed("cafe (case conflict from Phone).txt", CAFE_NFC));
+    }
+
+    #[test]
+    fn the_disk_is_asked_whether_it_takes_both_spellings_for_one_name() {
+        let root = temp("norm-probe");
+        std::fs::write(root.join(CAFE_NFC), b"x").unwrap();
+        assert_eq!(disk_folds_norm(&root), root.join(CAFE_NFD).exists());
+        assert_eq!(std::fs::read_dir(root.join(STATE_DIR)).unwrap().count(), 0);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_name_spelled_otherwise_is_sent_in_nfc_and_stays_one_file() {
+        let root = temp("nfd");
+        std::fs::write(root.join(CAFE_NFD), b"caf").unwrap();
+        let mut entries = BTreeMap::new();
+        scan(&root, &mut entries, 1 << 20, 10).unwrap();
+        // As the disk lists it (a Mac's may list it either way).
+        let (k, e) = entries.iter().next().unwrap();
+        let k = k.clone();
+        assert_eq!(nfc(&k), CAFE_NFC);
+        if k == CAFE_NFD {
+            assert_eq!(e.a.as_deref(), Some(CAFE_NFC));
+            assert!(!e.renamed(&k));
+        }
+        let (view, keys) = local_view(&entries);
+        assert_eq!(
+            view.keys().map(String::as_str).collect::<Vec<_>>(),
+            [CAFE_NFC]
+        );
+        assert_eq!(
+            local_key(&entries, &keys, CAFE_NFC).as_deref(),
+            Some(k.as_str())
+        );
+        // Listed under the other spelling now: the same file, still agreed.
+        let h = e.h.clone();
+        entries.get_mut(&k).unwrap().b = Some(h.clone());
+        let other = if k == CAFE_NFD { CAFE_NFC } else { CAFE_NFD };
+        std::fs::rename(root.join(&k), root.join(other)).unwrap();
+        let listed = names(&root).pop().unwrap();
+        scan(&root, &mut entries, 1 << 20, 20).unwrap();
+        assert_eq!(entries.len(), 1, "{entries:?}");
+        let e = &entries[&listed];
+        assert_eq!(
+            (e.h.as_str(), e.b.as_deref()),
+            (h.as_str(), Some(h.as_str()))
+        );
+        assert_eq!(e.a.as_deref(), (listed != CAFE_NFC).then_some(CAFE_NFC));
+        assert_eq!(
+            local_view(&entries).0.keys().collect::<Vec<_>>(),
+            [CAFE_NFC]
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_file_of_the_nfc_name_takes_the_path_from_one_spelled_otherwise() {
+        let root = temp("nfc-twin");
+        std::fs::write(root.join(CAFE_NFD), b"nfd").unwrap();
+        let mut entries = BTreeMap::new();
+        scan(&root, &mut entries, 1 << 20, 10).unwrap();
+        std::fs::write(root.join(CAFE_NFC), b"nfc").unwrap();
+        if names(&root).len() < 2 {
+            // This disk takes both for one name.
+            std::fs::remove_dir_all(&root).unwrap();
+            return;
+        }
+        let agreed = entries[CAFE_NFD].h.clone();
+        entries.get_mut(CAFE_NFD).unwrap().b = Some(agreed.clone());
+        scan(&root, &mut entries, 1 << 20, 20).unwrap();
+        assert_eq!(entries[CAFE_NFC].a, None);
+        assert_eq!(entries[CAFE_NFC].b.as_deref(), Some(agreed.as_str()));
+        assert_eq!((&entries[CAFE_NFD].a, &entries[CAFE_NFD].b), (&None, &None));
+        let (view, keys) = local_view(&entries);
+        assert_eq!(
+            view.keys().map(String::as_str).collect::<Vec<_>>(),
+            [CAFE_NFD, CAFE_NFC]
+        );
+        assert!(keys.is_empty());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn two_spellings_of_one_name_get_names_of_their_own_where_the_disk_merges_them() {
+        let root = temp("norm-room");
+        let exact = Fold { case: false };
+        let mut idx = Index::default();
+        idx.entries
+            .insert("x\u{e9}.txt".into(), entry(A, Some(A), 1));
+        let pulls = vec![
+            new_pull("xe\u{301}.txt", B),
+            new_pull(CAFE_NFD, B),
+            new_pull(CAFE_NFC, C),
+            new_pull("Caf\u{e9}.txt", C),
+        ];
+        let out = make_room(&root, &idx, pulls, &mut HashMap::new(), "Phone", exact);
+        let got: Vec<(&str, &str, bool)> = out
+            .iter()
+            .map(|(t, p)| (t.as_str(), p.src.as_str(), p.alias))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                // The NFC one keeps the name.
+                (CAFE_NFC, CAFE_NFC, false),
+                // Letter case tells them apart on this disk.
+                ("Caf\u{e9}.txt", "Caf\u{e9}.txt", false),
+                (
+                    "x\u{e9} (case conflict from Phone).txt",
+                    "xe\u{301}.txt",
+                    true
+                ),
+                ("caf\u{e9} (case conflict from Phone).txt", CAFE_NFD, true),
+            ]
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_file_whose_name_is_just_spelled_otherwise_isnt_renamed() {
+        let root = temp("norm-settle");
+        let mut e = file(&root, CAFE_NFD, b"c");
+        e.a = Some(CAFE_NFC.into());
+        let key = names(&root).pop().unwrap();
+        let mut entries: BTreeMap<String, Entry> = [(key.clone(), e)].into();
+        settle_names(&root, &mut entries, Fold::LOOSE);
+        assert!(entries.contains_key(&key));
+        assert_eq!(names(&root), [key]);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

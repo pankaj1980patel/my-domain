@@ -133,6 +133,12 @@ pub struct CoreConfig {
     /// (tests: a Linux temp folder tells them apart, a Mac's doesn't).
     /// Off: each folder's disk is asked once.
     pub sync_fold_case: bool,
+    /// Treat every synced folder's disk as one where two spellings of the
+    /// same name in Unicode ("é" as one character, or as "e" and an
+    /// accent) are the same file, without asking the disk (tests: a Mac's
+    /// disk does that, a Linux or Windows one doesn't). Off: each
+    /// folder's disk is asked once.
+    pub sync_fold_norm: bool,
 }
 
 impl Default for CoreConfig {
@@ -157,6 +163,7 @@ impl Default for CoreConfig {
             folder_sync: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
+            sync_fold_norm: false,
         }
     }
 }

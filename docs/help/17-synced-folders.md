@@ -1,6 +1,6 @@
 ---
 title: Synced folders
-keywords: sync, synced, case, capital letters, uppercase, lowercase, case conflict, synchronise, synchronize, mirror, folder, notes, documents, two-way, both ways, conflict, trash, pause
+keywords: sync, synced, case, capital letters, accents, accented letters, unicode, normalization, NFC, NFD, uppercase, lowercase, case conflict, synchronise, synchronize, mirror, folder, notes, documents, two-way, both ways, conflict, trash, pause
 platforms: desktop, android
 ---
 A synced folder is kept the same on two of your devices, for example **Documents/Notes** on your computer and a folder on your phone. Change, add or delete a file on one and the other follows. The files go straight between your devices, encrypted like everything else: nothing is stored on a server or in a cloud.
@@ -39,6 +39,13 @@ Linux and an Android app’s own storage keep **Notes.txt** and **notes.txt** as
 - A file whose name differs from another file’s there only by capital letters is saved as **name (case conflict from <device>)**. The folder’s line in Settings → **Synced folders** says how many: “2 files couldn’t keep their names on this computer”. They still sync both ways: edit or delete one and the other device follows. Once the other file is gone, it takes its own name again.
 - A file in a folder whose name differs only by capital letters (**Docs** and **docs**) goes in the folder as it’s already spelled there, and is counted the same way.
 - To fix it for good, rename one of the two files on the device that has both.
+
+## Names with accents
+
+An accented letter such as **é** can be written two ways inside a file name: as one character, or as **e** followed by an accent. They look the same, and a Mac takes them for the same name (and may show a file’s name either way), while Linux, Windows and Android keep them as two different names. my-domain treats them as one name everywhere:
+
+- A file whose name is written one way on one device and the other way on the other is the same file: it isn’t copied again or moved to the trash, and edits and deletes go both ways. Each device keeps the name as it has it.
+- If a Linux or Windows computer has two files whose names differ only in how an accent is written, a Mac (or another device that takes them for one) gets the second as **name (case conflict from <device>)**, counted like the files above: neither overwrites the other.
 
 ## Pause and remove
 
