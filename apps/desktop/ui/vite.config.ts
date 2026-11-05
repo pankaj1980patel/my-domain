@@ -16,5 +16,7 @@ export default defineConfig({
     strictPort: true,
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), helpDocs] },
   },
-  build: { target: "es2021", outDir: "dist", emptyOutDir: true },
+  // One bundle loaded from disk by the app, not over a network: the
+  // 500 kB web-page warning doesn't apply (the Hindi strings took it past).
+  build: { target: "es2021", outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 1024 },
 });
