@@ -37,23 +37,85 @@ pub fn copied_to_png() -> Result<PathBuf, String> {
             .map_err(|_| "There's no picture on the clipboard. Copy one first.".to_string())
     })?;
     let (w, h, rgba) = img;
+    let path = temp_png_path()?;
+    let width = u32::try_from(w).map_err(|_| "picture too big")?;
+    let height = u32::try_from(h).map_err(|_| "picture too big")?;
+    write_png(&path, width, height, &rgba)?;
+    Ok(path)
+}
+
+/// A new "Copied picture <time>.png" in the temporary folder pictures are
+/// sent from (" 2", " 3"... added when one that second is there already).
+fn temp_png_path() -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join("my-domain-clipboard");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    let path = dir.join(format!("Copied picture {stamp}.png"));
-    let file = std::fs::File::create(&path).map_err(|e| e.to_string())?;
-    let width = u32::try_from(w).map_err(|_| "picture too big")?;
-    let height = u32::try_from(h).map_err(|_| "picture too big")?;
+    let mut path = dir.join(format!("Copied picture {stamp}.png"));
+    let mut n = 2;
+    while path.exists() && n < 1000 {
+        path = dir.join(format!("Copied picture {stamp} {n}.png"));
+        n += 1;
+    }
+    Ok(path)
+}
+
+/// A copy of the PNG at `src` in the temporary folder, to send from (so the
+/// kept one may go while it's on its way).
+pub fn temp_copy(src: &Path) -> Result<PathBuf, String> {
+    let path = temp_png_path()?;
+    std::fs::copy(src, &path).map_err(|e| format!("can't read the picture: {e}"))?;
+    Ok(path)
+}
+
+/// Write 8-bit RGBA pixels as a PNG at `path`.
+pub fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> Result<(), String> {
+    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
     let mut enc = png::Encoder::new(std::io::BufWriter::new(file), width, height);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
     enc.write_header()
-        .and_then(|mut w| w.write_image_data(&rgba))
-        .map_err(|e| format!("can't save the picture: {e}"))?;
-    Ok(path)
+        .and_then(|mut w| w.write_image_data(rgba))
+        .map_err(|e| format!("can't save the picture: {e}"))
+}
+
+/// The picture (`width` x `height`, 8-bit RGBA) shrunk so its longer side is
+/// at most `max` pixels (never enlarged), each pixel the average of the ones
+/// it covers. Its width, height and pixels.
+pub fn thumbnail(width: u32, height: u32, rgba: &[u8], max: u32) -> (u32, u32, Vec<u8>) {
+    let long = width.max(height);
+    if long <= max || max == 0 {
+        return (width, height, rgba.to_vec());
+    }
+    let scale = |v: u32| {
+        let s = (u64::from(v) * u64::from(max) + u64::from(long) / 2) / u64::from(long);
+        u32::try_from(s.max(1)).unwrap_or(max)
+    };
+    let (tw, th) = (scale(width) as usize, scale(height) as usize);
+    let (w, h) = (width as usize, height as usize);
+    let mut out = Vec::with_capacity(tw * th * 4);
+    for ty in 0..th {
+        let y0 = ty * h / th;
+        let y1 = ((ty + 1) * h / th).max(y0 + 1);
+        for tx in 0..tw {
+            let x0 = tx * w / tw;
+            let x1 = ((tx + 1) * w / tw).max(x0 + 1);
+            let mut sum = [0u64; 4];
+            for y in y0..y1 {
+                let row = rgba.get((y * w + x0) * 4..(y * w + x1) * 4).unwrap_or(&[]);
+                for p in row.as_chunks::<4>().0 {
+                    for (s, &c) in sum.iter_mut().zip(p) {
+                        *s += u64::from(c);
+                    }
+                }
+            }
+            let n = ((y1 - y0) * (x1 - x0)) as u64;
+            out.extend(sum.iter().map(|s| u8::try_from(s / n).unwrap_or(u8::MAX)));
+        }
+    }
+    (tw as u32, th as u32, out)
 }
 
 /// Put the PNG at `path` on the clipboard.
@@ -70,7 +132,7 @@ pub fn put_on_clipboard(path: &Path) -> Result<(), String> {
 }
 
 /// A PNG's size and pixels as 8-bit RGBA.
-fn read_png(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
+pub fn read_png(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut dec = png::Decoder::new(std::io::BufReader::new(file));
     dec.set_transformations(png::Transformations::normalize_to_color8());
@@ -100,7 +162,32 @@ fn to_rgba(px: &[u8], color: png::ColorType) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::to_rgba;
+    use super::{thumbnail, to_rgba};
+
+    #[test]
+    fn thumbnails_fit_in_the_box() {
+        let px = |w: u32, h: u32| vec![200u8; (w * h * 4) as usize];
+        let (w, h, out) = thumbnail(1024, 512, &px(1024, 512), 256);
+        assert_eq!((w, h), (256, 128));
+        assert_eq!(out.len(), 256 * 128 * 4);
+        assert!(out.iter().all(|&c| c == 200));
+        let (w, h, _) = thumbnail(300, 1000, &px(300, 1000), 256);
+        assert_eq!((w, h), (77, 256));
+        // A thin one keeps at least a pixel across.
+        let (w, h, _) = thumbnail(2000, 1, &px(2000, 1), 256);
+        assert_eq!((w, h), (256, 1));
+        // A small one stays as it is.
+        let (w, h, out) = thumbnail(10, 20, &px(10, 20), 256);
+        assert_eq!((w, h, out.len()), (10, 20, 800));
+    }
+
+    #[test]
+    fn thumbnails_average_what_they_cover() {
+        // 2x1, black and white: one grey pixel.
+        let (w, h, out) = thumbnail(2, 1, &[0, 0, 0, 255, 255, 255, 255, 255], 1);
+        assert_eq!((w, h), (1, 1));
+        assert_eq!(out, [127, 127, 127, 255]);
+    }
 
     #[test]
     fn png_pixels_become_rgba() {

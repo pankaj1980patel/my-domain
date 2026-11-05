@@ -942,6 +942,28 @@ export async function sendClipAgain(node: string, text: string): Promise<string>
   return unwrap(commands.sendText(node, text, "clipboard"));
 }
 
+export type ClipPicture = ClipPage["pictures"][number];
+
+/** A kept picture at full size, as a data URL. */
+export function clipPictureUrl(id: number): Promise<string> {
+  return unwrap(commands.clipPicture(id));
+}
+
+/** Put a kept picture back on this computer's clipboard. */
+export async function copyClipPicture(id: number) {
+  await unwrap(commands.copyClipPicture(id));
+}
+
+/** Send a kept picture to a device's clipboard again (a transfer). */
+export async function sendClipPictureAgain(node: string, id: number) {
+  await unwrap(commands.sendClipPicture(node, id));
+}
+
+/** Save a kept picture where the user picks; the path, or null if closed. */
+export function saveClipPicture(id: number): Promise<string | null> {
+  return unwrap(commands.saveClipPicture(id));
+}
+
 export async function requestApps(node: string) {
   await unwrap(commands.requestApps(node));
 }

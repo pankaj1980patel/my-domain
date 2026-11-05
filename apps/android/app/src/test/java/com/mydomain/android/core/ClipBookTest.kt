@@ -174,4 +174,111 @@ class ClipBookTest {
         assertTrue(huge[0].truncated)
         assertEquals(ClipBook.MAX_TEXT, huge[0].text.length)
     }
+
+    // --- pictures ---------------------------------------------------------
+
+    private fun pic(key: String, bytes: Long = 10) = ClipPicture(key, 800, 600, bytes)
+
+    @Test
+    fun picturesAreCappedByCount() {
+        val book = ClipBook()
+        for (i in 1..60) book.addPicture("p", true, pic("k$i"), i.toLong())
+        val kept = book.list.mapNotNull { it.picture?.file }
+        assertEquals(ClipBook.MAX_PICTURES, kept.size)
+        assertEquals("k60", kept.first())
+        assertEquals("k11", kept.last())
+        assertEquals((10 downTo 1).map { "k$it" }.toSet(), book.takeDropped().map { it.file }.toSet())
+        // Handed over once.
+        assertTrue(book.takeDropped().isEmpty())
+    }
+
+    @Test
+    fun picturesAreCappedByBytes() {
+        val mb = 1024L * 1024
+        val book = ClipBook()
+        book.addPicture("p", true, pic("a", 40 * mb), 1)
+        book.addPicture("p", true, pic("b", 40 * mb), 2)
+        book.add("p", true, "text stays", 3)
+        assertTrue(book.takeDropped().isEmpty())
+        // 30 MB more is over 100 MB: the oldest picture goes, the text stays.
+        book.addPicture("p", false, pic("c", 30 * mb), 4)
+        assertEquals(listOf("c", "b"), book.list.mapNotNull { it.picture?.file })
+        assertEquals(listOf("a"), book.takeDropped().map { it.file })
+        assertTrue(book.list.any { it.text == "text stays" })
+        // One alone over the cap isn't kept at all.
+        assertNull(book.addPicture("p", true, pic("huge", ClipBook.MAX_PICTURE_BYTES + 1), 5))
+        assertTrue(book.takeDropped().isEmpty())
+    }
+
+    @Test
+    fun capPicturesLeavesTextAlone() {
+        val list = listOf(
+            ClipRecord(3, "Picture (image), 1 × 1", false, "p", true, 3, pic("x", 5)),
+            clip(2, true, "p", "hello"),
+            ClipRecord(1, "Picture (image), 1 × 1", false, "p", true, 1, pic("y", 5)),
+        )
+        assertEquals(listOf(3L, 2L), ClipBook.capPictures(list, 1, 100).map { it.id })
+        assertEquals(listOf(3L, 2L), ClipBook.capPictures(list, 5, 9).map { it.id })
+        assertEquals(listOf(3L, 2L, 1L), ClipBook.capPictures(list, 2, 10).map { it.id })
+    }
+
+    @Test
+    fun aPicturePushedOutByTextIsDropped() {
+        val book = ClipBook()
+        book.addPicture("p", true, pic("old"), 0)
+        for (i in 1..ClipBook.MAX_ENTRIES) book.add("p", true, "t$i", i.toLong())
+        assertTrue(book.list.none { it.picture != null })
+        assertEquals(listOf("old"), book.takeDropped().map { it.file })
+    }
+
+    @Test
+    fun clearingDropsThePictures() {
+        val book = ClipBook()
+        book.addPicture("p", true, pic("p1"), 1)
+        book.addPicture("q", true, pic("q1"), 2)
+        assertTrue(book.clear("p"))
+        assertEquals(listOf("p1"), book.takeDropped().map { it.file })
+        book.clearAll()
+        assertEquals(listOf("q1"), book.takeDropped().map { it.file })
+    }
+
+    @Test
+    fun pictureClipsAreFoundAsPicturesOrImages() {
+        val e = ClipBook().addPicture("p", true, pic("k"), 1)!!
+        assertEquals("Picture (image), 800 × 600", e.text)
+        assertTrue(ClipBook.matches(e.text, "picture"))
+        assertTrue(ClipBook.matches(e.text, "IMAGE"))
+        assertFalse(ClipBook.matches(e.text, "photo"))
+        assertEquals(1, ClipBook.page(listOf(e), "p", "image", 10).total)
+    }
+
+    @Test
+    fun picturesRoundTripThroughTheFile() {
+        val book = ClipBook()
+        book.add("p", false, "hi", 1)
+        book.addPicture("p", true, ClipPicture("abc123", 1920, 1080, 4_000_000), 2)
+        val back = ClipBook.decode(book.encode())
+        assertEquals(book.list, back)
+        assertEquals(ClipPicture("abc123", 1920, 1080, 4_000_000), back[0].picture)
+        // A file name that could leave the folder: that clip is left out.
+        val bad = """[{"id":1,"text":"Picture","node":"p","direction":"in","at":1,"picture":{"file":"../x","width":1,"height":1,"bytes":1}}]"""
+        assertTrue(ClipBook.decode(bad).isEmpty())
+        // Read back past the caps: the extra pictures are handed over.
+        val many = (1L..60L).map { ClipRecord(it, "Picture (image), 1 × 1", false, "p", true, it, pic("f$it")) }.reversed()
+        val reread = ClipBook()
+        reread.addOlder(many)
+        assertEquals(ClipBook.MAX_PICTURES, reread.list.size)
+        assertEquals(10, reread.takeDropped().size)
+    }
+
+    @Test
+    fun thumbnailsFitInTheBox() {
+        assertEquals(256 to 128, ClipBook.thumbSize(1024, 512))
+        assertEquals(77 to 256, ClipBook.thumbSize(300, 1000))
+        assertEquals(256 to 1, ClipBook.thumbSize(2000, 1))
+        assertEquals(10 to 20, ClipBook.thumbSize(10, 20))
+        assertEquals(1, ClipBook.sampleSize(500, 300, 256))
+        assertEquals(4, ClipBook.sampleSize(4000, 3000, 1000))
+        assertEquals(16, ClipBook.sampleSize(4096, 100, 256))
+    }
 }

@@ -3518,3 +3518,67 @@ html.qp-window body {
 .conn-result strong {
   font-size: var(--text-lg);
 }
+
+/* --- Pictures in the clipboard history (ClipHistoryTile.tsx, clip_history.rs) --- */
+.clip-pic-thumb {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  padding: 0;
+  overflow: hidden;
+  font-size: var(--text-xl);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: zoom-in;
+}
+.clip-pic-thumb:hover {
+  border-color: var(--accent);
+}
+.clip-pic-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.clip-pic-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 50%;
+}
+.clip-pic-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: var(--s-4);
+  background: var(--bg-veil);
+}
+.clip-pic-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  max-width: min(960px, 100%);
+  max-height: 100%;
+  padding: var(--s-4);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  animation: rise var(--normal) var(--ease);
+}
+.clip-pic-full {
+  display: block;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 72vh;
+  margin: 0 auto;
+  object-fit: contain;
+  border-radius: var(--r-sm);
+}

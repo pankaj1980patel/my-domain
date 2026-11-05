@@ -128,7 +128,15 @@ pub fn clipboard_to(app: &AppHandle, engine: &Eng, node: &str) -> Result<Option<
         None => match crate::clip_image::copied_to_png() {
             Ok(path) => engine
                 .send_clipboard_image(node, &path.to_string_lossy())
-                .map(|_| Some(live)),
+                .map(|_| {
+                    crate::clip_history::on_picture(
+                        app,
+                        crate::clip_history::ClipDirection::Out,
+                        node,
+                        &path,
+                    );
+                    Some(live)
+                }),
             Err(_) => Ok(None),
         },
     }

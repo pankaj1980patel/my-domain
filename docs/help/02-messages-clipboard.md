@@ -1,6 +1,6 @@
 ---
 title: Messages, clipboard and clipboard history
-keywords: chat, message, text, message history, chat history, saved messages, copy, paste, clipboard, sync, history, clips, link, open link, verification code, otp, code
+keywords: chat, message, text, message history, chat history, saved messages, copy, paste, clipboard, sync, history, clips, picture, image, copied picture, link, open link, verification code, otp, code
 platforms: desktop, android
 ---
 ## Messages
@@ -29,6 +29,15 @@ Copied pictures can be sent too.
 ## Clipboard history
 
 Text sent or received as clipboard is kept on each device: the newest 200 clips, up to 10 KB each. On a device's page you can search it, **Copy** a clip again or **Send again**. On the computer the tray menu also has **Recent clips**.
+
+Copied pictures sent or received are kept too: the newest 50, and no more than 100 MB of them in all (whichever comes first; the oldest go). Each shows a small thumbnail, its size in pixels and on disk, when, and which way it went. You can:
+
+- **Copy** it onto this device's clipboard again, to paste in any app.
+- **Send again** to that device's clipboard.
+- **Save as…** (computer: pick where) or **Save** (phone: into Pictures/my-domain; Android 10 or later).
+- **Open** it larger, or tap the thumbnail.
+
+Search finds a picture by "picture" or "image", and by device or time (not by what's in it). Clearing a device's clips, or turning the history off, deletes the kept pictures too.
 
 It stays on that device only. Turn **Keep a clipboard history** off in Settings to stop it and forget what was kept.
 

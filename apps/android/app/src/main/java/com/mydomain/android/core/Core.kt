@@ -1039,6 +1039,55 @@ object Core {
             }
         } ?: return false
         call { it.sendClipboardImage(node, file.absolutePath) }
+        ClipLog.pictureSent(ctx, node, file)
+        return true
+    }
+
+    /** Send kept picture [p] (clipboard history) to [node]'s clipboard
+     *  again, from a copy (so the kept one may go meanwhile). */
+    suspend fun sendKeptPicture(ctx: Context, node: String, p: ClipPicture) {
+        val kept = ClipLog.pictureFile(p) ?: throw java.io.FileNotFoundException(p.file)
+        val file = withContext(Dispatchers.IO) {
+            val dir = java.io.File(ctx.cacheDir, "clipboard").apply { mkdirs() }
+            kept.copyTo(java.io.File(dir, "Copied picture ${System.currentTimeMillis() / 1000}.png"), overwrite = true)
+        }
+        call { it.sendClipboardImage(node, file.absolutePath) }
+        ClipLog.pictureSent(ctx, node, file)
+    }
+
+    /** Put kept picture [p] on this phone's clipboard: a content Uri through
+     *  the app's FileProvider, so the app that pastes may read it. */
+    fun copyKeptPicture(ctx: Context, p: ClipPicture) {
+        val file = ClipLog.pictureFile(p)?.takeIf { it.isFile } ?: throw java.io.FileNotFoundException(p.file)
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", file)
+        val cm = ctx.getSystemService(android.content.ClipboardManager::class.java) ?: return
+        cm.setPrimaryClip(android.content.ClipData.newUri(ctx.contentResolver, "Picture", uri))
+    }
+
+    /** Save kept picture [p] to Pictures/my-domain (MediaStore, Android 10+).
+     *  False on older Android, which would need the storage permission. */
+    suspend fun saveKeptPicture(ctx: Context, p: ClipPicture): Boolean {
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.Q) return false
+        val file = ClipLog.pictureFile(p)?.takeIf { it.isFile } ?: throw java.io.FileNotFoundException(p.file)
+        withContext(Dispatchers.IO) {
+            val cr = ctx.contentResolver
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "Picture ${System.currentTimeMillis() / 1000}.png")
+                put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "${android.os.Environment.DIRECTORY_PICTURES}/my-domain")
+                put(android.provider.MediaStore.Images.Media.IS_PENDING, 1)
+            }
+            val uri = cr.insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                ?: throw java.io.IOException("MediaStore insert failed")
+            try {
+                cr.openOutputStream(uri)?.use { out -> file.inputStream().use { it.copyTo(out) } }
+                    ?: throw java.io.IOException("can't write the picture")
+                cr.update(uri, android.content.ContentValues().apply { put(android.provider.MediaStore.Images.Media.IS_PENDING, 0) }, null, null)
+            } catch (e: Exception) {
+                cr.delete(uri, null, null)
+                throw e
+            }
+        }
         return true
     }
 

@@ -4,4 +4,7 @@
 <paths>
     <external-files-path name="downloads" path="Download/" />
     <files-path name="downloads_internal" path="downloads/" />
+    <!-- Pictures kept in the clipboard history (ClipLog), put back on the
+         clipboard as a content Uri by "Copy". -->
+    <files-path name="clip_images" path="clip-images/" />
 </paths>

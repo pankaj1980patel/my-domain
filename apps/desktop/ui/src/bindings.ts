@@ -103,6 +103,20 @@ export const commands = {
 	clipHistoryEnabled: () => __TAURI_INVOKE<boolean>("clip_history_enabled"),
 	/**  Turn the history on or off; off also forgets everything kept. */
 	setClipHistoryEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_clip_history_enabled", { on }),
+	/**  Kept picture `id` at full size, as a `data:image/png` URL (to look at it). */
+	clipPicture: (id: number) => typedError<string, string>(__TAURI_INVOKE("clip_picture", { id })),
+	/**  Put kept picture `id` on this computer's clipboard. */
+	copyClipPicture: (id: number) => typedError<null, string>(__TAURI_INVOKE("copy_clip_picture", { id })),
+	/**
+	 *  Send kept picture `id` to device `node_id`'s clipboard again. Returns the
+	 *  transfer id (progress as `file-progress`); kept again as sent.
+	 */
+	sendClipPicture: (nodeId: string, id: number) => typedError<string, string>(__TAURI_INVOKE("send_clip_picture", { nodeId, id })),
+	/**
+	 *  Save kept picture `id` where the user picks (the save dialog). The path
+	 *  it went to, or `None` when the dialog was closed.
+	 */
+	saveClipPicture: (id: number) => typedError<string | null, string>(__TAURI_INVOKE("save_clip_picture", { id })),
 	/**
 	 *  Ask a device for its battery/charging; the answer arrives as
 	 *  `device-status-event`.
@@ -431,7 +445,7 @@ export const commands = {
 	sendInput: (nodeId: string, eventsJson: string) => typedError<null, string>(__TAURI_INVOKE("send_input", { nodeId, eventsJson })),
 	/**
 	 *  Send the picture on this clipboard to a device's clipboard. Returns the
-	 *  transfer id (progress as `file-progress`).
+	 *  transfer id (progress as `file-progress`). Kept in the clipboard history.
 	 */
 	sendClipboardImage: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard_image", { nodeId })),
 	/**
@@ -1004,27 +1018,59 @@ export type ClipDirection =
 /**
  *  What a device's clipboard tile shows: the first matches, how many there
  *  are, and how many this device has kept in all.
+ *  `pictures`: the ones among `entries` that are pictures.
  */
 export type ClipPage = ClipPage_Serialize | ClipPage_Deserialize;
 
 /**
  *  What a device's clipboard tile shows: the first matches, how many there
  *  are, and how many this device has kept in all.
+ *  `pictures`: the ones among `entries` that are pictures.
  */
 export type ClipPage_Deserialize = {
 	entries: ClipRecord_Deserialize[],
 	total: number,
 	kept: number,
+	pictures: ClipPicture_Deserialize[],
 };
 
 /**
  *  What a device's clipboard tile shows: the first matches, how many there
  *  are, and how many this device has kept in all.
+ *  `pictures`: the ones among `entries` that are pictures.
  */
 export type ClipPage_Serialize = {
 	entries: ClipRecord_Serialize[],
 	total: number,
 	kept: number,
+	pictures: ClipPicture_Serialize[],
+};
+
+/**  A kept picture as a clipboard tile shows it. */
+export type ClipPicture = ClipPicture_Serialize | ClipPicture_Deserialize;
+
+/**  A kept picture as a clipboard tile shows it. */
+export type ClipPicture_Deserialize = {
+	/**  The clip's id. */
+	id: number,
+	width: number,
+	height: number,
+	/**  The PNG's size on disk. */
+	bytes: number | null,
+	/**  Its thumbnail as a `data:image/png` URL, if there is one. */
+	thumb?: string | null,
+};
+
+/**  A kept picture as a clipboard tile shows it. */
+export type ClipPicture_Serialize = {
+	/**  The clip's id. */
+	id: number,
+	width: number,
+	height: number,
+	/**  The PNG's size on disk. */
+	bytes: number | null,
+	/**  Its thumbnail as a `data:image/png` URL, if there is one. */
+	thumb: string | null,
 };
 
 /**  One clip as kept. */

@@ -157,6 +157,11 @@ object FileActions {
         // A synced folder's file is already in its place (SyncFolders):
         // it stays there, without a notice.
         if (o.optBoolean("sync")) return
+        // A copied picture is kept in the clipboard history: copied before
+        // it's moved into Downloads.
+        if (o.optBoolean("clipboard")) {
+            runCatching { com.mydomain.android.core.ClipLog.pictureReceived(ctx, o.optString("from"), File(o.optString("path"))) }
+        }
         val saved = save(ctx, File(o.optString("path")), name) ?: return
         val (uri, mime) = saved
         Core.fileSaved(id, uri, mime)

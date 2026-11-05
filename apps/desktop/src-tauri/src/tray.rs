@@ -512,11 +512,20 @@ pub(crate) fn send_clipboard(app: &AppHandle, node: &str) {
 
 /// Put a recent clip back on this computer's clipboard; off the main thread.
 fn copy_clip(app: &AppHandle, id: &str) {
-    let Some(text) = id
-        .parse()
-        .ok()
-        .and_then(|id| crate::clip_history::text_of(app, id))
-    else {
+    let Ok(id) = id.parse() else {
+        return;
+    };
+    // A picture goes back on the clipboard as the picture.
+    if let Some(path) = crate::clip_history::picture_of(app, id) {
+        let app = app.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = crate::clip_image::put_on_clipboard(&path) {
+                notify::post_always(&app, "Couldn't copy the picture", &e);
+            }
+        });
+        return;
+    }
+    let Some(text) = crate::clip_history::text_of(app, id) else {
         return;
     };
     let app = app.clone();

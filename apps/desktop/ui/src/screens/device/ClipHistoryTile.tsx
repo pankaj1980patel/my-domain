@@ -2,11 +2,29 @@
 // as clipboard, kept on this computer (the last 200, clip_history.rs),
 // searchable. "Copy" puts a clip on this computer's clipboard; "Send again"
 // puts it on the device's. Turned off in Settings, nothing is kept.
+// Copied pictures are kept too (the newest 50, 100 MB at most): a row with a
+// thumbnail, its size, and Copy / Send again / Save as… / Open (larger, here).
 
 import { createEffect, createSignal, For, on, Show } from "solid-js";
-import { clearClipHistoryOf, clipHistory, clipTick, copyText, peerName, sendClipAgain, type ClipPage } from "../../lib/core";
+import { Portal } from "solid-js/web";
+import {
+  clearClipHistoryOf,
+  clipHistory,
+  clipPictureUrl,
+  clipTick,
+  copyClipPicture,
+  copyText,
+  peerName,
+  saveClipPicture,
+  sendClipAgain,
+  sendClipPictureAgain,
+  type ClipPage,
+  type ClipPicture,
+  type ClipRecord,
+} from "../../lib/core";
 import { foundId, foundTarget, isFound } from "../../lib/search";
-import { friendlyError } from "../../lib/words";
+import { friendlyError, humanSize } from "../../lib/words";
+import { rememberFocus, trapTab } from "../../lib/a11y";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -23,11 +41,18 @@ function whenOf(ts: number, now = new Date()): string {
   return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${time}`;
 }
 
+/** A picture's dimensions and size: "800 × 600 · 1.2 MB". */
+function details(pic: ClipPicture): string {
+  return t("clipHistory.pictureDetails", { w: pic.width, h: pic.height, size: humanSize(pic.bytes ?? 0) });
+}
+
 export default function ClipHistoryTile(props: { node: string }) {
   const name = () => peerName(props.node);
   const [query, setQuery] = createSignal("");
   const [limit, setLimit] = createSignal(PAGE);
-  const [page, setPage] = createSignal<ClipPage>({ entries: [], total: 0, kept: 0 });
+  const [page, setPage] = createSignal<ClipPage>({ entries: [], total: 0, kept: 0, pictures: [] });
+  /** The picture shown larger ("Open"). */
+  const [preview, setPreview] = createSignal<{ pic: ClipPicture; e: ClipRecord; url: string } | null>(null);
   let asked = 0;
 
   // A new search starts from the top again.
@@ -51,6 +76,10 @@ export default function ClipHistoryTile(props: { node: string }) {
     }),
   );
 
+  const way = (e: ClipRecord) =>
+    e.direction === "in" ? t("clipHistory.from", { name: name() }) : t("clipHistory.to", { name: name() });
+  const pictureOf = (id: number) => page().pictures.find((p) => p.id === id);
+
   const copy = (text: string) =>
     copyText(text)
       .then(() => toast(t("clipHistory.copied"), "ok"))
@@ -61,6 +90,24 @@ export default function ClipHistoryTile(props: { node: string }) {
         toast(how === "queued" ? t("clipHistory.queued", { name: name() }) : t("clipHistory.sent", { name: name() }), "ok"),
       )
       .catch((e) => toast(friendlyError(e), "error"));
+  const copyPicture = (id: number) =>
+    copyClipPicture(id)
+      .then(() => toast(t("clipHistory.pictureCopied"), "ok"))
+      .catch((e) => toast(friendlyError(e), "error"));
+  const sendPicture = (id: number) =>
+    sendClipPictureAgain(props.node, id)
+      .then(() => toast(t("clipHistory.pictureSending", { name: name() }), "ok"))
+      .catch((e) => toast(friendlyError(e), "error"));
+  const savePicture = (id: number) =>
+    saveClipPicture(id)
+      .then((path) => {
+        if (path) toast(t("clipHistory.pictureSaved"), "ok");
+      })
+      .catch((e) => toast(friendlyError(e), "error"));
+  const openPicture = (pic: ClipPicture, e: ClipRecord) =>
+    clipPictureUrl(pic.id)
+      .then((url) => setPreview({ pic, e, url }))
+      .catch((err) => toast(friendlyError(err), "error"));
   const clear = () =>
     clearClipHistoryOf(props.node)
       .then(() => toast(t("clipHistory.cleared"), "ok"))
@@ -99,31 +146,88 @@ export default function ClipHistoryTile(props: { node: string }) {
                     class="clip-log-dir"
                     role="img"
                     classList={{ "clip-log-in": e.direction === "in" }}
-
-                    title={e.direction === "in" ? t("clipHistory.from", { name: name() }) : t("clipHistory.to", { name: name() })}
-                    aria-label={e.direction === "in" ? t("clipHistory.from", { name: name() }) : t("clipHistory.to", { name: name() })}
+                    title={way(e)}
+                    aria-label={way(e)}
                   >
                     {e.direction === "in" ? "↓" : "↑"}
                   </span>
-                  <div class="clip-log-body">
-                    <span class="clip-log-text">{e.text}</span>
-                    <span class="small muted">
-                      {whenOf(e.at ?? 0)}
-                      <Show when={e.truncated}> · {t("clipHistory.truncated")}</Show>
-                    </span>
-                  </div>
-                  <div class="clip-log-actions">
-                    <button class="btn btn-ghost btn-sm" aria-label={t("clipHistory.copyLabel")} onClick={() => copy(e.text)}>
-                      {t("clipHistory.copy")}
-                    </button>
-                    <button
-                      class="btn btn-ghost btn-sm"
-                      aria-label={t("clipHistory.sendAgainLabel", { name: name() })}
-                      onClick={() => sendAgain(e.text)}
-                    >
-                      {t("clipHistory.sendAgain")}
-                    </button>
-                  </div>
+                  <Show
+                    when={pictureOf(e.id)}
+                    fallback={
+                      <>
+                        <div class="clip-log-body">
+                          <span class="clip-log-text">{e.text}</span>
+                          <span class="small muted">
+                            {whenOf(e.at ?? 0)}
+                            <Show when={e.truncated}> · {t("clipHistory.truncated")}</Show>
+                          </span>
+                        </div>
+                        <div class="clip-log-actions">
+                          <button class="btn btn-ghost btn-sm" aria-label={t("clipHistory.copyLabel")} onClick={() => copy(e.text)}>
+                            {t("clipHistory.copy")}
+                          </button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            aria-label={t("clipHistory.sendAgainLabel", { name: name() })}
+                            onClick={() => sendAgain(e.text)}
+                          >
+                            {t("clipHistory.sendAgain")}
+                          </button>
+                        </div>
+                      </>
+                    }
+                  >
+                    {(pic) => (
+                      <>
+                        <button
+                          type="button"
+                          class="clip-pic-thumb"
+                          aria-label={t("clipHistory.openLabel")}
+                          title={t("clipHistory.openLabel")}
+                          onClick={() => openPicture(pic(), e)}
+                        >
+                          <Show when={pic().thumb} fallback={<span aria-hidden="true">🖼</span>}>
+                            {(src) => <img src={src()} alt="" />}
+                          </Show>
+                        </button>
+                        <div class="clip-log-body">
+                          <span class="clip-log-text">{t("clipHistory.picture")}</span>
+                          <span class="small muted">{details(pic())}</span>
+                          <span class="small muted">{whenOf(e.at ?? 0)}</span>
+                        </div>
+                        <div class="clip-log-actions clip-pic-actions">
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            aria-label={t("clipHistory.copyPictureLabel")}
+                            onClick={() => copyPicture(e.id)}
+                          >
+                            {t("clipHistory.copy")}
+                          </button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            aria-label={t("clipHistory.sendAgainLabel", { name: name() })}
+                            onClick={() => sendPicture(e.id)}
+                          >
+                            {t("clipHistory.sendAgain")}
+                          </button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            aria-label={t("clipHistory.saveAsLabel")}
+                            onClick={() => savePicture(e.id)}
+                          >
+                            {t("clipHistory.saveAs")}
+                          </button>
+                          <button
+                            class="btn btn-ghost btn-sm"
+                            aria-label={t("clipHistory.openLabel")}
+                            onClick={() => openPicture(pic(), e)}
+                          >
+                            {t("clipHistory.open")}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </Show>
                 </li>
               )}
             </For>
@@ -140,6 +244,60 @@ export default function ClipHistoryTile(props: { node: string }) {
           </Show>
         </Show>
       </Show>
+      <Show when={preview()}>
+        {(p) => (
+          <PicturePreview
+            url={p().url}
+            note={`${way(p().e)} · ${details(p().pic)} · ${whenOf(p().e.at ?? 0)}`}
+            alt={t("clipHistory.pictureAlt", { details: details(p().pic) })}
+            onClose={() => setPreview(null)}
+          />
+        )}
+      </Show>
     </article>
+  );
+}
+
+/** A kept picture shown larger, over the page; Escape, Close or a click
+ *  outside closes it, and focus goes back where it was. */
+function PicturePreview(props: { url: string; note: string; alt: string; onClose: () => void }) {
+  let dialog: HTMLDivElement | undefined;
+  const restore = rememberFocus();
+  const close = () => {
+    props.onClose();
+    restore();
+  };
+  return (
+    <Portal>
+      <div class="clip-pic-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
+        <div
+          class="clip-pic-preview"
+          ref={(el) => {
+            dialog = el;
+            queueMicrotask(() => el.querySelector<HTMLElement>("button")?.focus());
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="clip-pic-title"
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              close();
+            } else trapTab(e, dialog);
+          }}
+        >
+          <div class="row">
+            <h2 id="clip-pic-title" class="grow">
+              {t("clipHistory.picture")}
+            </h2>
+            <button class="btn btn-ghost btn-sm" onClick={close}>
+              {t("clipHistory.close")}
+            </button>
+          </div>
+          <img class="clip-pic-full" src={props.url} alt={props.alt} />
+          <p class="small muted">{props.note}</p>
+        </div>
+      </div>
+    </Portal>
   );
 }

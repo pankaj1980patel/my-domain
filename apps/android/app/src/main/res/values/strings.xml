@@ -115,7 +115,7 @@
     <string name="clipboard_from_this_phone">This phone</string>
     <string name="clipboard_recent_hint">Kept on this phone until the app closes.</string>
     <string name="clip_history_title">Clipboard history</string>
-    <string name="clip_history_empty">Text you send to %1$s’s clipboard, or it sends to yours, is kept here, the last 200.</string>
+    <string name="clip_history_empty">Text and pictures you send to %1$s’s clipboard, or it sends to yours, are kept here: the last 200 clips, the newest 50 pictures.</string>
     <string name="clip_history_clear">Clear</string>
     <string name="clip_history_cleared">Clipboard history cleared</string>
     <string name="clip_history_search">Search clips</string>
@@ -130,6 +130,16 @@
     <string name="clip_history_queued">Will send when %1$s is reachable</string>
     <string name="clip_history_showing">Showing %1$d of %2$d</string>
     <string name="clip_history_more">Show more</string>
+    <string name="clip_history_picture">Picture</string>
+    <string name="clip_history_picture_details">%1$d × %2$d · %3$s</string>
+    <string name="clip_history_picture_alt">The copied picture, %1$s</string>
+    <string name="clip_history_picture_copied">Picture copied to your clipboard</string>
+    <string name="clip_history_picture_sending">Sending the picture to %1$s’s clipboard</string>
+    <string name="clip_history_save">Save</string>
+    <string name="clip_history_picture_saved">Saved to Pictures/my-domain</string>
+    <string name="clip_history_save_needs_q">Saving pictures needs Android 10 or later. Use Copy, then paste it where you want it.</string>
+    <string name="clip_history_open">Open</string>
+    <string name="clip_history_close">Close</string>
     <string name="notify_title">Send a notification</string>
     <string name="notify_field_title">Title</string>
     <string name="notify_field_message">Message (optional)</string>
@@ -164,7 +174,7 @@
     <string name="settings_chat_history_hint">Chats with your devices are kept on this phone (the newest 2,000 per device), so they’re still there after a restart. Never synced. Turning this off forgets them all.</string>
     <string name="settings_share_labels">Share names and icons with my other devices</string>
     <string name="settings_share_labels_hint">A nickname, icon or colour you give a device here shows up on your other devices too, and ones set there show up here. The newest change wins. Off: this phone keeps its own and ignores theirs.</string>
-    <string name="settings_clip_history_hint">Text sent between your devices as clipboard is kept on this phone (the last 200), on each device’s screen. Turning this off forgets it all.</string>
+    <string name="settings_clip_history_hint">Text and pictures sent between your devices as clipboard are kept on this phone (the last 200 clips; the newest 50 pictures, 100 MB at most), on each device’s screen. Turning this off forgets it all.</string>
     <string name="settings_share_codes_hint">When a code arrives in a notification, it\'s copied on your computers so you can paste it there.</string>
     <string name="settings_device_key">Device key</string>
     <string name="settings_key_hint">All your devices must use the same key. Changing it here means changing it on every device.</string>

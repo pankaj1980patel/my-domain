@@ -493,6 +493,12 @@ impl EventSink for TauriSink {
                 ..
             } => {
                 transfers::on_received(&self.app, id, from, name, path, *size);
+                clip_history::on_picture(
+                    &self.app,
+                    clip_history::ClipDirection::In,
+                    from,
+                    std::path::Path::new(path),
+                );
                 let (app, from, path) = (self.app.clone(), from.clone(), path.clone());
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
@@ -1086,12 +1092,18 @@ fn send_input(node_id: String, events_json: String, engine: State<Eng>) -> Resul
 }
 
 /// Send the picture on this clipboard to a device's clipboard. Returns the
-/// transfer id (progress as `file-progress`).
+/// transfer id (progress as `file-progress`). Kept in the clipboard history.
 #[tauri::command]
 #[specta::specta]
-fn send_clipboard_image(node_id: String, engine: State<Eng>) -> Result<String, CoreError> {
+fn send_clipboard_image(
+    node_id: String,
+    app: AppHandle,
+    engine: State<Eng>,
+) -> Result<String, CoreError> {
     let path = clip_image::copied_to_png().map_err(CoreError::InvalidInput)?;
-    engine.send_clipboard_image(&node_id, &path.to_string_lossy())
+    let id = engine.send_clipboard_image(&node_id, &path.to_string_lossy())?;
+    clip_history::on_picture(&app, clip_history::ClipDirection::Out, &node_id, &path);
+    Ok(id)
 }
 
 /// Start (`on`) or stop watching a device's screen: snapshots arrive as
@@ -1450,6 +1462,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         clip_history::clear_clip_history,
         clip_history::clip_history_enabled,
         clip_history::set_clip_history_enabled,
+        clip_history::clip_picture,
+        clip_history::copy_clip_picture,
+        clip_history::send_clip_picture,
+        clip_history::save_clip_picture,
         request_status,
         ring_device,
         open_url_on,
