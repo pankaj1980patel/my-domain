@@ -22,6 +22,7 @@ import Help from "./screens/Help";
 import Search from "./screens/Search";
 import { revealFound, type Found } from "./lib/search";
 import Notes, { type NoteRequest } from "./screens/Notes";
+import NoteReminders from "./components/NoteReminders";
 import { notes } from "./lib/notes";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
@@ -301,6 +302,7 @@ export default function App() {
         />
         <CallOverlay />
         <SendToPicker />
+        <NoteReminders onOpen={(id) => openNote(id)} />
         </Show>
       </Show>
       <Show when={state.ringing}>{(r) => <RingBanner from={r().from} />}</Show>

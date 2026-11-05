@@ -75,7 +75,7 @@ fn no_notes_as_chat(node: &TestNode) {
 
 fn save(node: &TestNode, id: Option<&str>, title: &str, body: &str) -> Note {
     node.engine
-        .save_note(id, title, body, false, false, None)
+        .save_note(id, title, body, false, false, None, None, false)
         .unwrap()
 }
 
@@ -95,6 +95,8 @@ fn two_devices_end_with_the_same_notes() {
             true,
             true,
             Some("green"),
+            None,
+            false,
         )
         .unwrap();
     save(&phone, None, "Wi-Fi", "the guest password");
@@ -241,4 +243,149 @@ fn an_app_from_before_never_gets_notes() {
     assert_eq!(note_events(&old), 0);
     assert!(old.engine.notes().is_empty());
     assert_eq!(note_events(&new), 0);
+}
+
+// --- reminders (notes: 2) ----------------------------------------------------
+
+fn remind(node: &TestNode, id: Option<&str>, title: &str, body: &str, at: u64, done: bool) -> Note {
+    node.engine
+        .save_note(id, title, body, false, false, None, Some(at), done)
+        .unwrap()
+}
+
+/// Wait for a `NotesChanged` on `node` with note `id` matching `f`.
+fn wait_change(node: &TestNode, id: &str, f: impl Fn(&Note) -> bool) -> Note {
+    node.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::NotesChanged { notes, .. } => {
+                notes.iter().find(|n| n.id == id && f(n)).cloned()
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no change to {id}"))
+}
+
+/// An app from before reminders: it shares notes (`notes: 1`) but keeps
+/// no reminders.
+fn start_old(id: &str) -> TestNode {
+    TestNode::start_full(
+        MockPlatform::new(id),
+        CoreConfig {
+            note_reminders: false,
+            ..test_config()
+        },
+    )
+}
+
+#[test]
+fn a_reminder_and_done_reach_the_other_device() {
+    let phone = TestNode::start("remind-phone");
+    let mac = TestNode::start("remind-mac");
+    TestNode::pair(&phone, &mac);
+    link(&phone, &mac, "hi");
+    let n = remind(
+        &phone,
+        None,
+        "Dentist",
+        "Call to move it\nnumber in contacts",
+        1_000_000,
+        false,
+    );
+    let got = wait_note(&mac, "Dentist");
+    assert_eq!((got.remind_at, got.remind_done), (Some(1_000_000), false));
+    assert!(phone.engine.note_reminders_supported(&mac.node_id()));
+
+    // Done on the mac reaches the phone (it dismisses it there).
+    remind(&mac, Some(&n.id), "Dentist", &got.body, 1_000_000, true);
+    let done = wait_change(&phone, &n.id, |n| n.remind_done);
+    assert_eq!(done.remind_at, Some(1_000_000));
+
+    // Snooze on the phone: a new time, not done.
+    remind(&phone, Some(&n.id), "Dentist", &got.body, 2_000_000, false);
+    wait_change(&mac, &n.id, |n| {
+        n.remind_at == Some(2_000_000) && !n.remind_done
+    });
+
+    // Done apart from the other's edit of the text: both end Done.
+    unlink(&phone, &mac);
+    remind(&phone, Some(&n.id), "Dentist", &got.body, 2_000_000, true);
+    std::thread::sleep(Duration::from_millis(20));
+    remind(
+        &mac,
+        Some(&n.id),
+        "Dentist",
+        "moved to Friday",
+        2_000_000,
+        false,
+    );
+    link(&mac, &phone, "again");
+    let notes = converged(&phone, &mac);
+    let note = notes.iter().find(|x| x.id == n.id).unwrap();
+    assert_eq!(note.body, "moved to Friday");
+    assert!(note.remind_done, "{note:#?}");
+    no_notes_as_chat(&phone);
+    no_notes_as_chat(&mac);
+}
+
+#[test]
+fn an_app_before_reminders_keeps_working_and_loses_nothing() {
+    let new = TestNode::start("remind-new");
+    let old = start_old("remind-old");
+    TestNode::pair(&new, &old);
+    let n = remind(&new, None, "Rent", "pay by the 1st", 5_000_000, false);
+    link(&new, &old, "hello");
+
+    // The older app gets the note, as notes (never as chat), with no
+    // reminder (it doesn't know them) ...
+    let got = wait_note(&old, "Rent");
+    assert_eq!(got.remind_at, None);
+    assert!(new.engine.notes_supported(&old.node_id()));
+    assert!(!new.engine.note_reminders_supported(&old.node_id()));
+    assert!(old.engine.notes_supported(&new.node_id()));
+    no_notes_as_chat(&old);
+
+    // ... edits the text, and the reminder is still there here.
+    save(&old, Some(&n.id), "Rent", "pay by the 1st, by transfer");
+    let back = wait_change(&new, &n.id, |n| n.body.ends_with("transfer"));
+    assert_eq!((back.remind_at, back.remind_done), (Some(5_000_000), false));
+
+    // Done here goes to the older app as an ordinary edit.
+    remind(&new, Some(&n.id), "Rent", &back.body, 5_000_000, true);
+    std::thread::sleep(Duration::from_millis(500));
+    let there = old.engine.note(&n.id).unwrap();
+    assert_eq!(there.body, back.body);
+    assert_eq!(there.remind_at, None);
+    assert!(new.engine.note(&n.id).unwrap().remind_done);
+
+    // Both still agree on the text, no conflict copies, and it settles.
+    std::thread::sleep(Duration::from_millis(500));
+    let (en, eo) = (note_events(&new), note_events(&old));
+    std::thread::sleep(Duration::from_millis(700));
+    assert_eq!((note_events(&new), note_events(&old)), (en, eo));
+    assert_eq!(new.engine.notes().len(), 1);
+    assert_eq!(old.engine.notes().len(), 1);
+}
+
+#[test]
+fn a_reminder_passed_on_by_an_older_app_is_filled_in_later() {
+    // a (reminders) -> old (none) -> c (reminders): c first gets the note
+    // without its reminder, and the reminder once a and c link.
+    let a = TestNode::start("remind-relay-a");
+    let old = start_old("remind-relay-old");
+    let c = TestNode::start("remind-relay-c");
+    TestNode::pair(&a, &old);
+    TestNode::pair(&old, &c);
+    TestNode::pair(&a, &c);
+    let n = remind(&a, None, "Passport", "renew it", 7_000_000, false);
+    link(&a, &old, "one");
+    wait_note(&old, "Passport");
+    unlink(&a, &old);
+    link(&old, &c, "two");
+    let got = wait_note(&c, "Passport");
+    assert_eq!(got.remind_at, None);
+    unlink(&old, &c);
+    link(&a, &c, "three");
+    let filled = wait_change(&c, &n.id, |n| n.remind_at.is_some());
+    assert_eq!(filled.remind_at, Some(7_000_000));
+    assert_eq!(converged(&a, &c).len(), 1);
 }

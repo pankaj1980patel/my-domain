@@ -62,6 +62,7 @@ class MainActivity : ComponentActivity() {
         askWifiScan(intent)
         openSettings(intent)
         openDevice(intent)
+        openNote(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -90,6 +91,13 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(PhoneLocation.EXTRA_OPEN_SETTINGS, false) != true) return
         intent.removeExtra(PhoneLocation.EXTRA_OPEN_SETTINGS)
         Core.showSettings = true
+    }
+
+    /** A note reminder's notification ([NoteReminders]) asked for its note. */
+    private fun openNote(intent: Intent?) {
+        val id = intent?.getStringExtra(NoteReminders.EXTRA_OPEN_NOTE) ?: return
+        intent.removeExtra(NoteReminders.EXTRA_OPEN_NOTE)
+        Core.showNote = id
     }
 
     /** A launcher shortcut ([ShareTargets]) asked for a device's screen. */
@@ -169,6 +177,7 @@ class MainActivity : ComponentActivity() {
         openSettings(intent)
         askWifiScan(intent)
         openDevice(intent)
+        openNote(intent)
         if (!directShare(intent)) takeShare(intent)
     }
 

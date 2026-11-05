@@ -6,8 +6,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.mydomain.android.NoteReminders
 import com.mydomain.android.ffi.NoteItem
 import org.json.JSONObject
+import java.util.concurrent.Executors
 
 /**
  * Notes: the notepad that's the same on all your devices (the core's
@@ -18,6 +20,9 @@ import org.json.JSONObject
  *
  * A checklist is a convention over plain text: lines starting with "[ ] "
  * or "[x] " are drawn as boxes ([lines], [toggle], [addItem]).
+ *
+ * Whenever the notes change here, their reminders go to [NoteReminders]
+ * (which shows them, and takes down what's Done or given a new time).
  */
 object Notes {
     /** The longest body the core keeps, in bytes. */
@@ -27,15 +32,34 @@ object Notes {
     var loaded by mutableStateOf(false); private set
 
     private val main = Handler(Looper.getMainLooper())
+    /** Reminders are worked out off the main thread, one look at a time. */
+    private val reminderThread = Executors.newSingleThreadExecutor()
 
-    /** Read every note from the core. Safe from any thread. */
+    /** Read every note from the core. Safe from any thread. Done and Snooze
+     *  tapped on a reminder while the core wasn't running are saved first. */
     fun refresh() {
+        runCatching { NoteReminders.flushPending(Core.app) }
         val list = runCatching { Core.engine()?.notesList() }.getOrNull() ?: return
         main.post {
             byId.clear()
             list.forEach { byId[it.id] = it }
             loaded = true
+            reminders()
         }
+    }
+
+    /** The notes changed here: their reminders too. Main thread. */
+    private fun reminders() {
+        val all = byId.values.toList()
+        val ctx = Core.app
+        reminderThread.execute { runCatching { NoteReminders.sync(ctx, all) } }
+    }
+
+    /** A note saved outside the screens (a reminder's Done or Snooze).
+     *  Main thread. */
+    fun applySaved(n: NoteItem) {
+        byId[n.id] = n
+        reminders()
     }
 
     /** A `notes_changed` event: notes changed on your other devices, and
@@ -52,6 +76,7 @@ object Notes {
         if (removed != null) {
             for (i in 0 until removed.length()) byId.remove(removed.optString(i))
         }
+        reminders()
     }
 
     private fun JSONObject.text(key: String): String? =
@@ -71,6 +96,8 @@ object Notes {
             by = o.optString("by"),
             byName = o.optString("by_name"),
             conflictOf = o.text("conflict_of"),
+            remindAt = if (o.isNull("remind_at")) null else o.optLong("remind_at"),
+            remindDone = o.optBoolean("remind_done"),
         )
     }
 
@@ -94,30 +121,54 @@ object Notes {
         val pinned: Boolean = false,
         val checklist: Boolean = false,
         val color: String? = null,
+        /** The reminder: when (unix ms; null: none), and marked Done. */
+        val remindAt: Long? = null,
+        val remindDone: Boolean = false,
     )
 
-    fun fields(n: NoteItem) = Fields(n.title, n.body, n.pinned, n.checklist, n.color)
+    fun fields(n: NoteItem) = Fields(n.title, n.body, n.pinned, n.checklist, n.color, n.remindAt, n.remindDone)
 
     /** Save a note ([id] null: a new one; a deleted one comes back). Throws
      *  the core's reason when it can't be kept. Call from the main thread. */
     suspend fun save(id: String?, f: Fields): NoteItem {
-        val saved = Core.call { it.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color) }
-        byId[saved.id] = saved
+        val saved = Core.call { it.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color, f.remindAt, f.remindDone) }
+        applySaved(saved)
         return saved
     }
 
     /** Save on the way out of the editor (the screen's scope is gone). */
     fun saveDetached(id: String?, f: Fields) {
         Thread {
-            val saved = runCatching { Core.engine()?.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color) }.getOrNull()
-            if (saved != null) main.post { byId[saved.id] = saved }
+            val saved = runCatching {
+                Core.engine()?.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color, f.remindAt, f.remindDone)
+            }.getOrNull()
+            if (saved != null) main.post { applySaved(saved) }
         }.start()
     }
+
+    /** Set note [id]'s reminder ([at] null: none; [done]: marked Done), the
+     *  rest as the core has it. Throws the core's reason. Main thread. */
+    suspend fun setReminder(id: String, at: Long?, done: Boolean): NoteItem {
+        val saved = Core.call { e ->
+            val n = e.noteGet(id) ?: throw IllegalStateException("no such note")
+            e.noteSave(id, n.title, n.body, n.pinned, n.checklist, n.color, at, done)
+        }
+        applySaved(saved)
+        return saved
+    }
+
+    /** A reminder still to come, or due and not Done. */
+    fun pending(n: NoteItem) = n.remindAt != null && !n.remindDone
+
+    /** Notes with a pending reminder, soonest first. */
+    fun upcoming(): List<NoteItem> =
+        byId.values.filter(::pending).sortedWith(compareBy<NoteItem> { it.remindAt }.thenBy { it.id })
 
     /** Delete a note on all your devices. Call from the main thread. */
     suspend fun delete(id: String) {
         Core.call { it.noteDelete(id) }
         byId.remove(id)
+        reminders()
     }
 
     // --- checklists ----------------------------------------------------------

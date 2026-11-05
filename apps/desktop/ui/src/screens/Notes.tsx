@@ -4,6 +4,9 @@
 // note saves itself a moment after you stop typing, and goes to your other
 // devices from there. A note changed on two devices at once keeps both
 // texts: the one that lost is a separate note, marked as a conflict copy.
+// A note can remind you at a time ("Remind me"): every device with it shows
+// the reminder; a bell marks it in the list, and "Upcoming" lists those
+// still to come, soonest first.
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js";
 import {
@@ -12,16 +15,28 @@ import {
   checklistCount,
   checklistLines,
   deleteNote,
+  fromLocalInput,
+  laterToday,
   MAX_BODY,
+  nextWeek,
   noteMatches,
   notes,
+  pendingReminder,
+  reminderDue,
+  reminderTime,
   restoreNote,
   saveNote,
+  setReminder,
   sortedNotes,
+  toLocalInput,
   toggleLine,
+  tomorrowMorning,
+  upcomingNotes,
   type Note,
   type NoteFields,
+  type Snooze,
 } from "../lib/notes";
+import { Bell, done, snooze, SnoozeButtons } from "../components/NoteReminders";
 import { friendlyError, niceName, timeAgo } from "../lib/words";
 import { Empty, toast } from "../components/ui";
 import { LABEL_COLORS } from "../components/DeviceLabel";
@@ -35,8 +50,18 @@ const SAVE_AFTER_MS = 600;
  *  same request again open it again. */
 export type NoteRequest = { id: string | null; at: number };
 
+/** Now, every half minute: what's due changes with it. */
+function useNow() {
+  const [now, setNow] = createSignal(Date.now());
+  const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+  onCleanup(() => clearInterval(timer));
+  return now;
+}
+
 export default function Notes(props: { request?: NoteRequest }) {
   const [query, setQuery] = createSignal("");
+  const [upcoming, setUpcoming] = createSignal(false);
+  const now = useNow();
   // The editor shown: `key` changes only when you pick something, so a new
   // note getting its id doesn't redraw the editor under your fingers.
   const [open, setOpen] = createSignal<{ key: number; id: string | null } | null>(null);
@@ -57,7 +82,9 @@ export default function Notes(props: { request?: NoteRequest }) {
     ),
   );
 
-  const list = createMemo(() => sortedNotes().filter((n) => noteMatches(n, query())));
+  const list = createMemo(() =>
+    (upcoming() ? upcomingNotes() : sortedNotes()).filter((n) => noteMatches(n, query())),
+  );
 
   // Deleted on another device while open (and nothing typed here since):
   // close it.
@@ -113,11 +140,33 @@ export default function Notes(props: { request?: NoteRequest }) {
             value={query()}
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
+          <div class="notes-filter" role="group" aria-label={t("notes.filter")}>
+            <button
+              class="btn btn-sm"
+              classList={{ "btn-soft": !upcoming(), "btn-ghost": upcoming() }}
+              aria-pressed={!upcoming()}
+              onClick={() => setUpcoming(false)}
+            >
+              {t("notes.filterAll")}
+            </button>
+            <button
+              class="btn btn-sm"
+              classList={{ "btn-soft": upcoming(), "btn-ghost": !upcoming() }}
+              aria-pressed={upcoming()}
+              onClick={() => setUpcoming(true)}
+            >
+              <Bell /> {t("notes.filterUpcoming")}
+            </button>
+          </div>
           <Show
             when={list().length > 0}
             fallback={
               <p class="muted small notes-none">
-                {Object.keys(notes.byId).length ? t("notes.noMatch", { query: query() }) : t("notes.empty")}
+                {upcoming() && !query()
+                  ? t("notes.noUpcoming")
+                  : Object.keys(notes.byId).length
+                    ? t("notes.noMatch", { query: query() })
+                    : t("notes.empty")}
               </p>
             }
           >
@@ -134,6 +183,15 @@ export default function Notes(props: { request?: NoteRequest }) {
                     >
                       <span class="note-item-head">
                         <span class="note-item-title">{n.title || t("notes.untitled")}</span>
+                        <Show when={pendingReminder(n)}>
+                          <span
+                            class="note-bell"
+                            classList={{ "note-bell-due": reminderDue(n, now()) }}
+                            title={t("notes.remind.at", { when: reminderTime(n.remind_at ?? 0) })}
+                          >
+                            <Bell label={t("notes.remind.at", { when: reminderTime(n.remind_at ?? 0) })} />
+                          </span>
+                        </Show>
                         <Show when={n.pinned}>
                           <span class="note-pin" title={t("notes.pinned")} aria-label={t("notes.pinned")}>
                             ●
@@ -144,7 +202,9 @@ export default function Notes(props: { request?: NoteRequest }) {
                         <span class="note-conflict-tag small">{t("notes.conflictTag")}</span>
                       </Show>
                       <span class="note-item-snippet muted small">{snippet(n)}</span>
-                      <span class="note-item-when muted small">{timeAgo(n.updated_at ?? 0)}</span>
+                      <span class="note-item-when muted small">
+                        {upcoming() && n.remind_at != null ? reminderTime(n.remind_at) : timeAgo(n.updated_at ?? 0)}
+                      </span>
                     </button>
                   </li>
                 )}
@@ -204,6 +264,8 @@ function Editor(props: {
   const [item, setItem] = createSignal("");
   const [error, setError] = createSignal("");
   const [saving, setSaving] = createSignal(false);
+  // A new note's reminder, until the note is saved (then it's the note's).
+  const [newRemind, setNewRemind] = createSignal<number | null>(null);
   // Changed here and not saved yet.
   let dirty = false;
   // The version on screen (to spot one changed on another device).
@@ -221,6 +283,8 @@ function Editor(props: {
     pinned: pinned(),
     checklist: checklist(),
     color: color(),
+    remindAt: note() ? (note()?.remind_at ?? null) : newRemind(),
+    remindDone: note()?.remind_done ?? false,
   });
   const tooLong = () => bodyBytes(body()) > MAX_BODY;
 
@@ -296,6 +360,24 @@ function Editor(props: {
     setBody(addItem(body(), item()));
     setItem("");
     now();
+  };
+
+  /** Set the reminder (null: take it off). A saved note saves it at once
+   *  (after what's typed); a new one keeps it until it's saved. */
+  const remindAt = async (at: number | null) => {
+    const i = id();
+    if (!i) {
+      setNewRemind(at);
+      now();
+      return;
+    }
+    await save();
+    try {
+      await setReminder(i, at);
+      setError("");
+    } catch (e) {
+      setError(friendlyError(e));
+    }
   };
 
   const original = () => {
@@ -403,6 +485,19 @@ function Editor(props: {
           )}
         </Show>
       </div>
+      <RemindControl
+        at={fields().remindAt}
+        done={fields().remindDone}
+        onSet={(at) => void remindAt(at)}
+        onDone={() => {
+          const n = note();
+          if (n) void save().then(() => done(n));
+        }}
+        onSnooze={(s) => {
+          const n = note();
+          if (n) void save().then(() => snooze(n, s));
+        }}
+      />
       <Show
         when={checklist() && !asText()}
         fallback={
@@ -474,5 +569,107 @@ function Editor(props: {
         </Show>
       </p>
     </article>
+  );
+}
+
+/** "Remind me": the note's reminder, with a date and time field and quick
+ *  picks (Later today, Tomorrow, Next week); Done and Snooze once it's due. */
+function RemindControl(props: {
+  at: number | null;
+  done: boolean;
+  onSet: (at: number | null) => void;
+  onDone: () => void;
+  onSnooze: (s: Snooze) => void;
+}) {
+  const now = useNow();
+  const [picking, setPicking] = createSignal(false);
+  const [value, setValue] = createSignal("");
+  const open = () => {
+    setValue(toLocalInput(props.at && !props.done ? props.at : tomorrowMorning(new Date()).getTime()));
+    setPicking(true);
+  };
+  const pick = (d: Date | null) => {
+    if (!d) return;
+    setPicking(false);
+    props.onSet(d.getTime());
+  };
+  const quick = () => {
+    const n = new Date(now());
+    return [
+      { label: t("notes.remind.laterToday"), at: laterToday(n) },
+      { label: t("notes.remind.tomorrow"), at: tomorrowMorning(n) },
+      { label: t("notes.remind.nextWeek"), at: nextWeek(n) },
+    ].filter((q): q is { label: string; at: Date } => q.at !== null);
+  };
+  const due = () => props.at != null && !props.done && props.at <= now();
+  return (
+    <div class="note-remind" classList={{ "note-remind-due": due() }}>
+      <Show
+        when={props.at != null}
+        fallback={
+          <button class="btn btn-ghost btn-sm" aria-expanded={picking()} onClick={() => (picking() ? setPicking(false) : open())}>
+            <Bell /> {t("notes.remind.me")}
+          </button>
+        }
+      >
+        <span class="note-remind-when small">
+          <Bell />{" "}
+          {props.done
+            ? t("notes.remind.doneAt", { when: reminderTime(props.at ?? 0) })
+            : due()
+              ? t("notes.remind.dueAt", { when: reminderTime(props.at ?? 0) })
+              : t("notes.remind.at", { when: reminderTime(props.at ?? 0) })}
+        </span>
+        <Show when={due()}>
+          <button class="btn btn-primary btn-sm" onClick={() => props.onDone()}>
+            {t("notes.remind.done")}
+          </button>
+        </Show>
+        <button class="btn btn-ghost btn-sm" aria-expanded={picking()} onClick={() => (picking() ? setPicking(false) : open())}>
+          {t("notes.remind.change")}
+        </button>
+        <button class="btn btn-ghost btn-sm" onClick={() => props.onSet(null)}>
+          {t("notes.remind.remove")}
+        </button>
+        <Show when={due()}>
+          <SnoozeButtons onSnooze={(s) => props.onSnooze(s)} />
+        </Show>
+      </Show>
+      <Show when={picking()}>
+        <div class="note-remind-pick">
+          <div class="note-remind-quick">
+            <For each={quick()}>
+              {(q) => (
+                <button class="btn btn-soft btn-sm" title={reminderTime(q.at.getTime())} onClick={() => pick(q.at)}>
+                  {q.label}
+                </button>
+              )}
+            </For>
+          </div>
+          <form
+            class="note-remind-custom"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const at = fromLocalInput(value());
+              if (at != null) pick(new Date(at));
+            }}
+          >
+            <input
+              type="datetime-local"
+              aria-label={t("notes.remind.dateTime")}
+              value={value()}
+              onInput={(e) => setValue(e.currentTarget.value)}
+            />
+            <button class="btn btn-primary btn-sm" type="submit" disabled={fromLocalInput(value()) == null}>
+              {t("notes.remind.set")}
+            </button>
+            <button class="btn btn-ghost btn-sm" type="button" onClick={() => setPicking(false)}>
+              {t("notes.remind.cancel")}
+            </button>
+          </form>
+          <p class="muted small">{t("notes.remind.hint")}</p>
+        </div>
+      </Show>
+    </div>
   );
 }

@@ -351,10 +351,15 @@ export const commands = {
 	/**
 	 *  Save a note (`id` null: a new one; a deleted one comes back, which is
 	 *  how Undo works). Goes to your other devices. Answers with it as saved.
+	 *  `remind_at` (unix ms, null: none) and `remind_done`: its reminder.
 	 */
-	noteSave: (id: string | null, title: string, body: string, pinned: boolean, checklist: boolean, color: string | null) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_save", { id, title, body, pinned, checklist, color })),
+	noteSave: (id: string | null, title: string, body: string, pinned: boolean, checklist: boolean, color: string | null, remindAt: number | null, remindDone: boolean) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_save", { id, title, body, pinned, checklist, color, remindAt, remindDone })),
 	/**  Delete a note on all your devices. */
 	noteDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("note_delete", { id })),
+	/**  Mark a note's reminder Done (on every device, as they sync). */
+	noteRemindDone: (id: string) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_remind_done", { id })),
+	/**  Remind at `at` (unix ms: snooze, or a new time), or no more (null). */
+	noteRemindAt: (id: string, at: number | null) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_remind_at", { id, at })),
 	/**
 	 *  Your phones on Do Not Disturb right now (node ids; a live link and a
 	 *  fresh word from each, see `quiet`), whether or not this computer stays
@@ -1317,6 +1322,10 @@ export type NoteView_Deserialize = {
 	by_name: string,
 	/**  A conflict copy: the note it split from. */
 	conflict_of?: string | null,
+	/**  A reminder: when (unix ms) ... */
+	remind_at?: number | null,
+	/**  ... and marked Done (on any device). */
+	remind_done: boolean,
 };
 
 /**  One note, as the UI shows it (the core's `Note`). */
@@ -1337,6 +1346,10 @@ export type NoteView_Serialize = {
 	by_name: string,
 	/**  A conflict copy: the note it split from. */
 	conflict_of: string | null,
+	/**  A reminder: when (unix ms) ... */
+	remind_at: number | null,
+	/**  ... and marked Done (on any device). */
+	remind_done: boolean,
 };
 
 /**  An app seen showing notifications here. */

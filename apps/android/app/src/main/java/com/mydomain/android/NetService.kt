@@ -272,6 +272,7 @@ class NetService : Service() {
         DeviceActions.createChannels(this)
         FileActions.createChannels(this)
         ComputerNotifs.createChannel(this)
+        NoteReminders.createChannel(this)
     }
 
     private fun createNotification(): Notification {

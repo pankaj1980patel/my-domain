@@ -411,6 +411,13 @@ pub struct Note {
     /// A conflict copy: the note it split from, when it was changed on two
     /// devices at once and this text lost (its title says so).
     pub conflict_of: Option<String>,
+    /// A reminder: when (unix ms). Every device with the note shows it
+    /// then (the apps schedule it).
+    #[serde(default)]
+    pub remind_at: Option<u64>,
+    /// The reminder was marked Done (on any device): it shows no more.
+    #[serde(default)]
+    pub remind_done: bool,
 }
 
 /// A synced folder: one folder kept the same on this device and another

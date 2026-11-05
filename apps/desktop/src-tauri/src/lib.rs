@@ -30,6 +30,7 @@ mod device;
 mod device_labels;
 mod fcm;
 mod location;
+mod note_reminders;
 mod notes;
 mod notif_history;
 mod notify;
@@ -391,6 +392,8 @@ impl EventSink for TauriSink {
             CoreEvent::LabelsChanged { labels } => device_labels::apply_shared(&self.app, labels),
             // A device asks to sync a folder: say so.
             CoreEvent::SyncPairs { pairs } => sync_folders::on_pairs(&self.app, pairs),
+            // A reminder set, snoozed or Done on another device.
+            CoreEvent::NotesChanged { .. } => note_reminders::changed(&self.app),
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
             // Kept in the chat history too (`chat_history`).
@@ -1519,6 +1522,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notes::notes_list,
         notes::note_save,
         notes::note_delete,
+        note_reminders::note_remind_done,
+        note_reminders::note_remind_at,
         dnd_devices,
         quiet::phone_quiet,
         remote_input_allowed,
@@ -1622,6 +1627,7 @@ pub fn run() {
             app.manage(page_layout::PageLayouts::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
+            app.manage(note_reminders::NoteReminders::load(&handle));
             app.manage(automations::Automations::load(&handle));
             app.manage(battery_log::BatteryLog::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
@@ -1677,6 +1683,7 @@ pub fn run() {
             away_lock::spawn(handle.clone());
             quiet::spawn(handle.clone());
             schedule::spawn(handle.clone());
+            note_reminders::spawn(handle.clone());
             automations::spawn(handle.clone());
             battery_log::spawn(handle.clone());
             // Off by default: listens only once switched on in Settings.

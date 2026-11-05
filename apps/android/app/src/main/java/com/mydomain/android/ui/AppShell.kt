@@ -215,6 +215,22 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
+    // A note reminder's notification asked for its note.
+    LaunchedEffect(Core.showNote) {
+        Core.showNote?.let { id ->
+            device = null
+            developer = false
+            automations = false
+            transfers = false
+            setup = false
+            help = false
+            leaveSearch()
+            foundNote = id
+            tab = Tab.Notes
+            Core.showNote = null
+        }
+    }
+
     val pushed = help || device != null || developer || automations || transfers || setup || search
     BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
         when {

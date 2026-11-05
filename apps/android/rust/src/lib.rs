@@ -321,6 +321,10 @@ pub struct NoteItem {
     pub by_name: String,
     /// A conflict copy: the note it split from.
     pub conflict_of: Option<String>,
+    /// A reminder: when (unix ms) ...
+    pub remind_at: Option<i64>,
+    /// ... and marked Done (on any device).
+    pub remind_done: bool,
 }
 
 impl From<mdcore::model::Note> for NoteItem {
@@ -337,6 +341,8 @@ impl From<mdcore::model::Note> for NoteItem {
             by: n.by,
             by_name: n.by_name,
             conflict_of: n.conflict_of,
+            remind_at: n.remind_at.map(|t| i64::try_from(t).unwrap_or(i64::MAX)),
+            remind_done: n.remind_done,
         }
     }
 }
@@ -1337,7 +1343,9 @@ impl MdEngine {
 
     /// Save a note (`id` none: a new one; a deleted one comes back, which
     /// is how Undo works). Goes to your other devices. Answers with it as
-    /// saved.
+    /// saved. `remind_at` (unix ms, none: no reminder) and `remind_done`:
+    /// its reminder (snooze saves a new time, Done saves true).
+    #[allow(clippy::too_many_arguments)]
     pub fn note_save(
         &self,
         id: Option<String>,
@@ -1346,7 +1354,12 @@ impl MdEngine {
         pinned: bool,
         checklist: bool,
         color: Option<String>,
+        remind_at: Option<i64>,
+        remind_done: bool,
     ) -> MdResult<NoteItem> {
+        let remind_at = remind_at
+            .and_then(|t| u64::try_from(t).ok())
+            .filter(|t| *t > 0);
         Ok(self
             .inner
             .save_note(
@@ -1356,8 +1369,15 @@ impl MdEngine {
                 pinned,
                 checklist,
                 color.as_deref(),
+                remind_at,
+                remind_done,
             )?
             .into())
+    }
+
+    /// One note (none: no such note, or deleted).
+    pub fn note_get(&self, id: String) -> Option<NoteItem> {
+        self.inner.note(&id).map(Into::into)
     }
 
     /// Delete a note on all your devices.

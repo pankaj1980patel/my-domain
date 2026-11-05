@@ -135,6 +135,11 @@ pub struct CoreConfig {
     /// `notes_digest` messages. On by default; off behaves like an app
     /// from before (tests use it to play an older peer).
     pub notes: bool,
+    /// Reminders on notes (`features::notes`, `notes: 2`): this end says
+    /// `notes: 2` and keeps and sends them. On by default; off behaves
+    /// like an app from before reminders, `notes: 1` (tests use it to play
+    /// an older peer).
+    pub note_reminders: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -173,6 +178,7 @@ impl Default for CoreConfig {
             folder_sync: true,
             shared_labels: true,
             notes: true,
+            note_reminders: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

@@ -213,6 +213,9 @@ object Core {
     /** Ask the UI to open this device's screen (a launcher shortcut). */
     var showDevice by mutableStateOf<String?>(null)
 
+    /** Ask the UI to open this note (a reminder's notification). */
+    var showNote by mutableStateOf<String?>(null)
+
     /** Text or a link shared to the app from another app, waiting for the
      *  user to pick a device (files win if both came). */
     var pendingText by mutableStateOf<String?>(null); private set

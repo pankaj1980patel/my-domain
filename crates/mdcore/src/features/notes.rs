@@ -4,7 +4,7 @@
 //! a server or in a cloud.
 //!
 //! A note is `{id, title, body, pinned, checklist, color?, created_at,
-//! updated_at, by, by_name, deleted, conflict_of?, seen}`. The body is plain
+//! updated_at, by, by_name, deleted, conflict_of?, seen, remind?}`. The body is plain
 //! text (at most `MAX_BODY` bytes); `checklist` only tells the apps to draw
 //! lines starting with `[ ] ` / `[x] ` as checkboxes. Deleting keeps a
 //! tombstone (`deleted`, no text) so the delete reaches every device; a
@@ -52,9 +52,39 @@
 //! brings nothing newer back, so it ends there. Devices without a link get
 //! everything at their next link (nothing wakes a device for a note).
 //!
-//! Only devices that said `notes: 1` (in their status, or in the
+//! Only devices that said `notes: 1` or more (in their status, or in the
 //! `addr_update` every link starts with) are sent notes: older apps would
-//! show the message as chat. Receiving one says the same.
+//! show the message as chat. Receiving one says the same (and its `v`,
+//! which version).
+//!
+//! # Reminders (`notes: 2`)
+//!
+//! A note may carry a reminder, `remind: {at?, done?}` (`at` unix ms;
+//! `done` once someone marked it Done on any device). Every device that
+//! has the note shows it at `at` (the apps schedule that; the core only
+//! syncs it). Setting, snoozing (a new `at`) and Done are edits like any
+//! other, so they merge the same way.
+//!
+//! An app from before reminders (`notes: 1`) keeps only the fields it
+//! knows: what it saves or passes on has no `remind` at all, which here
+//! means "unknown", not "no reminder" (an app that knows reminders always
+//! sends `remind`, `{}` for none). So:
+//!
+//! - `remind` goes only to devices that said `notes: 2`, in `notes`
+//!   messages that say `v: 2`; their digests (also `v: 2`) hash the
+//!   reminder too (`full_version`), so two devices that know reminders
+//!   and hold one version with different reminders find out;
+//! - a version with no `remind` takes the one of the version it replaces
+//!   here (an older app's edit of the text keeps the reminder), or the
+//!   one another device has for that very version (`remind` beats none;
+//!   two reminders for one version: Done wins, then the later time, so
+//!   every device ends the same);
+//! - when two edits conflict, the winner keeps a Done made on the other
+//!   side for the same time (marking Done on the phone while the text was
+//!   edited on the computer doesn't bring the reminder back).
+//!
+//! The version hash (`version`) stays as it was, so an older app's
+//! digests and lineage still match.
 //!
 //! Limits: `MAX_NOTES` notes, `MAX_TOTAL` bytes of text in all; past them a
 //! new note isn't made here, nor taken from another device (conflict copies
@@ -106,9 +136,9 @@ const MAX_NAME: usize = 64;
 const MAX_TOKEN: usize = 24;
 
 /// The status (and `addr_update`) flag saying this device understands
-/// notes, and its version.
+/// notes, and its version: 1 notes, 2 reminders too.
 pub const FLAG: &str = "notes";
-const VERSION: u64 = 1;
+const VERSION: u64 = 2;
 
 const KV_KEY: &str = "notes";
 const FILE: &str = "notes.json";
@@ -153,6 +183,34 @@ pub struct Entry {
     /// Edited here since it last went to another device (local only).
     #[serde(default, skip_serializing_if = "not")]
     pub dirty: bool,
+    /// The reminder; none: unknown (the version came from, or through, an
+    /// app before reminders; see "Reminders").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remind: Option<Remind>,
+}
+
+/// A note's reminder. Ordered so that of two for one version Done wins,
+/// then the later time.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
+)]
+pub struct Remind {
+    /// Marked Done (on any device).
+    #[serde(default, skip_serializing_if = "not")]
+    pub done: bool,
+    /// When, unix ms; none: no reminder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<u64>,
+}
+
+impl Remind {
+    /// A reminder as it's kept: Done only means something with a time.
+    pub fn new(at: Option<u64>, done: bool) -> Remind {
+        Remind {
+            done: done && at.is_some(),
+            at,
+        }
+    }
 }
 
 /// Note id -> note.
@@ -174,6 +232,20 @@ impl Entry {
     /// Which version this is, as a hash (digests and lineage).
     pub fn version(&self) -> u64 {
         fnv(&[&self.updated_at.to_le_bytes(), self.by.as_bytes()])
+    }
+
+    /// The version and its reminder, as a hash (digests between devices
+    /// that know reminders).
+    pub fn full_version(&self) -> u64 {
+        let remind = match self.remind {
+            None => vec![0],
+            Some(r) => {
+                let mut b = vec![1, u8::from(r.done), u8::from(r.at.is_some())];
+                b.extend_from_slice(&r.at.unwrap_or(0).to_le_bytes());
+                b
+            }
+        };
+        fnv(&[&self.updated_at.to_le_bytes(), self.by.as_bytes(), &remind])
     }
 
     fn same_version(&self, other: &Entry) -> bool {
@@ -221,10 +293,11 @@ impl Entry {
         }
     }
 
-    /// As it goes to another device.
-    fn wire(&self) -> Entry {
+    /// As it goes to another device (`reminders`: one that knows them).
+    fn wire(&self, reminders: bool) -> Entry {
         Entry {
             dirty: false,
+            remind: if reminders { self.remind } else { None },
             ..self.clone()
         }
     }
@@ -243,6 +316,8 @@ impl Entry {
             by: self.by.clone(),
             by_name: self.by_name.clone(),
             conflict_of: self.conflict_of.clone(),
+            remind_at: self.remind.and_then(|r| r.at),
+            remind_done: self.remind.is_some_and(|r| r.done),
         }
     }
 }
@@ -339,21 +414,36 @@ pub fn parse_digest(v: &Value) -> HashMap<String, u64> {
         .collect()
 }
 
-/// Every note's version, for a `notes_digest`.
-pub fn digest(map: &NoteMap) -> BTreeMap<String, u64> {
+/// The hash a digest names a note by: its version, and with `full` (both
+/// ends know reminders) its reminder too.
+fn hash(e: &Entry, full: bool) -> u64 {
+    if full {
+        e.full_version()
+    } else {
+        e.version()
+    }
+}
+
+/// Every note's version, for a `notes_digest` (`full`: see `hash`).
+pub fn digest(map: &NoteMap, full: bool) -> BTreeMap<String, u64> {
     map.iter()
-        .map(|(id, e)| (id.clone(), e.version()))
+        .map(|(id, e)| (id.clone(), hash(e, full)))
         .collect()
 }
 
 /// What a digest from another device asks of this one: the ids to send it
 /// (its version differs, or it lacks a note that isn't deleted here) and
-/// the ids to ask it for (notes this device doesn't have).
-pub fn diff(map: &NoteMap, theirs: &HashMap<String, u64>) -> (Vec<String>, Vec<String>) {
+/// the ids to ask it for (notes this device doesn't have). `full`: the
+/// digest hashes reminders too (see `hash`).
+pub fn diff(
+    map: &NoteMap,
+    theirs: &HashMap<String, u64>,
+    full: bool,
+) -> (Vec<String>, Vec<String>) {
     let send = map
         .iter()
         .filter(|(id, e)| match theirs.get(*id) {
-            Some(v) => *v != e.version(),
+            Some(v) => *v != hash(e, full),
             None => !e.deleted,
         })
         .map(|(id, _)| id.clone())
@@ -446,6 +536,8 @@ pub fn conflict_copy(loser: &Entry) -> Entry {
         conflict_of: Some(loser.id.clone()),
         seen: Vec::new(),
         dirty: false,
+        // A copy never reminds again (the note it split from does).
+        remind: None,
     }
 }
 
@@ -473,13 +565,31 @@ fn keep_copy(map: &mut NoteMap, loser: &Entry, out: &mut Merged) {
     out.answer.push(id);
 }
 
+/// The reminder `winner` keeps when it replaces (or beats) `other`: its
+/// own, or `other`'s when it has none (unknown: from an app before
+/// reminders); and a Done made on `other`'s side for the same time. True
+/// if `winner` changed.
+fn carry(winner: &mut Entry, other: &Entry) -> bool {
+    match (&mut winner.remind, other.remind) {
+        (w @ None, Some(o)) => {
+            *w = Some(o);
+            true
+        }
+        (Some(w), Some(o)) if w.at == o.at && o.done && !w.done => {
+            w.done = true;
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Merge notes that arrived (checked: `parse`) into `map` (see the module
 /// notes). `now` (unix ms) drops tombstones too old to keep.
 pub fn merge(map: &mut NoteMap, incoming: Vec<Entry>, now: u64) -> Merged {
     let mut out = Merged::default();
-    for inc in incoming {
+    for mut inc in incoming {
         let id = inc.id.clone();
-        let Some(cur) = map.get(&id) else {
+        let Some(cur) = map.get_mut(&id) else {
             let stale = inc.deleted && inc.updated_at.saturating_add(TOMBSTONE_MS) < now;
             if !stale && fits(map, &inc, None) {
                 make_room(map);
@@ -489,10 +599,20 @@ pub fn merge(map: &mut NoteMap, incoming: Vec<Entry>, now: u64) -> Merged {
             continue;
         };
         if cur.same_version(&inc) {
+            // The same version: only its reminder can differ (see
+            // "Reminders"); the greater one is kept everywhere.
+            if let Some(r) = inc.remind.filter(|r| cur.remind.is_none_or(|c| *r > c)) {
+                cur.remind = Some(r);
+                out.changed.push(id);
+            }
             continue;
         }
         if inc.descends_from(cur) {
-            if fits(map, &inc, Some(cur)) {
+            if inc.remind.is_none() {
+                inc.remind = cur.remind;
+            }
+            let cur = map.get(&id);
+            if fits(map, &inc, cur) {
                 map.insert(id.clone(), inc);
                 out.changed.push(id);
             }
@@ -503,19 +623,24 @@ pub fn merge(map: &mut NoteMap, incoming: Vec<Entry>, now: u64) -> Merged {
             continue;
         }
         // A conflict: both were edited since they last agreed.
-        let cur = cur.clone();
-        if inc.wins_over(&cur) {
-            if cur.text_lost_to(&inc) {
-                keep_copy(map, &cur, &mut out);
+        if !inc.wins_over(cur) {
+            if carry(cur, &inc) {
+                out.changed.push(id.clone());
             }
-            map.insert(id.clone(), inc);
-            out.changed.push(id);
-        } else {
+            let cur = cur.clone();
             if inc.text_lost_to(&cur) {
                 keep_copy(map, &inc, &mut out);
             }
             out.answer.push(id);
+            continue;
         }
+        let cur = cur.clone();
+        carry(&mut inc, &cur);
+        if cur.text_lost_to(&inc) {
+            keep_copy(map, &cur, &mut out);
+        }
+        map.insert(id.clone(), inc);
+        out.changed.push(id);
     }
     if prune(map, now) {
         out.changed.retain(|id| map.contains_key(id));
@@ -532,6 +657,8 @@ pub struct Edit {
     pub pinned: bool,
     pub checklist: bool,
     pub color: Option<String>,
+    /// The reminder (none: this end doesn't know reminders).
+    pub remind: Option<Remind>,
 }
 
 /// Save a note here: `id` (none: a new note) with `edit`, as made at `now`
@@ -573,6 +700,7 @@ pub fn put(
             .map(|p| p.created_at)
             .unwrap_or(now),
         conflict_of: prev.and_then(|p| p.conflict_of.clone()),
+        remind: edit.remind.map(|r| Remind::new(r.at, r.done)),
         ..step(prev, me, now)
     };
     if !fits(map, &e, prev) {
@@ -639,28 +767,31 @@ pub fn listed(map: &NoteMap) -> Vec<Note> {
 }
 
 /// Split notes into `notes` messages of at most `BATCH_BYTES` (one note
-/// over that goes alone); `want` rides on the first.
-fn batches(from: &str, notes: Vec<Entry>, want: &[String]) -> Vec<String> {
+/// over that goes alone); `want` rides on the first. Each says `v`, this
+/// end's version; `reminders`: for a device that knows them (else they
+/// stay out).
+fn batches(from: &str, notes: Vec<Entry>, want: &[String], v: u64, reminders: bool) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur: Vec<Value> = Vec::new();
     let mut size = 0;
     let mut want = Some(want);
     let mut flush = |cur: &mut Vec<Value>, want: &mut Option<&[String]>| {
-        let mut msg = json!({ "type": "notes", "from": from, "notes": std::mem::take(cur) });
+        let mut msg =
+            json!({ "type": "notes", "from": from, "v": v, "notes": std::mem::take(cur) });
         if let Some(w) = want.take().filter(|w| !w.is_empty()) {
             msg["want"] = json!(w);
         }
         out.push(msg.to_string());
     };
     for n in notes {
-        let v = serde_json::to_value(n.wire()).unwrap_or_default();
-        let len = v.to_string().len();
+        let one = serde_json::to_value(n.wire(reminders)).unwrap_or_default();
+        let len = one.to_string().len();
         if !cur.is_empty() && size + len > BATCH_BYTES {
             flush(&mut cur, &mut want);
             size = 0;
         }
         size += len;
-        cur.push(v);
+        cur.push(one);
     }
     if !cur.is_empty() || want.is_some_and(|w| !w.is_empty()) {
         flush(&mut cur, &mut want);
@@ -675,7 +806,8 @@ fn batches(from: &str, notes: Vec<Entry>, want: &[String]) -> Vec<String> {
 pub struct Notes {
     /// `None` until read.
     map: Mutex<Option<NoteMap>>,
-    caps: Mutex<HashMap<String, bool>>,
+    /// Node -> the notes version it said (0: none).
+    caps: Mutex<HashMap<String, u64>>,
 }
 
 fn now_ms() -> u64 {
@@ -771,6 +903,10 @@ pub fn save_note<P: Platform>(
 ) -> crate::Result<Note> {
     let (node, name) = me(ctx);
     let now = now_ms();
+    let edit = Edit {
+        remind: edit.remind.filter(|_| ctx.config.note_reminders),
+        ..edit
+    };
     let e = with_map(ctx, |m| {
         let r = put(m, id, edit, (&node, &name), now);
         if r.is_ok() {
@@ -795,45 +931,71 @@ pub fn delete_note<P: Platform>(ctx: &NetCtx<P>, id: &str) -> crate::Result<()> 
     Ok(())
 }
 
-/// Say in this device's status that it understands notes.
+/// This end's notes version: 2 with reminders, 1 without (an app from
+/// before them, as tests play one).
+fn here<P: Platform>(ctx: &NetCtx<P>) -> u64 {
+    if ctx.config.note_reminders {
+        VERSION
+    } else {
+        1
+    }
+}
+
+/// Say in this device's status (or `addr_update`) that it understands
+/// notes, and which version.
 pub fn extend_status<P: Platform>(ctx: &NetCtx<P>, status: &mut Value) {
     if ctx.config.notes {
-        status[FLAG] = VERSION.into();
+        status[FLAG] = here(ctx).into();
     }
 }
 
 /// `node` said (`flag`: the `notes` value of its status or `addr_update`)
-/// whether it understands notes. Kept across restarts; newly understood,
-/// it gets this device's digest now.
+/// whether it understands notes, and which version. Kept across restarts;
+/// newly understood (or newer), it gets this device's digest now.
 pub fn remember<P: Platform>(ctx: &NetCtx<P>, node: &str, flag: &Value) {
-    let on = flag.as_u64().is_some_and(|v| v >= VERSION);
-    if set_caps(ctx, node, on) && on {
+    let level = flag.as_u64().unwrap_or(0);
+    if set_caps(ctx, node, level) && level >= 1 {
         send_digest(ctx, node);
     }
 }
 
 /// True if it changed.
-fn set_caps<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> bool {
-    if node.is_empty() || supports(ctx, node) == on {
+fn set_caps<P: Platform>(ctx: &NetCtx<P>, node: &str, level: u64) -> bool {
+    if node.is_empty() || caps(ctx, node) == level {
         return false;
     }
-    ctx.extras.notes.caps.lock().insert(node.to_string(), on);
-    ctx.platform
-        .kv_set(&format!("{CAPS_PREFIX}{node}"), if on { "1" } else { "" });
+    ctx.extras.notes.caps.lock().insert(node.to_string(), level);
+    let kept = if level == 0 {
+        String::new()
+    } else {
+        level.to_string()
+    };
+    ctx.platform.kv_set(&format!("{CAPS_PREFIX}{node}"), &kept);
     true
+}
+
+/// The notes version `node` said (0: none).
+fn caps<P: Platform>(ctx: &NetCtx<P>, node: &str) -> u64 {
+    if let Some(level) = ctx.extras.notes.caps.lock().get(node) {
+        return *level;
+    }
+    let level = ctx
+        .platform
+        .kv_get(&format!("{CAPS_PREFIX}{node}"))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0);
+    ctx.extras.notes.caps.lock().insert(node.to_string(), level);
+    level
 }
 
 /// `node` said it understands notes.
 pub fn supports<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
-    if let Some(on) = ctx.extras.notes.caps.lock().get(node) {
-        return *on;
-    }
-    let on = ctx
-        .platform
-        .kv_get(&format!("{CAPS_PREFIX}{node}"))
-        .is_some_and(|v| v == "1");
-    ctx.extras.notes.caps.lock().insert(node.to_string(), on);
-    on
+    caps(ctx, node) >= 1
+}
+
+/// Reminders go to `node` (both ends know them).
+pub fn reminders_with<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    ctx.config.note_reminders && caps(ctx, node) >= VERSION
 }
 
 /// A link to `node` just came up: send it the digest.
@@ -851,8 +1013,15 @@ fn send_digest<P: Platform>(ctx: &NetCtx<P>, node: &str) {
         return;
     }
     let (from, _) = me(ctx);
-    let digest = with_map(ctx, |m| (digest(m), false));
-    let msg = json!({ "type": "notes_digest", "from": from, "digest": digest });
+    let full = reminders_with(ctx, node);
+    let digest = with_map(ctx, |m| (digest(m, full), false));
+    let msg = json!({
+        "type": "notes_digest",
+        "from": from,
+        "v": here(ctx),
+        "full": full,
+        "digest": digest,
+    });
     send_control_to(ctx, node, &msg.to_string());
 }
 
@@ -874,7 +1043,8 @@ fn send_notes<P: Platform>(ctx: &NetCtx<P>, node: &str, ids: &[String], want: &[
         }
         (out, cleared)
     });
-    for msg in batches(&from, notes, want) {
+    let reminders = reminders_with(ctx, node);
+    for msg in batches(&from, notes, want, here(ctx), reminders) {
         send_control_to(ctx, node, &msg);
     }
 }
@@ -900,15 +1070,24 @@ impl<P: Platform> ControlHandler<P> for NotesHandler {
         if from.is_empty() || !ctx.peers.lock().contains_key(&from) {
             return; // only your own devices share your notes
         }
-        // Sending it says it understands it.
-        set_caps(ctx, &from, true);
+        // Sending it says it understands it (an app from before
+        // reminders doesn't say `v`: 1).
+        let v = msg.json("v").as_u64().unwrap_or(1).max(1);
+        set_caps(ctx, &from, v);
         if msg.kind() == "notes_digest" {
             let theirs = parse_digest(&msg.json("digest"));
-            let (send, want) = with_map(ctx, |m| (diff(m, &theirs), false));
+            let full = msg.json("full").as_bool() == Some(true) && ctx.config.note_reminders;
+            let (send, want) = with_map(ctx, |m| (diff(m, &theirs, full), false));
             send_notes(ctx, &from, &send, &want);
             return;
         }
-        let incoming = parse(&msg.json("notes"));
+        let mut incoming = parse(&msg.json("notes"));
+        if !ctx.config.note_reminders {
+            // An app from before reminders never kept them.
+            for e in &mut incoming {
+                e.remind = None;
+            }
+        }
         let want: Vec<String> = msg
             .json("want")
             .as_array()
@@ -967,7 +1146,7 @@ mod tests {
     fn sent(from: &mut NoteMap, id: &str) -> Vec<Entry> {
         let e = from.get_mut(id).unwrap();
         e.dirty = false;
-        vec![parse(&json!([e.wire()])).remove(0)]
+        vec![parse(&json!([e.wire(true)])).remove(0)]
     }
 
     #[test]
@@ -1031,7 +1210,7 @@ mod tests {
         assert_eq!(a, b);
         // Each answers with the copy; it changes nothing on the other side.
         assert!(ma.answer.contains(&copy.id) && mb.answer.contains(&copy.id));
-        let again = merge(&mut a, vec![b[&copy.id].wire()], 31);
+        let again = merge(&mut a, vec![b[&copy.id].wire(true)], 31);
         assert_eq!(again, Merged::default());
     }
 
@@ -1126,15 +1305,15 @@ mod tests {
                 ..Entry::default()
             },
         );
-        let theirs: HashMap<String, u64> = digest(&b).into_iter().collect();
-        let (mut send, want) = diff(&a, &theirs);
+        let theirs: HashMap<String, u64> = digest(&b, false).into_iter().collect();
+        let (mut send, want) = diff(&a, &theirs, false);
         send.sort();
         let mut expect = vec![newer.id.clone(), only_a.id.clone()];
         expect.sort();
         // The tombstone isn't sent to a device that never had the note.
         assert_eq!(send, expect);
         assert_eq!(want, ["only-b"]);
-        let wire = serde_json::to_value(digest(&a)).unwrap();
+        let wire = serde_json::to_value(digest(&a, false)).unwrap();
         assert_eq!(parse_digest(&wire).len(), 4);
     }
 
@@ -1225,7 +1404,7 @@ mod tests {
                 ..Entry::default()
             })
             .collect();
-        let msgs = batches("me", notes, &["w".to_string()]);
+        let msgs = batches("me", notes, &["w".to_string()], 2, true);
         assert!(msgs.len() >= 3);
         let parsed: Vec<Value> = msgs
             .iter()
@@ -1239,8 +1418,8 @@ mod tests {
             .sum();
         assert_eq!(total, 10);
         // Only a want: one message with no notes.
-        assert_eq!(batches("me", vec![], &["w".to_string()]).len(), 1);
-        assert!(batches("me", vec![], &[]).is_empty());
+        assert_eq!(batches("me", vec![], &["w".to_string()], 2, true).len(), 1);
+        assert!(batches("me", vec![], &[], 2, true).is_empty());
     }
 
     #[test]
@@ -1288,5 +1467,266 @@ mod tests {
             assert_eq!(r["n"], results[0]["n"]);
         }
         assert_eq!(results[0]["n"].body, "z");
+    }
+
+    fn remind(at: u64, done: bool) -> Option<Remind> {
+        Some(Remind::new(Some(at), done))
+    }
+
+    fn with_remind(title: &str, body: &str, r: Option<Remind>) -> Edit {
+        Edit {
+            remind: r,
+            ..edit(title, body)
+        }
+    }
+
+    /// What `from` would send of note `id` to an app from before
+    /// reminders, as that app keeps it (no `remind`: it doesn't know it).
+    fn sent_to_old(from: &mut NoteMap, id: &str) -> Vec<Entry> {
+        let e = from.get_mut(id).unwrap();
+        e.dirty = false;
+        vec![parse(&json!([e.wire(false)])).remove(0)]
+    }
+
+    #[test]
+    fn a_reminder_and_its_done_sync_like_the_text() {
+        let mut a = NoteMap::new();
+        let n = put(
+            &mut a,
+            None,
+            with_remind("Call", "the bank", remind(1_000, false)),
+            A,
+            10,
+        )
+        .unwrap();
+        let mut b = NoteMap::new();
+        merge(&mut b, sent(&mut a, &n.id), 11);
+        let got = b[&n.id].note();
+        assert_eq!((got.remind_at, got.remind_done), (Some(1_000), false));
+        // Done on b goes back to a.
+        put(
+            &mut b,
+            Some(&n.id),
+            with_remind("Call", "the bank", remind(1_000, true)),
+            B,
+            20,
+        )
+        .unwrap();
+        let m = merge(&mut a, sent(&mut b, &n.id), 21);
+        assert_eq!(m.changed, std::slice::from_ref(&n.id));
+        assert!(a[&n.id].note().remind_done);
+        // Snooze on a: a new time, not done.
+        put(
+            &mut a,
+            Some(&n.id),
+            with_remind("Call", "the bank", remind(5_000, false)),
+            A,
+            30,
+        )
+        .unwrap();
+        merge(&mut b, sent(&mut a, &n.id), 31);
+        let got = b[&n.id].note();
+        assert_eq!((got.remind_at, got.remind_done), (Some(5_000), false));
+        assert_eq!(a, b);
+        // Done without a time means nothing.
+        assert_eq!(Remind::new(None, true), Remind::default());
+        // The wire: a note with no reminder still says so (`{}`) ...
+        let plain = put(
+            &mut a,
+            None,
+            with_remind("x", "", Some(Remind::default())),
+            A,
+            40,
+        )
+        .unwrap();
+        let v = serde_json::to_value(plain.wire(true)).unwrap();
+        assert_eq!(v["remind"], json!({}));
+        // ... and an app from before reminders gets none at all.
+        assert!(serde_json::to_value(plain.wire(false))
+            .unwrap()
+            .get("remind")
+            .is_none());
+    }
+
+    #[test]
+    fn an_older_app_editing_the_text_keeps_the_reminder() {
+        let mut new = NoteMap::new();
+        let n = put(
+            &mut new,
+            None,
+            with_remind("Pay", "rent", remind(9_000, false)),
+            A,
+            10,
+        )
+        .unwrap();
+        // The older app keeps the note, without the reminder ...
+        let mut old = NoteMap::new();
+        merge(&mut old, sent_to_old(&mut new, &n.id), 11);
+        assert_eq!(old[&n.id].remind, None);
+        // ... edits the text (it can't say anything of reminders) ...
+        put(&mut old, Some(&n.id), edit("Pay", "rent and water"), B, 20).unwrap();
+        let back = sent_to_old(&mut old, &n.id);
+        assert_eq!(back[0].remind, None);
+        // ... and the reminder is still there where it's known.
+        let m = merge(&mut new, back, 21);
+        assert_eq!(m.changed, std::slice::from_ref(&n.id));
+        assert!(m.conflicts.is_empty());
+        let got = new[&n.id].note();
+        assert_eq!(got.body, "rent and water");
+        assert_eq!((got.remind_at, got.remind_done), (Some(9_000), false));
+        // Its own lineage still matches: the older app's digest names the
+        // same version, nothing to send either way.
+        let theirs: HashMap<String, u64> = digest(&old, false).into_iter().collect();
+        assert_eq!(diff(&new, &theirs, false), (vec![], vec![]));
+        // Done here, sent to the older app and edited there again: still Done.
+        put(
+            &mut new,
+            Some(&n.id),
+            with_remind("Pay", "rent and water", remind(9_000, true)),
+            A,
+            30,
+        )
+        .unwrap();
+        merge(&mut old, sent_to_old(&mut new, &n.id), 31);
+        put(&mut old, Some(&n.id), edit("Pay", "rent, water"), B, 40).unwrap();
+        merge(&mut new, sent_to_old(&mut old, &n.id), 41);
+        assert!(new[&n.id].note().remind_done);
+        // A conflict with an older app's edit keeps the reminder too.
+        put(
+            &mut new,
+            Some(&n.id),
+            with_remind("Pay", "rent, water", remind(12_000, false)),
+            A,
+            50,
+        )
+        .unwrap();
+        put(
+            &mut old,
+            Some(&n.id),
+            edit("Pay", "rent, water, gas"),
+            B,
+            60,
+        )
+        .unwrap();
+        let m = merge(&mut new, sent_to_old(&mut old, &n.id), 61);
+        assert_eq!(new[&n.id].body, "rent, water, gas");
+        assert_eq!(new[&n.id].remind, remind(12_000, false));
+        assert_eq!(m.conflicts.len(), 1, "the text it beat is kept");
+        assert_eq!(new[&m.conflicts[0]].remind, None, "a copy never reminds");
+    }
+
+    #[test]
+    fn one_version_with_two_reminders_ends_the_same_everywhere() {
+        let base = Entry {
+            id: "n".into(),
+            title: "T".into(),
+            updated_at: 5,
+            by: "o".into(),
+            ..Entry::default()
+        };
+        let none = base.clone();
+        let later = Entry {
+            remind: remind(200, false),
+            ..base.clone()
+        };
+        let done = Entry {
+            remind: remind(100, true),
+            ..base.clone()
+        };
+        // A reminder beats none (one passed on by an older app); Done beats
+        // a later time; and whatever the order, the same.
+        for order in [
+            [&none, &later, &done],
+            [&done, &later, &none],
+            [&later, &none, &done],
+        ] {
+            let mut m = NoteMap::new();
+            for e in order {
+                merge(&mut m, vec![e.clone()], 10);
+            }
+            assert_eq!(m["n"].remind, remind(100, true));
+        }
+        let mut m = NoteMap::new();
+        merge(&mut m, vec![none.clone()], 10);
+        assert_eq!(merge(&mut m, vec![later.clone()], 10).changed, ["n"]);
+        assert!(merge(&mut m, vec![none.clone()], 10).changed.is_empty());
+        // Digests between apps that know reminders tell them apart; the
+        // older apps' don't (the same version).
+        assert_ne!(later.full_version(), none.full_version());
+        assert_ne!(later.full_version(), done.full_version());
+        assert_eq!(later.version(), none.version());
+        let mut x = NoteMap::new();
+        x.insert("n".into(), later);
+        let mut y = NoteMap::new();
+        y.insert("n".into(), none);
+        let theirs: HashMap<String, u64> = digest(&y, true).into_iter().collect();
+        assert_eq!(diff(&x, &theirs, true).0, ["n"]);
+        let theirs: HashMap<String, u64> = digest(&y, false).into_iter().collect();
+        assert!(diff(&x, &theirs, false).0.is_empty());
+    }
+
+    #[test]
+    fn done_on_one_device_survives_an_edit_on_another() {
+        let mut a = NoteMap::new();
+        let n = put(
+            &mut a,
+            None,
+            with_remind("Pills", "after lunch", remind(500, false)),
+            A,
+            10,
+        )
+        .unwrap();
+        let mut b = NoteMap::new();
+        merge(&mut b, sent(&mut a, &n.id), 11);
+        // Apart: a marks it Done, b (later) edits the text.
+        put(
+            &mut a,
+            Some(&n.id),
+            with_remind("Pills", "after lunch", remind(500, true)),
+            A,
+            20,
+        )
+        .unwrap();
+        put(
+            &mut b,
+            Some(&n.id),
+            with_remind("Pills", "after lunch, with water", remind(500, false)),
+            B,
+            30,
+        )
+        .unwrap();
+        let to_b = sent(&mut a, &n.id);
+        let to_a = sent(&mut b, &n.id);
+        merge(&mut a, to_a, 40);
+        let mb = merge(&mut b, to_b, 40);
+        // b's text wins, and the Done stays, on both.
+        assert_eq!(a[&n.id].body, "after lunch, with water");
+        assert_eq!(a[&n.id].remind, remind(500, true));
+        assert!(mb.changed.contains(&n.id), "b's own version took the Done");
+        assert_eq!(b[&n.id].remind, remind(500, true));
+        assert_eq!(a, b);
+        // A Done for an older time doesn't stop a new one set elsewhere.
+        put(
+            &mut a,
+            Some(&n.id),
+            with_remind("Pills", "x", remind(500, true)),
+            A,
+            50,
+        )
+        .unwrap();
+        put(
+            &mut b,
+            Some(&n.id),
+            with_remind("Pills", "y", remind(900, false)),
+            B,
+            60,
+        )
+        .unwrap();
+        let to_b = sent(&mut a, &n.id);
+        let to_a = sent(&mut b, &n.id);
+        merge(&mut a, to_a, 70);
+        merge(&mut b, to_b, 70);
+        assert_eq!(a[&n.id].remind, remind(900, false));
+        assert_eq!(a, b);
     }
 }

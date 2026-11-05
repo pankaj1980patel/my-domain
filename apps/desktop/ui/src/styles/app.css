@@ -3152,3 +3152,120 @@ html:lang(hi) body {
   border: 1px solid var(--border);
   border-radius: var(--r-md);
 }
+
+/* --- Note reminders (note_reminders.rs, NoteReminders.tsx): bell, Upcoming, Remind me --- */
+.bell {
+  flex: none;
+  vertical-align: -2px;
+}
+.notes-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.note-bell {
+  flex: none;
+  display: inline-flex;
+  color: var(--text-2);
+}
+.note-bell-due {
+  color: var(--warning);
+}
+.note-remind {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.note-remind-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+}
+.note-remind-due .note-remind-when {
+  color: var(--warning);
+  font-weight: 600;
+}
+.note-remind-pick {
+  flex-basis: 100%;
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.note-remind-pick p {
+  margin: 0;
+}
+.note-remind-quick,
+.note-remind-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.note-remind-custom input {
+  min-width: 0;
+  max-width: 100%;
+}
+.snooze-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.reminder-stack {
+  position: fixed;
+  top: var(--s-6);
+  right: var(--s-6);
+  display: grid;
+  gap: var(--s-2);
+  width: min(340px, calc(100vw - 32px));
+  z-index: 11;
+}
+.reminder-card {
+  display: grid;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  backdrop-filter: blur(var(--glass-blur));
+  border-left: 4px solid var(--warning);
+  box-shadow: var(--shadow-3);
+  animation: rise var(--normal) var(--ease);
+}
+.reminder-card p {
+  margin: 0;
+}
+.reminder-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--warning);
+}
+.reminder-title {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reminder-close {
+  flex: none;
+}
+.reminder-line {
+  overflow-wrap: anywhere;
+}
+.reminder-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+@media (max-width: 720px) {
+  .reminder-stack {
+    top: 16px;
+    right: 16px;
+  }
+}

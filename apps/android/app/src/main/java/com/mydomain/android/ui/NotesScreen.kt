@@ -1,5 +1,10 @@
 package com.mydomain.android.ui
 
+import android.app.DatePickerDialog
+import android.app.TimePickerDialog
+import android.content.Context
+import android.text.format.DateFormat
+import android.text.format.DateUtils
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -23,6 +28,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -43,6 +49,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
@@ -51,9 +58,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.mydomain.android.NoteReminders
 import com.mydomain.android.R
 import com.mydomain.android.core.DeviceLabels
 import com.mydomain.android.core.Notes
+import com.mydomain.android.core.ReminderPlan
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.niceName
 import com.mydomain.android.core.timeAgo
@@ -64,6 +73,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
 /** How long after the last change a note saves itself. */
 private const val SAVE_AFTER_MS = 600L
@@ -78,6 +88,9 @@ private const val NEW = "\u0000new"
  * editor, which saves itself a moment after you stop typing. Delete has an
  * Undo on the snackbar. A note changed on two devices at once keeps both
  * texts: the one that lost is a separate note, marked as a conflict copy.
+ * A note can remind you at a time ("Remind me"): every device with it shows
+ * the reminder ([NoteReminders] here); a bell marks it in the list, and
+ * "Upcoming" lists those still to come, soonest first.
  *
  * [openNote]: a note to open (a search result), once: [onOpened] says it
  * was, so the shell can forget it.
@@ -116,9 +129,10 @@ fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Un
 @Composable
 private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
+    var upcoming by rememberSaveable { mutableStateOf(false) }
     val all = Notes.sorted()
-    val list = all.filter { Notes.matches(it, query) }
-    val now = System.currentTimeMillis()
+    val list = (if (upcoming) Notes.upcoming() else all).filter { Notes.matches(it, query) }
+    val now = rememberNow()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -138,19 +152,64 @@ private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () ->
                 PrimaryButton(stringResource(R.string.notes_new), onNew)
             }
         }
-        if (all.isEmpty()) {
+        item {
+            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ChoiceButton(stringResource(R.string.notes_filter_all), !upcoming) { upcoming = false }
+                ChoiceButton(stringResource(R.string.notes_filter_upcoming), upcoming) { upcoming = true }
+            }
+        }
+        if (upcoming && list.isEmpty() && query.isBlank()) {
+            item { Muted(stringResource(R.string.notes_no_upcoming)) }
+        } else if (all.isEmpty()) {
             item { EmptyState(stringResource(R.string.notes_empty_title), stringResource(R.string.notes_empty_body)) }
         } else if (list.isEmpty()) {
             item { Muted(stringResource(R.string.notes_no_match, query)) }
         }
-        items(list, key = { it.id }) { n -> NoteRow(n, now) { onOpen(n.id) } }
+        items(list, key = { it.id }) { n -> NoteRow(n, now, upcoming) { onOpen(n.id) } }
     }
+}
+
+/** One of a row of choices: filled when it's the one chosen. */
+@Composable
+private fun ChoiceButton(text: String, on: Boolean, onClick: () -> Unit) {
+    if (on) PrimaryButton(text, onClick, selected = true) else SoftButton(text, onClick, selected = false)
+}
+
+/** Now, every half minute (what's due changes with it). */
+@Composable
+private fun rememberNow(): Long {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000)
+            now = System.currentTimeMillis()
+        }
+    }
+    return now
+}
+
+/** "Thu, 6 Nov, 09:00" (the phone's own date and time style). */
+private fun reminderTime(ctx: Context, at: Long): String = DateUtils.formatDateTime(
+    ctx, at,
+    DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_DATE or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_ALL,
+)
+
+/** A bell: a note with a reminder (warning colour once it's due). */
+@Composable
+private fun ReminderBell(due: Boolean, label: String?) {
+    Icon(
+        Icons.Outlined.Notifications, label,
+        Modifier.padding(horizontal = 2.dp).height(16.dp).width(16.dp),
+        tint = if (due) T.warning else T.text2,
+    )
 }
 
 /** One note in the list: colour mark, title, pinned, conflict, first line. */
 @Composable
-private fun NoteRow(n: NoteItem, now: Long, onOpen: () -> Unit) {
+private fun NoteRow(n: NoteItem, now: Long, upcoming: Boolean, onOpen: () -> Unit) {
+    val ctx = LocalContext.current
     val untitled = stringResource(R.string.notes_untitled)
+    val remindAt = n.remindAt?.takeIf { Notes.pending(n) }
     val snippet = if (n.checklist && Notes.progress(n.body).second > 0) {
         val (done, all) = Notes.progress(n.body)
         stringResource(R.string.notes_progress, done, all)
@@ -167,13 +226,19 @@ private fun NoteRow(n: NoteItem, now: Long, onOpen: () -> Unit) {
                         style = MaterialTheme.typography.titleSmall, color = T.text,
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                     )
+                    if (remindAt != null) {
+                        ReminderBell(remindAt <= now, stringResource(R.string.notes_remind_at, reminderTime(ctx, remindAt)))
+                    }
                     if (n.pinned) Text(stringResource(R.string.notes_pinned), style = MaterialTheme.typography.labelSmall, color = T.accentFg)
                 }
                 if (n.conflictOf != null) ConflictTag()
                 if (snippet.isNotEmpty()) {
                     Text(snippet, style = MaterialTheme.typography.bodySmall, color = T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text(timeAgo(n.updatedAt, now), style = MaterialTheme.typography.labelSmall, color = T.text3)
+                Text(
+                    if (upcoming && remindAt != null) reminderTime(ctx, remindAt) else timeAgo(n.updatedAt, now),
+                    style = MaterialTheme.typography.labelSmall, color = T.text3,
+                )
             }
         }
     }
@@ -208,6 +273,8 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
     var dirty by remember { mutableStateOf(false) }
     var shown by remember { mutableLongStateOf(start?.updatedAt ?: 0L) }
     var deleting by remember { mutableStateOf(false) }
+    // A new note's reminder, until the note is saved (then it's the note's).
+    var newRemind by remember { mutableStateOf<Long?>(null) }
     val current = id?.let { Notes.byId[it] }
     val untitled = stringResource(R.string.notes_untitled)
     val elsewhere = stringResource(R.string.notes_deleted_elsewhere)
@@ -215,7 +282,11 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
     val deletedFmt = stringResource(R.string.notes_deleted)
     val saveLock = remember { Mutex() }
 
-    fun fields() = Notes.Fields(title, body, pinned, checklist, color)
+    fun fields() = Notes.Fields(
+        title, body, pinned, checklist, color,
+        remindAt = if (id != null) current?.remindAt else newRemind,
+        remindDone = current?.remindDone ?: false,
+    )
     fun edit(block: () -> Unit) {
         block()
         dirty = true
@@ -223,7 +294,7 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
 
     // A moment after the last change: save (a new note with nothing in it
     // isn't kept).
-    LaunchedEffect(title, body, pinned, checklist, color, dirty) {
+    LaunchedEffect(title, body, pinned, checklist, color, newRemind, dirty) {
         if (!dirty) return@LaunchedEffect
         delay(SAVE_AFTER_MS)
         val f = fields()
@@ -398,6 +469,53 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
             GhostButton(stringResource(if (asText) R.string.notes_as_list else R.string.notes_as_text), { asText = !asText }, small = true)
             if (asText) Muted(stringResource(R.string.notes_checklist_hint))
         }
+        val snoozedFmt = stringResource(R.string.notes_remind_snoozed)
+        val ctx = LocalContext.current
+        RemindSection(
+            at = fields().remindAt,
+            done = fields().remindDone,
+            unsaved = id == null,
+            onSet = { at ->
+                val i = id
+                if (i == null) {
+                    edit { newRemind = at }
+                } else {
+                    scope.launch {
+                        try {
+                            Notes.setReminder(i, at, false)
+                            error = null
+                        } catch (e: Exception) {
+                            error = friendlyError(e)
+                        }
+                    }
+                }
+            },
+            onDone = {
+                val n = current
+                if (n != null) {
+                    scope.launch {
+                        try {
+                            Notes.setReminder(n.id, n.remindAt, true)
+                        } catch (e: Exception) {
+                            error = friendlyError(e)
+                        }
+                    }
+                }
+            },
+            onSnooze = { s ->
+                val n = current
+                if (n != null) {
+                    scope.launch {
+                        try {
+                            val saved = Notes.setReminder(n.id, ReminderPlan.snoozeUntil(s, System.currentTimeMillis()), false)
+                            saved.remindAt?.let { toast(String.format(snoozedFmt, reminderTime(ctx, it))) }
+                        } catch (e: Exception) {
+                            error = friendlyError(e)
+                        }
+                    }
+                }
+            },
+        )
         if (Notes.tooLong(body)) ErrorText(stringResource(R.string.notes_too_long))
         error?.let { ErrorText(it) }
         Muted(
@@ -412,4 +530,100 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
             },
         )
     }
+}
+
+/**
+ * "Remind me": the note's reminder, with quick picks (Later today,
+ * Tomorrow, Next week) and Android's date and time pickers; Done and
+ * Snooze once it's due. Says so when Android only allows inexact alarms.
+ */
+@Composable
+private fun RemindSection(
+    at: Long?,
+    done: Boolean,
+    unsaved: Boolean,
+    onSet: (Long?) -> Unit,
+    onDone: () -> Unit,
+    onSnooze: (ReminderPlan.Snooze) -> Unit,
+) {
+    val ctx = LocalContext.current
+    val now = rememberNow()
+    var picking by remember { mutableStateOf(false) }
+    val due = at != null && !done && at <= now
+    Column(
+        Modifier.fillMaxWidth().background(
+            if (due) T.warning.copy(alpha = 0.18f) else T.border.copy(alpha = 0.25f), MaterialTheme.shapes.small,
+        ).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (at == null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ReminderBell(false, null)
+                GhostButton(stringResource(R.string.notes_remind_me), { picking = !picking }, small = true)
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ReminderBell(due, null)
+                val whenText = reminderTime(ctx, at)
+                Text(
+                    when {
+                        done -> stringResource(R.string.notes_remind_done_at, whenText)
+                        due -> stringResource(R.string.notes_remind_due, whenText)
+                        else -> stringResource(R.string.notes_remind_at, whenText)
+                    },
+                    style = MaterialTheme.typography.bodyMedium, color = T.text,
+                    fontWeight = if (due) FontWeight.Bold else null,
+                )
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (due) PrimaryButton(stringResource(R.string.notes_remind_done), onDone)
+                GhostButton(stringResource(R.string.notes_remind_change), { picking = !picking }, small = true)
+                GhostButton(stringResource(R.string.notes_remind_remove), { onSet(null) }, small = true)
+            }
+            if (due) {
+                Text(stringResource(R.string.notes_remind_snooze), style = MaterialTheme.typography.labelLarge, color = T.text2)
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    SoftButton(stringResource(R.string.notes_remind_snooze_10m), { onSnooze(ReminderPlan.Snooze.TEN_MIN) })
+                    SoftButton(stringResource(R.string.notes_remind_snooze_1h), { onSnooze(ReminderPlan.Snooze.HOUR) })
+                    SoftButton(stringResource(R.string.notes_remind_snooze_tomorrow), { onSnooze(ReminderPlan.Snooze.TOMORROW) })
+                }
+            }
+        }
+        if (picking) {
+            val set = { t: Long ->
+                picking = false
+                onSet(t)
+            }
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ReminderPlan.laterToday(now)?.let { t -> SoftButton(stringResource(R.string.notes_remind_later_today), { set(t) }) }
+                SoftButton(stringResource(R.string.notes_remind_tomorrow), { set(ReminderPlan.tomorrowMorning(now)) })
+                SoftButton(stringResource(R.string.notes_remind_next_week), { set(ReminderPlan.nextWeek(now)) })
+            }
+            GhostButton(stringResource(R.string.notes_remind_pick), {
+                pickDateTime(ctx, at?.takeIf { !done } ?: ReminderPlan.tomorrowMorning(now), set)
+            }, small = true)
+            Muted(stringResource(R.string.notes_remind_hint))
+        }
+        if (unsaved && at != null) Muted(stringResource(R.string.notes_remind_save_first))
+        if (at != null && !done && !NoteReminders.exactAllowed(ctx)) {
+            Muted(stringResource(R.string.notes_remind_inexact))
+            GhostButton(stringResource(R.string.notes_remind_allow_exact), { NoteReminders.askExact(ctx) }, small = true)
+        }
+    }
+}
+
+/** Android's date picker, then its time picker, starting at [start]. */
+private fun pickDateTime(ctx: Context, start: Long, onPicked: (Long) -> Unit) {
+    val c = Calendar.getInstance().apply { timeInMillis = start }
+    DatePickerDialog(ctx, { _, y, m, d ->
+        TimePickerDialog(ctx, { _, h, min ->
+            val picked = Calendar.getInstance().apply {
+                set(y, m, d, h, min, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            onPicked(picked.timeInMillis)
+        }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), DateFormat.is24HourFormat(ctx)).show()
+    }, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH)).apply {
+        datePicker.minDate = System.currentTimeMillis() - 1000
+    }.show()
 }

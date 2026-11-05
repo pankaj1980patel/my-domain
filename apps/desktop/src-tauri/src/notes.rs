@@ -7,7 +7,7 @@
 
 use mdcore::model::Note;
 use mdcore::CoreError;
-use tauri::State;
+use tauri::{AppHandle, State};
 
 use crate::Eng;
 
@@ -30,6 +30,10 @@ pub struct NoteView {
     pub by_name: String,
     /// A conflict copy: the note it split from.
     pub conflict_of: Option<String>,
+    /// A reminder: when (unix ms) ...
+    pub remind_at: Option<f64>,
+    /// ... and marked Done (on any device).
+    pub remind_done: bool,
 }
 
 impl From<Note> for NoteView {
@@ -46,6 +50,8 @@ impl From<Note> for NoteView {
             by: n.by,
             by_name: n.by_name,
             conflict_of: n.conflict_of,
+            remind_at: n.remind_at.map(|t| t as f64),
+            remind_done: n.remind_done,
         }
     }
 }
@@ -59,8 +65,10 @@ pub fn notes_list(engine: State<Eng>) -> Vec<NoteView> {
 
 /// Save a note (`id` null: a new one; a deleted one comes back, which is
 /// how Undo works). Goes to your other devices. Answers with it as saved.
+/// `remind_at` (unix ms, null: none) and `remind_done`: its reminder.
 #[tauri::command]
 #[specta::specta]
+#[allow(clippy::too_many_arguments)]
 pub fn note_save(
     id: Option<String>,
     title: String,
@@ -68,23 +76,33 @@ pub fn note_save(
     pinned: bool,
     checklist: bool,
     color: Option<String>,
+    remind_at: Option<f64>,
+    remind_done: bool,
+    app: AppHandle,
     engine: State<Eng>,
 ) -> Result<NoteView, CoreError> {
-    engine
-        .save_note(
-            id.as_deref(),
-            &title,
-            &body,
-            pinned,
-            checklist,
-            color.as_deref(),
-        )
-        .map(Into::into)
+    let remind_at = remind_at
+        .filter(|t| t.is_finite() && *t > 0.0)
+        .map(|t| t as u64);
+    let saved = engine.save_note(
+        id.as_deref(),
+        &title,
+        &body,
+        pinned,
+        checklist,
+        color.as_deref(),
+        remind_at,
+        remind_done,
+    )?;
+    crate::note_reminders::changed(&app);
+    Ok(saved.into())
 }
 
 /// Delete a note on all your devices.
 #[tauri::command]
 #[specta::specta]
-pub fn note_delete(id: String, engine: State<Eng>) -> Result<(), CoreError> {
-    engine.delete_note(&id)
+pub fn note_delete(id: String, app: AppHandle, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.delete_note(&id)?;
+    crate::note_reminders::changed(&app);
+    Ok(())
 }

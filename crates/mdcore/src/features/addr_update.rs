@@ -38,9 +38,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         if ctx.config.shared_labels {
             msg[super::labels::FLAG] = 1.into();
         }
-        if ctx.config.notes {
-            msg[super::notes::FLAG] = 1.into();
-        }
+        super::notes::extend_status(ctx, &mut msg);
         msg.to_string()
     };
     let targets: Vec<String> = match peers {

@@ -65,6 +65,10 @@
          background (a full-screen notification), and back after a restart. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Note reminders on time (NoteReminders.kt). Only so you can allow it
+         in Android 12+'s "Alarms & reminders" when this app targets it; the
+         app never asks on its own, and falls back to inexact alarms. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
     <application
         android:allowBackup="true"
@@ -105,6 +109,11 @@
         <!-- A computer's notification swiped away here (ComputerNotifs.kt). -->
         <receiver
             android:name=".ComputerNotifReceiver"
+            android:exported="false" />
+
+        <!-- Note reminders: the alarm, and a reminder's Done / Snooze. -->
+        <receiver
+            android:name=".NoteReminderReceiver"
             android:exported="false" />
 
         <!-- The receiving-file notification's Cancel action. -->

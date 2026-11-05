@@ -11,7 +11,7 @@ import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type Comp
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { niceName } from "./words";
-import { applyNotesChanged, loadNotes, type Note } from "./notes";
+import { applyNotesChanged, loadNotes, onReminder, type Note } from "./notes";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
@@ -509,6 +509,8 @@ export async function startEvents() {
     on<Record<string, DeviceLabel>>("device-labels", (labels) => setState("labels", reconcile(labels ?? {}))),
     // Notes changed on your other devices (and ones deleted there).
     on<{ notes: Note[]; removed: string[] }>("notes-changed", applyNotesChanged),
+    // A note's reminder came due here (the backend showed it too).
+    on<Note>("note-reminder", onReminder),
     // Synced folders: the whole list, whenever any of them changes.
     on<{ pairs: SyncPair[] }>("sync-pairs", ({ pairs }) => setState("syncPairs", reconcile(pairs ?? []))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
