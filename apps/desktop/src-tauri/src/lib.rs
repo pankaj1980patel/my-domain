@@ -37,6 +37,7 @@ mod quiet;
 mod remote_input;
 mod schedule;
 mod screen_share;
+mod search;
 mod send_to;
 mod shortcut;
 mod shortcuts;
@@ -1546,7 +1547,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync_folders::sync_now,
         sync_folders::sync_max_size_mb,
         sync_folders::sync_set_max_size_mb,
-        sync_folders::sync_open_folder
+        sync_folders::sync_open_folder,
+        search::search
     ])
 }
 

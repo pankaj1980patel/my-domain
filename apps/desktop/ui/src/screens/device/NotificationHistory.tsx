@@ -15,12 +15,15 @@ import {
   type HistoryEntry,
   type HistoryPage,
 } from "../../lib/core";
+import { foundId, foundTarget, isFound } from "../../lib/search";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
 /** Rows shown at first, and added by "Show more". */
 const PAGE = 100;
+/** The most one page holds (notif_history.rs), to show one a search opened. */
+const ALL = 500;
 
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
 
@@ -53,6 +56,15 @@ export default function NotificationHistory(props: { node: string }) {
   onMount(() => mutedApps().then(setMuted).catch(() => {}));
   // A new search or app starts from the top again.
   createEffect(on([query, app, () => props.node], () => setLimit(PAGE), { defer: true }));
+  // A notification opened from a search: all of them, so it's in the list.
+  createEffect(
+    on(foundTarget, (x) => {
+      if (x?.kind !== "notifications" || x.node !== props.node) return;
+      setQuery("");
+      setApp(null);
+      queueMicrotask(() => setLimit(ALL));
+    }),
+  );
   createEffect(
     on([() => props.node, query, app, limit, historyTick], ([node, q, a, l]) => {
       const mine = ++asked;
@@ -153,7 +165,12 @@ export default function NotificationHistory(props: { node: string }) {
                   <ul class="notif-list history-rows">
                     <For each={d.rows}>
                       {(e) => (
-                        <li class="notif" classList={{ "history-dismissed": e.dismissed }}>
+                        <li
+                          class="notif"
+                          id={foundId("notifications", e.id)}
+                          tabIndex={-1}
+                          classList={{ "history-dismissed": e.dismissed, "found-target": isFound("notifications", e.id) }}
+                        >
                           <div class="row">
                             <span class="small muted grow notif-app">{e.app || name()}</span>
                             <Show when={e.dismissed}>

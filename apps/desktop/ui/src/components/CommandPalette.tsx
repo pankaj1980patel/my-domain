@@ -8,6 +8,12 @@
 // Actions that need more from you (a number to call, a lost-mode message)
 // open the device's page instead of running blind. Ones that can't run now
 // show greyed with the reason. The last few run come first.
+//
+// Below the actions, what you typed is also searched across what this
+// computer keeps (lib/search.ts): messages, clipboard, notifications, files,
+// synced folders, Help and more, a few per group, with the words marked.
+// Enter on one opens it where it lives; the last option opens the Search
+// screen with every result.
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
@@ -32,6 +38,8 @@ import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../l
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { TOPICS } from "../help/topics";
+import { KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup } from "../lib/search";
+import { FoundText } from "./Found";
 import { t, tn, type Key } from "../i18n";
 
 export type Place = "home" | "activity" | "transfers" | "settings" | "help";
@@ -50,6 +58,21 @@ type Cmd = {
 const RECENT_KEY = "palette.recent";
 const MAX_RECENT = 8;
 const MAX_SHOWN = 60;
+/** Search results per group in the palette (the Search screen has more). */
+const FOUND_PER_GROUP = 3;
+/** How long typing must pause before searching. */
+const SEARCH_DELAY = 120;
+
+/** One row of the list: an action, a search result, or "see all". */
+type Entry = { type: "cmd"; cmd: Cmd } | { type: "hit"; hit: Found } | { type: "all" };
+
+/** The palette action a result would repeat (devices, Help, Settings). */
+function sameAs(f: Found): string | null {
+  if (f.kind === "devices") return `open:${f.id}`;
+  if (f.kind === "help") return `place.help.${f.id}`;
+  if (f.kind === "settings") return `place.settings.${f.id}`;
+  return null;
+}
 
 function loadRecent(): string[] {
   try {
@@ -205,12 +228,20 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
   return out;
 }
 
-export default function CommandPalette(props: { onDevice: (node: string) => void; onPlace: (place: Place, section?: string) => void }) {
+export default function CommandPalette(props: {
+  onDevice: (node: string) => void;
+  onPlace: (place: Place, section?: string) => void;
+  /** Open a search result where it lives. */
+  onFound: (f: Found) => void;
+  /** The Search screen, with this query. */
+  onSearch: (query: string) => void;
+}) {
   const [open, setOpen] = createSignal(false);
   const [query, setQuery] = createSignal("");
   const [active, setActive] = createSignal(0);
   const [recent, setRecent] = createSignal<string[]>(loadRecent());
   const [local, setLocal] = createSignal<LocalActions>();
+  const [found, setFound] = createSignal<FoundGroup[]>([]);
   let input: HTMLInputElement | undefined;
   let dialog: HTMLDivElement | undefined;
   let list: HTMLUListElement | undefined;
@@ -219,6 +250,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
   const show = () => {
     returnFocus = document.activeElement as HTMLElement | null;
     setQuery("");
+    setFound([]);
     setActive(0);
     setOpen(true);
     queueMicrotask(() => input?.focus());
@@ -282,6 +314,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
       section("shortcuts", "shortcuts.title"),
       section("key", "settings.deviceKey"),
       section("appearance", "settings.appearance"),
+      { id: "place.search", label: t("palette.search"), group, run: () => props.onSearch("") },
       { id: "place.help", label: t("palette.help"), group, run: go("help") },
       ...TOPICS.map((topic) => ({
         id: `place.help.${topic.id}`,
@@ -322,6 +355,47 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
     return [...first, ...rest].slice(0, MAX_SHOWN);
   });
 
+  // Search what this computer keeps, once typing pauses.
+  let asked = 0;
+  let timer: number | undefined;
+  createEffect(
+    on(query, (q) => {
+      const mine = ++asked;
+      clearTimeout(timer);
+      if (!queryWords(q).length) {
+        setFound([]);
+        return;
+      }
+      timer = window.setTimeout(() => {
+        searchAll(q, { limit: FOUND_PER_GROUP + 2 }).then(
+          (groups) => mine === asked && open() && setFound(groups),
+          () => {},
+        );
+      }, SEARCH_DELAY);
+    }),
+  );
+  onCleanup(() => clearTimeout(timer));
+
+  /** The search results not already in the actions, a few per group. */
+  const groups = createMemo(() => {
+    const ids = new Set(shown().map((c) => c.id));
+    return found()
+      .map((g) => ({ ...g, hits: g.hits.filter((h) => !ids.has(sameAs(h) ?? "")).slice(0, FOUND_PER_GROUP) }))
+      .filter((g) => g.hits.length > 0);
+  });
+  const words = createMemo(() => queryWords(query()));
+
+  /** Every row in order: actions, results by group, then "see all". */
+  const entries = createMemo<Entry[]>(() => [
+    ...shown().map((cmd): Entry => ({ type: "cmd", cmd })),
+    ...groups().flatMap((g) => g.hits.map((hit): Entry => ({ type: "hit", hit }))),
+    ...(words().length ? [{ type: "all" } as Entry] : []),
+  ]);
+  /** Where each group's rows start in `entries`. */
+  const groupStart = (gi: number) => shown().length + groups().slice(0, gi).reduce((n, g) => n + g.hits.length, 0);
+  const hitCount = () => groups().reduce((n, g) => n + g.hits.length, 0);
+  const lastIndex = () => entries().length - 1;
+
   // A new search starts at the top.
   createEffect(on(query, () => setActive(0), { defer: true }));
   // Keep the highlighted one in view.
@@ -333,7 +407,7 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
   );
 
   const optionId = (i: number) => `palette-opt-${i}`;
-  const current = () => shown()[active()];
+  const current = () => entries()[active()];
 
   const runCmd = (c: Cmd | undefined) => {
     if (!c) return;
@@ -353,8 +427,17 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
     }
   };
 
+  const runEntry = (e: Entry | undefined) => {
+    if (!e) return;
+    if (e.type === "cmd") return runCmd(e.cmd);
+    const q = query();
+    close();
+    if (e.type === "hit") props.onFound(e.hit);
+    else props.onSearch(q);
+  };
+
   const move = (by: number) => {
-    const n = shown().length;
+    const n = entries().length;
     if (!n) return;
     setActive((i) => (i + by + n) % n);
   };
@@ -378,12 +461,12 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
       case "End":
         if (e.ctrlKey || e.metaKey) {
           e.preventDefault();
-          setActive(Math.max(0, shown().length - 1));
+          setActive(Math.max(0, lastIndex()));
         }
         break;
       case "Enter":
         e.preventDefault();
-        runCmd(current());
+        runEntry(current());
         break;
       case "Escape":
         e.preventDefault();
@@ -436,14 +519,17 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
             onInput={(e) => setQuery(e.currentTarget.value)}
           />
           <ul class="palette-list" id="palette-list" role="listbox" aria-label={t("palette.results")} ref={list}>
-            <For
-              each={shown()}
-              fallback={
-                <li class="palette-empty muted small" role="presentation">
-                  {t("palette.none", { query: query() })}
-                </li>
-              }
-            >
+            <Show when={!shown().length && !hitCount()}>
+              <li class="palette-empty muted small" role="presentation">
+                {t("palette.none", { query: query() })}
+              </li>
+            </Show>
+            <Show when={shown().length > 0 && hitCount() > 0}>
+              <li class="palette-heading small" role="presentation" aria-hidden="true">
+                {t("palette.commands")}
+              </li>
+            </Show>
+            <For each={shown()}>
               {(c, i) => (
                 <li
                   id={optionId(i())}
@@ -470,10 +556,61 @@ export default function CommandPalette(props: { onDevice: (node: string) => void
                 </li>
               )}
             </For>
+            <For each={groups()}>
+              {(g, gi) => (
+                <li role="group" class="palette-section" aria-labelledby={`palette-group-${g.kind}`}>
+                  <div class="palette-heading small" id={`palette-group-${g.kind}`}>
+                    {t(KIND_LABEL[g.kind])}
+                  </div>
+                  <ul class="palette-sublist" role="presentation">
+                    <For each={g.hits}>
+                      {(h, hi) => {
+                        const i = () => groupStart(gi()) + hi();
+                        return (
+                          <li
+                            id={optionId(i())}
+                            class="palette-option palette-found"
+                            classList={{ "palette-active": i() === active() }}
+                            role="option"
+                            aria-selected={i() === active()}
+                            onMouseMove={() => i() !== active() && setActive(i())}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => runEntry({ type: "hit", hit: h })}
+                          >
+                            <FoundText f={h} words={words()} class="palette-text" />
+                          </li>
+                        );
+                      }}
+                    </For>
+                  </ul>
+                </li>
+              )}
+            </For>
+            <Show when={words().length > 0}>
+              <li
+                id={optionId(lastIndex())}
+                class="palette-option palette-all"
+                classList={{ "palette-active": lastIndex() === active() }}
+                role="option"
+                aria-selected={lastIndex() === active()}
+                onMouseMove={() => active() !== lastIndex() && setActive(lastIndex())}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => runEntry({ type: "all" })}
+              >
+                <span class="palette-text">
+                  <span class="palette-label">{t("palette.allResults", { query: query().trim() })}</span>
+                </span>
+                <span class="palette-group small">{t("palette.searchScreen")}</span>
+              </li>
+            </Show>
           </ul>
           {/* How many match, said after typing (the list itself isn't live). */}
           <p class="sr-only" role="status">
-            {shown().length ? tn("a11y.paletteCount", shown().length) : t("palette.none", { query: query() })}
+            {hitCount()
+              ? `${tn("a11y.paletteCount", shown().length)}, ${tn("a11y.foundCount", hitCount())}`
+              : shown().length
+                ? tn("a11y.paletteCount", shown().length)
+                : t("palette.none", { query: query() })}
           </p>
           <p class="palette-hint muted small" aria-hidden="true">
 

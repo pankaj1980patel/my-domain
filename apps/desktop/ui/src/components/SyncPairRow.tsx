@@ -14,6 +14,7 @@ import {
   syncRemove,
   type SyncPair,
 } from "../lib/core";
+import { foundId, isFound } from "../lib/search";
 import { friendlyError, timeAgo } from "../lib/words";
 import { toast } from "./ui";
 import { t, tn, type Key } from "../i18n";
@@ -80,7 +81,12 @@ export function SyncPairRow(props: { pair: SyncPair; showDevice?: boolean }) {
   });
 
   return (
-    <li class="sync-pair" classList={{ "sync-pair-problem": p().state === "error" }}>
+    <li
+      class="sync-pair"
+      id={foundId("folders", p().id)}
+      tabIndex={-1}
+      classList={{ "sync-pair-problem": p().state === "error", "found-target": isFound("folders", p().id) }}
+    >
       <div class="sync-pair-head">
         <strong class="sync-pair-name">{p().name}</strong>
         <span class={`sync-badge sync-badge-${p().state}`}>{stateLine(p())}</span>

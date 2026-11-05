@@ -5,12 +5,15 @@
 
 import { createEffect, createSignal, For, on, Show } from "solid-js";
 import { clearClipHistoryOf, clipHistory, clipTick, copyText, peerName, sendClipAgain, type ClipPage } from "../../lib/core";
+import { foundId, foundTarget, isFound } from "../../lib/search";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
 /** Rows shown at first, and added by "Show more". */
 const PAGE = 50;
+/** Every kept clip (clip_history.rs keeps 200), to show one a search opened. */
+const ALL = 200;
 
 /** The time, with the date when it wasn't today. */
 function whenOf(ts: number, now = new Date()): string {
@@ -29,6 +32,14 @@ export default function ClipHistoryTile(props: { node: string }) {
 
   // A new search starts from the top again.
   createEffect(on([query, () => props.node], () => setLimit(PAGE), { defer: true }));
+  // A clip opened from a search: every clip, so it's in the list.
+  createEffect(
+    on(foundTarget, (x) => {
+      if (x?.kind !== "clipboard" || x.node !== props.node) return;
+      setQuery("");
+      queueMicrotask(() => setLimit(ALL));
+    }),
+  );
   createEffect(
     on([() => props.node, query, limit, clipTick], ([node, q, l]) => {
       const mine = ++asked;
@@ -78,7 +89,12 @@ export default function ClipHistoryTile(props: { node: string }) {
           <ul class="clip-log">
             <For each={page().entries}>
               {(e) => (
-                <li class="clip-log-row">
+                <li
+                  class="clip-log-row"
+                  id={foundId("clipboard", e.id)}
+                  tabIndex={-1}
+                  classList={{ "found-target": isFound("clipboard", e.id) }}
+                >
                   <span
                     class="clip-log-dir"
                     role="img"

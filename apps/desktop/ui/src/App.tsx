@@ -1,12 +1,12 @@
 // App shell: sign in first, then a sidebar with Devices / Activity /
-// Transfers / Settings / Help. A device opens its detail page; the Developer screen
+// Transfers / Search / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
 import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
 import { dismissRing, onOpenDevice, peerName, resume, state } from "./lib/core";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
-import { Toasts } from "./components/ui";
+import { toast, Toasts } from "./components/ui";
 import CommandPalette, { type Place } from "./components/CommandPalette";
 import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
@@ -19,12 +19,14 @@ import Transfers from "./screens/Transfers";
 import Settings from "./screens/Settings";
 import Developer from "./screens/Developer";
 import Help from "./screens/Help";
+import Search from "./screens/Search";
+import { revealFound, type Found } from "./lib/search";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 
-type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string };
+type View = { name: "home" } | { name: "device"; node: string } | { name: "activity" } | { name: "transfers" } | { name: "settings" } | { name: "developer" } | { name: "help"; topic?: string } | { name: "search"; query?: string };
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -47,6 +49,7 @@ export default function App() {
     settings: "nav.settings",
     developer: "nav.settings",
     help: "nav.help",
+    search: "nav.search",
   };
   createEffect(
     on(
@@ -78,6 +81,34 @@ export default function App() {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ block: "start" })),
     );
+  };
+  // A search result opens where it lives: a device's page with that
+  // message, clip, notification or folder brought into view and marked;
+  // Transfers with that file; the Settings section; the Help topic.
+  const openFound = (f: Found) => {
+    const missing = () => toast(t("search.gone"));
+    switch (f.kind) {
+      case "devices":
+        return go({ name: "device", node: f.id });
+      case "messages":
+      case "clipboard":
+      case "notifications":
+      case "folders":
+        if (!f.node) return;
+        go({ name: "device", node: f.node });
+        return revealFound({ kind: f.kind, id: f.id, node: f.node }, missing);
+      case "transfers":
+        go({ name: "transfers" });
+        return revealFound({ kind: f.kind, id: f.id, node: f.node }, missing);
+      case "automations":
+      case "schedules":
+      case "shortcuts":
+        return goPlace("settings", `settings-${f.kind}`);
+      case "settings":
+        return goPlace("settings", `settings-${f.id}`);
+      case "help":
+        return go({ name: "help", topic: f.id });
+    }
   };
   // A "?" next to a setting opens its Help topic.
   setHelpOpener((topic) => go({ name: "help", topic }));
@@ -149,6 +180,15 @@ export default function App() {
               </li>
               <li>
                 <button
+                  class={`nav-item ${is("search") ? "active" : ""}`}
+                  aria-current={is("search") ? "page" : undefined}
+                  onClick={() => go({ name: "search" })}
+                >
+                  {t("nav.search")}
+                </button>
+              </li>
+              <li>
+                <button
                   class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`}
                   aria-current={is("settings") || is("developer") ? "page" : undefined}
                   onClick={() => go({ name: "settings" })}
@@ -213,13 +253,21 @@ export default function App() {
               <Match when={view().name === "help" && view()}>
                 {(v) => <Help topic={(v() as { topic?: string }).topic} onTopic={(topic) => go({ name: "help", topic })} />}
               </Match>
+              <Match when={view().name === "search" && view()}>
+                {(v) => <Search query={(v() as { query?: string }).query} onOpen={openFound} />}
+              </Match>
               <Match when={view().name === "developer"}>
                 <Developer onBack={() => go({ name: "settings" })} />
               </Match>
             </Switch>
           </main>
         </div>
-        <CommandPalette onDevice={(node) => go({ name: "device", node })} onPlace={goPlace} />
+        <CommandPalette
+          onDevice={(node) => go({ name: "device", node })}
+          onPlace={goPlace}
+          onFound={openFound}
+          onSearch={(query) => go({ name: "search", query })}
+        />
         <CallOverlay />
         <SendToPicker />
         </Show>

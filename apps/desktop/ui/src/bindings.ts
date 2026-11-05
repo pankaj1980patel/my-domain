@@ -473,6 +473,13 @@ export const commands = {
 	 *  path: the UI can't open anything else through this).
 	 */
 	syncOpenFolder: (id: string) => typedError<null, string>(__TAURI_INVOKE("sync_open_folder", { id })),
+	/**
+	 *  Search what this computer keeps for `query` (every word, ignoring case
+	 *  and accents): for each kind (`KINDS`; all when `kinds` is none or
+	 *  empty) its best `limit_per_kind` hits and how many matched. `filter`
+	 *  narrows to a device and a time span. Only local data is read.
+	 */
+	search: (query: string, limitPerKind: number, kinds: string[] | null, filter: SearchFilter_Deserialize | null) => __TAURI_INVOKE<SearchResults_Serialize>("search", { query, limitPerKind, kinds, filter }),
 };
 
 /* Types */
@@ -1380,6 +1387,113 @@ export type Schedule_Serialize = {
 	enabled: boolean,
 	/**  The last time it ran, as local "YYYY-MM-DDTHH:MM" (its slot). */
 	last_run: string | null,
+};
+
+/**
+ *  Narrowing a search: one device, and a time span (ms since 1970, either
+ *  end open). With a span, items that have no time are left out.
+ */
+export type SearchFilter = SearchFilter_Serialize | SearchFilter_Deserialize;
+
+/**
+ *  Narrowing a search: one device, and a time span (ms since 1970, either
+ *  end open). With a span, items that have no time are left out.
+ */
+export type SearchFilter_Deserialize = {
+	node?: string | null,
+	since?: number | null,
+	until?: number | null,
+};
+
+/**
+ *  Narrowing a search: one device, and a time span (ms since 1970, either
+ *  end open). With a span, items that have no time are left out.
+ */
+export type SearchFilter_Serialize = {
+	node: string | null,
+	since: number | null,
+	until: number | null,
+};
+
+/**  The hits of one kind, best first, and how many matched in all. */
+export type SearchGroup = SearchGroup_Serialize | SearchGroup_Deserialize;
+
+/**  The hits of one kind, best first, and how many matched in all. */
+export type SearchGroup_Deserialize = {
+	kind: string,
+	total: number,
+	hits: SearchHit_Deserialize[],
+};
+
+/**  The hits of one kind, best first, and how many matched in all. */
+export type SearchGroup_Serialize = {
+	kind: string,
+	total: number,
+	hits: SearchHit_Serialize[],
+};
+
+/**  One thing found. */
+export type SearchHit = SearchHit_Serialize | SearchHit_Deserialize;
+
+/**  One thing found. */
+export type SearchHit_Deserialize = {
+	/**
+	 *  Its id in its own list (a clip's number, a transfer's id, a node id
+	 *  for a device…), for opening it.
+	 */
+	id: string,
+	/**  What to show first: a name, a title, or the clip's text. */
+	title: string,
+	/**  A line of its text around the first match ("" when none). */
+	detail: string,
+	/**  The device it belongs to, if any. */
+	node?: string | null,
+	/**  When, in ms since 1970, if it has a time. */
+	ts?: number | null,
+	/**
+	 *  A kind's own short note: a clip's way ("in" / "out"), a
+	 *  notification's app, a transfer's state ("active" / "done" /
+	 *  "failed"), a folder's state, a shortcut's keys.
+	 */
+	tag?: string | null,
+	score: number | null,
+};
+
+/**  One thing found. */
+export type SearchHit_Serialize = {
+	/**
+	 *  Its id in its own list (a clip's number, a transfer's id, a node id
+	 *  for a device…), for opening it.
+	 */
+	id: string,
+	/**  What to show first: a name, a title, or the clip's text. */
+	title: string,
+	/**  A line of its text around the first match ("" when none). */
+	detail: string,
+	/**  The device it belongs to, if any. */
+	node: string | null,
+	/**  When, in ms since 1970, if it has a time. */
+	ts: number | null,
+	/**
+	 *  A kind's own short note: a clip's way ("in" / "out"), a
+	 *  notification's app, a transfer's state ("active" / "done" /
+	 *  "failed"), a folder's state, a shortcut's keys.
+	 */
+	tag: string | null,
+	score: number | null,
+};
+
+/**  Every kind that had a match, in `KINDS` order. */
+export type SearchResults = SearchResults_Serialize | SearchResults_Deserialize;
+
+/**  Every kind that had a match, in `KINDS` order. */
+export type SearchResults_Deserialize = {
+	groups: SearchGroup_Deserialize[],
+};
+
+/**  Every kind that had a match, in `KINDS` order. */
+export type SearchResults_Serialize = {
+	groups: SearchGroup_Serialize[],
 };
 
 /**  One thing to send. */

@@ -297,6 +297,11 @@ impl TransferHistory {
         }
     }
 
+    /// A copy of the list as the view shows it (for search.rs).
+    pub fn snapshot(&self) -> Vec<TransferEntry> {
+        self.inner.lock().map(|t| t.listed()).unwrap_or_default()
+    }
+
     fn save_soon(&self, app: &AppHandle) {
         if self.save_pending.swap(true, Ordering::AcqRel) {
             return;

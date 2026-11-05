@@ -181,6 +181,14 @@ impl NotifHistory {
             .unwrap_or_default()
     }
 
+    /// A copy of every kept notification, newest first (for search.rs).
+    pub fn snapshot(&self) -> Vec<HistoryEntry> {
+        self.inner
+            .lock()
+            .map(|i| i.list.clone())
+            .unwrap_or_default()
+    }
+
     /// Write the file once `SAVE_DELAY` has passed, folding in whatever else
     /// changes meanwhile.
     fn save_soon(&self, app: &AppHandle) {

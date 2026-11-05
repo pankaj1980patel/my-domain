@@ -53,6 +53,7 @@ import ScheduleTile from "./device/ScheduleTile";
 import CommandsTile from "./device/CommandsTile";
 import LostModeTile from "./device/LostModeTile";
 import NotificationHistory from "./device/NotificationHistory";
+import { foundId, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
@@ -219,7 +220,12 @@ function ChatTile(props: { node: string }) {
         <Show when={thread().length > 0} fallback={<p class="muted small center">{t("chat.empty")}</p>}>
           <For each={thread()}>
             {(m) => (
-              <div class={`bubble bubble-${m.dir}`} classList={{ "bubble-pending": !!m.pending }}>
+              <div
+                id={foundId("messages", m.id)}
+                tabIndex={-1}
+                class={`bubble bubble-${m.dir}`}
+                classList={{ "bubble-pending": !!m.pending, "found-target": isFound("messages", m.id) }}
+              >
                 <span>{m.text}</span>
                 <Show when={m.pending}>
                   <small class="bubble-note">{m.via === "queued" ? t("chat.queued") : t("chat.sending")}</small>

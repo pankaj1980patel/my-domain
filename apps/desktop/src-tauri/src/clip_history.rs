@@ -184,6 +184,14 @@ impl ClipHistory {
         self.on.load(Ordering::Relaxed)
     }
 
+    /// A copy of every kept clip, newest first (for search.rs).
+    pub fn snapshot(&self) -> Vec<ClipRecord> {
+        self.inner
+            .lock()
+            .map(|i| i.list.clone())
+            .unwrap_or_default()
+    }
+
     /// Write the file once `SAVE_DELAY` has passed, folding in whatever else
     /// changes meanwhile.
     fn save_soon(&self, app: &AppHandle) {

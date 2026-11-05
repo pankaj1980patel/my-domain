@@ -8,6 +8,7 @@ import { commands, type TransferEntry_Serialize as Entry } from "../bindings";
 import { cancelFile, peerName, sendFile, state, unwrap } from "../lib/core";
 import { fileFailReason, friendlyError, humanSize, timeAgo } from "../lib/words";
 import { Empty, toast } from "../components/ui";
+import { foundId, isFound } from "../lib/search";
 import { t } from "../i18n";
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
@@ -149,7 +150,7 @@ function ActiveRow(props: { e: Entry; clock: number }) {
   };
   const cancel = () => cancelFile(props.e.id).catch((err) => toast(friendlyError(err), "error"));
   return (
-    <li class="xfer">
+    <li class="xfer" id={foundId("transfers", props.e.id)} tabIndex={-1} classList={{ "found-target": isFound("transfers", props.e.id) }}>
       <div class="xfer-top">
         <Head e={props.e} />
         <button class="btn btn-ghost btn-sm" onClick={cancel} aria-label={t("transfers.cancelLabel", { name: props.e.name })}>
@@ -202,7 +203,7 @@ function FinishedRow(props: { e: Entry; clock: number; onChange: () => void }) {
     }
   };
   return (
-    <li class="xfer">
+    <li class="xfer" id={foundId("transfers", props.e.id)} tabIndex={-1} classList={{ "found-target": isFound("transfers", props.e.id) }}>
       <div class="xfer-top">
         <Head e={props.e} />
         <div class="row xfer-actions">
