@@ -90,16 +90,18 @@ impl<P: Platform> Engine<P> {
 
     // --- waking a sleeping computer ---
 
-    /// Whether `node` ever said how to wake it (Wake-on-LAN; see
-    /// `features::wake`).
+    /// Whether `node` said it may be woken (Wake-on-LAN; see
+    /// `features::wake`). Kept across restarts.
     pub fn can_wake(&self, node_id: &str) -> bool {
-        crate::features::wake::known(&self.ctx, node_id).is_some()
+        !crate::features::wake::known(&self.ctx, node_id).is_empty()
     }
 
-    /// Wake `node` from sleep: broadcasts its magic packet on this network.
-    /// Works from the same network, on a computer set to wake for network
-    /// access.
-    pub fn wake_device(&self, node_id: &str) -> crate::Result<()> {
+    /// Wake `node` from sleep: broadcasts its magic packet from here, and
+    /// asks each other linked device of yours on its network (that says it
+    /// can) to send it too. Works on a computer set to wake for network
+    /// access. Fails when it never said it may be woken, or nothing could
+    /// be sent.
+    pub fn wake_device(&self, node_id: &str) -> crate::Result<crate::model::WakeReport> {
         crate::features::wake::wake(&self.ctx, node_id)
     }
 

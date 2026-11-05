@@ -18,7 +18,12 @@
     <string name="back">वापस</string>
     <string name="connect">कनेक्ट करें</string>
     <string name="wake_it">इसे जगाएँ</string>
-    <string name="wake_sent">जगाने का सिग्नल भेजा गया। इसका इसी Wi-Fi पर होना और नेटवर्क से जागने के लिए सेट होना ज़रूरी है।</string>
+    <string name="wake_sent">इस नेटवर्क पर जगाने का सिग्नल भेजा गया।</string>
+    <string name="wake_sent_relayed">जगाने का सिग्नल भेजा गया, %1$s के ज़रिए भी।</string>
+    <string name="wake_waking">जगा रहे हैं…</string>
+    <string name="wake_hint">यह स्लीप में लगता है। “इसे जगाएँ” आपके घर के नेटवर्क पर जगाने का सिग्नल भेजता है; जागने पर यह फिर से कनेक्ट हो जाता है।</string>
+    <string name="wake_awake">%1$s जाग गया है।</string>
+    <string name="wake_no_answer">%1$s नहीं जागा। इसका इसी नेटवर्क पर होना और नेटवर्क से जागने के लिए सेट होना ज़रूरी है।</string>
     <string name="send">भेजें</string>
     <string name="cancel">रद्द करें</string>
     <string name="save">सेव करें</string>
@@ -684,6 +689,7 @@
     <string name="automation_preset_ringer_silent">रिंगर को साइलेंट करें</string>
     <string name="automation_preset_lock">इसे लॉक करें</string>
     <string name="automation_preset_ring">इसकी घंटी बजाएँ</string>
+    <string name="automation_preset_wake">इसे स्लीप से जगाएँ</string>
     <string name="automation_preset_note">एक नोट भेजें</string>
     <string name="automation_preset_mute">आवाज़ म्यूट करें</string>
     <string name="automation_preset_unmute">आवाज़ अनम्यूट करें</string>

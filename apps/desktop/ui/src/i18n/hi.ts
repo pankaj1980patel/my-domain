@@ -1203,4 +1203,30 @@ export const hi: Partial<Messages> = {
   "conn.speedFailed": "स्पीड जाँच रुक गई: {why}",
   "conn.speedCancelled": "स्पीड जाँच रद्द की गई।",
   "a11y.speedProgress": "स्पीड जाँच की प्रगति",
+
+  // Wake a sleeping computer (Wake-on-LAN)
+  "wake.button": "इसे जगाएँ",
+  "wake.waking": "जगा रहे हैं…",
+  "wake.hint": "यह स्लीप में लगता है। “इसे जगाएँ” आपके घर के नेटवर्क पर जगाने का सिग्नल भेजता है; जागने पर यह फिर से कनेक्ट हो जाता है।",
+  "wake.sent": "इस नेटवर्क पर जगाने का सिग्नल भेजा गया।",
+  "wake.sentRelayed": "जगाने का सिग्नल भेजा गया, {names} के ज़रिए भी।",
+  "wake.awake": "{name} जाग गया है।",
+  "wake.noAnswer": "{name} नहीं जागा। इसका इसी नेटवर्क पर होना और नेटवर्क से जागने के लिए सेट होना ज़रूरी है।",
+  "wake.title": "इस कंप्यूटर को जगाएँ",
+  "wake.switch": "मेरे दूसरे डिवाइस इस कंप्यूटर को जगा सकें",
+  "wake.switchHint":
+    "आपका फ़ोन और दूसरे कंप्यूटर इस कंप्यूटर का नेटवर्क पता जान लेते हैं, ताकि “इसे जगाएँ” से इसे स्लीप से जगा सकें। सिर्फ़ आपके अपने डिवाइस, और सिर्फ़ आपके घर के नेटवर्क पर।",
+  "wake.hintMac":
+    "Mac को भी जागने के लिए सेट करना होगा: System Settings → Battery (या Energy Saver) → Options → Wake for network access।",
+  "wake.hintWindows":
+    "PC को भी जागने के लिए सेट करना होगा: Device Manager → आपका नेटवर्क एडैप्टर → Properties → Power Management → Allow this device to wake the computer। कई PC में BIOS/UEFI में Wake on LAN भी चालू करना होता है।",
+  "wake.hintLinux":
+    "कंप्यूटर को भी जागने के लिए सेट करना होगा: sudo ethtool -s <card> wol g चलाएँ, और BIOS/UEFI में Wake on LAN चालू करें।",
+  "wake.wompOn": "Wake for network access चालू है।",
+  "wake.wompOff": "Wake for network access बंद है: इसे System Settings में चालू करें, वरना यह Mac नहीं जागेगा।",
+  "wake.cards": "साझा: {cards}",
+  "wake.wired": "{iface} (तार वाला)",
+  "wake.wifi": "{iface} (Wi-Fi)",
+  "wake.noCards": "अभी कोई तार वाला या Wi-Fi कनेक्शन चालू नहीं है।",
+  "wake.wifiOnly": "सिर्फ़ Wi-Fi जुड़ा है। बहुत कम कंप्यूटर Wi-Fi से जगाए जा सकते हैं; नेटवर्क केबल कहीं बेहतर काम करती है।",
 };

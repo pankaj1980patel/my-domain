@@ -629,3 +629,14 @@ impl InputKey {
         serde_json::from_value(serde_json::Value::String(s.to_string())).ok()
     }
 }
+
+/// What waking a sleeping computer did (`Engine::wake_device`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct WakeReport {
+    /// Where this device sent the magic packet (`ip:port`, broadcasts).
+    pub sent: Vec<String>,
+    /// The other devices of yours on the computer's network asked to send
+    /// it too (node ids).
+    pub relays: Vec<String>,
+}

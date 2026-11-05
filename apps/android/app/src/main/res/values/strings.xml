@@ -16,7 +16,12 @@
     <string name="back">Back</string>
     <string name="connect">Connect</string>
     <string name="wake_it">Wake it</string>
-    <string name="wake_sent">Sent the wake-up. It needs to be on this Wi-Fi, set to wake for network access.</string>
+    <string name="wake_sent">Sent the wake-up on this network.</string>
+    <string name="wake_sent_relayed">Sent the wake-up, also through %1$s.</string>
+    <string name="wake_waking">Waking…</string>
+    <string name="wake_hint">It looks asleep. Wake it sends a wake-up over your home network; it connects again once it’s awake.</string>
+    <string name="wake_awake">%1$s is awake.</string>
+    <string name="wake_no_answer">%1$s didn’t wake up. It needs to be on this network, set to wake for network access.</string>
     <string name="send">Send</string>
     <string name="cancel">Cancel</string>
     <string name="save">Save</string>
@@ -692,6 +697,7 @@
     <string name="automation_preset_ringer_silent">Set the ringer to silent</string>
     <string name="automation_preset_lock">Lock it</string>
     <string name="automation_preset_ring">Ring it</string>
+    <string name="automation_preset_wake">Wake it from sleep</string>
     <string name="automation_preset_note">Send a note</string>
     <string name="automation_preset_mute">Mute the sound</string>
     <string name="automation_preset_unmute">Unmute the sound</string>

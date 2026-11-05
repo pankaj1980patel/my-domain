@@ -506,7 +506,9 @@ fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
     assert!(!phone.engine.can_wake(&pc.node_id()));
     assert!(phone.engine.wake_device(&pc.node_id()).is_err());
     pc.engine
-        .set_device_status(r#"{"wake":{"mac":"AA:BB:CC:00:11:22"}}"#);
+        .set_device_status(
+            r#"{"wol":[{"mac":"AA:BB:CC:00:11:22","broadcast":"192.168.0.255","iface":"en0","wired":true}]}"#,
+        );
     phone.engine.request_status(&pc.node_id()).unwrap();
     phone
         .sink
@@ -520,7 +522,7 @@ fn a_computer_that_says_how_to_wake_it_can_be_woken_later() {
     // Sending needs a network that allows broadcasts (CI's macOS machines
     // don't): only "couldn't send" may stop it, never "doesn't know how".
     match phone.engine.wake_device(&pc.node_id()) {
-        Ok(()) | Err(mdcore::CoreError::NoLink(_)) => {}
+        Ok(_) | Err(mdcore::CoreError::NoLink(_)) => {}
         Err(e) => panic!("wake failed: {e}"),
     }
 }

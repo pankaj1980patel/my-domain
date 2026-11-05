@@ -4337,6 +4337,7 @@ dependencies = [
  "httparse",
  "if-addrs 0.13.4",
  "keyring",
+ "libc",
  "machine-uid",
  "md-ble",
  "md-geo",
@@ -4362,6 +4363,7 @@ dependencies = [
  "tauri-specta",
  "tungstenite",
  "uuid",
+ "windows 0.61.3",
 ]
 
 [[package]]

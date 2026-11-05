@@ -248,6 +248,23 @@ export const commands = {
 	 */
 	locationAvailable: () => __TAURI_INVOKE<boolean>("location_available"),
 	/**
+	 *  The "Let my other devices wake this computer" switch, how to set this
+	 *  computer to wake, and the cards it would share.
+	 */
+	wakeSetting: () => __TAURI_INVOKE<WakeSetting_Serialize>("wake_setting"),
+	/**
+	 *  Let your other devices wake this computer, or stop it (they forget how
+	 *  at their next look at it).
+	 */
+	setWakeSetting: (on: boolean) => __TAURI_INVOKE<WakeSetting_Serialize>("set_wake_setting", { on }),
+	/**  Whether another device said it may be woken (kept across restarts). */
+	canWake: (nodeId: string) => __TAURI_INVOKE<boolean>("can_wake", { nodeId }),
+	/**
+	 *  Wake another computer: its magic packet from here, and from your other
+	 *  devices on its network.
+	 */
+	wakeDevice: (nodeId: string) => typedError<WakeReport, string>(__TAURI_INVOKE("wake_device", { nodeId })),
+	/**
 	 *  "Lock this computer when my phone goes away": on or off, how long to
 	 *  wait, and whether this computer can lock at all.
 	 */
@@ -2277,6 +2294,48 @@ export type Trigger_Serialize = {
 	level: number | null,
 };
 
+/**  What waking a sleeping computer did (`Engine::wake_device`). */
+export type WakeReport = {
+	/**  Where this device sent the magic packet (`ip:port`, broadcasts). */
+	sent: string[],
+	/**
+	 *  The other devices of yours on the computer's network asked to send
+	 *  it too (node ids).
+	 */
+	relays: string[],
+};
+
+/**  What Settings shows. */
+export type WakeSetting = WakeSetting_Serialize | WakeSetting_Deserialize;
+
+/**  What Settings shows. */
+export type WakeSetting_Deserialize = {
+	on: boolean,
+	/**  "macos", "windows" or "linux": which hint to show. */
+	os: string,
+	/**
+	 *  macOS: whether "Wake for network access" is on (`pmset -g` womp);
+	 *  `None` where it can't be told.
+	 */
+	womp?: boolean | null,
+	/**  The cards it would list now. */
+	ifaces: WolIface[],
+};
+
+/**  What Settings shows. */
+export type WakeSetting_Serialize = {
+	on: boolean,
+	/**  "macos", "windows" or "linux": which hint to show. */
+	os: string,
+	/**
+	 *  macOS: whether "Wake for network access" is on (`pmset -g` womp);
+	 *  `None` where it can't be told.
+	 */
+	womp: boolean | null,
+	/**  The cards it would list now. */
+	ifaces: WolIface[],
+};
+
 /**  What Settings shows. */
 export type WebhookSettings = WebhookSettings_Serialize | WebhookSettings_Deserialize;
 
@@ -2302,6 +2361,18 @@ export type WebhookSettings_Serialize = {
 	running: boolean,
 	/**  Why it isn't listening, e.g. the port is taken. */
 	error: string | null,
+};
+
+/**  One network card this computer can be woken through. */
+export type WolIface = {
+	/**  `aa:bb:cc:dd:ee:ff`. */
+	mac: string,
+	/**  Its IPv4 network's broadcast address. */
+	broadcast: string,
+	/**  The OS's name for it (`en0`, `eth0`, `Ethernet`). */
+	iface: string,
+	/**  Wired (Wi-Fi otherwise): waking over Wi-Fi works on few computers. */
+	wired: boolean,
 };
 
 /* Tauri Specta runtime */

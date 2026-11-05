@@ -47,6 +47,8 @@ fn push_status(app: &AppHandle) {
         status["storage"] = serde_json::json!({ "free": free, "total": total });
     }
     crate::sysinfo::extend(&mut status);
+    // How to wake it later, while the switch in Settings is on.
+    crate::wol::extend(app, &mut status);
     let actions = actions(app, &mut status);
     if !actions.is_empty() {
         status["actions"] = actions.into();

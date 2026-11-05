@@ -8,7 +8,8 @@
 //! (`features::labels`) and `notes: 1` when it shares notes
 //! (`features::notes`), so each end of a new link learns that at once;
 //! older apps ignore the fields. Likewise `ping: 1` when it answers pings
-//! and speed tests (`features::diag`).
+//! and speed tests (`features::diag`), and `wol: 1` when it sends
+//! Wake-on-LAN packets for the others (`features::wake`).
 //!
 //! Only peers we already know are updated: this message can't create one.
 //! It arrives end-to-end encrypted with the shared key, like every message.
@@ -41,6 +42,9 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         }
         super::notes::extend_status(ctx, &mut msg);
         super::diag::extend_status(ctx, &mut msg);
+        if ctx.config.wake_relay {
+            msg[super::wake::FLAG] = 1.into();
+        }
         msg.to_string()
     };
     let targets: Vec<String> = match peers {
@@ -88,6 +92,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::labels::remember(ctx, &from, &msg.json(super::labels::FLAG));
         super::notes::remember(ctx, &from, &msg.json(super::notes::FLAG));
         super::diag::remember(ctx, &from, &msg.json(super::diag::FLAG));
+        super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();
             ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });

@@ -189,6 +189,15 @@ pub struct DeviceIdentity {
     pub quic_port: u16,
 }
 
+/// What waking a sleeping computer did (`wake_device`).
+#[derive(uniffi::Record)]
+pub struct WakeResult {
+    /// Where this phone sent the magic packet (`ip:port`).
+    pub sent: Vec<String>,
+    /// Your other devices asked to send it too, on its network (node ids).
+    pub relays: Vec<String>,
+}
+
 /// A folder this phone lets your other devices browse and download from.
 #[derive(uniffi::Record)]
 pub struct SharedDir {
@@ -1273,10 +1282,14 @@ impl MdEngine {
     }
 
     /// Wake a sleeping computer: its magic packet, broadcast on this
-    /// network (works from the same Wi-Fi, if it's set to wake for network
-    /// access).
-    pub fn wake_device(&self, node_id: String) -> MdResult<()> {
-        Ok(self.inner.wake_device(&node_id)?)
+    /// network, and sent by your other devices linked now on its network
+    /// (works if it's set to wake for network access).
+    pub fn wake_device(&self, node_id: String) -> MdResult<WakeResult> {
+        let r = self.inner.wake_device(&node_id)?;
+        Ok(WakeResult {
+            sent: r.sent,
+            relays: r.relays,
+        })
     }
 
     /// Start (`on`) or stop watching a computer's screen: snapshots arrive

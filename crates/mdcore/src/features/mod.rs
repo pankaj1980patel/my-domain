@@ -116,14 +116,16 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::folder_sync`); without it the `sync_*` messages aren't
     /// known here, as in an app from before; likewise `labels` and the
     /// `labels` message (`CoreConfig::shared_labels`), `notes` and the
-    /// `notes*` messages (`CoreConfig::notes`), and `ping` with the ping
-    /// and speed-test messages (`CoreConfig::diag`).
+    /// `notes*` messages (`CoreConfig::notes`), `ping` with the ping
+    /// and speed-test messages (`CoreConfig::diag`), and `wake_relay`
+    /// (`CoreConfig::wake_relay`).
     pub fn with_defaults(
         has_clipboard: bool,
         folder_sync: bool,
         labels: bool,
         notes: bool,
         diag: bool,
+        wake_relay: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -161,6 +163,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if diag {
             r.register(Arc::new(diag::DiagHandler));
+        }
+        if wake_relay {
+            r.register(Arc::new(wake::WakeRelayHandler));
         }
         r
     }

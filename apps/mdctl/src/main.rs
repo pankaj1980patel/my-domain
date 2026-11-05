@@ -676,8 +676,8 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
         }
         "wake" => {
             let to = resolve(engine, &arg(words.next())?)?;
-            engine.wake_device(&to)?;
-            Ok(json!("sent"))
+            let r = engine.wake_device(&to)?;
+            Ok(json!({ "sent": r.sent, "relays": r.relays }))
         }
         "screen-send" => {
             let path = arg(words.next())?;

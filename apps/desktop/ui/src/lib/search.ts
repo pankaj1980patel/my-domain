@@ -233,6 +233,7 @@ export const SETTINGS_SECTIONS: { id: string; title: Key }[] = [
   { id: "shortcuts", title: "shortcuts.title" },
   { id: "calls", title: "calls.title" },
   { id: "computer-notifs", title: "computerNotifs.title" },
+  { id: "wake", title: "wake.title" },
   { id: "file-manager", title: "sendTo.settingTitle" },
   { id: "sync", title: "sync.title" },
   { id: "commands", title: "commands.title" },

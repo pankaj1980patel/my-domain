@@ -1091,11 +1091,12 @@ object Core {
         return true
     }
 
-    /** Whether [node] ever said how to wake it from sleep (Wake-on-LAN). */
+    /** Whether [node] said it may be woken from sleep (Wake-on-LAN). */
     fun canWake(node: String): Boolean = runCatching { engine()?.canWake(node) }.getOrNull() == true
 
-    /** Wake [node] from sleep: its magic packet, broadcast on this network. */
-    suspend fun wake(node: String) = call { it.wakeDevice(node) }
+    /** Wake [node] from sleep: its magic packet, broadcast on this network,
+     *  and sent by your other devices linked now on its network ([WakeResult.relays]). */
+    suspend fun wake(node: String): com.mydomain.android.ffi.WakeResult = call { it.wakeDevice(node) }
 
     /** Start ([on]) or stop watching [node]'s screen; null when it went out. */
     fun screenWatch(node: String, on: Boolean): Throwable? =

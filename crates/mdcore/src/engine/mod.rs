@@ -331,6 +331,7 @@ impl<P: Platform> Engine<P> {
             config.shared_labels,
             config.notes,
             config.diag,
+            config.wake_relay,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

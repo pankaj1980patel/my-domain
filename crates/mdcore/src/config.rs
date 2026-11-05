@@ -145,6 +145,12 @@ pub struct CoreConfig {
     /// behaves like an app from before (tests use it to play an older
     /// peer).
     pub diag: bool,
+    /// Sending Wake-on-LAN packets for your other devices
+    /// (`features::wake`): this end says `wol` in its status and
+    /// `addr_update` and understands `wake_relay`. On by default; off
+    /// behaves like an app from before (tests use it to play an older
+    /// peer).
+    pub wake_relay: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -185,6 +191,7 @@ impl Default for CoreConfig {
             notes: true,
             note_reminders: true,
             diag: true,
+            wake_relay: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

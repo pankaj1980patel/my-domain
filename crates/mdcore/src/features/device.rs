@@ -22,8 +22,10 @@
 //! the others browse (`features::browse`; absent from older versions), and
 //! `sync: 1` when it syncs folders (`features::folder_sync`), and
 //! `labels: 1` when it shares device labels (`features::labels`), and
-//! `notes: 1` when it shares notes (`features::notes`), and
-//! `ping: 1` when it answers pings and speed tests (`features::diag`).
+//! `notes: 1` when it shares notes (`features::notes`),
+//! `ping: 1` when it answers pings and speed tests (`features::diag`), and
+//! `wol` when it sends Wake-on-LAN packets for the others
+//! (`features::wake`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -80,6 +82,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::notes::extend_status(ctx, &mut status);
                 // Whether it answers pings and speed tests.
                 super::diag::extend_status(ctx, &mut status);
+                // Whether it sends wake-ups for the others (and may be woken).
+                super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
                 if !playing.is_null() {
                     status["now_playing"] = playing;

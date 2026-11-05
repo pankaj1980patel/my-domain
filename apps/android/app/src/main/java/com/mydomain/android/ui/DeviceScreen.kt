@@ -111,7 +111,6 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
         val s = linkStateOf(node)
         // The nickname you gave it here, else its own name.
         val name = Core.peerName(node)
-        val wakeSent = stringResource(R.string.wake_sent)
         LazyColumn(
             Modifier.fillMaxSize(),
             state = list,
@@ -142,17 +141,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
                             progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
                         }
-                        // Asleep? Wake it (Wake-on-LAN), if it ever said how.
-                        if ((s == LinkState.Offline || s == LinkState.Failed) && Core.canWake(node)) {
-                            GhostButton(stringResource(R.string.wake_it), {
-                                scope.launch {
-                                    try {
-                                        Core.wake(node)
-                                        toast(wakeSent)
-                                    } catch (e: Exception) { toast(friendlyError(e)) }
-                                }
-                            }, small = true)
-                        }
+                        // Asleep? Wake it (Wake-on-LAN), if it said it may be woken.
+                        WakeIt(node)
                     }
                     if (s == LinkState.Offline || s == LinkState.Failed) {
                         PrimaryButton(stringResource(R.string.connect), {

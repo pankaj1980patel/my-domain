@@ -50,6 +50,10 @@ object AutoPresets {
     /** Sends a note, shown on the device as a notification. */
     const val SEND_TEXT = "send_text"
 
+    /** Wakes a sleeping computer (Wake-on-LAN): offered for one that said
+     *  it may be woken. */
+    const val WAKE = "wake"
+
     /** On this phone. */
     val PHONE = listOf(
         AutoPreset("notify", AutomationBook.NOTIFY, "{}", R.string.automation_preset_notify, always = true),
@@ -65,6 +69,7 @@ object AutoPresets {
     val DEVICE = listOf(
         AutoPreset("lock", "lock", "{}", R.string.automation_preset_lock),
         AutoPreset("ring", "ring", "{}", R.string.automation_preset_ring, always = true),
+        AutoPreset("wake", WAKE, "{}", R.string.automation_preset_wake),
         AutoPreset("note", SEND_TEXT, "{}", R.string.automation_preset_note, always = true),
         AutoPreset("mute", "mute", """{"on":true}""", R.string.automation_preset_mute),
         AutoPreset("unmute", "mute", """{"on":false}""", R.string.automation_preset_unmute),
@@ -88,7 +93,7 @@ object AutoPresets {
         PHONE.filter { it.always || it.action in acts }
     } else {
         val acts = Core.deviceStatus[node]?.actions
-        DEVICE.filter { it.always || acts?.contains(it.action) == true }
+        DEVICE.filter { it.always || acts?.contains(it.action) == true || (it.action == WAKE && Core.canWake(node)) }
     }
 
     /** The preset [a] was made from, if any. */
@@ -310,6 +315,10 @@ object PhoneAutomations {
                 "here"
             }
             a.action == "ring" -> Core.ring(a.node)
+            a.action == AutoPresets.WAKE -> {
+                Core.wake(a.node)
+                "here"
+            }
             a.action == AutoPresets.SEND_TEXT -> Core.sendText(a.node, args.optString("text"), "notify")
             else -> Core.runAction(a.node, a.action, args)
         }

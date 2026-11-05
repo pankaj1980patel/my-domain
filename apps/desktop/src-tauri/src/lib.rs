@@ -53,6 +53,7 @@ mod transfers;
 mod tray;
 mod webhooks;
 mod wifi_share;
+mod wol;
 
 pub(crate) type Eng = Engine<DesktopPlatform>;
 
@@ -1503,6 +1504,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         wifi_share::current_wifi_name,
         wifi_share::share_wifi_to,
         location_available,
+        wol::wake_setting,
+        wol::set_wake_setting,
+        wol::can_wake,
+        wol::wake_device,
         away_lock::away_lock,
         away_lock::set_away_lock,
         shortcuts::list_shortcuts,
@@ -1650,6 +1655,7 @@ pub fn run() {
             app.manage(chat_history::ChatHistory::load(&handle));
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
+            app.manage(wol::WakePref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));
             app.manage(page_layout::PageLayouts::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));

@@ -61,6 +61,7 @@ import { foundId, foundTarget, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
+import WakeButton from "./device/WakeButton";
 import ConnectionTile from "./device/ConnectionTile";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
@@ -205,6 +206,8 @@ export default function Device(props: { node: string; onBack: () => void }) {
               <Show when={s() === "connecting" || s() === "failed"}>
                 <p class="muted small">{progressLabel(state.progress[props.node])}</p>
               </Show>
+              {/* Asleep? Wake it, if it said it may be woken. */}
+              <WakeButton node={props.node} />
             </div>
             <Show when={s() === "offline" || s() === "failed"}>
               <button

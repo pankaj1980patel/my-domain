@@ -1314,6 +1314,32 @@ export const en = {
   "settings.quickPanel": "Open the quick panel when clicking the menu-bar icon",
   "settings.quickPanelHint":
     "A click on the my-domain icon opens a small panel with your devices, the last clips and files, and search. Right-click for the menu. Off: a click shows the menu. On Linux the menu always shows; choose “Quick panel” in it.",
+
+  // Wake a sleeping computer (Wake-on-LAN)
+  "wake.button": "Wake it",
+  "wake.waking": "Waking…",
+  "wake.hint": "It looks asleep. Wake it sends a wake-up over your home network; it connects again once it’s awake.",
+  "wake.sent": "Sent the wake-up on this network.",
+  "wake.sentRelayed": "Sent the wake-up, also through {names}.",
+  "wake.awake": "{name} is awake.",
+  "wake.noAnswer": "{name} didn’t wake up. It needs to be on this network, set to wake for network access.",
+  "wake.title": "Wake this computer",
+  "wake.switch": "Let my other devices wake this computer",
+  "wake.switchHint":
+    "Your phone and other computers learn this computer’s network address, so they can wake it from sleep with Wake it. Only your own devices, and only on your home network.",
+  "wake.hintMac":
+    "The Mac must be set to wake too: System Settings → Battery (or Energy Saver) → Options → Wake for network access.",
+  "wake.hintWindows":
+    "The PC must be set to wake too: Device Manager → your network adapter → Properties → Power Management → Allow this device to wake the computer. Many PCs also need Wake on LAN turned on in the BIOS/UEFI.",
+  "wake.hintLinux":
+    "The computer must be set to wake too: run sudo ethtool -s <card> wol g, and turn on Wake on LAN in the BIOS/UEFI.",
+  "wake.wompOn": "Wake for network access is on.",
+  "wake.wompOff": "Wake for network access is off: turn it on in System Settings, or this Mac won’t wake.",
+  "wake.cards": "Shared: {cards}",
+  "wake.wired": "{iface} (wired)",
+  "wake.wifi": "{iface} (Wi-Fi)",
+  "wake.noCards": "No wired or Wi-Fi connection is up right now.",
+  "wake.wifiOnly": "Only Wi-Fi is connected. Few computers can be woken over Wi-Fi; a network cable works much better.",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */

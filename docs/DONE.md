@@ -677,25 +677,38 @@ top). On the phone, against the Mac app: the Mac's screen showed behind
 the full-screen pad, and with Point & click on, a tap on the middle of the
 picture's menu bar put the Mac's pointer at (639, 12) of 1280x800.
 
-## Wake a sleeping computer from the phone (2026-11-03)
+## Wake a sleeping computer from the phone or another computer (2026-11-03, reworked 2026-11-05)
 
-- Core (`features/wake.rs`): a computer's status may say its network card
-  (`"wake": {"mac": "…"}`); the core remembers it per device (a sleeping
-  computer sends no status). `Engine::can_wake`, `Engine::wake_device`
-  broadcast the magic packet (six 0xFF, then the address sixteen times) to
-  255.255.255.255 and this network's .255, UDP ports 9 and 7. Tests:
-  `wake::addresses_parse_and_bad_ones_dont`,
-  `the_magic_packet_is_six_ones_then_the_address_sixteen_times`,
-  `device_actions::a_computer_that_says_how_to_wake_it_can_be_woken_later`.
-- Desktop: the status carries the default route's card (macOS `route` +
-  `ifconfig`, Linux `ip route` + `/sys/class/net`).
-- Android: a "Wake it" button on a computer's page while it isn't
-  connected and has said its address once.
-- mdctl: `wake <node>`.
+- Desktop (`wol.rs`): "Let my other devices wake this computer" in
+  Settings (off by default, `prefs.json` `wake_lan`). On, the status lists
+  its wired and Wi-Fi cards that are up: `wol: [{mac, broadcast, iface,
+  wired}]`, read with the OS's own calls (macOS/Linux `getifaddrs`: AF_LINK
+  `sockaddr_dl` / AF_PACKET `sockaddr_ll` for the address, the IPv4 entry's
+  broadcast; Windows `GetAdaptersAddresses`, broadcast from the prefix).
+  Settings shows the OS's own wake setting to turn on, and on macOS whether
+  `pmset -g` says `womp 1`.
+- Core (`features/wake.rs`): each device remembers the last cards per
+  computer in kv (`wol:<node>`; an empty list keeps them, `wol: 1` = switch
+  off forgets them; an older app's `wake.mac` still counts).
+  `Engine::wake_device` sends the magic packet (six 0xFF, then the address
+  sixteen times) to each card's broadcast and 255.255.255.255, UDP 9 and 7,
+  and sends `wake_relay {mac, broadcast}` to each other linked device that
+  said `wol` (status or `addr_update`, `CoreConfig::wake_relay`) and is on
+  that network, which sends it too (only to a private/link-local
+  broadcast). Returns what was sent (`WakeReport {sent, relays}`).
+- Both apps: "Wake it" on an offline computer's page that may be woken,
+  with a spinner (trying to connect every 10 s) until it connects or a
+  minute passes; the phone's automations can wake a computer. mdctl:
+  `wake <node>` prints the report. Help: `docs/help/19-wake.md`.
+- Tests: `wake::*` unit tests (packet, addresses, broadcasts, networks,
+  status updates); `tests/wake.rs` (relay only to devices that said `wol`
+  and share the network, never shown as chat; switch off forgets; an older
+  app's address); `device_actions::a_computer_that_says_how_to_wake_it_can_be_woken_later`;
+  desktop `wol::tests`.
 
-Tried: the Mac app (rebuilt by `tauri dev`) reports its address; mdctl
-learned it and `wake` sent the packet. Actually waking a sleeping
-computer: not tried yet.
+Tried: the Mac reads its card (en0, Wi-Fi, its broadcast) and `womp 1`.
+Actually waking a sleeping computer, and the Linux/Windows card reading:
+not tried yet.
 
 ## See a computer's screen on the phone (2026-11-03)
 
