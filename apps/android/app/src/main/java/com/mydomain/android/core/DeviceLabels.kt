@@ -2,6 +2,8 @@ package com.mydomain.android.core
 
 import android.content.Context
 import androidx.compose.runtime.mutableStateMapOf
+import com.mydomain.android.ffi.MdEngine
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** What you call one of your devices on this phone: a nickname (null: its
@@ -13,9 +15,13 @@ data class DeviceLabel(val nickname: String? = null, val icon: String? = null, v
 
 /**
  * Device labels: a nickname, an icon and a colour you give each of your
- * devices, on this phone only (like a contact name; the device and your
- * other devices never see it, nothing goes on the wire). Like the desktop's
- * `device_labels.rs`, with the same icon and colour sets.
+ * devices. Like the desktop's `device_labels.rs`, with the same icon and
+ * colour sets. Kept on this phone, and shared with your other devices while
+ * "Share names and icons with my other devices" is on (the core's
+ * `features::labels`, on until turned off): [Core.setDeviceLabel] hands a
+ * label to the core, and labels set on your other devices arrive as the
+ * `labels_changed` event ([applyShared]), which changes them here without
+ * sending anything back.
  *
  * In the "md" SharedPreferences, key [PREF]: a JSON object node id ->
  * `{nickname?, icon?, color?}`. [Core.peerName] prefers the nickname, so
@@ -46,12 +52,45 @@ object DeviceLabels {
 
     fun nickname(node: String?): String? = node?.let { labels[it]?.nickname }
 
-    /** Set [node]'s label (all blank: forget it) and save. Main thread. */
-    fun set(ctx: Context, node: String, nickname: String?, icon: String?, color: String?) {
+    /** Set [node]'s label (all blank: forget it) and save; returns it as
+     *  set. Main thread. */
+    fun set(ctx: Context, node: String, nickname: String?, icon: String?, color: String?): DeviceLabel {
         val label = checked(nickname, icon, color)
         if (label.isEmpty) labels.remove(node) else labels[node] = label
+        save(ctx)
+        return label
+    }
+
+    private fun save(ctx: Context) {
         prefs(ctx.applicationContext).edit().putString(PREF, encode(labels.toMap())).apply()
     }
+
+    /** Labels set on your other devices (the `labels` array of a
+     *  `labels_changed` event): change them here (a cleared one forgets the
+     *  label) and save. Nothing goes back to the core. Main thread. */
+    fun applyShared(ctx: Context, arr: JSONArray?) {
+        if (arr == null) return
+        for (i in 0 until arr.length()) {
+            val o = arr.optJSONObject(i) ?: continue
+            val node = o.optString("node").ifEmpty { null } ?: continue
+            val label = checked(o.text("nickname"), o.text("icon"), o.text("color"))
+            if (label.isEmpty) labels.remove(node) else labels[node] = label
+        }
+        save(ctx)
+    }
+
+    /** Hand the labels this phone had before labels were shared to the core
+     *  (at start): ones it doesn't know yet, which anything set since wins
+     *  over. */
+    fun seed(engine: MdEngine) {
+        for ((node, l) in labels.toMap()) {
+            runCatching { engine.seedLabel(node, l.nickname, l.icon, l.color) }
+        }
+    }
+
+    /** A string field, or null when it's missing, null or blank. */
+    private fun JSONObject.text(key: String): String? =
+        if (isNull(key)) null else optString(key).ifEmpty { null }
 
     /** The nickname tidied (spaces collapsed, cut to [MAX_NICKNAME]; blank:
      *  none); an icon or colour not in its set is dropped. */

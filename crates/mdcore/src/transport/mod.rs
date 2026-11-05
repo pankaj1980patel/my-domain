@@ -151,12 +151,14 @@ pub fn mark_live<P: Platform>(
 /// send what waited for it, and tell it what a fresh start doesn't know.
 pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     outbox::flush(ctx, node_id);
-    // Our current addresses (it may only know stale ones from the server)
-    // and our Do Not Disturb, if on; off this thread: sending may block.
+    // Our current addresses (it may only know stale ones from the server),
+    // our Do Not Disturb, if on, and the device labels; off this thread:
+    // sending may block.
     let (ctx, peer) = (ctx.clone(), node_id.to_string());
     std::thread::spawn(move || {
         crate::features::addr_update::announce(&ctx, Some(std::slice::from_ref(&peer)));
         crate::features::dnd::link_up(&ctx, &peer);
+        crate::features::labels::link_up(&ctx, &peer);
     });
 }
 

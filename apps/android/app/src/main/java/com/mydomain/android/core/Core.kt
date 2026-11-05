@@ -294,9 +294,21 @@ object Core {
     /** Give a device a nickname, an icon and a colour on this phone (blank:
      *  none). Main thread. */
     fun setDeviceLabel(node: String, nickname: String?, icon: String?, color: String?) {
-        DeviceLabels.set(app, node, nickname, icon, color)
+        val label = DeviceLabels.set(app, node, nickname, icon, color)
         HomeWidget.refresh(app)
         ShareTargets.refresh(app)
+        // Your other devices see it too, while sharing is on.
+        Thread {
+            runCatching { engine()?.setSharedLabel(node, label.nickname, label.icon, label.color) }
+        }.start()
+    }
+
+    /** Whether device labels are shared with your other devices (on until
+     *  turned off). */
+    fun labelsShare(): Boolean = runCatching { engine()?.labelsShare() }.getOrNull() ?: true
+
+    fun setLabelsShare(on: Boolean) {
+        Thread { runCatching { engine()?.setLabelsShare(on) } }.start()
     }
 
     private fun onMain(block: () -> Unit) {
@@ -428,6 +440,12 @@ object Core {
         val node = o.optString("node_id")
         when (o.optString("kind")) {
             "peers_updated" -> peersNow?.let { peers = it }
+            // Labels set on your other devices: take them here.
+            "labels_changed" -> {
+                DeviceLabels.applyShared(app, o.optJSONArray("labels"))
+                HomeWidget.refresh(app)
+                ShareTargets.refresh(app)
+            }
             "peer_connected" -> {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")

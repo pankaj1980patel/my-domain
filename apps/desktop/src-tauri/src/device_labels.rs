@@ -1,6 +1,11 @@
 // Device labels: a nickname, an icon and an accent colour you give each of
-// your devices, on this computer only (like a contact name: the device
-// itself and your other devices never see it; nothing goes on the wire).
+// your devices. Kept here (what this computer shows), and shared with your
+// other devices while "Share names and icons with my other devices" is on
+// (mdcore `features::labels`, on until turned off): a label set here goes
+// to the core (`Engine::set_shared_label`), and labels set on your other
+// devices come back as `CoreEvent::LabelsChanged` (`apply_shared`), which
+// changes the labels here without sending anything back. With the switch
+// off the core neither sends nor takes them.
 //
 // Kept in `<app config dir>/device-labels.json`, key `labels`, as a JSON
 // object node id -> label. A blank nickname means the device's own name;
@@ -14,8 +19,11 @@ use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use mdcore::kv::FileKv;
+use mdcore::model::SharedLabel;
 use mdcore::CoreError;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+use crate::Eng;
 
 const KEY: &str = "labels";
 /// The longest nickname, in characters.
@@ -85,6 +93,14 @@ pub fn checked(
     })
 }
 
+/// A label another device set: like `checked`, but an icon or colour this
+/// app can't draw is left out instead of refusing the label.
+fn lenient(l: &SharedLabel) -> DeviceLabel {
+    let icon = l.icon.clone().filter(|i| ICONS.contains(&i.as_str()));
+    let color = l.color.clone().filter(|c| COLORS.contains(&c.as_str()));
+    checked(l.nickname.clone(), icon, color).unwrap_or_default()
+}
+
 /// Set (or, when empty, drop) `node`'s label in `map`.
 fn put(
     map: &mut BTreeMap<String, DeviceLabel>,
@@ -145,18 +161,65 @@ impl DeviceLabels {
     }
 
     fn set(&self, node: &str, label: DeviceLabel) -> Result<(), CoreError> {
+        self.set_all(&[(node.to_string(), label)])
+    }
+
+    /// Set several labels and save once. One that can't be set is skipped
+    /// (the first such error is the answer).
+    fn set_all(&self, labels: &[(String, DeviceLabel)]) -> Result<(), CoreError> {
         let mut map = self
             .map
             .lock()
             .map_err(|_| CoreError::Other("labels unavailable".into()))?;
-        put(&mut map, node, label)?;
+        let mut result = Ok(());
+        for (node, label) in labels {
+            if let Err(e) = put(&mut map, node, label.clone()) {
+                if result.is_ok() {
+                    result = Err(e);
+                }
+            }
+        }
         if let (Some(kv), Ok(json)) = (&self.kv, serde_json::to_string(&*map)) {
             if let Err(e) = kv.set(KEY, &json) {
                 eprintln!("[labels] couldn't save the labels: {e}");
             }
         }
-        Ok(())
+        result
     }
+}
+
+/// Hand the labels this computer had before labels were shared to the core
+/// (at start): ones it doesn't know yet, which anything set since wins over.
+pub fn seed(app: &AppHandle, engine: &Eng) {
+    let Some(state) = app.try_state::<DeviceLabels>() else {
+        return;
+    };
+    for (node, l) in state.all() {
+        engine.seed_label(
+            &node,
+            l.nickname.as_deref(),
+            l.icon.as_deref(),
+            l.color.as_deref(),
+        );
+    }
+}
+
+/// Labels set on your other devices (`CoreEvent::LabelsChanged`): change
+/// them here (a cleared one forgets the label), refresh the tray and tell
+/// the window (`device-labels`, every label). Nothing goes back to the core.
+pub fn apply_shared(app: &AppHandle, labels: &[SharedLabel]) {
+    let Some(state) = app.try_state::<DeviceLabels>() else {
+        return;
+    };
+    let changes: Vec<(String, DeviceLabel)> = labels
+        .iter()
+        .map(|l| (l.node.clone(), lenient(l)))
+        .collect();
+    if let Err(e) = state.set_all(&changes) {
+        eprintln!("[labels] couldn't take a shared label: {e}");
+    }
+    crate::tray::refresh(app);
+    let _ = app.emit("device-labels", state.all());
 }
 
 /// The nickname you gave `node` here, if any.
@@ -200,9 +263,35 @@ pub fn set_device_label(
     app: AppHandle,
     state: State<DeviceLabels>,
 ) -> Result<BTreeMap<String, DeviceLabel>, CoreError> {
-    state.set(&node, checked(nickname, icon, color)?)?;
+    let label = checked(nickname, icon, color)?;
+    state.set(&node, label.clone())?;
+    // Your other devices see it too, while sharing is on.
+    if let Some(engine) = app.try_state::<Eng>() {
+        if let Err(e) = engine.set_shared_label(
+            &node,
+            label.nickname.as_deref(),
+            label.icon.as_deref(),
+            label.color.as_deref(),
+        ) {
+            eprintln!("[labels] couldn't share the label: {e}");
+        }
+    }
     crate::tray::refresh(&app);
     Ok(state.all())
+}
+
+/// Whether the names, icons and colours you give your devices are shared
+/// with your other devices (and theirs taken here). On until turned off.
+#[tauri::command]
+#[specta::specta]
+pub fn labels_share(engine: State<Eng>) -> bool {
+    engine.labels_share()
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_labels_share(on: bool, engine: State<Eng>) {
+    engine.set_labels_share(on);
 }
 
 #[cfg(test)]
@@ -261,6 +350,26 @@ mod tests {
         // An icon alone keeps the device's own name.
         put(&mut map, "n2", checked(None, s("phone"), None).unwrap()).unwrap();
         assert_eq!(name_for(&map, "n2", "pixel_8"), "pixel 8");
+    }
+
+    #[test]
+    fn shared_labels_keep_only_what_this_app_draws() {
+        let shared = SharedLabel {
+            node: "n1".into(),
+            nickname: s("  Den   TV "),
+            icon: s("toaster"),
+            color: s("gold"),
+            updated_at: 5,
+            by: "n2".into(),
+        };
+        let l = lenient(&shared);
+        assert_eq!(l.nickname.as_deref(), Some("Den TV"));
+        assert_eq!((l.icon, l.color.as_deref()), (None, Some("gold")));
+        let cleared = SharedLabel {
+            node: "n1".into(),
+            ..SharedLabel::default()
+        };
+        assert!(lenient(&cleared).is_empty());
     }
 
     #[test]

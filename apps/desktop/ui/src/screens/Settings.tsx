@@ -56,6 +56,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const [followDnd, setFollowDnd] = createSignal(false);
   const [remoteInput, setRemoteInput] = createSignal(true);
   const [screenShare, setScreenShare] = createSignal(true);
+  const [shareLabels, setShareLabels] = createSignal(true);
   const [shareLocation, setShareLocation] = createSignal(false);
   const [clipHistory, setClipHistory] = createSignal(true);
   const [canLocate, setCanLocate] = createSignal(false);
@@ -68,6 +69,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
     setFollowDnd(await commands.followPhoneDnd());
     setRemoteInput(await commands.remoteInputAllowed());
     setScreenShare(await commands.screenAllowed());
+    setShareLabels(await commands.labelsShare());
     setShareLocation(await commands.shareLocation());
     setClipHistory(await commands.clipHistoryEnabled());
     setCanLocate(await commands.locationAvailable());
@@ -89,6 +91,10 @@ export default function Settings(props: { onDeveloper: () => void }) {
   const toggleScreenShare = async (on: boolean) => {
     await commands.setScreenAllowed(on);
     setScreenShare(on);
+  };
+  const toggleShareLabels = async (on: boolean) => {
+    await commands.setLabelsShare(on);
+    setShareLabels(on);
   };
   const toggleShareLocation = async (on: boolean) => {
     await commands.setShareLocation(on);
@@ -168,6 +174,11 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={screenShare()} onChange={(e) => toggleScreenShare(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.screenShareHint")}</p>
+        <label class="switch-row">
+          <span>{t("settings.shareLabels")}</span>
+          <input type="checkbox" role="switch" checked={shareLabels()} onChange={(e) => toggleShareLabels(e.currentTarget.checked)} />
+        </label>
+        <p class="muted small">{t("settings.shareLabelsHint")}</p>
         <Show when={canLocate()}>
           <label class="switch-row">
             <span>{t("settings.shareLocation")}</span>

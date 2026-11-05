@@ -161,7 +161,7 @@ fun DeviceLabelEditor(node: String, onDone: () -> Unit) {
     val saved = stringResource(R.string.label_saved)
 
     Tile(title = stringResource(R.string.label_title)) {
-        Muted(String.format(stringResource(R.string.label_hint), own))
+        Muted(stringResource(R.string.label_hint))
         Field(nickname, { nickname = it.take(DeviceLabels.MAX_NICKNAME) }, stringResource(R.string.label_nickname))
         if (nickname.isEmpty()) Muted(String.format(stringResource(R.string.label_nickname_blank), own))
 

@@ -32,6 +32,7 @@ mod background;
 mod ble;
 pub use ble::BleSender;
 mod control;
+mod labels;
 mod ladder;
 mod media;
 pub use media::MAX_AWAKE_MINUTES;
@@ -325,6 +326,7 @@ impl<P: Platform> Engine<P> {
         let control = Arc::new(ControlRegistry::with_defaults(
             platform.clipboard().is_some(),
             config.folder_sync,
+            config.shared_labels,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

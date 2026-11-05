@@ -76,6 +76,19 @@ fun ClipHistorySwitch() {
     Muted(stringResource(R.string.settings_clip_history_hint))
 }
 
+/** "Share names and icons with my other devices": the nicknames, icons
+ *  and colours given to devices ([com.mydomain.android.core.DeviceLabels])
+ *  go to your other devices and theirs come here. On by default. */
+@Composable
+fun ShareLabelsSwitch() {
+    var on by remember { mutableStateOf(Core.labelsShare()) }
+    SwitchRow(stringResource(R.string.settings_share_labels), on) {
+        on = it
+        Core.setLabelsShare(it)
+    }
+    Muted(stringResource(R.string.settings_share_labels_hint))
+}
+
 /** Photo access, the photo backup (on/off, which computer, charging only)
  *  and battery alerts: the phone has no other place to turn these on. */
 @Composable
@@ -310,6 +323,7 @@ fun SettingsScreen(
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
             ClipHistorySwitch()
             ShareCodesSwitch()
+            ShareLabelsSwitch()
         }
 
         Tile(title = stringResource(R.string.automations_title)) {

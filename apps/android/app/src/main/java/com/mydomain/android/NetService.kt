@@ -94,6 +94,8 @@ class NetService : Service() {
         // A computer's sound plays here (any Android: ComputerAudio.kt);
         // this phone's audio on a computer: Android 10 or later.
         Core.engine()?.setAudioRoles(true, PhoneAudio.supported)
+        // Labels given on this phone before they were shared.
+        Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
         PhotoBackup.start(this)
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)

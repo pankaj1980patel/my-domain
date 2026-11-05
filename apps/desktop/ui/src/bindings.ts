@@ -314,6 +314,12 @@ export const commands = {
 	 */
 	setDeviceLabel: (node: string, nickname: string | null, icon: string | null, color: string | null) => typedError<{ [key in string]: DeviceLabel_Serialize }, string>(__TAURI_INVOKE("set_device_label", { node, nickname, icon, color })),
 	/**
+	 *  Whether the names, icons and colours you give your devices are shared
+	 *  with your other devices (and theirs taken here). On until turned off.
+	 */
+	labelsShare: () => __TAURI_INVOKE<boolean>("labels_share"),
+	setLabelsShare: (on: boolean) => __TAURI_INVOKE<void>("set_labels_share", { on }),
+	/**
 	 *  Your phones on Do Not Disturb right now (node ids; a live link and a
 	 *  fresh word from each, see `quiet`), whether or not this computer stays
 	 *  quiet with them.

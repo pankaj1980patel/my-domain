@@ -1,6 +1,7 @@
 // A device's look here: its avatar (the icon you chose, else the initial of
 // its name, ringed in the colour you chose) and the small form that sets the
-// nickname, icon and colour. Kept on this computer only (`device_labels.rs`);
+// nickname, icon and colour. Kept here and shared with your other devices
+// while the Settings switch is on (`device_labels.rs`);
 // names everywhere come from `peerName`, which prefers the nickname.
 
 import { createSignal, For, onMount, Show } from "solid-js";
@@ -144,7 +145,7 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
       }}
     >
       <h2 id="label-form-title">{t("label.title")}</h2>
-      <p class="muted small">{t("label.hint", { name: own() })}</p>
+      <p class="muted small">{t("label.hint")}</p>
       <label class="field">
         <span>{t("label.nickname")}</span>
         <input

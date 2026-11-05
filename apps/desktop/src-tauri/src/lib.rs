@@ -378,6 +378,8 @@ impl EventSink for TauriSink {
                 std::thread::spawn(move || computer_audio::on_listen(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
+            // Labels set on your other devices: take them here.
+            CoreEvent::LabelsChanged { labels } => device_labels::apply_shared(&self.app, labels),
             // A device asks to sync a folder: say so.
             CoreEvent::SyncPairs { pairs } => sync_folders::on_pairs(&self.app, pairs),
             // OS notifications for what arrives while the window is in the
@@ -1489,6 +1491,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         webhooks::new_webhook_token,
         device_labels::get_device_labels,
         device_labels::set_device_label,
+        device_labels::labels_share,
+        device_labels::set_labels_share,
         dnd_devices,
         quiet::phone_quiet,
         remote_input_allowed,
@@ -1627,6 +1631,8 @@ pub fn run() {
                     // captured (`computer_audio.rs`); said in this
                     // computer's status as `audio_sink` / `audio_source`.
                     engine.set_audio_roles(true, computer_audio::supported());
+                    // Labels given here before they were shared.
+                    device_labels::seed(&handle, &engine);
                     app.manage(engine);
                 }
                 Err(e) => {

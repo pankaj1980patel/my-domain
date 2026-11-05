@@ -359,6 +359,32 @@ pub struct BackupItem {
     pub month: Option<String>,
 }
 
+/// What your devices call one of them, as shared between them
+/// (`features::labels`): `Engine::shared_labels`, and the `LabelsChanged`
+/// event. A label with no nickname, icon or colour is a cleared one.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SharedLabel {
+    /// The device it names (node id).
+    pub node: String,
+    /// Shown instead of its own name; none: its own name.
+    pub nickname: Option<String>,
+    /// An icon name (the apps' fixed set); none: the initial of its name.
+    pub icon: Option<String>,
+    /// An accent colour name (the apps' fixed set); none: the default.
+    pub color: Option<String>,
+    /// When it was set (unix ms) ...
+    pub updated_at: u64,
+    /// ... and on which device (node id): the newest wins everywhere.
+    pub by: String,
+}
+
+impl SharedLabel {
+    /// A cleared label: nothing set.
+    pub fn is_cleared(&self) -> bool {
+        self.nickname.is_none() && self.icon.is_none() && self.color.is_none()
+    }
+}
+
 /// A synced folder: one folder kept the same on this device and another
 /// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
 /// event whenever any of them changes.

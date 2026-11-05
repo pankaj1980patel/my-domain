@@ -14,7 +14,8 @@ import { niceName } from "./words";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
-/** What you call a device here: nickname, icon, colour (this computer only). */
+/** What you call a device here: nickname, icon, colour (shared with your
+ *  other devices while the Settings switch is on). */
 export type DeviceLabel = DeviceLabel_Serialize;
 export type Identity = Identity_Serialize;
 /** A synced folder (`features::folder_sync`). */
@@ -493,6 +494,8 @@ export async function startEvents() {
     // This computer's sound on a phone: started, asked, stopped. The
     // sidebar's Stop and the phone's tile follow it.
     on<ComputerAudioStatus_Serialize>("computer-audio", (s) => setState("computerAudio", reconcile(s))),
+    // Device labels set on your other devices (shared): every label here.
+    on<Record<string, DeviceLabel>>("device-labels", (labels) => setState("labels", reconcile(labels ?? {}))),
     // Synced folders: the whole list, whenever any of them changes.
     on<{ pairs: SyncPair[] }>("sync-pairs", ({ pairs }) => setState("syncPairs", reconcile(pairs ?? []))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),

@@ -74,11 +74,12 @@ export const en = {
   // Device page
   "device.back": "← Your devices",
   "device.gone": "This device isn't in your list any more.",
-  // Nickname, icon and colour (this computer only)
+  // Nickname, icon and colour (shared with your other devices while the
+  // Settings switch is on)
   "label.edit": "Edit",
   "label.editHint": "Give this device a nickname, an icon and a colour",
   "label.title": "How this device looks here",
-  "label.hint": "Only on this computer. {name} and your other devices don't see it.",
+  "label.hint": "Your other devices show it too, while “Share names and icons with my other devices” is on in Settings.",
   "label.nickname": "Nickname",
   "label.nicknamePlaceholder": "{name}",
   "label.icon": "Icon",
@@ -709,6 +710,8 @@ export const en = {
   "settings.batteryAlertsHint": "Only on a computer with a battery. Low is {low}% while not charging. A charged level is told once per charge, instead of when it's full.",
   "settings.screenShare": "Let my phone see this screen",
   "settings.screenShareHint": "Your phone shows this screen behind its full-screen touchpad, and you get a notice each time it starts watching. On a Mac, also allow my-domain under Privacy & Security > Screen Recording.",
+  "settings.shareLabels": "Share names and icons with my other devices",
+  "settings.shareLabelsHint": "A nickname, icon or colour you give a device here shows up on your other devices too, and ones you set there show up here. The newest change wins. Off: this computer keeps its own and ignores theirs.",
   // Keyboard shortcuts (Settings), pressed in any app.
   "shortcuts.title": "Keyboard shortcuts",
   "shortcuts.hint": "Keys you press in any app to make my-domain do something. A notification says how it went.",

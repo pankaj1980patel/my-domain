@@ -1232,4 +1232,52 @@ impl MdEngine {
     pub fn set_dnd(&self, on: bool) {
         self.inner.set_dnd(on);
     }
+
+    // --- device labels shared with your other devices ---
+
+    /// Whether the nicknames, icons and colours you give your devices are
+    /// shared with your other devices (and theirs taken here). On until
+    /// turned off.
+    pub fn labels_share(&self) -> bool {
+        self.inner.labels_share()
+    }
+
+    pub fn set_labels_share(&self, on: bool) {
+        self.inner.set_labels_share(on);
+    }
+
+    /// A label set on this phone (all none: cleared): sent to your other
+    /// devices while sharing is on. Labels set on them arrive as
+    /// `labels_changed` events.
+    pub fn set_shared_label(
+        &self,
+        node_id: String,
+        nickname: Option<String>,
+        icon: Option<String>,
+        color: Option<String>,
+    ) -> MdResult<()> {
+        Ok(self.inner.set_shared_label(
+            &node_id,
+            nickname.as_deref(),
+            icon.as_deref(),
+            color.as_deref(),
+        )?)
+    }
+
+    /// A label this phone had before labels were shared (at start): kept
+    /// unless the core already has one for the device. True if added.
+    pub fn seed_label(
+        &self,
+        node_id: String,
+        nickname: Option<String>,
+        icon: Option<String>,
+        color: Option<String>,
+    ) -> bool {
+        self.inner.seed_label(
+            &node_id,
+            nickname.as_deref(),
+            icon.as_deref(),
+            color.as_deref(),
+        )
+    }
 }

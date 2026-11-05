@@ -125,6 +125,11 @@ pub struct CoreConfig {
     /// off behaves like an app from before (tests use it to play an older
     /// peer).
     pub folder_sync: bool,
+    /// Device nicknames, icons and colours shared between your devices
+    /// (`features::labels`): this end says `labels` in its status and
+    /// understands the `labels` message. On by default; off behaves like
+    /// an app from before (tests use it to play an older peer).
+    pub shared_labels: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -161,6 +166,7 @@ impl Default for CoreConfig {
             idle_close_after: Some(std::time::Duration::from_secs(180)),
             bin_media: true,
             folder_sync: true,
+            shared_labels: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

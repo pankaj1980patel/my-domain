@@ -26,6 +26,7 @@ pub mod folder_sync;
 pub mod folders;
 pub mod gallery;
 pub mod input;
+pub mod labels;
 pub mod media;
 pub mod notif_apps;
 pub mod notification;
@@ -111,8 +112,9 @@ impl<P: Platform> ControlRegistry<P> {
     /// so those control messages pass through to the host instead of being
     /// swallowed here. `folder_sync`: this device syncs folders
     /// (`CoreConfig::folder_sync`); without it the `sync_*` messages aren't
-    /// known here, as in an app from before.
-    pub fn with_defaults(has_clipboard: bool, folder_sync: bool) -> Self {
+    /// known here, as in an app from before; likewise `labels` and the
+    /// `labels` message (`CoreConfig::shared_labels`).
+    pub fn with_defaults(has_clipboard: bool, folder_sync: bool, labels: bool) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
         };
@@ -140,6 +142,9 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(audio_share::AudioShareHandler));
         if folder_sync {
             r.register(Arc::new(folder_sync::FolderSyncHandler));
+        }
+        if labels {
+            r.register(Arc::new(labels::LabelsHandler));
         }
         r
     }
