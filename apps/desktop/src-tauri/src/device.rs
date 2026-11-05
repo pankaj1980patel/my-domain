@@ -225,6 +225,7 @@ pub fn on_action(app: &AppHandle, from: &str, name: &str, args: &serde_json::Val
 mod sound {
     use std::process::Command;
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn run(cmd: &str, args: &[&str]) -> Option<String> {
         let out = Command::new(cmd).args(args).output().ok()?;
         out.status
@@ -667,6 +668,7 @@ mod awake {
 pub(crate) mod screen {
     use std::process::Command;
 
+    #[cfg_attr(windows, allow(dead_code))]
     fn ok(cmd: &str, args: &[&str]) -> bool {
         Command::new(cmd)
             .args(args)

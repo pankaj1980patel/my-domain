@@ -23,6 +23,7 @@ use tauri::{AppHandle, Manager};
 use crate::Eng;
 use mdcore::CoreError;
 
+#[cfg_attr(windows, allow(dead_code))]
 const SAID_NO: &str = "The password wasn't shared: you said no on this computer";
 const NO_PASSWORD: &str = "There's no saved password for this Wi-Fi on this computer";
 const NO_WIFI: &str = "This computer isn't on Wi-Fi";

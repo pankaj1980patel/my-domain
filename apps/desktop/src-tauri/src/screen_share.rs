@@ -7,6 +7,7 @@
 // ImageMagick's `import` (X11). A notice says when a device starts
 // watching, so it's never silent.
 
+#[cfg_attr(windows, allow(unused_imports))]
 use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
@@ -16,6 +17,7 @@ use tauri::{AppHandle, Manager};
 use crate::Eng;
 
 /// Snapshot width in pixels (height follows the screen's shape).
+#[cfg_attr(windows, allow(dead_code))]
 const WIDTH: u32 = 1280;
 /// At most one snapshot per this long.
 const EVERY: Duration = Duration::from_millis(500);

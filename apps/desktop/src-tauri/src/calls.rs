@@ -1622,7 +1622,9 @@ fn md_hfp_event(ev: md_hfp::HfEvent, list_calls: impl Fn()) {
 
 // Compiled into the macOS test build too (md-hfp's stub `Hfp` has the same
 // API there), so this glue is at least type-checked off Linux.
-#[cfg(any(target_os = "linux", test))]
+// Also built for macOS tests, so the Mac type-checks it (Windows has no
+// audio bridge for its phone end).
+#[cfg(any(target_os = "linux", all(test, target_os = "macos")))]
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod linux {
     use std::sync::{Arc, Mutex};
