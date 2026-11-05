@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -285,7 +286,10 @@ fun SettingsScreen(
     onAutomations: () -> Unit = {},
     onSetup: () -> Unit = {},
     onHelp: () -> Unit = {},
+    focus: String? = null,
 ) {
+    // [focus]: the tile a search result opened (SearchScreen's Settings ids),
+    // marked and brought into view.
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var taps by remember { mutableIntStateOf(0) }
@@ -303,11 +307,11 @@ fun SettingsScreen(
 
         SetupSettingsTile(onSetup)
 
-        Tile(title = stringResource(R.string.help_title), onClick = onHelp) {
+        Tile(Modifier.foundMark(focus == "help"), title = stringResource(R.string.help_title), onClick = onHelp) {
             Muted(stringResource(R.string.help_settings_hint))
         }
 
-        Tile(title = stringResource(R.string.settings_account)) {
+        Tile(Modifier.foundMark(focus == "account"), title = stringResource(R.string.settings_account)) {
             Text(
                 boldArg(R.string.settings_signed_in_as, Core.session?.username ?: prefs.getString("user", null) ?: "…"),
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
@@ -315,7 +319,7 @@ fun SettingsScreen(
             GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
         }
 
-        Tile(title = stringResource(R.string.settings_this_device)) {
+        Tile(Modifier.foundMark(focus == "device"), title = stringResource(R.string.settings_this_device)) {
             Text(
                 boldArg(R.string.settings_seen_as, niceName(Core.me?.name ?: "")),
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
@@ -326,21 +330,21 @@ fun SettingsScreen(
             ShareLabelsSwitch()
         }
 
-        Tile(title = stringResource(R.string.automations_title)) {
+        Tile(Modifier.foundMark(focus == "automations"), title = stringResource(R.string.automations_title)) {
             Muted(stringResource(R.string.automations_settings_hint))
             SoftButton(stringResource(R.string.automations_open), onAutomations)
         }
 
-        AutomationAppsTile()
+        Box(Modifier.foundMark(focus == "automation-apps")) { AutomationAppsTile() }
 
-        PhotosTile()
-        SyncFoldersTile()
-        TouchpadSettingsTile()
-        LocationSettingsTile()
-        HelperSettingsTile()
-        ShizukuSettingsTile()
+        Box(Modifier.foundMark(focus == "photos")) { PhotosTile() }
+        Box(Modifier.foundMark(focus == "sync")) { SyncFoldersTile() }
+        Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
+        Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
+        Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
+        Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 
-        Tile(title = stringResource(R.string.settings_device_key)) {
+        Tile(Modifier.foundMark(focus == "key"), title = stringResource(R.string.settings_device_key)) {
             Muted(stringResource(R.string.settings_key_hint))
             if (!changing) {
                 GhostButton(stringResource(R.string.settings_change_key), { changing = true })
@@ -364,7 +368,7 @@ fun SettingsScreen(
             }
         }
 
-        Tile(title = stringResource(R.string.settings_appearance)) {
+        Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {
             Muted(stringResource(R.string.settings_appearance_hint))
             ThemePicker(prefs)
         }

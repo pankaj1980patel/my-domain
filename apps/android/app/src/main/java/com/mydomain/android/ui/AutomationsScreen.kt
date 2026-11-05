@@ -56,10 +56,11 @@ private val KINDS = listOf(
 /**
  * The phone's automations (pushed from Settings): the list (what starts
  * each, what it does, on/off, edit, delete) and the form that adds or
- * changes one. They live and run in [PhoneAutomations].
+ * changes one. They live and run in [PhoneAutomations]. [found]: one a
+ * search opened, marked and brought into view.
  */
 @Composable
-fun AutomationsScreen(onBack: () -> Unit) {
+fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
     val ctx = LocalContext.current
     val toast = LocalToast.current
     remember { PhoneAutomations.load(ctx) }
@@ -96,6 +97,7 @@ fun AutomationsScreen(onBack: () -> Unit) {
                     a,
                     onEdit = { isNew = false; editing = a },
                     onDelete = { PhoneAutomations.delete(ctx, a.id); toast(deleted) },
+                    modifier = Modifier.foundMark(a.id == found),
                 )
             }
             PrimaryButton(stringResource(R.string.automation_add), {
@@ -121,9 +123,9 @@ private fun draft(computer: String) = Automation(
 )
 
 @Composable
-private fun AutomationRow(a: Automation, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun AutomationRow(a: Automation, onEdit: () -> Unit, onDelete: () -> Unit, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
-    Tile {
+    Tile(modifier) {
         SwitchRow(
             stringResource(R.string.automation_arrow, PhoneAutomations.whenText(ctx, a.trigger), PhoneAutomations.thenText(ctx, a)),
             a.enabled,

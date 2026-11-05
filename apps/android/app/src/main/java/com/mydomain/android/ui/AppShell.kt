@@ -38,6 +38,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.Findable
+import com.mydomain.android.core.FoundKind
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -57,7 +59,7 @@ private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 
 /** Sign-in until ready; then tabs (Devices, Notes, Activity, Settings) plus the
  *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
- *  this phone and Help screens. */
+ *  this phone, Search (from Home) and Help screens. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -107,6 +109,62 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         help = true
     }
 
+    // Search (from Home): shown over the tabs; what a result opens is pushed
+    // over it, so Back comes back to the results as they were. The query,
+    // the type chips and the open groups (kind names, comma-separated)
+    // survive that and a rotation.
+    var search by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchKinds by rememberSaveable { mutableStateOf("") }
+    var searchOpen by rememberSaveable { mutableStateOf("") }
+    // What a result opened, for that screen to bring into view and mark.
+    var deviceFocus by rememberSaveable { mutableStateOf<String?>(null) }
+    var foundTransfer by rememberSaveable { mutableStateOf<String?>(null) }
+    var foundAutomation by rememberSaveable { mutableStateOf<String?>(null) }
+    var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
+    // A result opened a Settings tile (a tab, not a pushed screen): Back
+    // goes back to Search. And Help opened from Search closes in one Back.
+    var settingsFromSearch by rememberSaveable { mutableStateOf(false) }
+    var helpFromSearch by rememberSaveable { mutableStateOf(false) }
+
+    /** Leave Search and everything it opened (another way in took over). */
+    val leaveSearch = {
+        search = false
+        settingsFromSearch = false
+        helpFromSearch = false
+        settingsFocus = null
+    }
+    val openFound: (Findable) -> Unit = { f ->
+        when (f.kind) {
+            FoundKind.DEVICES -> { deviceFocus = null; device = f.id }
+            FoundKind.MESSAGES -> f.node?.let { deviceFocus = "msg:" + f.id; device = it }
+            FoundKind.CLIPBOARD -> f.node?.let { deviceFocus = "clip:" + f.id; device = it }
+            FoundKind.TRANSFERS -> { foundTransfer = f.id; transfers = true }
+            FoundKind.AUTOMATIONS -> { foundAutomation = f.id; automations = true }
+            FoundKind.HELP -> { helpFromSearch = true; openHelp(f.id) }
+            FoundKind.FOLDERS, FoundKind.AUTOMATION_APPS, FoundKind.SETTINGS -> {
+                settingsFocus = when (f.kind) {
+                    FoundKind.FOLDERS -> "sync"
+                    FoundKind.AUTOMATION_APPS -> "automation-apps"
+                    else -> f.id
+                }
+                settingsFromSearch = true
+                search = false
+                tab = Tab.Settings
+            }
+        }
+    }
+    val closeDevice = { device = null; deviceFocus = null }
+    val closeTransfers = { transfers = false; foundTransfer = null }
+    val closeAutomations = { automations = false; foundAutomation = null }
+    val closeHelp = { help = false; helpFromSearch = false }
+    val backToSearch = {
+        settingsFromSearch = false
+        settingsFocus = null
+        tab = Tab.Devices
+        search = true
+    }
+
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
         while (true) {
@@ -124,6 +182,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             transfers = false
             setup = false
             help = false
+            leaveSearch()
             tab = Tab.Settings
             Core.showSettings = false
         }
@@ -137,21 +196,26 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             transfers = false
             setup = false
             help = false
+            leaveSearch()
             tab = Tab.Devices
+            deviceFocus = null
             device = node
             Core.showDevice = null
         }
     }
 
-    BackHandler(enabled = help || device != null || developer || automations || transfers || setup || tab != Tab.Devices) {
+    val pushed = help || device != null || developer || automations || transfers || setup || search
+    BackHandler(enabled = pushed || settingsFromSearch || tab != Tab.Devices) {
         when {
-            help && helpTopic != null -> helpTopic = null
-            help -> help = false
-            device != null -> device = null
+            help && helpTopic != null && !helpFromSearch -> helpTopic = null
+            help -> closeHelp()
+            device != null -> closeDevice()
             developer -> developer = false
-            automations -> automations = false
-            transfers -> transfers = false
+            automations -> closeAutomations()
+            transfers -> closeTransfers()
             setup -> setup = false
+            search -> search = false
+            settingsFromSearch && tab == Tab.Settings -> backToSearch()
             else -> tab = Tab.Devices
         }
     }
@@ -160,12 +224,17 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
         bottomBar = {
-            if (!help && device == null && !developer && !automations && !transfers && !setup) {
+            if (!pushed) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
-                            onClick = { tab = t },
+                            onClick = {
+                                // Picking a tab leaves what Search opened.
+                                settingsFromSearch = false
+                                settingsFocus = null
+                                tab = t
+                            },
                             icon = { Icon(t.icon, contentDescription = null) },
                             label = { Text(stringResource(t.label)) },
                             colors = NavigationBarItemDefaults.colors(
@@ -182,23 +251,46 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     ) { inner ->
         Box(Modifier.fillMaxSize().padding(inner)) {
             when {
-                help -> HelpScreen(helpTopic, onTopic = { helpTopic = it }, onBack = { help = false })
-                device != null -> DeviceScreen(device!!, onBack = { device = null })
+                help -> HelpScreen(
+                    helpTopic,
+                    onTopic = { if (it == null && helpFromSearch) closeHelp() else helpTopic = it },
+                    onBack = closeHelp,
+                )
+                device != null -> DeviceScreen(device!!, onBack = closeDevice, focus = deviceFocus)
                 developer -> DeveloperScreen(onBack = { developer = false })
-                automations -> AutomationsScreen(onBack = { automations = false })
+                automations -> AutomationsScreen(onBack = closeAutomations, found = foundAutomation)
                 setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
-                transfers -> TransfersScreen(onBack = { transfers = false }, onOpenDevice = { device = it })
-                tab == Tab.Devices -> HomeScreen(onOpen = { device = it }, onSetup = { setup = true })
+                transfers -> TransfersScreen(
+                    onBack = closeTransfers,
+                    onOpenDevice = { deviceFocus = null; device = it },
+                    found = foundTransfer,
+                )
+                search -> SearchScreen(
+                    query = searchQuery,
+                    onQuery = { searchQuery = it },
+                    kinds = kindsOf(searchKinds),
+                    onKinds = { searchKinds = it.joinToString(",") { k -> k.name } },
+                    expanded = kindsOf(searchOpen),
+                    onExpanded = { searchOpen = it.joinToString(",") { k -> k.name } },
+                    onOpen = openFound,
+                    onBack = { search = false },
+                )
+                tab == Tab.Devices -> HomeScreen(onOpen = { deviceFocus = null; device = it }, onSetup = { setup = true }, onSearch = { search = true })
                 tab == Tab.Notes -> NotesScreen(onHelp = { openHelp("notes") })
-                tab == Tab.Activity -> ActivityScreen(onTransfers = { transfers = true })
+                tab == Tab.Activity -> ActivityScreen(onTransfers = { foundTransfer = null; transfers = true })
                 else -> SettingsScreen(
                     prefs,
                     onDeveloper = { developer = true },
-                    onAutomations = { automations = true },
+                    onAutomations = { foundAutomation = null; automations = true },
                     onSetup = { setup = true },
                     onHelp = { openHelp(null) },
+                    focus = settingsFocus,
                 )
             }
         }
     }
 }
+
+/** Kinds saved as their names, comma-separated (unknown names dropped). */
+private fun kindsOf(saved: String): Set<FoundKind> =
+    saved.split(',').mapNotNull { name -> FoundKind.entries.firstOrNull { it.name == name } }.toSet()

@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
@@ -53,13 +54,25 @@ import com.mydomain.android.core.linkStateOf
 import com.mydomain.android.core.progressLabel
 import kotlinx.coroutines.launch
 
-/** One device: its status, then a tile per feature. */
+/** One device: its status, then a tile per feature. [focus]: what a
+ *  search result opened ("msg:<id>" a message, "clip:<id>" a clip), brought
+ *  into view and marked. */
 @Composable
-fun DeviceScreen(node: String, onBack: () -> Unit) {
+fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
     val peer = Core.peers.firstOrNull { it.nodeId == node }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var editing by remember(node) { mutableStateOf(false) }
+    val list = rememberLazyListState()
+    val foundMessage = focus?.takeIf { it.startsWith("msg:") }?.removePrefix("msg:")?.toLongOrNull()
+    val foundClip = focus?.takeIf { it.startsWith("clip:") }?.removePrefix("clip:")?.toLongOrNull()
+    // Scroll to the tile; the row in it brings itself into view (foundMark).
+    LaunchedEffect(node, focus) {
+        when {
+            foundMessage != null -> list.scrollToKey("chat")
+            foundClip != null -> list.scrollToKey("clip-history")
+        }
+    }
 
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -76,6 +89,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
         val wakeSent = stringResource(R.string.wake_sent)
         LazyColumn(
             Modifier.fillMaxSize(),
+            state = list,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -128,7 +142,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
                 }
             }
             if (editing) item { DeviceLabelEditor(node) { editing = false } }
-            item { ChatTile(node) }
+            item(key = "chat") { ChatTile(node, foundMessage) }
             item { FilesTile(node) }
             // Its shared folders, for a device that can be browsed.
             if (Core.deviceStatus[node]?.sharedFolders != null) item { BrowseTile(node, name) }
@@ -164,15 +178,16 @@ fun DeviceScreen(node: String, onBack: () -> Unit) {
             }
             item { ClipboardTile(node) }
             // Text sent to it and from it as clipboard, kept on this phone.
-            if (ClipLog.enabled) item { ClipHistoryTile(node, name) }
+            if (ClipLog.enabled) item(key = "clip-history") { ClipHistoryTile(node, name, foundClip) }
             item { NotifyTile() }
             item { AppsTile(node) }
         }
     }
 }
 
+/** The chat with [node]; [found]: a message a search opened (marked). */
 @Composable
-private fun ChatTile(node: String) {
+private fun ChatTile(node: String, found: Long? = null) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var text by remember { mutableStateOf("") }
@@ -190,6 +205,7 @@ private fun ChatTile(node: String) {
                 Column(
                     // One stop per message, saying which way it went.
                     Modifier.semantics(mergeDescendants = true) { stateDescription = way }
+                        .foundMark(m.id == found)
                         .widthIn(max = 280.dp)
                         .alpha(if (waiting) 0.7f else 1f)
                         .background(if (m.incoming) T.surface2 else T.primary, MaterialTheme.shapes.medium)

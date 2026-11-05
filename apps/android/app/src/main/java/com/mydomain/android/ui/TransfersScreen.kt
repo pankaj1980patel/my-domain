@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -64,13 +65,19 @@ private const val STALE_MS = 5_000L
  * Transfers (pushed from the Activity tab): every file going to or coming
  * from your devices. Those under way first (progress, speed, time left,
  * Cancel), then the newest finished or failed ones (Open, Send again),
- * kept across restarts by [TransferLog].
+ * kept across restarts by [TransferLog]. [found]: a transfer a search
+ * opened, scrolled to and marked.
  */
 @Composable
-fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit) {
+fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: String? = null) {
     val list = TransferLog.list
     val active = list.filter { !it.finished }
     val finished = list.filter { it.finished }
+    val listState = rememberLazyListState()
+    LaunchedEffect(found) {
+        val t = found?.let { id -> list.firstOrNull { it.id == id } } ?: return@LaunchedEffect
+        listState.scrollToKey((if (t.finished) "f-" else "a-") + t.id)
+    }
     // A clock for stale speeds and "2 min ago".
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -80,7 +87,7 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit) {
         }
     }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
         item {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
@@ -103,11 +110,11 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit) {
         }
         if (active.isNotEmpty()) {
             item { Section(stringResource(R.string.transfers_active)) }
-            items(active, key = { "a-" + it.id }) { ActiveRow(it, now) }
+            items(active, key = { "a-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { ActiveRow(it, now) } }
         }
         if (finished.isNotEmpty()) {
             item { Section(stringResource(R.string.transfers_recent)) }
-            items(finished, key = { "f-" + it.id }) { FinishedRow(it, now, onOpenDevice) }
+            items(finished, key = { "f-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { FinishedRow(it, now, onOpenDevice) } }
         }
     }
 }

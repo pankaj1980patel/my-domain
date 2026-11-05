@@ -865,6 +865,32 @@
     <string name="automation_apps_queued">Waiting to reach the device; it’ll happen once it’s reachable</string>
     <string name="automation_apps_pending">Sent; no answer yet</string>
     <string name="automation_apps_failed">Couldn’t do it: %1$s</string>
+    <!-- Search everything (SearchScreen.kt) -->
+    <string name="search_title">Search</string>
+    <string name="search_open">Search everything on this phone</string>
+    <string name="search_field">Search devices, clips, files, settings…</string>
+    <string name="search_clear">Clear search</string>
+    <string name="search_intro">Finds your devices, this session’s messages, the clipboard history, transfers, synced folders, automations, Settings and Help. Only what’s on this phone; nothing is sent anywhere.</string>
+    <string name="search_none">Nothing on this phone matches “%1$s”.</string>
+    <plurals name="search_results">
+        <item quantity="one">%1$d result</item>
+        <item quantity="other">%1$d results</item>
+    </plurals>
+    <string name="search_group">%1$s · %2$d</string>
+    <string name="search_show_all">Show all %1$d</string>
+    <string name="search_show_fewer">Show fewer</string>
+    <string name="search_messages_session">Messages aren’t kept, so only this session’s are here.</string>
+    <string name="search_tag_failed">Didn’t finish</string>
+    <string name="search_kind_all">All</string>
+    <string name="search_kind_devices">Devices</string>
+    <string name="search_kind_messages">Messages</string>
+    <string name="search_kind_clipboard">Clipboard</string>
+    <string name="search_kind_transfers">Transfers</string>
+    <string name="search_kind_folders">Synced folders</string>
+    <string name="search_kind_automations">Automations</string>
+    <string name="search_kind_automation_apps">Automation apps</string>
+    <string name="search_kind_settings">Settings</string>
+    <string name="search_kind_help">Help</string>
     <!-- Accessibility: words only TalkBack reads. -->
     <plurals name="a11y_unread">
         <item quantity="one">%1$d unread message</item>

@@ -51,15 +51,21 @@ private fun whenOf(ts: Long): String {
  * Clipboard history for one device: the text sent to it and received from
  * it as clipboard, kept on this phone ([ClipLog], the last 200), searchable.
  * "Copy" puts a clip on this phone's clipboard; "Send again" puts it on the
- * device's. Like the desktop's ClipHistoryTile.
+ * device's. Like the desktop's ClipHistoryTile. [found]: a clip a search
+ * opened: the list shows down to it, and it's marked and brought into view.
  */
 @Composable
-fun ClipHistoryTile(node: String, name: String) {
+fun ClipHistoryTile(node: String, name: String, found: Long? = null) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var query by remember(node) { mutableStateOf("") }
+    // Far enough down to show the found clip, in whole pages.
+    val start = remember(node, found) {
+        val at = if (found == null) -1 else ClipLog.list.filter { it.node == node }.indexOfFirst { it.id == found }
+        if (at < 0) PAGE else (at / PAGE + 1) * PAGE
+    }
     // A new search starts from the top again.
-    var limit by remember(node, query) { mutableIntStateOf(PAGE) }
+    var limit by remember(node, query) { mutableIntStateOf(if (query.isEmpty()) start else PAGE) }
     val page = ClipLog.page(node, query, limit)
 
     val copied = stringResource(R.string.clip_history_copied)
@@ -93,7 +99,7 @@ fun ClipHistoryTile(node: String, name: String) {
         }
         page.entries.forEach { e ->
             // Way, text and time as one stop; Copy and Send again stay their own.
-            Row(Modifier.semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
+            Row(Modifier.foundMark(e.id == found).semantics(mergeDescendants = true) {}, verticalAlignment = Alignment.Top) {
                 val way = if (e.incoming) from else to
                 Text(
                     if (e.incoming) "↓" else "↑",
