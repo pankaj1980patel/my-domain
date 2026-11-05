@@ -382,6 +382,7 @@ fun SettingsScreen(
         Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {
             Muted(stringResource(R.string.settings_appearance_hint))
             ThemePicker(prefs)
+            LanguageSetting()
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -397,5 +398,26 @@ fun SettingsScreen(
                 }.padding(12.dp),
             )
         }
+    }
+}
+
+/** The app's language: it follows the phone's language (English or Hindi,
+ *  res/values-hi). On Android 13+ the system's per-app language page
+ *  (res/xml/locales_config.xml) can override it; this opens that page. */
+@Composable
+private fun LanguageSetting() {
+    val ctx = LocalContext.current
+    if (android.os.Build.VERSION.SDK_INT >= 33) {
+        Muted(stringResource(R.string.settings_language_hint))
+        GhostButton(stringResource(R.string.settings_language), {
+            val pkg = android.net.Uri.fromParts("package", ctx.packageName, null)
+            try {
+                ctx.startActivity(Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS, pkg))
+            } catch (_: Exception) {
+                runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
+            }
+        })
+    } else {
+        Muted(stringResource(R.string.settings_language_hint_old))
     }
 }

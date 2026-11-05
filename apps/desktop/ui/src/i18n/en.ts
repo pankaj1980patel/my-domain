@@ -4,7 +4,8 @@
 // `{name}` is filled in by t(). A value with `one`/`other` is a plural: read it
 // with tn(), which picks the form by `{count}`. To add a language, copy this
 // file, translate the values (keep the keys and placeholders), and register
-// it in index.ts.
+// it in index.ts (catalogues + LANGUAGES). A language may lag behind: a key it
+// lacks shows in English (scripts/check-translations.py lists the gaps).
 
 export const en = {
   // App shell
@@ -783,6 +784,9 @@ export const en = {
   "settings.version": "my-domain {version}",
   "settings.appearance": "Appearance",
   "settings.appearanceHint": "How my-domain looks on this computer.",
+  "settings.language": "Language",
+  "settings.languageHint": "The language of my-domain on this computer. Help topics are in English for now.",
+  "settings.languageSystem": "System ({name})",
 
   // Themes (the brand kit's five palettes)
   "theme.cosmic-blue": "Cosmic Blue",

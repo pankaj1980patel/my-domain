@@ -22,7 +22,7 @@ import { CallsSetting } from "../components/CallsSetting";
 import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { SyncSetting } from "../components/SyncSetting";
-import { t, tRich, type Key } from "../i18n";
+import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
 
@@ -351,6 +351,25 @@ export default function Settings(props: { onDeveloper: () => void }) {
         <h2>{t("settings.appearance")}</h2>
         <p class="muted small">{t("settings.appearanceHint")}</p>
         <ThemePicker />
+        <label class="row small language-row">
+          <span>{t("settings.language")}</span>
+          <select
+            aria-label={t("settings.language")}
+            onChange={(e) => setLanguagePref(e.currentTarget.value as LangPref)}
+          >
+            <option value="system" selected={languagePref() === "system"}>
+              {t("settings.languageSystem", { name: LANGUAGES.find((l) => l.id === systemLanguage())!.name })}
+            </option>
+            <For each={LANGUAGES}>
+              {(l) => (
+                <option value={l.id} lang={l.id} selected={languagePref() === l.id}>
+                  {l.name}
+                </option>
+              )}
+            </For>
+          </select>
+        </label>
+        <p class="muted small">{t("settings.languageHint")}</p>
       </article>
 
       {/* A button (no look of one), so the 7 taps work from the keyboard too. */}

@@ -3059,3 +3059,19 @@ input[type="checkbox"][role="switch"]:not(:checked) {
 .chat-kept {
   margin: 0;
 }
+
+/* ---- Languages (Hindi): Devanagari fonts + the Settings language row ---- */
+/* Inter has no Devanagari glyphs, so name each system's Devanagari face right
+   after it: Kohinoor / Devanagari Sangam (macOS), Nirmala UI (Windows), Noto
+   Sans / Lohit Devanagari (Linux). Latin text still renders in Inter. */
+:root {
+  --font: "Inter Variable", Inter, "Kohinoor Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Noto Sans Devanagari", "Lohit Devanagari", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+/* Devanagari's vowel signs sit above and below the line: give them room. */
+html:lang(hi) body {
+  line-height: 1.65;
+}
+.language-row {
+  justify-content: space-between;
+  margin-top: var(--s-4);
+}
