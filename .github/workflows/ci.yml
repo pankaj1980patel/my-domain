@@ -45,11 +45,12 @@ jobs:
       - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -p my-domain -p md-hfp -p md-geo --all-targets --locked
-      # The desktop app's own test binary can't start on Windows: built without
-      # the app manifest that tauri-build gives the app, it exits with
-      # STATUS_ENTRYPOINT_NOT_FOUND before any test runs. Clippy above compiles
-      # all its targets; its tests run on macOS and Linux.
-      - run: cargo test -p md-hfp -p md-geo --locked
+      # The desktop app's test binary needs the app manifest (Common Controls
+      # v6) to start; tauri-build links it into the app binary only, so the
+      # app's build.rs has the linker embed windows-app-manifest.xml into every
+      # binary instead (/MANIFEST:EMBED). Without it the tests would exit with
+      # STATUS_ENTRYPOINT_NOT_FOUND before running.
+      - run: cargo test -p md-hfp -p md-geo -p my-domain --locked
 
   test:
     name: test (${{ matrix.os }})
