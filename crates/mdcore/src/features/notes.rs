@@ -41,8 +41,9 @@
 //!   notes_digest { from, digest: { <id>: <version hash> } }
 //!   notes        { from, notes: [<note>...], want?: [<id>...] }
 //!
-//! When a link comes up (or a device is first heard to understand notes),
-//! each end sends its digest: just ids and version hashes, so a large set
+//! When a link comes up (or a device is first heard to understand notes,
+//! or a newer version of them: in its status, `addr_update` or a notes
+//! message itself), each end sends its digest: just ids and version hashes, so a large set
 //! isn't resent. The other end answers with the notes whose version
 //! differs or the digest lacks (tombstones only for notes it has), and
 //! asks (`want`) for those it lacks; the answer goes in batches of at most
@@ -81,7 +82,11 @@
 //!   every device ends the same);
 //! - when two edits conflict, the winner keeps a Done made on the other
 //!   side for the same time (marking Done on the phone while the text was
-//!   edited on the computer doesn't bring the reminder back).
+//!   edited on the computer doesn't bring the reminder back);
+//! - a device that knows reminders sent the version this device has but
+//!   without the reminder kept here (it had it through an older app): it
+//!   gets the note back, with the reminder. So one digest either way
+//!   fills it in.
 //!
 //! The version hash (`version`) stays as it was, so an older app's
 //! digests and lineage still match.
@@ -551,6 +556,10 @@ pub struct Merged {
     pub answer: Vec<String>,
     /// Conflict copies made.
     pub conflicts: Vec<String>,
+    /// Notes that arrived as the version here but without the reminder
+    /// this device has for it: worth sending back to a sender that knows
+    /// reminders (it had the version from, or through, an older app).
+    pub fill: Vec<String>,
 }
 
 fn keep_copy(map: &mut NoteMap, loser: &Entry, out: &mut Merged) {
@@ -604,6 +613,8 @@ pub fn merge(map: &mut NoteMap, incoming: Vec<Entry>, now: u64) -> Merged {
             if let Some(r) = inc.remind.filter(|r| cur.remind.is_none_or(|c| *r > c)) {
                 cur.remind = Some(r);
                 out.changed.push(id);
+            } else if inc.remind.is_none() && cur.remind.is_some() {
+                out.fill.push(id);
             }
             continue;
         }
@@ -645,6 +656,7 @@ pub fn merge(map: &mut NoteMap, incoming: Vec<Entry>, now: u64) -> Merged {
     if prune(map, now) {
         out.changed.retain(|id| map.contains_key(id));
         out.answer.retain(|id| map.contains_key(id));
+        out.fill.retain(|id| map.contains_key(id));
     }
     out
 }
@@ -1071,9 +1083,15 @@ impl<P: Platform> ControlHandler<P> for NotesHandler {
             return; // only your own devices share your notes
         }
         // Sending it says it understands it (an app from before
-        // reminders doesn't say `v`: 1).
+        // reminders doesn't say `v`: 1). Heard here first (before its
+        // status or `addr_update`, which then change nothing), it gets
+        // this device's digest now, as `remember` would send: its own
+        // digest can't name what only this device has (a reminder it
+        // lacks for a version both have).
         let v = msg.json("v").as_u64().unwrap_or(1).max(1);
-        set_caps(ctx, &from, v);
+        if set_caps(ctx, &from, v) {
+            send_digest(ctx, &from);
+        }
         if msg.kind() == "notes_digest" {
             let theirs = parse_digest(&msg.json("digest"));
             let full = msg.json("full").as_bool() == Some(true) && ctx.config.note_reminders;
@@ -1118,6 +1136,12 @@ impl<P: Platform> ControlHandler<P> for NotesHandler {
             ctx.sink.emit(CoreEvent::NotesChanged { notes, removed });
         }
         let mut answer = merged.answer;
+        // The version it sent lacks the reminder kept here: it knows
+        // reminders (`v: 2`), so it lost it through an older app; fill it
+        // in. (From an older app no reminder ever comes: nothing to say.)
+        if v >= VERSION && reminders_with(ctx, &from) {
+            answer.extend(merged.fill);
+        }
         for id in want {
             if !answer.contains(&id) {
                 answer.push(id);
@@ -1663,6 +1687,55 @@ mod tests {
         assert_eq!(diff(&x, &theirs, true).0, ["n"]);
         let theirs: HashMap<String, u64> = digest(&y, false).into_iter().collect();
         assert!(diff(&x, &theirs, false).0.is_empty());
+    }
+
+    /// a (reminders) -> old -> c (reminders), then a and c link, and only
+    /// a's digest goes: c heard that a knows notes from that very digest
+    /// (before a's `addr_update`), so at its link-up it sent none. The
+    /// order the integration test hit now and then, played step by step.
+    #[test]
+    fn a_reminder_lost_through_an_older_app_comes_back_from_one_digest() {
+        let mut a = NoteMap::new();
+        let n = put(
+            &mut a,
+            None,
+            with_remind("Passport", "renew it", remind(7_000, false)),
+            A,
+            10,
+        )
+        .unwrap();
+        let mut old = NoteMap::new();
+        merge(&mut old, sent_to_old(&mut a, &n.id), 11);
+        let mut c = NoteMap::new();
+        merge(&mut c, sent_to_old(&mut old, &n.id), 12);
+        assert_eq!(c[&n.id].remind, None);
+        // a's digest (both know reminders): c's differs, so c sends its
+        // version, the same one but without the reminder ...
+        let theirs: HashMap<String, u64> = digest(&a, true).into_iter().collect();
+        let (send, want) = diff(&c, &theirs, true);
+        assert_eq!(
+            (send.as_slice(), want.len()),
+            (std::slice::from_ref(&n.id), 0)
+        );
+        let to_a = sent(&mut c, &n.id);
+        assert_eq!(to_a[0].remind, None);
+        // ... and a, which has the reminder for that version, sends it back
+        // (`fill`; the handler answers it to a device that said `v: 2`).
+        let m = merge(&mut a, to_a, 13);
+        assert!(m.changed.is_empty() && m.answer.is_empty());
+        assert_eq!(m.fill, std::slice::from_ref(&n.id));
+        let m = merge(&mut c, sent(&mut a, &n.id), 14);
+        assert_eq!(m.changed, std::slice::from_ref(&n.id));
+        assert!(m.answer.is_empty() && m.fill.is_empty(), "it ends there");
+        assert_eq!(c[&n.id].remind, remind(7_000, false));
+        assert_eq!(a, c);
+        // Neither has one: nothing to fill.
+        let mut x = NoteMap::new();
+        let p = put(&mut x, None, edit("Plain", "x"), A, 20).unwrap();
+        let mut y = NoteMap::new();
+        merge(&mut y, sent_to_old(&mut x, &p.id), 21);
+        x.get_mut(&p.id).unwrap().remind = None;
+        assert!(merge(&mut x, sent(&mut y, &p.id), 22).fill.is_empty());
     }
 
     #[test]
