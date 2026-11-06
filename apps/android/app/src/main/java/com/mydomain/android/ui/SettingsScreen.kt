@@ -398,6 +398,7 @@ fun SettingsScreen(
                 boldArg(R.string.settings_seen_as, niceName(Core.me?.name ?: "")),
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
             )
+            OwnFingerprint()
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
             ChatHistorySwitch()
             ClipHistorySwitch()

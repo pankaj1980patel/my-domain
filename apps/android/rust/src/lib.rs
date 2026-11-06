@@ -497,6 +497,36 @@ pub struct JoinInvite {
     pub qr_modules: Vec<u8>,
 }
 
+/// Comparing security keys with one of your devices (mdcore
+/// `KeyVerification`), its QR code as modules.
+#[derive(uniffi::Record)]
+pub struct KeyVerify {
+    pub node_id: String,
+    pub name: String,
+    /// This phone's short fingerprint, and the other device's.
+    pub own_fingerprint: String,
+    pub their_fingerprint: String,
+    /// 12 groups of 5 digits: the same on both devices.
+    pub safety_number: String,
+    pub verified: bool,
+    /// Its key changed and that isn't settled.
+    pub key_changed: bool,
+    /// What the QR code holds (`mydomain://verify?…`).
+    pub code: String,
+    pub qr_size: u32,
+    /// Row-major, 1 = dark, `qr_size * qr_size` of them (no margin).
+    pub qr_modules: Vec<u8>,
+}
+
+/// What came of a scanned verify code: the device now verified, or why
+/// not ("not_a_code", "not_for_this_device", "unknown_device",
+/// "key_changed", "mismatch").
+#[derive(uniffi::Record)]
+pub struct VerifyResult {
+    pub node_id: Option<String>,
+    pub problem: Option<String>,
+}
+
 /// Has the new device joined: "waiting", "joined" (with its name), "none".
 #[derive(uniffi::Record)]
 pub struct JoinStatus {
@@ -881,6 +911,49 @@ impl MdEngine {
     /// "Not now": keep refusing `node_id`'s new key, stop asking about it.
     pub fn dismiss_key_change(&self, node_id: String) -> bool {
         self.inner.dismiss_key_change(&node_id)
+    }
+
+    /// This phone's own security key as a short fingerprint (Settings, Add
+    /// a device): what your other devices show for it.
+    pub fn own_fingerprint(&self) -> String {
+        self.inner.own_fingerprint()
+    }
+
+    /// Both fingerprints, the safety number and the QR code to compare with
+    /// `node_id`; none until it has connected with a security key.
+    pub fn key_verification(&self, node_id: String) -> Option<KeyVerify> {
+        let v = self.inner.key_verification(&node_id)?;
+        let qr = mdcore::qr::QrCode::encode(v.code.as_bytes());
+        Some(KeyVerify {
+            qr_size: qr.as_ref().map_or(0, |q| q.size as u32),
+            qr_modules: qr
+                .map(|q| q.modules.iter().map(|&d| u8::from(d)).collect())
+                .unwrap_or_default(),
+            node_id: v.node_id,
+            name: v.name,
+            own_fingerprint: v.own_fingerprint,
+            their_fingerprint: v.their_fingerprint,
+            safety_number: v.safety_number,
+            verified: v.verified,
+            key_changed: v.key_changed,
+            code: v.code,
+        })
+    }
+
+    /// The user compared and the keys match (`verified`), or takes it back.
+    pub fn set_device_verified(&self, node_id: String, verified: bool) -> MdResult<()> {
+        Ok(self.inner.set_device_verified(&node_id, verified)?)
+    }
+
+    /// A scanned verify code (`mydomain://verify?…`, opened by the camera
+    /// app): marks its device verified when it was made for this phone by
+    /// one of your devices and both keys match.
+    pub fn verify_scanned(&self, text: String) -> VerifyResult {
+        let r = self.inner.verify_scanned(&text);
+        VerifyResult {
+            node_id: r.node_id,
+            problem: r.problem,
+        }
     }
 
     /// The phone's Bluetooth can't link now (`reason`: "off",

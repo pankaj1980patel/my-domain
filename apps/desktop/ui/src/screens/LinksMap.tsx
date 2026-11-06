@@ -12,6 +12,7 @@ import { mapView, myEdge, watchMap, type MapDevice, type MapEdge, type MapView }
 import { niceName, timeAgo } from "../lib/words";
 import { HelpLink } from "../help/HelpLink";
 import KeyChangeBanner from "../components/KeyChangeBanner";
+import { VerifiedBadge } from "../components/VerifyDevice";
 import { t, type Key } from "../i18n";
 
 type Pick = { kind: "device"; node: string } | { kind: "edge"; id: string } | null;
@@ -162,6 +163,13 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                         <text class="map-name" y={40} text-anchor="middle">
                           {peerName(s.node_id)}
                         </text>
+                        <Show when={device(v(), s.node_id)?.verified}>
+                          <g class="map-verified" transform="translate(18 -18)">
+                            <title>{t("verify.badge")}</title>
+                            <circle r={8} />
+                            <path d="M-3.5 0.5 L-1 3 L3.5 -2.5" />
+                          </g>
+                        </Show>
                       </g>
                     )}
                   </For>
@@ -219,7 +227,8 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                       <li class="map-row">
                         <span class={`map-dot tone-${e()?.tone ?? "none"}`} aria-hidden="true" />
                         <span class="grow">
-                          <strong>{peerName(d.node_id)}</strong>
+                          <strong>{peerName(d.node_id)}</strong>{" "}
+                          <VerifiedBadge verified={d.verified} />
                           {": "}
                           {d.link ? label(e()!) : offline(d)}
                           <Show when={(e()?.why.length ?? 0) > 0}>
@@ -299,6 +308,11 @@ function Details(props: {
           <span class="nearby-badge" title={t("nearby.badgeHint")}>
             {t("nearby.badge")}
           </span>
+        </p>
+      </Show>
+      <Show when={e().mine && props.device?.verified}>
+        <p class="small">
+          <VerifiedBadge verified />
         </p>
       </Show>
       <Show when={e().mine && props.device?.problem === "key_changed"}>

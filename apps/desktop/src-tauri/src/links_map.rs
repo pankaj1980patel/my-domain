@@ -374,6 +374,7 @@ mod tests {
             shares_links: true,
             tries: Vec::new(),
             problem: None,
+            verified: false,
         }
     }
 

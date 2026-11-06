@@ -68,6 +68,7 @@ import ConnectionTile from "./device/ConnectionTile";
 import { NearbyBadge } from "../components/NearbyBadge";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
+import VerifyDevice from "../components/VerifyDevice";
 
 /** Every tile a device's page can show, in default order. A new tile is one
  *  entry here (its `id` is kept in saved layouts: never rename one); a saved
@@ -212,6 +213,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 >
                   {arranging() ? t("layout.done") : t("layout.edit")}
                 </button>
+                <VerifyDevice node={props.node} />
               </div>
               <StatusPill node={props.node} />
               <Show when={s() === "connecting" || s() === "failed"}>

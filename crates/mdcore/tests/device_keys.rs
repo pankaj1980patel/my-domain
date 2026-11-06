@@ -192,3 +192,66 @@ fn a_reinstalled_device_is_refused_until_the_user_trusts_its_new_key() {
     assert_eq!(kept.len(), 1);
     assert_eq!(kept[0].old_fingerprint, change.new_fingerprint);
 }
+
+#[test]
+fn two_devices_see_the_same_safety_number_and_a_scan_verifies() {
+    let a_store = Install::new();
+    let b_store = Install::new();
+    let a = a_store.start("vf-a");
+    let b = b_store.start("vf-b");
+    TestNode::pair(&a, &b);
+    assert!(
+        a.engine.key_verification(&b.node_id()).is_none(),
+        "not linked yet"
+    );
+    assert_eq!(a.engine.send(&b.node_id(), "hello").unwrap(), "QUIC");
+    b.sink.wait_for_message("hello");
+
+    let on_a = a.engine.key_verification(&b.node_id()).unwrap();
+    let on_b = b.engine.key_verification(&a.node_id()).unwrap();
+    assert_eq!(on_a.safety_number, on_b.safety_number, "same on both");
+    assert_eq!(on_a.own_fingerprint, a.engine.own_fingerprint());
+    assert_eq!(on_a.their_fingerprint, b.engine.own_fingerprint());
+    assert_eq!(on_b.their_fingerprint, a.engine.own_fingerprint());
+    assert!(!on_a.verified && !on_b.verified);
+
+    // b scans a's code: b marks a verified; a code for someone else isn't.
+    let wrong = on_a.code.replace("t=vf-b", "t=vf-c");
+    assert_eq!(
+        b.engine.verify_scanned(&wrong).problem.as_deref(),
+        Some("not_for_this_device")
+    );
+    let scan = b.engine.verify_scanned(&on_a.code);
+    assert_eq!(scan.node_id.as_deref(), Some("vf-a"));
+    assert!(b.engine.is_device_verified("vf-a"));
+    assert!(b
+        .engine
+        .links_map()
+        .devices
+        .iter()
+        .any(|d| d.node_id == "vf-a" && d.verified));
+    // a marks b after comparing the numbers.
+    a.engine.set_device_verified(&b.node_id(), true).unwrap();
+    assert!(a.engine.key_verification(&b.node_id()).unwrap().verified);
+    drop(a);
+
+    // a is reinstalled: b says it was verified, and trusting the new key
+    // clears it.
+    let a = Install::new().start("vf-a");
+    TestNode::pair(&a, &b);
+    let _ = a.engine.send(&b.node_id(), "new install");
+    b.sink
+        .wait_until(Duration::from_secs(10), |e| match e {
+            CoreEvent::KeyChanged { .. } => Some(()),
+            _ => None,
+        })
+        .expect("key change event");
+    let change = b.engine.key_changes().pop().unwrap();
+    assert!(change.was_verified);
+    assert!(b.engine.set_device_verified("vf-a", true).is_err());
+    b.engine
+        .trust_new_key("vf-a", &change.new_fingerprint)
+        .unwrap();
+    assert!(!b.engine.is_device_verified("vf-a"));
+    assert!(!b.engine.key_verification("vf-a").unwrap().verified);
+}

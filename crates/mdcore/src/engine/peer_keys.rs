@@ -81,3 +81,100 @@ impl<P: Platform> Engine<P> {
         device_key::dismiss(&self.ctx.peer_keys, &*self.ctx.platform, node_id)
     }
 }
+
+/// Comparing keys with one of your devices (`Engine::key_verification`).
+#[derive(Clone, Debug, PartialEq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct KeyVerification {
+    pub node_id: String,
+    pub name: String,
+    /// This device's short fingerprint (its own Settings shows it too).
+    pub own_fingerprint: String,
+    /// The other device's, as this device remembers its key.
+    pub their_fingerprint: String,
+    /// 12 groups of 5 digits from both keys: the same on both devices.
+    pub safety_number: String,
+    /// The user verified this key (cleared when its key changes).
+    pub verified: bool,
+    /// Its key changed and that isn't settled: verify after.
+    pub key_changed: bool,
+    /// What the QR code holds (`device_key::VerifyCode`): the other device
+    /// scans it.
+    pub code: String,
+    /// That QR code: modules per side, and its dark modules as an SVG path
+    /// with a 4-module margin (`viewBox="0 0 {qr_size+8} {qr_size+8}"`).
+    pub qr_size: u32,
+    pub qr_path: String,
+}
+
+impl<P: Platform> Engine<P> {
+    /// This device's own key, as a short fingerprint (four groups of four
+    /// hex digits): what other devices show for it.
+    pub fn own_fingerprint(&self) -> String {
+        device_key::fingerprint(&self.ctx.device_key.public())
+    }
+
+    /// Fingerprints, safety number and QR code to compare with `node_id`;
+    /// `None` until it has connected with a security key.
+    pub fn key_verification(&self, node_id: &str) -> Option<KeyVerification> {
+        let ctx = &self.ctx;
+        let theirs = device_key::pinned(&ctx.peer_keys, &*ctx.platform, node_id)?;
+        let mine = ctx.device_key.public();
+        let me = ctx.identity.lock().node_id.clone();
+        let code = device_key::VerifyCode {
+            from: me,
+            from_key: mine.clone(),
+            to: node_id.to_string(),
+            to_key: theirs.clone(),
+        }
+        .to_uri();
+        // About 170 bytes: always fits.
+        let qr = crate::qr::QrCode::encode(code.as_bytes());
+        let name = ctx
+            .peers
+            .lock()
+            .get(node_id)
+            .map(|p| p.name.clone())
+            .filter(|n| !n.trim().is_empty())
+            .unwrap_or_else(|| node_id.to_string());
+        Some(KeyVerification {
+            node_id: node_id.to_string(),
+            name,
+            own_fingerprint: device_key::fingerprint(&mine),
+            their_fingerprint: device_key::fingerprint(&theirs),
+            safety_number: device_key::safety_number(&mine, &theirs),
+            verified: device_key::is_verified(&ctx.peer_keys, &*ctx.platform, node_id),
+            key_changed: key_changed(ctx, node_id),
+            qr_size: qr.as_ref().map_or(0, |q| q.size as u32),
+            qr_path: qr.map(|q| q.svg_path()).unwrap_or_default(),
+            code,
+        })
+    }
+
+    /// The user compared and the keys match (`true`), or takes that back.
+    /// Fails when `node_id` hasn't connected with a key, or its key changed
+    /// and that isn't settled.
+    pub fn set_device_verified(&self, node_id: &str, verified: bool) -> crate::Result<()> {
+        device_key::set_verified(&self.ctx.peer_keys, &*self.ctx.platform, node_id, verified)
+            .map_err(CoreError::InvalidInput)
+    }
+
+    /// `node_id`'s key is verified (and still the one remembered).
+    pub fn is_device_verified(&self, node_id: &str) -> bool {
+        device_key::is_verified(&self.ctx.peer_keys, &*self.ctx.platform, node_id)
+    }
+
+    /// A verify QR code scanned on this device: when it was made for this
+    /// device by one of yours and both keys match, that device is marked
+    /// verified.
+    pub fn verify_scanned(&self, text: &str) -> device_key::VerifyScan {
+        let me = self.ctx.identity.lock().node_id.clone();
+        device_key::check_scan(
+            &self.ctx.peer_keys,
+            &*self.ctx.platform,
+            &me,
+            &self.ctx.device_key.public(),
+            text,
+        )
+    }
+}

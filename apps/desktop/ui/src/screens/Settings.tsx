@@ -29,6 +29,7 @@ import { WifiDirectSetting } from "../components/WifiDirectSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
+import { OwnFingerprint } from "../components/VerifyDevice";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -161,6 +162,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <article class="tile" id="settings-device">
         <h2>{t("settings.thisDevice")}</h2>
         <p>{tRich("settings.seenAs", { name: <strong>{niceName(state.me?.name ?? "")}</strong> })}</p>
+        <OwnFingerprint />
         <label class="switch-row">
           <span>{t("settings.clipSync")}</span>
           <input type="checkbox" role="switch" checked={state.clipSync} onChange={(e) => setClipSync(e.currentTarget.checked)} />

@@ -30,6 +30,7 @@ import com.mydomain.android.R
 import com.mydomain.android.core.KeyChangeInfo
 import com.mydomain.android.core.KeyChangePlan
 import com.mydomain.android.core.KeyChanges
+import com.mydomain.android.core.KeyVerifyPlan
 import com.mydomain.android.core.friendlyError
 import kotlinx.coroutines.launch
 
@@ -37,8 +38,9 @@ import kotlinx.coroutines.launch
  * "<name>'s security key changed": on the device's screen (until the user
  * decides or says "Not now") and in the connection map's details (always,
  * while it's refused, [showDismissed]). "Trust the new key" asks first,
- * showing the old and new keys' short fingerprints; only the key shown is
- * trusted.
+ * showing the old and new keys' short fingerprints, whether the old one
+ * was verified, and to compare with the fingerprint the other device shows
+ * in its own Settings; only the key shown is trusted.
  */
 @Composable
 fun KeyChangeBanner(node: String, showDismissed: Boolean = false) {
@@ -56,6 +58,9 @@ fun KeyChangeBanner(node: String, showDismissed: Boolean = false) {
     ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.key_change_title, name), style = MaterialTheme.typography.titleSmall, color = T.text, fontWeight = FontWeight.Bold)
+            if (KeyVerifyPlan.warnVerified(c)) {
+                Text(stringResource(R.string.key_change_was_verified), style = MaterialTheme.typography.bodyMedium, color = T.warning, fontWeight = FontWeight.Bold)
+            }
             Text(stringResource(R.string.key_change_body), style = MaterialTheme.typography.bodyMedium, color = T.text)
             Muted(stringResource(if (c.dismissed) R.string.key_change_dismissed else R.string.key_change_refused, name))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -98,6 +103,13 @@ private fun TrustDialog(c: KeyChangeInfo, name: String, close: () -> Unit, trust
                 Text(c.oldFingerprint, color = T.text, fontFamily = FontFamily.Monospace)
                 Muted(stringResource(R.string.key_change_new))
                 Text(c.newFingerprint, color = T.text, fontFamily = FontFamily.Monospace)
+                Muted(stringResource(R.string.key_change_status))
+                Text(
+                    stringResource(if (c.wasVerified) R.string.key_change_status_verified else R.string.key_change_status_not_verified),
+                    color = if (c.wasVerified) T.warning else T.text,
+                    fontWeight = if (c.wasVerified) FontWeight.Bold else null,
+                )
+                Text(stringResource(R.string.key_change_compare, name), color = T.text)
             }
         },
         // Cancel is the easy way out; trusting is never the default.

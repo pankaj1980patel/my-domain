@@ -124,6 +124,7 @@ private fun InvitePanel(round: Int, onNewCode: () -> Unit, onClose: () -> Unit) 
             }
         }
         Muted(stringResource(R.string.join_privacy))
+        OwnFingerprint()
         GhostButton(stringResource(R.string.join_close), {
             if (live) scope.launch { runCatching { Core.joinCancel() } }
             live = false
@@ -135,13 +136,18 @@ private fun InvitePanel(round: Int, onNewCode: () -> Unit, onClose: () -> Unit) 
 /** The QR code, black on white whatever the theme (scanners need the
  *  contrast), with the standard 4-module quiet zone. */
 @Composable
-private fun QrImage(inv: JoinInvite, modifier: Modifier) {
-    val n = inv.qrSize.toInt()
+private fun QrImage(inv: JoinInvite, modifier: Modifier) =
+    QrModules(inv.qrSize.toInt(), { inv.qrModules[it].toInt() != 0 }, modifier)
+
+/** A QR code from the core's encoder: [n] modules per side, [dark] by
+ *  row-major index; black on white with a 4-module quiet zone. */
+@Composable
+internal fun QrModules(n: Int, dark: (Int) -> Boolean, modifier: Modifier) {
     Canvas(modifier.background(Color.White)) {
         val cell = size.minDimension / (n + 8)
         for (y in 0 until n) {
             for (x in 0 until n) {
-                if (inv.qrModules[y * n + x].toInt() != 0) {
+                if (dark(y * n + x)) {
                     drawRect(Color.Black, topLeft = Offset((x + 4) * cell, (y + 4) * cell), size = Size(cell + 0.5f, cell + 0.5f))
                 }
             }

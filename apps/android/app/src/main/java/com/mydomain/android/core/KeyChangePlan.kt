@@ -12,6 +12,8 @@ data class KeyChangeInfo(
     val attempts: Int = 0,
     /** The user said "Not now": still refused, not asked again. */
     val dismissed: Boolean = false,
+    /** The key it had was verified by the user: be careful. */
+    val wasVerified: Boolean = false,
 )
 
 /**

@@ -262,6 +262,7 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
     val text2 = T.text2
     val accent = T.accent
     val off = T.text3
+    val verifiedBg = T.success
     val tones = Tone.entries.associateWith { toneColor(it) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val w = with(density) { maxWidth.toPx() }
@@ -371,6 +372,18 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
             for (d in map.devices) {
                 val s = at[d.nodeId] ?: continue
                 node(s.x, s.y, r, names[d.nodeId].orEmpty(), if (d.link != null) accent else off, d.link == null, pick == PickedDevice(d.nodeId))
+                // Verified: a small check at its top right.
+                if (d.verified) {
+                    val v = Offset(s.x + r * 0.75f, s.y - r * 0.75f)
+                    val k = r * 0.32f
+                    drawCircle(verifiedBg, k, v)
+                    val tick = Path().apply {
+                        moveTo(v.x - k * 0.45f, v.y + k * 0.05f)
+                        lineTo(v.x - k * 0.1f, v.y + k * 0.4f)
+                        lineTo(v.x + k * 0.5f, v.y - k * 0.35f)
+                    }
+                    drawPath(tick, Color.White, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+                }
             }
             node(c.x, c.y, r * 1.3f, me, accent, dashed = false, bold = true)
         }
@@ -467,6 +480,7 @@ private fun Details(map: LinksMapInfo, pick: Picked, onClose: () -> Unit, onDevi
             val how = l?.how
             Tile(title = name) {
                 Text(stringResource(howRes(how)), color = toneColor(LinksMapPlan.tone(how)), fontWeight = FontWeight.Bold)
+                if (d.verified) VerifiedBadge()
                 if (d.problem == "key_changed") KeyChangeBanner(d.nodeId, showDismissed = true)
                 if (how != null) {
                     pathRes(how)?.let { Kv(stringResource(R.string.map_d_path), stringResource(it, me, name)) }

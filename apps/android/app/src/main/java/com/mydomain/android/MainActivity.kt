@@ -19,6 +19,8 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.JoinLinks
+import com.mydomain.android.core.KeyVerifyPlan
+import com.mydomain.android.core.Verify
 import com.mydomain.android.ui.App
 import com.mydomain.android.ui.MdTheme
 
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
         if (savedInstanceState == null) openNote(intent)
         if (savedInstanceState == null) openTimers(intent)
         if (savedInstanceState == null) takeJoinLink(intent)
+        if (savedInstanceState == null) takeVerifyLink(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -135,6 +138,18 @@ class MainActivity : ComponentActivity() {
             return
         }
         Core.pendingJoin = link
+    }
+
+    /** A scanned verify QR code (`mydomain://verify?…`, opened by the camera
+     *  app): the core checks it and the app says what came of it. Not again
+     *  from Recents. */
+    private fun takeVerifyLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val link = intent.dataString ?: return
+        if (!KeyVerifyPlan.isVerifyLink(link)) return
+        intent.data = null
+        Verify.pendingScan = link
     }
 
     /** A launcher shortcut ([ShareTargets]) asked for a device's screen. */
@@ -217,6 +232,7 @@ class MainActivity : ComponentActivity() {
         openNote(intent)
         openTimers(intent)
         takeJoinLink(intent)
+        takeVerifyLink(intent)
         if (!directShare(intent)) takeShare(intent)
     }
 

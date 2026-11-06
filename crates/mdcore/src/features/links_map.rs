@@ -197,6 +197,8 @@ pub struct MapDevice {
     /// trusts the new one), "bad_key" (what it sent couldn't be read: a
     /// different encryption key).
     pub problem: Option<String>,
+    /// The user verified its security key (and it's still that key).
+    pub verified: bool,
 }
 
 /// A link between two of your other devices, as one of them said.
@@ -764,6 +766,11 @@ pub fn snapshot<P: Platform>(ctx: &NetCtx<P>) -> LinksMap {
                 shares_links: supports(ctx, &p.node_id),
                 tries,
                 problem,
+                verified: crate::device_key::is_verified(
+                    &ctx.peer_keys,
+                    &*ctx.platform,
+                    &p.node_id,
+                ),
             }
         })
         .collect();

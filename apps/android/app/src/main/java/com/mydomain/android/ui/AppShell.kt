@@ -88,6 +88,8 @@ fun App(prefs: SharedPreferences) {
         } else {
             Main(prefs, snack)
             ShareChooser()
+            // A verify code scanned with the camera app: what came of it.
+            VerifyScanResult()
         }
     }
 }

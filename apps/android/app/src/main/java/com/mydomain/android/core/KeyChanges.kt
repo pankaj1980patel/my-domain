@@ -90,6 +90,7 @@ object KeyChanges {
             lastAgoS = o.optLong("last_ago_s"),
             attempts = o.optInt("attempts"),
             dismissed = o.optBoolean("dismissed"),
+            wasVerified = o.optBoolean("was_verified"),
         )
     }
 }

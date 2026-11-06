@@ -1,7 +1,9 @@
 // "<name>'s security key changed": on a device's page (until you decide or
 // say "Not now") and in the connection map's details (always, while it's
 // refused). "Trust the new key" asks first, showing the old and new keys'
-// short fingerprints; only the key shown is trusted.
+// short fingerprints; only the key shown is trusted. It says whether the old
+// key had been verified, and to compare the new fingerprint with the one the
+// other device shows in its own Settings.
 
 import { createSignal, Show } from "solid-js";
 import { Portal } from "solid-js/web";
@@ -25,6 +27,9 @@ export default function KeyChangeBanner(props: { node: string; showDismissed?: b
       {(c) => (
         <div class="key-banner" role="alert">
           <strong>{t("keyChange.title", { name: name() })}</strong>
+          <Show when={c().was_verified}>
+            <p class="small key-was-verified">{t("keyChange.wasVerified")}</p>
+          </Show>
           <p class="small">{t("keyChange.body")}</p>
           <p class="small muted">
             {c().dismissed ? t("keyChange.dismissed", { name: name() }) : t("keyChange.refused", { name: name() })}
@@ -95,7 +100,12 @@ function Confirm(props: { change: KeyChange; name: string; onClose: () => void }
             <dd class="mono">{props.change.old_fingerprint}</dd>
             <dt>{t("keyChange.new")}</dt>
             <dd class="mono">{props.change.new_fingerprint}</dd>
+            <dt>{t("keyChange.status")}</dt>
+            <dd classList={{ "key-was-verified": props.change.was_verified }}>
+              {props.change.was_verified ? t("keyChange.statusVerified") : t("keyChange.statusNotVerified")}
+            </dd>
           </dl>
+          <p class="small">{t("keyChange.compare", { name: props.name })}</p>
           <div class="row">
             <button class="btn btn-ghost btn-sm" onClick={close}>
               {t("keyChange.cancel")}

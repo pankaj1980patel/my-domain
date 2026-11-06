@@ -201,6 +201,14 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="mydomain" android:host="join" />
             </intent-filter>
+            <!-- Verify a device: the camera app opens a scanned verify QR code
+                 (mydomain://verify?…, see ui/VerifyUi.kt). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mydomain" android:host="verify" />
+            </intent-filter>
             <!-- Direct Share: each of your devices in the share sheet (ShareTargets.kt),
                  and the New note launcher shortcut. -->
             <meta-data

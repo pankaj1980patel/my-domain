@@ -136,7 +136,7 @@ impl JoinLink {
 
 /// Percent-encode a query value: everything but unreserved characters and
 /// `:` `/` (allowed in a query, and keeps the server URL short).
-fn pct_encode(s: &str) -> String {
+pub(crate) fn pct_encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     for b in s.bytes() {
         if b.is_ascii_alphanumeric() || b"-._~:/".contains(&b) {
@@ -148,7 +148,7 @@ fn pct_encode(s: &str) -> String {
     out
 }
 
-fn pct_decode(s: &str) -> Option<String> {
+pub(crate) fn pct_decode(s: &str) -> Option<String> {
     let bytes = s.as_bytes();
     let mut out = Vec::with_capacity(bytes.len());
     let mut i = 0;

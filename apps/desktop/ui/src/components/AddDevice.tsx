@@ -10,6 +10,7 @@ import { friendlyError, niceName } from "../lib/words";
 import { toast } from "./ui";
 import { t } from "../i18n";
 import { focusSoon } from "../lib/a11y";
+import { OwnFingerprint } from "./VerifyDevice";
 
 const POLL_MS = 2000;
 
@@ -148,6 +149,7 @@ export function AddDevice() {
           )}
         </Show>
         <p class="muted small">{t("join.privacy")}</p>
+        <OwnFingerprint />
         <button class="btn btn-ghost btn-sm" ref={closeButton} onClick={() => close()}>
           {t("join.close")}
         </button>

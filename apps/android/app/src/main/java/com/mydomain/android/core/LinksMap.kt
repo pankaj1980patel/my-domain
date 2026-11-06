@@ -85,6 +85,7 @@ object LinksMap {
                     PathTryInfo(it.optString("path"), it.optString("reason"), it.optLong("ago_s"))
                 },
                 problem = d.strOrNull("problem"),
+                verified = d.optBoolean("verified"),
             )
         },
         others = o.optJSONArray("others").objects().map {

@@ -695,6 +695,18 @@ export const commands = {
 	/**  "Not now": keep refusing it, stop asking (until another key turns up). */
 	dismissKeyChange: (nodeId: string) => __TAURI_INVOKE<boolean>("dismiss_key_change", { nodeId }),
 	/**
+	 *  This computer's own security key, as a short fingerprint (Settings, Add
+	 *  a device): what your other devices show for it.
+	 */
+	ownFingerprint: () => __TAURI_INVOKE<string>("own_fingerprint"),
+	/**
+	 *  Both fingerprints, the safety number and the QR code to compare with
+	 *  `node_id` (none until it has connected with a security key).
+	 */
+	keyVerification: (nodeId: string) => __TAURI_INVOKE<KeyVerification | null>("key_verification", { nodeId }),
+	/**  You compared and they match (`verified`), or you take that back. */
+	setDeviceVerified: (nodeId: string, verified: boolean) => typedError<null, string>(__TAURI_INVOKE("set_device_verified", { nodeId, verified })),
+	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
 	 *  closed.
@@ -1742,6 +1754,35 @@ export type KeyChange = {
 	attempts: number,
 	/**  The user said "Not now" (still refused, not asked again). */
 	dismissed: boolean,
+	/**  The key it had was verified by the user: be careful. */
+	was_verified: boolean,
+};
+
+/**  Comparing keys with one of your devices (`Engine::key_verification`). */
+export type KeyVerification = {
+	node_id: string,
+	name: string,
+	/**  This device's short fingerprint (its own Settings shows it too). */
+	own_fingerprint: string,
+	/**  The other device's, as this device remembers its key. */
+	their_fingerprint: string,
+	/**  12 groups of 5 digits from both keys: the same on both devices. */
+	safety_number: string,
+	/**  The user verified this key (cleared when its key changes). */
+	verified: boolean,
+	/**  Its key changed and that isn't settled: verify after. */
+	key_changed: boolean,
+	/**
+	 *  What the QR code holds (`device_key::VerifyCode`): the other device
+	 *  scans it.
+	 */
+	code: string,
+	/**
+	 *  That QR code: modules per side, and its dark modules as an SVG path
+	 *  with a 4-module margin (`viewBox="0 0 {qr_size+8} {qr_size+8}"`).
+	 */
+	qr_size: number,
+	qr_path: string,
 };
 
 /**  Where the layout a page shows came from. */
@@ -1890,6 +1931,8 @@ export type MapDevice_Deserialize = {
 	 *  different encryption key).
 	 */
 	problem?: string | null,
+	/**  The user verified its security key (and it's still that key). */
+	verified: boolean,
 };
 
 /**  One of your devices on the map. */
@@ -1926,6 +1969,8 @@ export type MapDevice_Serialize = {
 	 *  different encryption key).
 	 */
 	problem: string | null,
+	/**  The user verified its security key (and it's still that key). */
+	verified: boolean,
 };
 
 /**  How this device is linked to one of your devices. */

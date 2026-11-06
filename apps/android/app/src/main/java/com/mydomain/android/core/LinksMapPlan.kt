@@ -42,6 +42,8 @@ data class MapDeviceInfo(
     /** "key_changed": its security key changed, refused until you trust
      *  the new one; "bad_key": what it sends can't be read. */
     val problem: String? = null,
+    /** The user verified its security key (and it's still that key). */
+    val verified: Boolean = false,
 )
 
 /** A link between two of your other devices, as one of them said. */

@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust
+keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -30,7 +30,17 @@ The **6-digit code** is for a device that can't scan. So that it can bring the d
 
 ## When a device's security key changes
 
-Besides the device key you share, each install has a security key of its own that proves which device is on the other end of a direct connection. Your devices remember it the first time they meet. If a device turns up with another key (the app was reinstalled, its data cleared, or someone is pretending to be it), direct connections to it are refused until you choose **Trust the new key** on its page, after comparing the old and new fingerprints. Nothing is trusted by itself, and only the exact key you were shown is. See [Troubleshooting](help:troubleshooting).
+Besides the device key you share, each install has a security key of its own that proves which device is on the other end of a direct connection. Your devices remember it the first time they meet. If a device turns up with another key (the app was reinstalled, its data cleared, or someone is pretending to be it), direct connections to it are refused until you choose **Trust the new key** on its page, after comparing the old and new fingerprints. Nothing is trusted by itself, and only the exact key you were shown is. Before you trust it, compare the new fingerprint with the one the other device shows under **Settings → This device → Your security key**: they must be the same. If the device was verified before, the warning says so: be extra careful. See [Troubleshooting](help:troubleshooting).
+
+## Verifying a device
+
+To be sure a device is really yours and nothing sits between them, verify it once:
+
+1. Each device shows its own security key as a short fingerprint (four groups of four characters) in **Settings → This device → Your security key**, and under **Add a device**.
+2. On a device's page, choose **Verify**. You see this device's fingerprint and the other one's side by side, and a **safety number** (12 groups of 5 digits) made from both keys. Open **Verify** for this device on the other one too: the safety number is the same on both when the keys are genuine.
+3. If they match, choose **They match: mark as verified**. Or, on the phone, point the camera at the QR code the computer shows under **Verify** and open the link: the phone checks both keys itself and marks the computer verified. A code made for another device, from a device the phone doesn't know, or with keys that don't match is refused.
+
+Verified devices show a **Verified** badge on their page and on the connection map. If a verified device's key ever changes, the badge goes away, and the key-changed warning says it was verified before. Verify it again after you've checked and trusted the new key.
 
 ## Consent: the device being reached decides
 

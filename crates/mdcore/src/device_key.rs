@@ -21,6 +21,15 @@
 //! key. Only the user can trust it (`trust`), and only the exact key
 //! recorded is then remembered: a third key is refused again. Records are
 //! kept across restarts (kv `peer_key_changes`), at most `MAX_CHANGES`.
+//!
+//! Verifying a device: both show their own key's short fingerprint
+//! (`fingerprint`) and, per pair, a safety number made from both keys
+//! (`safety_number`, the same on both devices) and a QR code
+//! (`VerifyCode`). When the user says they match, or this device scans
+//! the other's code and it checks out, the device is marked verified: the
+//! key verified is kept next to its pin (kv `peer_keys_verified`), so it
+//! counts only while that key is the one remembered. Trusting a new key
+//! clears it; a key change says whether the old key had been verified.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,7 +38,7 @@ use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use parking_lot::Mutex;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2::{Digest, Sha256, Sha512};
 
 use crate::platform::Platform;
 
@@ -46,6 +55,10 @@ const MISPLACED_KV: &str = "device_key";
 const PINS_KV: &str = "peer_keys";
 /// kv key holding the refused key changes (JSON: node id -> `Change`).
 const CHANGES_KV: &str = "peer_key_changes";
+/// kv key holding the keys the user verified (JSON: node id -> base64 key).
+const VERIFIED_KV: &str = "peer_keys_verified";
+/// What a verify QR code starts with (opened by the phone's camera too).
+pub const VERIFY_PREFIX: &str = "mydomain://verify?";
 /// The most key changes kept (the one heard of longest ago goes first).
 pub const MAX_CHANGES: usize = 32;
 
@@ -197,6 +210,8 @@ pub struct KeyChange {
     pub attempts: u32,
     /// The user said "Not now" (still refused, not asked again).
     pub dismissed: bool,
+    /// The key it had was verified by the user: be careful.
+    pub was_verified: bool,
 }
 
 /// The keys other devices used, and the changes refused (both loaded from
@@ -205,6 +220,7 @@ pub struct KeyChange {
 pub struct PeerKeys {
     pins: Mutex<Option<HashMap<String, String>>>,
     changes: Mutex<Option<HashMap<String, Change>>>,
+    verified: Mutex<Option<HashMap<String, String>>>,
 }
 
 /// The remembered keys (shared by the engine and its threads).
@@ -309,6 +325,11 @@ pub fn check(pins: &Pins, store: &dyn Store, node_id: &str, key: Option<&str>) -
 /// The key changes refused so far, newest first; `name` names a node id.
 pub fn changes(pins: &Pins, store: &dyn Store, name: impl Fn(&str) -> String) -> Vec<KeyChange> {
     let now = now_secs();
+    let verified = pins
+        .verified
+        .lock()
+        .get_or_insert_with(|| load(store, VERIFIED_KV))
+        .clone();
     let ago = |t: u64| u32::try_from(now.saturating_sub(t)).unwrap_or(u32::MAX);
     let mut list: Vec<(u64, KeyChange)> = pins
         .changes
@@ -327,6 +348,7 @@ pub fn changes(pins: &Pins, store: &dyn Store, name: impl Fn(&str) -> String) ->
                     last_ago_s: ago(c.last_at),
                     attempts: c.count,
                     dismissed: c.dismissed,
+                    was_verified: verified.get(node) == Some(&c.old),
                 },
             )
         })
@@ -370,7 +392,197 @@ pub fn trust(
     }
     changes.remove(node_id);
     save(store, CHANGES_KV, &*changes);
+    // A new key isn't verified: the user compares again.
+    let mut verified = pins.verified.lock();
+    let verified = verified.get_or_insert_with(|| load(store, VERIFIED_KV));
+    if verified.remove(node_id).is_some() {
+        save(store, VERIFIED_KV, &*verified);
+    }
     Ok(())
+}
+
+/// The key remembered for `node_id` (base64), if it connected with one.
+pub fn pinned(pins: &Pins, store: &dyn Store, node_id: &str) -> Option<String> {
+    pins.pins
+        .lock()
+        .get_or_insert_with(|| load(store, PINS_KV))
+        .get(node_id)
+        .cloned()
+}
+
+/// The user verified `node_id`'s key, and it's still the one remembered.
+pub fn is_verified(pins: &Pins, store: &dyn Store, node_id: &str) -> bool {
+    let Some(pin) = pinned(pins, store, node_id) else {
+        return false;
+    };
+    pins.verified
+        .lock()
+        .get_or_insert_with(|| load(store, VERIFIED_KV))
+        .get(node_id)
+        == Some(&pin)
+}
+
+/// Mark `node_id` verified (its remembered key: only while that one stays
+/// remembered) or not. Fails when no key is remembered for it, or its key
+/// changed and that isn't settled.
+pub fn set_verified(pins: &Pins, store: &dyn Store, node_id: &str, on: bool) -> Result<(), String> {
+    // Checked before taking the verified lock (`trust` takes the locks the
+    // other way round).
+    let pin = if on {
+        if has_change(pins, store, node_id) {
+            return Err("its security key changed: settle that first".into());
+        }
+        let Some(pin) = pinned(pins, store, node_id) else {
+            return Err("it hasn't connected with a security key yet".into());
+        };
+        Some(pin)
+    } else {
+        None
+    };
+    let mut verified = pins.verified.lock();
+    let verified = verified.get_or_insert_with(|| load(store, VERIFIED_KV));
+    match pin {
+        Some(pin) => {
+            verified.insert(node_id.to_string(), pin);
+        }
+        None if verified.remove(node_id).is_none() => return Ok(()),
+        None => {}
+    }
+    save(store, VERIFIED_KV, &*verified);
+    Ok(())
+}
+
+/// The safety number of two devices' keys (base64): 12 groups of 5 digits,
+/// the same whichever device works it out (the keys are sorted first).
+/// Equal on both devices only when each holds the other's real key.
+pub fn safety_number(a: &str, b: &str) -> String {
+    let raw = |k: &str| B64.decode(k).unwrap_or_else(|_| k.as_bytes().to_vec());
+    let (mut lo, mut hi) = (raw(a), raw(b));
+    if hi < lo {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    let mut h = Sha512::new();
+    h.update(b"my-domain safety number v1");
+    for k in [&lo, &hi] {
+        h.update(u32::try_from(k.len()).unwrap_or(u32::MAX).to_be_bytes());
+        h.update(k);
+    }
+    let hash = h.finalize();
+    hash[..60]
+        .chunks(5)
+        .map(|c| {
+            let n = c.iter().fold(0u64, |n, &b| (n << 8) | u64::from(b));
+            format!("{:05}", n % 100_000)
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// A verify QR code: the device showing it (`from`, its key) and the one
+/// meant to scan it (`to`, the key the shower remembers for it).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VerifyCode {
+    pub from: String,
+    pub from_key: String,
+    pub to: String,
+    pub to_key: String,
+}
+
+impl VerifyCode {
+    pub fn to_uri(&self) -> String {
+        use crate::join::pct_encode as e;
+        format!(
+            "{VERIFY_PREFIX}v=1&f={}&fk={}&t={}&tk={}",
+            e(&self.from),
+            e(&self.from_key),
+            e(&self.to),
+            e(&self.to_key)
+        )
+    }
+
+    /// Read a scanned code; `None` when it isn't one (or is damaged).
+    pub fn parse(uri: &str) -> Option<VerifyCode> {
+        let uri = uri.trim();
+        let query = uri
+            .get(..VERIFY_PREFIX.len())
+            .filter(|p| p.eq_ignore_ascii_case(VERIFY_PREFIX))
+            .map(|_| &uri[VERIFY_PREFIX.len()..])?;
+        let (mut v, mut f, mut fk, mut t, mut tk) = (None, None, None, None, None);
+        for pair in query.split('&') {
+            let (name, value) = pair.split_once('=')?;
+            let value = crate::join::pct_decode(value)?;
+            match name {
+                "v" => v = Some(value),
+                "f" => f = Some(value),
+                "fk" => fk = Some(value),
+                "t" => t = Some(value),
+                "tk" => tk = Some(value),
+                _ => {} // newer fields are ignored
+            }
+        }
+        if v.as_deref() != Some("1") {
+            return None;
+        }
+        let key = |k: Option<String>| k.filter(|k| B64.decode(k).is_ok_and(|r| r.len() == 32));
+        let id = |n: Option<String>| n.filter(|n| !n.trim().is_empty());
+        Some(VerifyCode {
+            from: id(f)?,
+            from_key: key(fk)?,
+            to: id(t)?,
+            to_key: key(tk)?,
+        })
+    }
+}
+
+/// What came of scanning a verify code (`Engine::verify_scanned`).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct VerifyScan {
+    /// The device now verified (none: nothing verified, see `problem`).
+    pub node_id: Option<String>,
+    /// "not_a_code" (not a verify code), "not_for_this_device" (made for
+    /// another device), "unknown_device" (not one of yours, or it hasn't
+    /// connected with a key yet), "key_changed" (its key change isn't
+    /// settled), "mismatch" (the keys don't match what each device holds:
+    /// don't trust it).
+    pub problem: Option<String>,
+}
+
+/// Check a scanned verify code against this device (`me`, `my_key`) and
+/// the keys remembered, and mark its device verified when it all matches.
+pub fn check_scan(
+    pins: &Pins,
+    store: &dyn Store,
+    me: &str,
+    my_key: &str,
+    text: &str,
+) -> VerifyScan {
+    let fail = |p: &str| VerifyScan {
+        node_id: None,
+        problem: Some(p.to_string()),
+    };
+    let Some(code) = VerifyCode::parse(text) else {
+        return fail("not_a_code");
+    };
+    if code.to != me {
+        return fail("not_for_this_device");
+    }
+    if has_change(pins, store, &code.from) {
+        return fail("key_changed");
+    }
+    let Some(pin) = pinned(pins, store, &code.from) else {
+        return fail("unknown_device");
+    };
+    if pin != code.from_key || code.to_key != my_key {
+        return fail("mismatch");
+    }
+    match set_verified(pins, store, &code.from, true) {
+        Ok(()) => VerifyScan {
+            node_id: Some(code.from),
+            problem: None,
+        },
+        Err(_) => fail("key_changed"),
+    }
 }
 
 /// "Not now": keep refusing `node_id`'s new key and stop asking about it
@@ -596,6 +808,123 @@ mod tests {
             assert!(!accept(&pins, &kv, &node, Some("b")));
         }
         assert_eq!(changes(&pins, &kv, str::to_string).len(), MAX_CHANGES);
+    }
+
+    fn b64(seed: u8) -> String {
+        B64.encode([seed; 32])
+    }
+
+    #[test]
+    fn the_safety_number_is_symmetric_and_stable() {
+        let (a, b) = (b64(1), b64(2));
+        let n = safety_number(&a, &b);
+        assert_eq!(n, safety_number(&b, &a), "the same on both devices");
+        let groups: Vec<&str> = n.split(' ').collect();
+        assert_eq!(groups.len(), 12);
+        assert!(groups
+            .iter()
+            .all(|g| g.len() == 5 && g.bytes().all(|c| c.is_ascii_digit())));
+        assert_ne!(n, safety_number(&a, &b64(3)), "another key, another number");
+        assert_ne!(n, safety_number(&b64(3), &b));
+        // Fixed: an update must never change what users compare.
+        assert_eq!(n, SAFETY_1_2);
+    }
+
+    /// `safety_number(b64(1), b64(2))`, as first released.
+    const SAFETY_1_2: &str =
+        "83209 04899 17154 39681 79009 07377 50615 33206 92703 06688 20318 89074";
+
+    #[test]
+    fn verified_counts_only_for_the_key_verified() {
+        let (kv, pins) = (Mem::default(), Pins::default());
+        assert!(
+            set_verified(&pins, &kv, "phone", true).is_err(),
+            "no key yet"
+        );
+        assert!(accept(&pins, &kv, "phone", Some("k1")));
+        assert!(!is_verified(&pins, &kv, "phone"));
+        set_verified(&pins, &kv, "phone", true).unwrap();
+        assert!(is_verified(&pins, &kv, "phone"));
+        assert!(is_verified(&Pins::default(), &kv, "phone"), "kept");
+
+        // Its key changes: the change says it was verified, and it can't be
+        // verified again until that's settled.
+        assert!(!accept(&pins, &kv, "phone", Some("k2")));
+        assert!(changes(&pins, &kv, str::to_string)[0].was_verified);
+        assert!(set_verified(&pins, &kv, "phone", true).is_err());
+        trust(&pins, &kv, "phone", &fingerprint("k2")).unwrap();
+        assert!(
+            !is_verified(&pins, &kv, "phone"),
+            "cleared with the new key"
+        );
+        assert!(!is_verified(&Pins::default(), &kv, "phone"));
+        // A change from a key never verified says so.
+        assert!(!accept(&pins, &kv, "phone", Some("k3")));
+        assert!(!changes(&pins, &kv, str::to_string)[0].was_verified);
+
+        assert!(accept(&pins, &kv, "laptop", Some("k1")));
+        set_verified(&pins, &kv, "laptop", true).unwrap();
+        set_verified(&pins, &kv, "laptop", false).unwrap();
+        assert!(!is_verified(&pins, &kv, "laptop"));
+        set_verified(&pins, &kv, "laptop", false).unwrap();
+    }
+
+    #[test]
+    fn a_verify_code_reads_back() {
+        let code = VerifyCode {
+            from: "desk top+1".into(),
+            from_key: b64(1),
+            to: "phone".into(),
+            to_key: b64(251),
+        };
+        let uri = code.to_uri();
+        assert!(uri.starts_with(VERIFY_PREFIX));
+        assert_eq!(VerifyCode::parse(&format!(" {uri}\n")), Some(code.clone()));
+        assert_eq!(VerifyCode::parse("mydomain://join?v=1"), None);
+        assert_eq!(VerifyCode::parse(&uri.replace("v=1", "v=2")), None);
+        assert_eq!(VerifyCode::parse(&uri.replace("&t=phone", "")), None);
+        let short = uri.replace(&crate::join::pct_encode(&b64(251)), "AAAA");
+        assert_eq!(VerifyCode::parse(&short), None, "not a key");
+    }
+
+    #[test]
+    fn a_scanned_code_verifies_only_the_right_device() {
+        let (kv, pins) = (Mem::default(), Pins::default());
+        let (desk, phone) = (b64(1), b64(2));
+        assert!(accept(&pins, &kv, "desk", Some(&desk)));
+        let code = |from: &str, fk: &str, to: &str, tk: &str| {
+            VerifyCode {
+                from: from.into(),
+                from_key: fk.into(),
+                to: to.into(),
+                to_key: tk.into(),
+            }
+            .to_uri()
+        };
+        let scan = |text: &str| check_scan(&pins, &kv, "phone", &phone, text);
+        let problem = |text: &str| scan(text).problem.unwrap_or_default();
+        assert_eq!(problem("hello"), "not_a_code");
+        assert_eq!(
+            problem(&code("desk", &desk, "tablet", &phone)),
+            "not_for_this_device"
+        );
+        assert_eq!(
+            problem(&code("other", &desk, "phone", &phone)),
+            "unknown_device"
+        );
+        assert_eq!(problem(&code("desk", &b64(9), "phone", &phone)), "mismatch");
+        assert_eq!(problem(&code("desk", &desk, "phone", &b64(9))), "mismatch");
+        assert!(!is_verified(&pins, &kv, "desk"));
+        let ok = scan(&code("desk", &desk, "phone", &phone));
+        assert_eq!(ok.node_id.as_deref(), Some("desk"));
+        assert_eq!(ok.problem, None);
+        assert!(is_verified(&pins, &kv, "desk"));
+        // A key change waiting: no verifying until it's settled.
+        assert!(!accept(&pins, &kv, "desk", Some(&b64(5))));
+        assert_eq!(
+            problem(&code("desk", &b64(5), "phone", &phone)),
+            "key_changed"
+        );
     }
 
     #[test]
