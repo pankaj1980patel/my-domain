@@ -13,7 +13,8 @@
 //! when it shares its link list for the map (`features::links_map`),
 //! `nearby: 1` for nearby media mode (`features::nearby`) and
 //! `audio_codec: 1` when it reads the smaller audio
-//! (`features::audio_codec`).
+//! (`features::audio_codec`), and `print: 1` while a computer prints for
+//! your phones (`features::print`).
 //!
 //! Only peers we already know are updated: this message can't create one.
 //! It arrives end-to-end encrypted with the shared key, like every message.
@@ -55,6 +56,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::timers::extend_status(ctx, &mut msg);
         super::wifi_direct::extend_status(ctx, &mut msg);
         super::kvm::extend_status(ctx, &mut msg);
+        super::print::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -119,6 +121,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
             &msg.json(super::kvm::FLAG),
             &msg.json(super::kvm::OS_FLAG),
         );
+        super::print::remember(ctx, &from, &msg.json(super::print::FLAG));
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();

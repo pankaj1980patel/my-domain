@@ -49,6 +49,7 @@ mod notify;
 mod page_layout;
 mod phone_audio;
 mod phone_screen;
+mod print;
 mod quick_panel;
 mod quiet;
 mod read_later;
@@ -457,6 +458,20 @@ impl EventSink for TauriSink {
                 std::thread::spawn(move || computer_audio::on_listen(&app, &from, on));
             }
             CoreEvent::Dnd { from, on } => quiet::on_dnd(&self.app, from, *on),
+            // Print from the phone: its printers, and a job to print (the
+            // transfer's row ends as received; the PDF is deleted after).
+            CoreEvent::PrintersRequested { from } => print::on_printers_requested(&self.app, from),
+            CoreEvent::PrintJob {
+                id,
+                from,
+                name,
+                path,
+                size,
+                options,
+            } => {
+                transfers::on_received(&self.app, id, from, name, path, *size);
+                print::on_job(&self.app, id, from, name, path, options);
+            }
             // Labels set on your other devices: take them here.
             CoreEvent::LabelsChanged { labels } => device_labels::apply_shared(&self.app, labels),
             // A device asks to sync a folder: say so.
@@ -1720,6 +1735,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         wifi_direct::wifi_direct_setting,
         wifi_direct::set_wifi_direct,
         wifi_direct::set_phone_hotspot,
+        print::print_setting,
+        print::set_print_allow,
+        print::set_print_ask,
+        print::print_answer,
         hotspot::hotspot_consent,
         tray_battery::tray_battery_setting,
         tray_battery::set_tray_battery,
@@ -1926,6 +1945,7 @@ pub fn run() {
             app.manage(location::LocationPref::load(&handle));
             app.manage(wol::WakePref::load(&handle));
             app.manage(wifi_direct::WifiDirectPref::load(&handle));
+            app.manage(print::PrintPrefs::load(&handle));
             app.manage(hotspot::HotspotPref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));
             app.manage(page_layout::PageLayouts::load(&handle));
@@ -1991,6 +2011,8 @@ pub fn run() {
             // Wi-Fi Direct for big files: what this computer can do (Windows
             // hosts a group), and the user's switch.
             wifi_direct::init(&handle);
+            // Print from the phone: whether this computer prints for it.
+            print::init(&handle);
             // Start the FCM receiver (needs the managed Engine for on_signal).
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);

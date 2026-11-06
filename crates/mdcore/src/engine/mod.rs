@@ -53,6 +53,7 @@ mod peer_keys;
 pub use peer_keys::KeyVerification;
 pub(crate) use peer_keys::{key_changed, key_refused};
 mod peers;
+mod print;
 pub(crate) use peers::{emit_peers, learn_unknown};
 mod session;
 mod sharing;
@@ -352,6 +353,7 @@ impl<P: Platform> Engine<P> {
             config.wifi_direct,
             config.kvm && platform.shares_input(),
             config.insert_capture,
+            config.print,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

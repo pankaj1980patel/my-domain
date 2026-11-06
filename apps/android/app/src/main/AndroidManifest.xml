@@ -156,6 +156,21 @@
         </provider>
 
         <!-- FCM: connection signals (dial me back, join the relay, punch). -->
+        <!-- Print from the phone on a computer's printer (PrintToComputer.kt):
+             "my-domain" in every app's print dialog. -->
+        <service
+            android:name=".PrintToComputer"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_PRINT_SERVICE">
+            <intent-filter>
+                <action android:name="android.printservice.PrintService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.printservice"
+                android:resource="@xml/print_service" />
+        </service>
+
         <service
             android:name=".MdMessagingService"
             android:exported="false">

@@ -283,6 +283,13 @@ export const commands = {
 	setWifiDirect: (on: boolean) => __TAURI_INVOKE<WifiDirectSetting>("set_wifi_direct", { on }),
 	/**  "Use the phone’s hotspot for big files": ask, always or never. */
 	setPhoneHotspot: (mode: Mode) => __TAURI_INVOKE<WifiDirectSetting>("set_phone_hotspot", { mode }),
+	printSetting: () => __TAURI_INVOKE<PrintSetting_Serialize>("print_setting"),
+	/**  Turn "Let my phone print here" on or off. */
+	setPrintAllow: (on: boolean) => __TAURI_INVOKE<PrintSetting_Serialize>("set_print_allow", { on }),
+	/**  Turn "Ask before printing" on or off. */
+	setPrintAsk: (on: boolean) => __TAURI_INVOKE<PrintSetting_Serialize>("set_print_ask", { on }),
+	/**  The answer to "Print this?" for job `id`. */
+	printAnswer: (id: string, yes: boolean) => __TAURI_INVOKE<void>("print_answer", { id, yes }),
 	/**  The user's answer to `hotspot-ask`. */
 	hotspotConsent: (sid: string, yes: boolean) => __TAURI_INVOKE<void>("hotspot_consent", { sid, yes }),
 	/**  The menu-bar battery setting, and your phones to pick from. */
@@ -2874,6 +2881,72 @@ export type PhoneAudioStatus_Serialize = {
 	volume: number,
 	/**  Why it stopped or can't play, if it did. */
 	error: string | null,
+};
+
+/**  What Settings shows. */
+export type PrintSetting = PrintSetting_Serialize | PrintSetting_Deserialize;
+
+/**  What Settings shows. */
+export type PrintSetting_Deserialize = {
+	/**  "Let my phone print here". */
+	allow: boolean,
+	/**  "Ask before printing". */
+	ask: boolean,
+	/**  This computer can print from the phone (CUPS; never Windows). */
+	supported: boolean,
+	/**  Its printers (listed only while allowed). */
+	printers: Printer_Deserialize[],
+};
+
+/**  What Settings shows. */
+export type PrintSetting_Serialize = {
+	/**  "Let my phone print here". */
+	allow: boolean,
+	/**  "Ask before printing". */
+	ask: boolean,
+	/**  This computer can print from the phone (CUPS; never Windows). */
+	supported: boolean,
+	/**  Its printers (listed only while allowed). */
+	printers: Printer_Serialize[],
+};
+
+/**  One printer a computer has. */
+export type Printer = Printer_Serialize | Printer_Deserialize;
+
+/**  One printer a computer has. */
+export type Printer_Deserialize = {
+	/**  Its name on that computer (CUPS queue name): what a job names. */
+	name: string,
+	/**  What it's called for people ("HP LaserJet in the hall"); may be "". */
+	label?: string,
+	/**  The computer's default printer. */
+	is_default?: boolean,
+	/**  It prints in colour. */
+	color?: boolean,
+	/**  It prints on both sides. */
+	duplex?: boolean,
+	/**  Paper sizes, as the printer names them ("A4", "Letter", ...). */
+	papers?: string[],
+	/**  The paper it uses unless told otherwise. */
+	default_paper?: string | null,
+};
+
+/**  One printer a computer has. */
+export type Printer_Serialize = {
+	/**  Its name on that computer (CUPS queue name): what a job names. */
+	name: string,
+	/**  What it's called for people ("HP LaserJet in the hall"); may be "". */
+	label: string,
+	/**  The computer's default printer. */
+	is_default: boolean,
+	/**  It prints in colour. */
+	color: boolean,
+	/**  It prints on both sides. */
+	duplex: boolean,
+	/**  Paper sizes, as the printer names them ("A4", "Letter", ...). */
+	papers: string[],
+	/**  The paper it uses unless told otherwise. */
+	default_paper: string | null,
 };
 
 export type Quality = "excellent" | "good" | "weak" | 

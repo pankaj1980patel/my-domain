@@ -25,7 +25,8 @@
 //! `notes: 1` when it shares notes (`features::notes`),
 //! `ping: 1` when it answers pings and speed tests (`features::diag`), and
 //! `wol` when it sends Wake-on-LAN packets for the others
-//! (`features::wake`).
+//! (`features::wake`), and `print: 1` when it prints for your phones
+//! (`features::print`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -99,6 +100,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::wifi_direct::extend_status(ctx, &mut status);
                 // Whether it shares mouse and keyboard (and its OS).
                 super::kvm::extend_status(ctx, &mut status);
+                // Whether it prints for your phones.
+                super::print::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -141,6 +144,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     &status[super::kvm::FLAG],
                     &status[super::kvm::OS_FLAG],
                 );
+                super::print::remember(ctx, &from, &status[super::print::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

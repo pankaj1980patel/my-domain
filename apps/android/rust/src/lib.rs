@@ -1631,6 +1631,50 @@ impl MdEngine {
         Ok(())
     }
 
+    /// Whether computer `node_id` prints for your phones (it said `print`
+    /// in its status or link start; kept across restarts). The print
+    /// dialog lists only those.
+    pub fn print_supported(&self, node_id: String) -> bool {
+        self.inner.print_supported(&node_id)
+    }
+
+    /// Ask computer `node_id` for its printers: they arrive as the
+    /// `printers` event (`on` false: it doesn't print for your phones).
+    /// Only to a computer that prints for your phones.
+    pub fn request_printers(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.request_printers(&node_id)?)
+    }
+
+    /// Send the PDF at `path` to computer `node_id` to print on `printer`
+    /// (`duplex`: "none", "long" or "short"; `paper`: the printer's own
+    /// name for it, "" for its default; `orientation`: "portrait" or
+    /// "landscape"). Returns the job's id, its transfer's id: the `file-*`
+    /// events say how sending goes, `print-status` how printing goes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn print_file(
+        &self,
+        node_id: String,
+        path: String,
+        printer: String,
+        copies: u32,
+        color: bool,
+        duplex: String,
+        paper: String,
+        orientation: String,
+        title: String,
+    ) -> MdResult<String> {
+        let options = mdcore::features::print::PrintOptions {
+            printer,
+            copies,
+            color,
+            duplex,
+            paper,
+            orientation,
+            title,
+        };
+        Ok(self.inner.print_file(&node_id, &path, &options)?)
+    }
+
     /// This phone sends its audio (`source`: Android 10 or later) or
     /// plays another's (`sink`). Said in its status (`audio_source`,
     /// `audio_sink`); off until set.

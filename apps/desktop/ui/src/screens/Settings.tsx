@@ -28,6 +28,7 @@ import { NearbySetting } from "../components/NearbySetting";
 import { WifiDirectSetting } from "../components/WifiDirectSetting";
 import { KvmSetting } from "../components/KvmSetting";
 import { InsertSetting } from "../components/InsertSetting";
+import { PrintSetting } from "../components/PrintSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
@@ -302,6 +303,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <KvmSetting />
 
       <InsertSetting />
+      <PrintSetting />
 
       <article class="tile" id="settings-schedules">
         <h2>{t("schedule.local.title")}</h2>

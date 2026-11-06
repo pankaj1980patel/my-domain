@@ -206,6 +206,13 @@ pub struct CoreConfig {
     /// How long such a request waits for the phone
     /// (`features::insert_capture::TIMEOUT`, 3 minutes; tests shorten it).
     pub insert_timeout: std::time::Duration,
+    /// Print from the phone on a computer's printer (`features::print`):
+    /// this end understands the `print_*` messages and print jobs, and a
+    /// computer says `print` in its status and `addr_update` while it
+    /// offers printing (`Engine::set_print_offered`). On by default; off
+    /// behaves like an app from before (tests use it to play an older
+    /// peer).
+    pub print: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -271,6 +278,7 @@ impl Default for CoreConfig {
             kvm: true,
             insert_capture: true,
             insert_timeout: crate::features::insert_capture::TIMEOUT,
+            print: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

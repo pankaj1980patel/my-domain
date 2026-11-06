@@ -41,6 +41,7 @@ pub mod notif_apps;
 pub mod notification;
 pub mod opus_audio;
 pub mod p2p_ping;
+pub mod print;
 pub mod read_later;
 pub mod screen;
 pub mod share;
@@ -143,7 +144,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::nearby`), and the `wifi_direct_*` messages
     /// (`CoreConfig::wifi_direct`), and the `kvm_*` messages
     /// (`CoreConfig::kvm`), and the `insert_*` messages
-    /// (`CoreConfig::insert_capture`).
+    /// (`CoreConfig::insert_capture`), and the `print_*` messages
+    /// (`CoreConfig::print`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -160,6 +162,7 @@ impl<P: Platform> ControlRegistry<P> {
         wifi_direct: bool,
         kvm: bool,
         insert_capture: bool,
+        print: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -224,6 +227,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if insert_capture {
             r.register(Arc::new(insert_capture::InsertHandler));
+        }
+        if print {
+            r.register(Arc::new(print::PrintHandler));
         }
         r
     }

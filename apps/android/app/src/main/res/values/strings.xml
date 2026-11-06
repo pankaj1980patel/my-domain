@@ -1571,4 +1571,20 @@
     <string name="insert_permission_denied">Without the camera permission, this phone can’t take it.</string>
     <string name="insert_camera_error">The camera couldn’t start</string>
     <string name="insert_corner">Corner %1$d of the page</string>
+    <!-- Print from the phone on a computer's printer (PrintToComputer.kt) -->
+    <string name="print_title">Print on your computers</string>
+    <string name="print_hint">Print from any app on a printer connected to one of your computers: choose Print, then a printer under my-domain. Turn on the my-domain print service in Android’s printing settings first. On the computer, Let my phone print here must be on (Mac and Linux).</string>
+    <string name="print_no_computers">None of your computers prints for this phone yet.</string>
+    <string name="print_computers">Printing on: %1$s</string>
+    <string name="print_open_settings">Open printing settings</string>
+    <string name="print_resolution">Printer’s default</string>
+    <string name="print_on_computer">On %1$s</string>
+    <string name="print_no_computer">That computer doesn’t print for this phone right now.</string>
+    <string name="print_failed_read">Couldn’t read the document.</string>
+    <string name="print_sending">Sending to %1$s…</string>
+    <string name="print_sent">Sent to %1$s</string>
+    <string name="print_waiting">Waiting for OK on %1$s</string>
+    <string name="print_printing">Printing on %1$s</string>
+    <string name="print_failed_send">Couldn’t send it to %1$s.</string>
+    <string name="print_failed_computer">%1$s couldn’t print it.</string>
 </resources>

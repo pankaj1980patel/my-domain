@@ -1569,4 +1569,20 @@
     <string name="insert_permission_denied">कैमरे की अनुमति के बिना यह फ़ोन इसे नहीं ले सकता।</string>
     <string name="insert_camera_error">कैमरा शुरू नहीं हो सका</string>
     <string name="insert_corner">पेज का कोना %1$d</string>
+    <!-- Print from the phone on a computer's printer (PrintToComputer.kt) -->
+    <string name="print_title">अपने कंप्यूटर पर प्रिंट करें</string>
+    <string name="print_hint">किसी भी ऐप से अपने किसी कंप्यूटर से जुड़े प्रिंटर पर प्रिंट करें: प्रिंट चुनें, फिर my-domain के नीचे कोई प्रिंटर। पहले Android की प्रिंटिंग सेटिंग में my-domain प्रिंट सेवा चालू करें। कंप्यूटर पर “मेरे फ़ोन को यहाँ प्रिंट करने दें” चालू होना चाहिए (Mac और Linux)।</string>
+    <string name="print_no_computers">आपका कोई भी कंप्यूटर अभी इस फ़ोन के लिए प्रिंट नहीं करता।</string>
+    <string name="print_computers">इन पर प्रिंट: %1$s</string>
+    <string name="print_open_settings">प्रिंटिंग सेटिंग खोलें</string>
+    <string name="print_resolution">प्रिंटर की डिफ़ॉल्ट</string>
+    <string name="print_on_computer">%1$s पर</string>
+    <string name="print_no_computer">वह कंप्यूटर अभी इस फ़ोन के लिए प्रिंट नहीं करता।</string>
+    <string name="print_failed_read">दस्तावेज़ पढ़ा नहीं जा सका।</string>
+    <string name="print_sending">%1$s को भेज रहे हैं…</string>
+    <string name="print_sent">%1$s को भेजा गया</string>
+    <string name="print_waiting">%1$s पर मंज़ूरी का इंतज़ार</string>
+    <string name="print_printing">%1$s पर प्रिंट हो रहा है</string>
+    <string name="print_failed_send">%1$s को भेजा नहीं जा सका।</string>
+    <string name="print_failed_computer">%1$s इसे प्रिंट नहीं कर सका।</string>
 </resources>

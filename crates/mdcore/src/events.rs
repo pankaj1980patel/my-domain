@@ -277,6 +277,38 @@ pub enum CoreEvent {
     KvmLayout {
         layout: Vec<crate::model::KvmNeighbor>,
     },
+    /// A phone asks this computer for its printers (`features::print`):
+    /// list them and answer with `Engine::send_printers`.
+    PrintersRequested { from: String },
+    /// A computer's printers (`features::print`), as asked with
+    /// `Engine::request_printers`; `on` false: it doesn't print for your
+    /// phones (any more), and the list is empty.
+    Printers {
+        from: String,
+        on: bool,
+        printers: Vec<crate::features::print::Printer>,
+    },
+    /// A print job's PDF arrived from a phone (`features::print`): print
+    /// it with `options` (check the printer is still one of this
+    /// computer's), delete the file at `path`, and report how it went with
+    /// `Engine::print_status`. It is not a received file (no
+    /// `FileReceived`).
+    PrintJob {
+        id: String,
+        from: String,
+        name: String,
+        path: String,
+        size: u64,
+        options: crate::features::print::PrintOptions,
+    },
+    /// How a print job this phone sent goes on the computer: "waiting"
+    /// (its user is asked), "printing", "done" or "failed" (`reason`).
+    PrintStatus {
+        from: String,
+        id: String,
+        state: String,
+        reason: Option<String>,
+    },
     /// Another device went into (`on`) or out of Do Not Disturb.
     Dnd { from: String, on: bool },
     /// Labels your other devices set changed what devices are called here
@@ -521,6 +553,10 @@ impl CoreEvent {
             CoreEvent::KvmChanged { .. } => "kvm-changed",
             CoreEvent::KvmInput { .. } => "kvm-input",
             CoreEvent::KvmLayout { .. } => "kvm-layout",
+            CoreEvent::PrintersRequested { .. } => "printers-requested",
+            CoreEvent::Printers { .. } => "printers",
+            CoreEvent::PrintJob { .. } => "print-job",
+            CoreEvent::PrintStatus { .. } => "print-status",
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
@@ -887,6 +923,56 @@ mod tests {
             json!({"node_id": "n1", "transport": "webrtc"})
         );
     }
+    #[test]
+    fn print_events_keep_their_shape() {
+        let ev = CoreEvent::Printers {
+            from: "pc".into(),
+            on: true,
+            printers: vec![crate::features::print::Printer {
+                name: "Hall".into(),
+                is_default: true,
+                papers: vec!["A4".into()],
+                ..Default::default()
+            }],
+        };
+        assert_eq!(ev.name(), "printers");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "printers", "from": "pc", "on": true, "printers": [{
+                "name": "Hall", "label": "", "is_default": true, "color": false,
+                "duplex": false, "papers": ["A4"], "default_paper": null}]})
+        );
+        let ev = CoreEvent::PrintStatus {
+            from: "pc".into(),
+            id: "j1".into(),
+            state: "failed".into(),
+            reason: Some("out of paper".into()),
+        };
+        assert_eq!(ev.name(), "print-status");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "print_status", "from": "pc", "id": "j1", "state": "failed",
+                "reason": "out of paper"})
+        );
+        let ev = CoreEvent::PrintJob {
+            id: "j1".into(),
+            from: "phone".into(),
+            name: "a.pdf".into(),
+            path: "/tmp/a.pdf".into(),
+            size: 3,
+            options: Default::default(),
+        };
+        assert_eq!(ev.name(), "print-job");
+        assert_eq!(ev.ui_payload()["options"]["copies"], 1);
+        assert_eq!(
+            CoreEvent::PrintersRequested {
+                from: "phone".into()
+            }
+            .name(),
+            "printers-requested"
+        );
+    }
+
     #[test]
     fn kvm_events_keep_their_shape() {
         let ev = CoreEvent::KvmChanged {

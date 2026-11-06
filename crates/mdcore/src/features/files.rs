@@ -33,6 +33,11 @@
 //! older receiver that leaves it out, or always answers 0, simply gets the
 //! whole file again), so peers of any version still talk.
 //!
+//! A print job (`"print": {...}` in the offer, see `features::print`) is
+//! received into `.mydomain-partial/print` and handed to the host as
+//! `PrintJob` instead of `FileReceived`; it's never resumed after the
+//! sender restarts.
+//!
 //! Your own devices are trusted, so offers are accepted without asking
 //! (Phase 4's grants add an `ask`).
 //!
@@ -464,7 +469,10 @@ fn offer_msg(me: &str, id: &str, t: &Outgoing) -> serde_json::Value {
 /// only other transfers outlive a restart here.
 fn persists(extra: Option<&serde_json::Value>) -> bool {
     extra.is_none_or(|e| {
-        e.get("folder").is_none() && e.get("backup").is_none() && e.get("sync").is_none()
+        e.get("folder").is_none()
+            && e.get("backup").is_none()
+            && e.get("sync").is_none()
+            && e.get("print").is_none()
     })
 }
 
@@ -1065,6 +1073,16 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             }
             Err(why) => return reject(why),
         }
+    } else if !msg.json("print").is_null() {
+        // A print job: its PDF into the partial folder, never the
+        // downloads (`features::print`); the host prints and deletes it.
+        let Some(dir) = ctx.files.download_dir.lock().clone() else {
+            return reject("this device can't receive files");
+        };
+        match super::print::offer_dest(ctx, from, &id, &msg.json("print"), &dir) {
+            Ok(dest) => (dir, dest),
+            Err(why) => return reject(why),
+        }
     } else {
         let Some(dir) = ctx.files.download_dir.lock().clone() else {
             return reject("this device can't receive files");
@@ -1322,6 +1340,8 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
                 path: path.to_string_lossy().into_owned(),
                 size: t.size,
             });
+        } else if super::print::received(ctx, id, &t.from, &path, &t.name, t.size) {
+            // A print job: the host prints it (`PrintJob`).
         } else {
             ctx.sink.emit(CoreEvent::FileReceived {
                 id: id.to_string(),

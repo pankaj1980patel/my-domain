@@ -270,6 +270,37 @@ fun NearbySettingsTile() {
     }
 }
 
+/** Print from the phone on a computer's printer (PrintToComputer): which
+ *  computers print for it, and the way to Android's printing settings,
+ *  where the print service is turned on. */
+@Composable
+fun PrintSettingsTile() {
+    val ctx = LocalContext.current
+    var computers by remember { mutableStateOf(emptyList<String>()) }
+    // A computer turning printing on or off says so over its link.
+    LaunchedEffect(Unit) {
+        while (true) {
+            val engine = Core.engine()
+            computers = Core.peers
+                .filter { p -> runCatching { engine?.printSupported(p.nodeId) == true }.getOrDefault(false) }
+                .map { Core.peerName(it.nodeId) }
+            delay(3_000)
+        }
+    }
+    Tile(title = stringResource(R.string.print_title)) {
+        Muted(stringResource(R.string.print_hint))
+        Text(
+            if (computers.isEmpty()) stringResource(R.string.print_no_computers)
+            else stringResource(R.string.print_computers, computers.joinToString(", ")),
+            Modifier.announce(),
+            style = MaterialTheme.typography.bodyMedium, color = T.text,
+        )
+        SoftButton(stringResource(R.string.print_open_settings), onClick = {
+            runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_PRINT_SETTINGS)) }
+        })
+    }
+}
+
 /** The Accessibility service (PhoneHelper): radios switched and keys
  *  pressed for your computers, on any phone. */
 @Composable
@@ -422,6 +453,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
         Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
         Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
+        Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 

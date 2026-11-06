@@ -1,6 +1,6 @@
 ---
 title: Sending files and folders
-keywords: file, files, folder, send, transfer, transfers, resume, download, share, share sheet, finder, explorer, file manager, drag, drop, photos, backup, browse, wi-fi direct, wifi direct, hotspot, offline, nearby, bluetooth
+keywords: file, files, print, printer, folder, send, transfer, transfers, resume, download, share, share sheet, finder, explorer, file manager, drag, drop, photos, backup, browse, wi-fi direct, wifi direct, hotspot, offline, nearby, bluetooth
 platforms: desktop, android
 ---
 ## Send a file or a folder
@@ -33,6 +33,10 @@ A file over 20 MB with one of your devices that's near you but not on the same n
 ## Browse and photos
 
 A device can let your others browse its shared folders and download from them. A computer can also show the phone's recent photos and videos and download them. On the phone, **Photo backup** in Settings copies new photos to a computer you choose, on Wi-Fi only (and only while charging, if you like). These need the phone's photo permission.
+
+## Print a document on a computer's printer
+
+From any app on the phone, **Print** → **my-domain** sends the document to one of your computers as a PDF and prints it there. See [Print from your phone](help:print).
 
 ## Limits
 

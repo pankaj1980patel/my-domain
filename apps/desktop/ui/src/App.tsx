@@ -35,6 +35,7 @@ import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 import { HotspotAsk } from "./components/HotspotAsk";
+import { PrintAsk } from "./components/PrintAsk";
 
 type View =
   | { name: "home" }
@@ -384,6 +385,7 @@ export default function App() {
         <CallOverlay />
         <SendToPicker />
         <HotspotAsk />
+        <PrintAsk />
         <NoteReminders onOpen={(id) => openNote(id)} />
         <TimerAlarm onOpen={() => go({ name: "timers" })} />
         </Show>

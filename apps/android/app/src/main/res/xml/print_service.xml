@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The print service (PrintToComputer.kt): your computers' printers in
+     every app's print dialog. No settings or add-printer screens: the
+     printers come from the computers themselves. -->
+<print-service xmlns:android="http://schemas.android.com/apk/res/android" />

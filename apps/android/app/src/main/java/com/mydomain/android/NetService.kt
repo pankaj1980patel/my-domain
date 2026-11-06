@@ -365,6 +365,9 @@ class NetService : Service() {
             serviceScope.launch {
                 try {
                     val o = JSONObject(payloadJson)
+                    // Print jobs sent from the print dialog: their printers,
+                    // transfers and states (only its own kinds).
+                    PrintToComputer.onEvent(o)
                     when (o.optString("kind")) {
                         "message_received" -> handleIncomingMessage(o)
                         // A computer's own notification (it was asked for them), or

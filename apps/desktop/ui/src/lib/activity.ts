@@ -34,6 +34,7 @@ export function activityIcon(a: ActivityItem): string {
   if (a.action === "timer") return "⏱";
   if (a.action === "read_later") return "🔖";
   if (a.action === "key_changed") return "⚠";
+  if (a.action === "printed" || a.action === "print_failed") return "🖨";
   return ICON[a.kind] ?? "•";
 }
 
@@ -113,6 +114,10 @@ export function activityText(a: ActivityItem, device: string): string {
       return t(on ? "activity.row.audioOfferOn" : "activity.row.audioOfferOff", { device });
     case "audio_listen":
       return t(on ? "activity.row.audioListenOn" : "activity.row.audioListenOff", { device });
+    case "printed":
+      return t("activity.row.printed", { name, device, printer: a.detail });
+    case "print_failed":
+      return t("activity.row.printFailed", { name, device });
     case "schedule": {
       const what = a.subject;
       if (a.detail === "queued") return t("activity.row.scheduleQueued", { what, device });
@@ -135,6 +140,7 @@ export function activityMeta(a: ActivityItem): string[] {
   if (a.action === "link_up" && a.detail === "ble") out.push(t("activity.viaBluetooth"));
   if (a.action === "notification" && a.subject && a.detail) out.push(a.detail);
   if (a.action === "read_later" && a.detail) out.push(a.detail);
+  if (a.action === "print_failed" && a.detail) out.push(a.detail);
   return out;
 }
 
