@@ -1,6 +1,6 @@
 ---
 title: Phone notifications on the computer
-keywords: notification, notifications, mirror, history, mute, apps, reply, dismiss, do not disturb, dnd, quiet, pop-up, alerts, computer notifications, linux, from computer
+keywords: notification, notifications, mirror, history, mute, apps, reply, dismiss, buttons, actions, conversation, private mode, otp, bank, locked, in use, do not disturb, dnd, quiet, pop-up, alerts, computer notifications, linux, from computer
 platforms: desktop, android
 ---
 Your phone's notifications can show on your computer, where you can read them, reply, tap their buttons or dismiss them.
@@ -8,6 +8,34 @@ Your phone's notifications can show on your computer, where you can read them, r
 ## What it needs
 
 On the phone, allow **Notification access** for my-domain (Settings → Set up this phone). Android asks you in its own settings screen; my-domain can't turn it on itself.
+
+## Reply, buttons and dismiss
+
+On the phone's page, **Notifications** shows what's on the phone now, one conversation at a time: the app's icon, the sender's picture, the last few messages and any picture in the notification.
+
+- **Reply** right there for any messaging app that takes replies (WhatsApp, Messages, Telegram and the like). The reply goes from the phone, as if you'd typed it there.
+- The notification's own buttons (Mark as read, Archive...) are under it; press one and the phone presses it.
+- **Dismiss** removes the whole conversation here and on the phone. Swiped away or opened on the phone, it leaves the computer too.
+
+The pop-up on the computer answers too, while the window is in the background:
+
+- **macOS**: a reply field when it takes a reply, else its buttons and **Mute** under Options. **Dismiss** dismisses it on the phone too; clicking it opens the phone's page.
+- **Windows**: a reply box, its buttons, **Mute** and **Dismiss** in the toast. Closing it with its X dismisses it on the phone. One that goes away on the phone leaves the screen.
+- **Linux**: a plain pop-up; reply and buttons are on the phone's page.
+
+## What doesn't come
+
+Only notifications worth seeing come: not ongoing ones (music, downloads, navigation, a running timer), group summaries, the system's own status or quiet (low-importance) channels. The same notification posted again with nothing new doesn't pop up again; an update that the app marks as quiet updates the list without a pop-up.
+
+## Private mode
+
+**Private mode** (on the phone's Notifications tile, on by default) keeps sensitive notifications on the phone: one-time codes, banks, payment apps and password managers show only "New notification from" the app. Their text never leaves the phone, and nothing of it is kept in the history. You can still dismiss them.
+
+The computer applies the same rule to a phone with an older my-domain app, which sends everything: it drops the content before showing or keeping it.
+
+## Only while the phone isn't in use
+
+Turn on **Only while my phone isn't in use** and notifications come to the computer only while the phone is locked or its screen is off. While you're using the phone, you see them there.
 
 ## History
 
@@ -18,7 +46,7 @@ The phone's page on the computer keeps its notifications: the newest 500, groupe
 
 ## Mute an app
 
-**Mute** an app in the history and its notifications stop popping up on the computer and aren't kept. Unmute it from the same list.
+**Mute** an app in the history, on its notification, or from the pop-up, and its notifications stop popping up on the computer and aren't kept. Unmute it from the same list.
 
 ## Follow the phone's Do Not Disturb
 

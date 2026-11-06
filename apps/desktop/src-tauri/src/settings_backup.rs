@@ -70,6 +70,8 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "clip_hide_concealed",
             "clip_excluded_apps",
             "muted_apps",
+            "notif_hide_sensitive",
+            "notif_only_locked",
             "share_location",
             "computer_notifs",
             "computer_notif_apps",

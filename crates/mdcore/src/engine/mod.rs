@@ -356,6 +356,7 @@ impl<P: Platform> Engine<P> {
             config.insert_capture,
             config.print,
             config.remote_download,
+            config.notif_rich,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));
@@ -431,6 +432,8 @@ impl<P: Platform> Engine<P> {
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
         // Peers remembered from last time: reconnect directly, server or not.
         background::load_peer_cache(&ctx);
+        // Who follows which of this device's apps, from last time.
+        crate::features::notif_rich::load_subs(&ctx);
         background::spawn_all(&ctx);
 
         let engine = Engine {

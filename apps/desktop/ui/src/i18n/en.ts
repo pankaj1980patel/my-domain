@@ -143,6 +143,13 @@ export const en = {
   "notifications.dismissLabel": "Dismiss {title}",
   "notifications.handled": "Handled",
   "notifications.cantAct": "This notification can't be acted on from here.",
+  "notifications.private": "New notification from {app}",
+  "notifications.count": { one: "{count} notification", other: "{count} notifications" },
+  "notifications.pictureLabel": "Picture in the notification",
+  "notifications.privateMode": "Private mode",
+  "notifications.privateModeHint": "Codes, banks, payment apps and password managers show only “New notification”: the phone keeps what they say to itself.",
+  "notifications.onlyLocked": "Only while my phone isn’t in use",
+  "notifications.onlyLockedHint": "No notifications come here while the phone is unlocked with its screen on: you’re looking at it already.",
 
   // Notification history (screens/device/NotificationHistory.tsx)
   "history.title": "Notification history",

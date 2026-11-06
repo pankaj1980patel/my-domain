@@ -4343,6 +4343,7 @@ dependencies = [
  "if-addrs 0.13.4",
  "keyring",
  "libc",
+ "mac-notification-sys",
  "machine-uid",
  "md-ble",
  "md-geo",

@@ -45,9 +45,11 @@ mod nearby;
 mod note_reminders;
 mod notes;
 mod notif_history;
+mod notif_popup;
 mod notify;
 mod page_layout;
 mod phone_audio;
+mod phone_notifs;
 mod phone_screen;
 mod print;
 mod quick_panel;
@@ -399,6 +401,12 @@ impl EventSink for TauriSink {
                     phone_audio::on_disconnected(&self.app, node_id);
                     computer_audio::on_disconnected(&self.app, node_id);
                 }
+                // A phone back: it hears this computer's subscription and
+                // settings again (an older phone forgets them on restart).
+                if let CoreEvent::PeerConnected { node_id, .. } = &ev {
+                    let (app, node) = (self.app.clone(), node_id.clone());
+                    std::thread::spawn(move || phone_notifs::resubscribe(&app, &node));
+                }
                 tray::refresh(&self.app);
                 tray_battery::update(&self.app);
                 automations::on_link(&self.app);
@@ -701,44 +709,57 @@ impl EventSink for TauriSink {
             // window hears of it (it drops it from the active list).
             CoreEvent::NotificationRemoved { from, key } => {
                 notif_history::on_dismissed(&self.app, from, key);
+                phone_notifs::on_removed(&self.app, from, key);
             }
+            // An app icon the phone was asked for: kept.
+            CoreEvent::NotificationIcon {
+                from,
+                pkg,
+                hash,
+                data,
+            } => phone_notifs::on_icon(&self.app, from, pkg, hash, data),
             // Swiped away on a phone showing this computer's notifications:
             // closed here too, if it's one of ours still on screen.
             CoreEvent::NotificationAction { key, index: -1, .. } => {
                 computer_notifs::on_dismiss(&self.app, key);
             }
-            // Kept in the history first (cheap, and before the window
-            // hears of it); a muted app's get no further.
+            // Kept (the list and the history) before the window hears of
+            // it, private mode applied; a muted app's get no further, and
+            // the window gets what's shown here, never more.
             CoreEvent::Notification {
                 from,
                 title,
                 body,
                 app: source,
                 key,
-                ..
+                actions,
+                extra,
             } => {
-                let shown = notif_history::on_notification(
+                let Some(arrived) = phone_notifs::on_notification(
                     &self.app,
                     from,
                     source.as_deref(),
                     title,
                     body,
                     key.as_deref(),
-                );
-                if !shown {
+                    actions,
+                    extra,
+                ) else {
                     return;
-                }
-                let app = self.app.clone();
-                let (from, title, body, source) =
-                    (from.clone(), title.clone(), body.clone(), source.clone());
-                std::thread::spawn(move || {
-                    let title = if !title.trim().is_empty() {
-                        title
-                    } else {
-                        source.unwrap_or_else(|| notify::device_name(&app, &from))
-                    };
-                    notify::post_if_away(&app, &title, &body);
+                };
+                let n = &arrived.notif;
+                let shown = serde_json::json!({
+                    "from": n.from, "title": n.title, "body": n.body, "app": n.app,
+                    "key": n.key, "private": n.private,
                 });
+                if arrived.pop_up {
+                    let app = self.app.clone();
+                    std::thread::spawn(move || {
+                        notif_popup::show(&app, &arrived.notif, arrived.icon_path)
+                    });
+                }
+                let _ = self.app.emit(ev.name(), shown);
+                return;
             }
             _ => {}
         }
@@ -1150,8 +1171,9 @@ fn request_apps(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
 
 #[tauri::command]
 #[specta::specta]
-fn subscribe_apps(node_id: String, apps_json: String, engine: State<Eng>) -> Result<(), CoreError> {
-    engine.subscribe_apps(&node_id, &apps_json)
+fn subscribe_apps(node_id: String, apps_json: String, app: AppHandle) -> Result<(), CoreError> {
+    // With this computer's settings (private mode, only while not in use).
+    phone_notifs::subscribe(&app, &node_id, &apps_json)
 }
 
 /// Press one of a shared phone notification's buttons (`index`, in the order
@@ -1172,6 +1194,7 @@ fn notification_action(
     if index < 0 {
         notif_history::on_dismissed(&app, &node_id, &key);
     }
+    phone_notifs::on_acted(&app, &node_id, &key, index);
     Ok(via)
 }
 
@@ -1690,6 +1713,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notif_history::clear_notification_history,
         notif_history::muted_apps,
         notif_history::set_muted_apps,
+        phone_notifs::phone_notifications,
+        phone_notifs::forget_phone_notification,
+        phone_notifs::phone_notif_prefs,
+        phone_notifs::set_phone_notif_prefs,
         chat_history::chat_history,
         chat_history::clear_chat_history,
         chat_history::chat_history_enabled,
@@ -1957,6 +1984,7 @@ pub fn run() {
             app.manage(quiet::Quiet::default());
             app.manage(activity::ActivityLog::load(&handle));
             app.manage(notif_history::NotifHistory::load(&handle));
+            app.manage(phone_notifs::PhoneNotifs::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
             // Before the Engine: its clipboard watcher asks.
             clip_privacy::load(&handle);

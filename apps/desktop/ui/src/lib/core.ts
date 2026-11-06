@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
+import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type NotifGroup_Serialize, type NotifPrefs, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { onSpeedEvent, type SpeedRun } from "./diag";
@@ -56,24 +56,11 @@ export type ActivityItem = {
 
 export type AppEntry = { pkg: string; label: string };
 
-/** A button on a phone notification; `reply` ones take text. */
-export type NotifAction = { title: string; reply: boolean };
-
-/** A notification a device shared from one of its subscribed apps. */
-export type PhoneNotification = {
-  id: number;
-  /** The device it came from (node id). */
-  from: string;
-  app?: string;
-  title: string;
-  body: string;
-  /** Its key on the device; without one it can't be acted on. */
-  key?: string;
-  actions: NotifAction[];
-  ts: number;
-  /** A button was pressed or a reply sent from here. */
-  handled?: boolean;
-};
+/** A phone's notifications as shown here, by conversation (kept by the
+ *  backend, phone_notifs.rs). */
+export type NotifGroup = NotifGroup_Serialize;
+export type PhoneNotification = NotifGroup["items"][number];
+export type { NotifPrefs };
 
 /** What a device reported about itself (answer to requestStatus). */
 /** A clipboard value in the history; `from` is the device (none: this one). */
@@ -277,8 +264,6 @@ type State = {
   messages: ChatMessage[];
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
-  /** node_id -> recent notifications from it, newest first (memory only). */
-  notifications: Record<string, PhoneNotification[]>;
   clipSync: boolean;
   /** Recent clipboard values from all your devices, newest first. */
   clipHistory: ClipEntry[];
@@ -323,7 +308,6 @@ export const [state, setState] = createStore<State>({
   messages: [],
   activity: [],
   apps: {},
-  notifications: {},
   clipSync: false,
   clipHistory: [],
   status: {},
@@ -390,33 +374,6 @@ function logDev(name: string, payload: unknown) {
       list.unshift({ ts: now(), name, payload });
       if (list.length > 500) list.length = 500;
     }),
-  );
-}
-
-const MAX_NOTIFICATIONS = 30;
-
-/** Keep a shared notification in its device's list (newest first, capped).
- *  The same key again (an update on the phone) replaces the older one. */
-function addNotification(n: { from: string; title: string; body: string; app?: string | null; key?: string | null; actions?: unknown }) {
-  const node = state.peers.find((p) => p.node_id === n.from || p.name === n.from)?.node_id ?? n.from;
-  if (!node) return;
-  const actions: NotifAction[] = Array.isArray(n.actions)
-    ? n.actions
-        .filter((a): a is { title: unknown; reply?: unknown } => !!a && typeof a === "object" && typeof (a as { title?: unknown }).title === "string")
-        .map((a) => ({ title: a.title as string, reply: a.reply === true }))
-    : [];
-  const item: PhoneNotification = {
-    id: ++seq,
-    from: node,
-    app: n.app ?? undefined,
-    title: n.title ?? "",
-    body: n.body ?? "",
-    key: n.key ?? undefined,
-    actions,
-    ts: now(),
-  };
-  setState("notifications", node, (list = []) =>
-    [item, ...list.filter((x) => !item.key || x.key !== item.key)].slice(0, MAX_NOTIFICATIONS),
   );
 }
 
@@ -497,22 +454,17 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
       );
       addActivity({ icon: "💬", tone: "info", node, text: t("activity.message", { name: peerName(node), text: m.text }) });
     }),
-    on<{ from: string; title: string; body: string; app?: string | null; key?: string | null; actions?: unknown }>(
-      "notification-event",
-      (n) => {
-        addActivity({ icon: "🔔", tone: "info", text: n.body ? t("activity.notificationWithBody", { title: n.title, body: n.body }) : t("activity.notification", { title: n.title }) });
-        addNotification(n);
-        setHistoryTick((x) => x + 1);
-      },
-    ),
-    // Gone on the phone (the backend already marked it in the history).
-    on<{ from: string; key: string }>("notification-removed-event", ({ from, key }) => {
-      const node = state.peers.find((p) => p.node_id === from || p.name === from)?.node_id ?? from;
-      if (node && key && state.notifications[node]) {
-        setState("notifications", node, (list = []) => list.filter((x) => x.key !== key));
-      }
+    // What's shown here (private mode applied by the backend); the list
+    // itself follows `phone-notifs-changed`.
+    on<{ from: string; title: string; body: string; app?: string | null; private?: boolean }>("notification-event", (n) => {
+      const title = n.private ? t("notifications.private", { app: n.app || peerName(n.from) }) : n.title || n.app || "";
+      const body = n.private ? "" : n.body;
+      addActivity({ icon: "🔔", tone: "info", text: body ? t("activity.notificationWithBody", { title, body }) : t("activity.notification", { title }) });
       setHistoryTick((x) => x + 1);
     }),
+    // Gone on the phone (the backend already marked it in the history).
+    on<{ from: string; key: string }>("notification-removed-event", () => setHistoryTick((x) => x + 1)),
+    on<{ node_id: string }>("phone-notifs-changed", ({ node_id }) => bumpNotifs(node_id)),
     on<{ from: string; caller: string; state: string }>("call-notification-event", (c) =>
       addActivity({ icon: "📞", tone: "info", text: t("activity.call", { caller: c.caller, state: c.state }) }),
     ),
@@ -961,24 +913,43 @@ export async function shareNotification(title: string, body: string) {
 }
 
 /** Press a shared notification's button (`index`), reply to it (`text`), or
- *  dismiss it (-1: also drops it from the list). Pressing or replying marks
- *  it handled. Returns the transport, or "queued". */
+ *  dismiss it (-1: it leaves the list, on the phone too). Pressing or
+ *  replying marks it handled. Returns the transport, or "queued". */
 export async function notificationAction(n: PhoneNotification, index: number, text?: string): Promise<string> {
-  const drop = () => setState("notifications", n.from, (list = []) => list.filter((x) => x.id !== n.id));
   if (!n.key) {
     // Nothing to tell the device; dismissing just forgets it here.
     if (index < 0) {
-      drop();
+      await commands.forgetPhoneNotification(n.id);
       return "local";
     }
     throw new Error(t("notifications.cantAct"));
   }
   const via = await unwrap(commands.notificationAction(n.from, n.key, index, text ?? null));
-  if (index < 0) {
-    drop();
-    setHistoryTick((x) => x + 1);
-  } else setState("notifications", n.from, (x) => x.id === n.id, "handled", true);
+  if (index < 0) setHistoryTick((x) => x + 1);
   return via;
+}
+
+/** Bumped per device when its notifications here changed. */
+const [notifTicks, setNotifTicks] = createStore<Record<string, number>>({});
+function bumpNotifs(node: string) {
+  setNotifTicks(node, (x = 0) => x + 1);
+}
+export function notifTick(node: string): number {
+  return notifTicks[node] ?? 0;
+}
+
+/** Device `node`'s notifications now, by conversation, newest first. */
+export function phoneNotifications(node: string): Promise<NotifGroup[]> {
+  return commands.phoneNotifications(node);
+}
+
+export function phoneNotifPrefs(): Promise<NotifPrefs> {
+  return commands.phoneNotifPrefs();
+}
+
+/** Private mode and "only while my phone isn't in use"; the phones hear at once. */
+export async function setPhoneNotifPrefs(prefs: NotifPrefs) {
+  await commands.setPhoneNotifPrefs(prefs);
 }
 
 // --- notification history (kept by the backend, notif_history.rs) ---
@@ -1007,14 +978,9 @@ export function mutedApps(): Promise<string[]> {
 }
 
 /** Replace the muted list (returned tidied). A newly muted app's
- *  notifications also leave the lists here. */
+ *  notifications also leave the lists here (the backend drops them). */
 export async function setMutedApps(apps: string[]): Promise<string[]> {
-  const muted = await commands.setMutedApps(apps);
-  const isMuted = (app?: string) => !!app && muted.some((m) => m.toLowerCase() === app.trim().toLowerCase());
-  for (const node of Object.keys(state.notifications)) {
-    setState("notifications", node, (list = []) => list.filter((n) => !isMuted(n.app)));
-  }
-  return muted;
+  return commands.setMutedApps(apps);
 }
 
 // --- clipboard history (kept by the backend, clip_history.rs) ---

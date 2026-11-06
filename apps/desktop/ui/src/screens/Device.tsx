@@ -14,7 +14,13 @@ import {
   disconnect,
   copyText,
   loadClipHistory,
+  mutedApps,
   notificationAction,
+  notifTick,
+  phoneNotifications,
+  phoneNotifPrefs,
+  setMutedApps,
+  setPhoneNotifPrefs,
   openFile,
   openUrlOn,
   peerName,
@@ -36,7 +42,8 @@ import {
   RADIOS,
   type ChatMessage,
   type DeviceStatus,
-  type PhoneNotification,
+  type NotifGroup,
+  type NotifPrefs,
   type Radio,
   type WifiNetwork,
   type Transfer,
@@ -694,34 +701,70 @@ function ChatTile(props: { node: string }) {
 }
 
 function NotificationsTile(props: { node: string }) {
-  const list = () => state.notifications[props.node] ?? [];
+  const [groups, setGroups] = createSignal<NotifGroup[]>([]);
+  const [prefs, setPrefs] = createSignal<NotifPrefs>({ private_mode: true, only_locked: false });
+  const load = () => phoneNotifications(props.node).then(setGroups, () => {});
+  createEffect(on(() => [props.node, notifTick(props.node)], load));
+  onMount(() => phoneNotifPrefs().then(setPrefs, () => {}));
+  const change = async (next: NotifPrefs) => {
+    try {
+      await setPhoneNotifPrefs(next);
+      setPrefs(next);
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  };
   return (
     <article class="tile tile-wide">
       <h2>{t("notifications.title")}</h2>
-      <Show when={list().length} fallback={<p class="muted small">{t("notifications.empty")}</p>}>
+      <Show when={groups().length} fallback={<p class="muted small">{t("notifications.empty")}</p>}>
         <ul class="notif-list">
-          <For each={list()}>{(n) => <NotificationRow n={n} />}</For>
+          <For each={groups()}>{(g) => <NotificationGroup g={g} />}</For>
         </ul>
         <p class="muted small">{t("notifications.hint")}</p>
       </Show>
+      <label class="switch-row">
+        <span>{t("notifications.privateMode")}</span>
+        <input type="checkbox" role="switch" checked={prefs().private_mode} onChange={(e) => change({ ...prefs(), private_mode: e.currentTarget.checked })} />
+      </label>
+      <p class="muted small">{t("notifications.privateModeHint")}</p>
+      <label class="switch-row">
+        <span>{t("notifications.onlyLocked")}</span>
+        <input type="checkbox" role="switch" checked={prefs().only_locked} onChange={(e) => change({ ...prefs(), only_locked: e.currentTarget.checked })} />
+      </label>
+      <p class="muted small">{t("notifications.onlyLockedHint")}</p>
     </article>
   );
 }
 
-function NotificationRow(props: { n: PhoneNotification }) {
+/** One conversation (or one notification): its app and sender, the last
+ *  messages, any picture, its buttons and a reply box for the newest. */
+function NotificationGroup(props: { g: NotifGroup }) {
   const [reply, setReply] = createSignal("");
   const [busy, setBusy] = createSignal(false);
-  const name = () => peerName(props.n.from);
-  const actionable = () => !!props.n.key && !props.n.handled;
-  // Buttons keep their index in the device's list; the first `reply` one
-  // becomes the reply box.
-  const buttons = () => props.n.actions.map((a, i) => ({ ...a, i })).filter((a) => !a.reply);
-  const replyIndex = () => props.n.actions.findIndex((a) => a.reply);
+  const name = () => peerName(props.g.from);
+  const newest = () => props.g.items[0];
+  const actionable = () => !!newest()?.key && !newest()?.handled;
+  const appName = () => props.g.app || name();
+  const title = () => (props.g.private ? t("notifications.private", { app: appName() }) : props.g.title || appName());
+  // The conversation: the newest one's messages, else each one's text.
+  const lines = () => {
+    const n = newest();
+    if (!n) return [];
+    if (n.messages.length) return n.messages.map((m) => ({ who: m.sender, text: m.text }));
+    return props.g.items
+      .slice()
+      .reverse()
+      .filter((i) => i.body)
+      .map((i) => ({ who: props.g.items.length > 1 || props.g.group_chat ? i.sender ?? "" : "", text: i.body }));
+  };
 
   const act = async (index: number, text?: string) => {
+    const n = newest();
+    if (!n) return;
     setBusy(true);
     try {
-      const via = await notificationAction(props.n, index, text);
+      const via = await notificationAction(n, index, text);
       const queued = via === "queued";
       if (text !== undefined) {
         setReply("");
@@ -736,50 +779,102 @@ function NotificationRow(props: { n: PhoneNotification }) {
     }
   };
 
+  // Dismiss every notification in it (on the phone too).
+  const dismissAll = async () => {
+    setBusy(true);
+    try {
+      for (const n of props.g.items) await notificationAction(n, -1);
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const mute = async () => {
+    try {
+      const app = props.g.app;
+      if (!app) return;
+      await setMutedApps([...(await mutedApps()), app]);
+      toast(t("history.muted", { app }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  };
+
   const send = (e: Event) => {
     e.preventDefault();
     const text = reply().trim();
-    if (text) act(replyIndex(), text);
+    const r = newest()?.reply;
+    if (text && r) act(r.index, text);
   };
 
   return (
-    <li class="notif" classList={{ "notif-handled": !!props.n.handled }}>
+    <li class="notif" classList={{ "notif-handled": !!newest()?.handled }}>
       <div class="row">
-        <span class="small muted grow notif-app">{props.n.app || name()}</span>
-        <Show when={props.n.handled}>
+        <Show when={props.g.icon} fallback={<span class="notif-icon" aria-hidden="true">🔔</span>}>
+          <img class="notif-icon" src={props.g.icon!} alt="" />
+        </Show>
+        <span class="small muted grow notif-app">{appName()}</span>
+        <Show when={newest()?.handled}>
           <span class="small muted">{t("notifications.handled")}</span>
+        </Show>
+        <Show when={props.g.app}>
+          <button class="btn btn-ghost btn-sm" onClick={mute} aria-label={t("history.muteLabel", { app: props.g.app })}>
+            {t("history.mute")}
+          </button>
         </Show>
         <button
           class="btn btn-ghost btn-sm"
           disabled={busy()}
-          onClick={() => act(-1)}
-          aria-label={t("notifications.dismissLabel", { title: props.n.title })}
+          onClick={dismissAll}
+          aria-label={t("notifications.dismissLabel", { title: title() })}
         >
           {t("notifications.dismiss")}
         </button>
       </div>
-      <strong class="notif-title">{props.n.title}</strong>
-      <Show when={props.n.body}>
-        <p class="notif-body small">{props.n.body}</p>
+      <div class="row">
+        <Show when={props.g.avatar}>
+          <img class="notif-avatar" src={props.g.avatar!} alt="" />
+        </Show>
+        <strong class="notif-title grow">{title()}</strong>
+        <Show when={props.g.items.length > 1}>
+          <span class="small muted">{tn("notifications.count", props.g.items.length)}</span>
+        </Show>
+      </div>
+      <Show when={!props.g.private}>
+        <For each={lines()}>
+          {(l) => (
+            <p class="notif-body small">
+              <Show when={l.who}>
+                <strong>{l.who}: </strong>
+              </Show>
+              {l.text}
+            </p>
+          )}
+        </For>
+        <Show when={newest()?.picture}>
+          <img class="notif-picture" src={newest()!.picture!} alt={t("notifications.pictureLabel")} />
+        </Show>
       </Show>
-      <Show when={actionable() && buttons().length}>
+      <Show when={actionable() && newest()!.buttons.length}>
         <div class="row">
-          <For each={buttons()}>
+          <For each={newest()!.buttons}>
             {(b) => (
-              <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={() => act(b.i)}>
+              <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={() => act(b.index)}>
                 {b.title}
               </button>
             )}
           </For>
         </div>
       </Show>
-      <Show when={actionable() && replyIndex() >= 0}>
+      <Show when={actionable() && newest()!.reply}>
         <form class="composer" onSubmit={send}>
           <input
-            placeholder={props.n.actions[replyIndex()]?.title || t("notifications.replyPlaceholder")}
+            placeholder={newest()!.reply!.title || t("notifications.replyPlaceholder")}
             value={reply()}
             onInput={(e) => setReply(e.currentTarget.value)}
-            aria-label={t("notifications.replyLabel", { title: props.n.title })}
+            aria-label={t("notifications.replyLabel", { title: title() })}
           />
           <button class="btn btn-soft" type="submit" disabled={busy() || !reply().trim()}>
             {t("notifications.reply")}

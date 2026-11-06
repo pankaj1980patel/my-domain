@@ -360,17 +360,39 @@ pub fn muted_apps(history: State<NotifHistory>) -> Vec<String> {
 /// Replace the muted list; returns it tidied (see `tidy_muted`).
 #[tauri::command]
 #[specta::specta]
-pub fn set_muted_apps(apps: Vec<String>, history: State<NotifHistory>) -> Vec<String> {
-    let apps = tidy_muted(apps);
-    if let Ok(mut i) = history.inner.lock() {
-        i.muted = apps.clone();
-    }
-    if let (Some(kv), Ok(json)) = (&history.prefs, serde_json::to_string(&apps)) {
-        if let Err(e) = kv.set(MUTED_KEY, &json) {
-            eprintln!("[history] couldn't save the muted apps: {e}");
-        }
-    }
+pub fn set_muted_apps(
+    apps: Vec<String>,
+    app: AppHandle,
+    history: State<NotifHistory>,
+) -> Vec<String> {
+    let apps = history.set_muted(apps);
+    crate::phone_notifs::on_muted(&app, &apps);
     apps
+}
+
+impl NotifHistory {
+    fn set_muted(&self, apps: Vec<String>) -> Vec<String> {
+        let apps = tidy_muted(apps);
+        if let Ok(mut i) = self.inner.lock() {
+            i.muted = apps.clone();
+        }
+        if let (Some(kv), Ok(json)) = (&self.prefs, serde_json::to_string(&apps)) {
+            if let Err(e) = kv.set(MUTED_KEY, &json) {
+                eprintln!("[history] couldn't save the muted apps: {e}");
+            }
+        }
+        apps
+    }
+}
+
+/// Mute `name` too (from a notification's own Mute). The muted list.
+pub fn mute(app: &AppHandle, name: &str) -> Vec<String> {
+    let Some(h) = app.try_state::<NotifHistory>() else {
+        return Vec::new();
+    };
+    let mut apps = h.muted();
+    apps.push(name.to_string());
+    h.set_muted(apps)
 }
 
 #[cfg(test)]

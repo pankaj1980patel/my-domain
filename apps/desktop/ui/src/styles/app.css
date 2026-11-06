@@ -942,6 +942,32 @@ input[type="checkbox"][role="switch"]:checked::after {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* Phone notifications: app icon, sender picture, a picture in it. */
+.notif-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex: none;
+  line-height: 20px;
+  text-align: center;
+}
+.notif-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+.notif-picture {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  border-radius: 8px;
+  margin: 6px 0;
+  object-fit: contain;
+}
 .app-row {
   display: flex;
   align-items: center;

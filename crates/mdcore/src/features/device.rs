@@ -104,6 +104,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::print::extend_status(ctx, &mut status);
                 // Whether it downloads links for the others.
                 super::remote_download::extend_status(ctx, &mut status);
+                // Whether it knows rich notifications.
+                super::notif_rich::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -138,6 +140,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 );
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
                 super::insert_capture::remember(ctx, &from, &status[super::insert_capture::FLAG]);
+                super::notif_rich::remember(ctx, &from, &status[super::notif_rich::FLAG]);
                 super::timers::remember(ctx, &from, &status[super::timers::FLAG]);
                 super::wifi_direct::remember(ctx, &from, &status[super::wifi_direct::FLAG]);
                 super::kvm::remember(

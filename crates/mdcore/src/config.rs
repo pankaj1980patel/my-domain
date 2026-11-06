@@ -219,6 +219,12 @@ pub struct CoreConfig {
     /// default; off behaves like an app from before (tests use it to play
     /// an older peer).
     pub remote_download: bool,
+    /// Rich phone notifications (`features::notif_rich`): this end says
+    /// `notif_rich` in its status and `addr_update`, sends and reads the
+    /// extra fields (conversation, pictures, private mode) and the app
+    /// icon messages. On by default; off behaves like an app from before
+    /// (tests use it to play an older peer).
+    pub notif_rich: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -286,6 +292,7 @@ impl Default for CoreConfig {
             insert_timeout: crate::features::insert_capture::TIMEOUT,
             print: true,
             remote_download: true,
+            notif_rich: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

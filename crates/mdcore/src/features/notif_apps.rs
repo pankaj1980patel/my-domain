@@ -6,7 +6,12 @@
 //!
 //!   apps_request   { from }                          consumer → producer
 //!   apps_list      { from, apps[], subscribed[] }    producer → consumer
-//!   subscribe_apps { from, apps[], removals? }       consumer → producer
+//!   subscribe_apps { from, apps[], removals?, only_locked?, private? }
+//!                                                    consumer → producer
+//!
+//! `only_locked` and `private` are the subscriber's filters (see
+//! `features::notif_rich`); the producer keeps subscriptions across
+//! restarts.
 //!
 //! `removals: true` asks the producer to also say when a shared notification
 //! goes away there (`notif_removed`, see `features::notification`). Builds
@@ -82,7 +87,10 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
                     removal_subs.remove(&from);
                 }
                 drop(removal_subs);
-                ctx.subs.lock().insert(from, apps);
+                ctx.subs.lock().insert(from.clone(), apps);
+                // Its filters (optional fields), and all of it kept for
+                // the next start.
+                super::notif_rich::subscribed(ctx, &from, msg);
             }
             // Consumer: surface the producer's app list to the UI.
             "apps_list" => {

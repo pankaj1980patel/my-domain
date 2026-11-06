@@ -58,6 +58,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::kvm::extend_status(ctx, &mut msg);
         super::print::extend_status(ctx, &mut msg);
         super::remote_download::extend_status(ctx, &mut msg);
+        super::notif_rich::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -114,6 +115,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::audio_share::remember_codec(ctx, &from, &msg.json(super::audio_share::CODEC_FLAG));
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
         super::insert_capture::remember(ctx, &from, &msg.json(super::insert_capture::FLAG));
+        super::notif_rich::remember(ctx, &from, &msg.json(super::notif_rich::FLAG));
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));
         super::wifi_direct::remember(ctx, &from, &msg.json(super::wifi_direct::FLAG));
         super::kvm::remember(

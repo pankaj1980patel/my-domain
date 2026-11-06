@@ -114,6 +114,10 @@ block2 = "0.6"
 # pointer. The versions enigo already pulls in.
 core-graphics = "0.25"
 core-foundation = "0.10"
+# A phone notification's pop-up with a reply field and its buttons
+# (`notif_popup.rs`): the library the notification plugin already uses on
+# macOS (same version), for the answers the plugin doesn't pass on.
+mac-notification-sys = "0.6"
 
 # Share mouse and keyboard on Linux (`kvm_os.rs`): X11 pointer and keyboard
 # grabs. The x11rb enigo already uses (core protocol only).
@@ -132,5 +136,7 @@ libc = "0.2"
 # and the app in front.
 # Wi-Fi Direct for big files (`wifi_direct.rs`): this computer hosts a
 # group the phone joins.
-windows = { version = "0.61.3", features = ["Devices_WiFiDirect", "Foundation", "Security_Credentials", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+# A phone notification's toast with a reply box and buttons
+# (`notif_popup.rs`): Data_Xml_Dom, Foundation_Collections, UI_Notifications.
+windows = { version = "0.61.3", features = ["Data_Xml_Dom", "Devices_WiFiDirect", "Foundation", "Foundation_Collections", "Security_Credentials", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "UI_Notifications"] }
 

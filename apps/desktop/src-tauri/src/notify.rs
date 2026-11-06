@@ -122,8 +122,16 @@ pub fn post_always(app: &AppHandle, title: &str, body: &str) {
 }
 
 fn post_as(app: &AppHandle, kind: Kind, title: &str, body: &str) {
+    if may_show(app, kind, title) {
+        show_plain(app, title, body);
+    }
+}
+
+/// Whether a pop-up of `kind` may show now: notifications on, permitted,
+/// and not held for Do Not Disturb (a held one is counted under `title`).
+pub fn may_show(app: &AppHandle, kind: Kind, title: &str) -> bool {
     let Some(prefs) = app.try_state::<Prefs>() else {
-        return;
+        return false;
     };
     // The phones are looked at only for a pop-up that could be held.
     let quiet = kind == Kind::Everyday && prefs.follow_dnd() && dnd_now(app);
@@ -133,14 +141,13 @@ fn post_as(app: &AppHandle, kind: Kind, title: &str, body: &str) {
                 held.push(title.to_string());
             }
         }
-        return;
+        return false;
     }
-    if !prefs.enabled() {
-        return;
-    }
-    if !permitted(app) {
-        return;
-    }
+    prefs.enabled() && permitted(app)
+}
+
+/// Show one through the plugin, no questions asked.
+pub fn show_plain(app: &AppHandle, title: &str, body: &str) {
     if let Err(e) = app.notification().builder().title(title).body(body).show() {
         eprintln!("[notify] couldn't show a notification: {e}");
     }
@@ -193,13 +200,16 @@ fn held_summary(titles: &[String]) -> Option<String> {
 /// Post one only while the main window isn't focused: when it is, the UI
 /// already shows the same thing (activity, toast, the chat itself).
 pub fn post_if_away(app: &AppHandle, title: &str, body: &str) {
-    let focused = app
-        .get_webview_window("main")
-        .and_then(|w| w.is_focused().ok())
-        .unwrap_or(false);
-    if !focused {
+    if away(app) {
         post(app, title, body);
     }
+}
+
+/// The main window isn't focused.
+pub fn away(app: &AppHandle) -> bool {
+    !app.get_webview_window("main")
+        .and_then(|w| w.is_focused().ok())
+        .unwrap_or(false)
 }
 
 /// Asked once, on the first notification. Desktop builds of the plugin always

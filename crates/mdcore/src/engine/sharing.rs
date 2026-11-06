@@ -407,14 +407,49 @@ impl<P: Platform> Engine<P> {
     /// to hear when a shared notification goes away there
     /// (`CoreEvent::NotificationRemoved`).
     pub fn subscribe_apps(&self, node_id: &str, apps_json: &str) -> crate::Result<()> {
+        self.subscribe_apps_with(node_id, apps_json, false, false)
+    }
+
+    /// `subscribe_apps`, with this device's filters: `only_locked` (only
+    /// while the phone isn't in use) and `private` (the content of a
+    /// sensitive notification left out on the phone). A phone from before
+    /// ignores them.
+    pub fn subscribe_apps_with(
+        &self,
+        node_id: &str,
+        apps_json: &str,
+        only_locked: bool,
+        private: bool,
+    ) -> crate::Result<()> {
         let me = self.ctx.identity.lock().node_id.clone();
         let apps: serde_json::Value =
             serde_json::from_str(apps_json).unwrap_or(serde_json::Value::Array(vec![]));
         let m = serde_json::json!({
             "type": "subscribe_apps", "from": me, "apps": apps, "removals": true,
+            "only_locked": only_locked, "private": private,
         })
         .to_string();
         self.send_control(node_id, &m)
+    }
+
+    /// `node_id` understands rich notifications (conversations, pictures,
+    /// private mode, app icons).
+    pub fn notif_rich_supported(&self, node_id: &str) -> bool {
+        crate::features::notif_rich::supports(&self.ctx, node_id)
+    }
+
+    /// Producer: app `pkg`'s icon, a small JPEG in base64 (at most
+    /// `notif_rich::MAX_ICON` bytes). Notifications from it then name it,
+    /// and a subscriber that hasn't got it asks. False when it isn't one.
+    pub fn set_app_icon(&self, pkg: &str, jpeg_b64: &str) -> bool {
+        crate::features::notif_rich::set_icon(&self.ctx, pkg, jpeg_b64)
+    }
+
+    /// Subscriber: ask `node_id` for app `pkg`'s icon; it arrives as
+    /// `CoreEvent::NotificationIcon`. Only to a device that understands
+    /// rich notifications, for an app this device follows there.
+    pub fn request_notification_icon(&self, node_id: &str, pkg: &str) -> crate::Result<()> {
+        crate::features::notif_rich::request_icon(&self.ctx, node_id, pkg)
     }
 
     /// Consumer (a phone): show (`on`) or stop showing a computer's own
@@ -484,24 +519,24 @@ impl<P: Platform> Engine<P> {
         actions_json: &str,
     ) {
         let actions: serde_json::Value = serde_json::from_str(actions_json).unwrap_or_default();
-        let me = self.ctx.identity.lock().node_id.clone();
-        let targets: Vec<String> = self
-            .ctx
-            .subs
-            .lock()
-            .iter()
-            .filter(|(_, pkgs)| pkgs.iter().any(|p| p == pkg))
-            .map(|(n, _)| n.clone())
-            .collect();
-        for n in targets {
-            let mut m = serde_json::json!({
-                "type": "notification", "from": me, "title": title, "body": body, "app": app,
-            });
-            if let Some(key) = key {
-                m["key"] = key.into();
-                m["actions"] = actions.clone();
-            }
-            let _ = self.send_control(&n, &m.to_string());
+        let mut n = serde_json::json!({ "title": title, "body": body, "app": app });
+        if let Some(key) = key {
+            n["key"] = key.into();
+            n["actions"] = actions;
+        }
+        crate::features::notif_rich::share(&self.ctx, pkg, &n);
+    }
+
+    /// Producer: share a notification of package `pkg` with everything it
+    /// has. `notif_json`: `{title, body, app, key?, actions?, in_use?,
+    /// conv?, conv_title?, group_chat?, sender?, messages?, avatar?,
+    /// picture?, sensitive?, silent?, ts?}` (see `features::notif_rich`);
+    /// `in_use`: the phone is unlocked with its screen on now. Each
+    /// subscriber gets what it understands and asked for.
+    pub fn share_app_notification_rich(&self, pkg: &str, notif_json: &str) {
+        let n: serde_json::Value = serde_json::from_str(notif_json).unwrap_or_default();
+        if n.is_object() {
+            crate::features::notif_rich::share(&self.ctx, pkg, &n);
         }
     }
 

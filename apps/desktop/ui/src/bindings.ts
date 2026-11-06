@@ -88,6 +88,16 @@ export const commands = {
 	mutedApps: () => __TAURI_INVOKE<string[]>("muted_apps"),
 	/**  Replace the muted list; returns it tidied (see `tidy_muted`). */
 	setMutedApps: (apps: string[]) => __TAURI_INVOKE<string[]>("set_muted_apps", { apps }),
+	/**  Device `node_id`'s notifications now, in groups (newest first). */
+	phoneNotifications: (nodeId: string) => __TAURI_INVOKE<NotifGroup_Serialize[]>("phone_notifications", { nodeId }),
+	/**
+	 *  Forget notification `id` here only (one without a key: there's nothing
+	 *  to tell the phone).
+	 */
+	forgetPhoneNotification: (id: number) => __TAURI_INVOKE<void>("forget_phone_notification", { id }),
+	phoneNotifPrefs: () => __TAURI_INVOKE<NotifPrefs>("phone_notif_prefs"),
+	/**  Change the two settings; the phones hear at once. */
+	setPhoneNotifPrefs: (prefs: NotifPrefs) => __TAURI_INVOKE<void>("set_phone_notif_prefs", { prefs }),
 	/**
 	 *  Device `node_id`'s kept messages before message `before` (the newest
 	 *  without it): the last `limit`, oldest first.
@@ -2688,6 +2698,78 @@ export type NotifApp = {
 	muted: boolean,
 };
 
+/**  One of a notification's buttons: its place on the phone and its name. */
+export type NotifButton = {
+	index: number,
+	title: string,
+};
+
+/**
+ *  What the device page shows: one conversation, one sender, or one
+ *  notification.
+ */
+export type NotifGroup = NotifGroup_Serialize | NotifGroup_Deserialize;
+
+/**
+ *  What the device page shows: one conversation, one sender, or one
+ *  notification.
+ */
+export type NotifGroup_Deserialize = {
+	id: string,
+	from: string,
+	app: string,
+	pkg?: string | null,
+	/**  The conversation's name, else the newest one's title. */
+	title: string,
+	/**  The app's icon, as a data URL, when it's here. */
+	icon?: string | null,
+	/**  The newest sender picture. */
+	avatar?: string | null,
+	group_chat: boolean,
+	private: boolean,
+	/**  The newest one's time. */
+	ts: number | null,
+	/**  Newest first. */
+	items: PhoneNotif_Deserialize[],
+};
+
+/**
+ *  What the device page shows: one conversation, one sender, or one
+ *  notification.
+ */
+export type NotifGroup_Serialize = {
+	id: string,
+	from: string,
+	app: string,
+	pkg: string | null,
+	/**  The conversation's name, else the newest one's title. */
+	title: string,
+	/**  The app's icon, as a data URL, when it's here. */
+	icon: string | null,
+	/**  The newest sender picture. */
+	avatar: string | null,
+	group_chat: boolean,
+	private: boolean,
+	/**  The newest one's time. */
+	ts: number | null,
+	/**  Newest first. */
+	items: PhoneNotif_Serialize[],
+};
+
+/**  One message of a conversation. */
+export type NotifLine = {
+	sender: string,
+	text: string,
+	/**  When, in ms since 1970 (0: unknown). */
+	ts: number | null,
+};
+
+/**  The two settings. */
+export type NotifPrefs = {
+	private_mode: boolean,
+	only_locked: boolean,
+};
+
 /**  A link between two of your other devices, as one of them said. */
 export type OtherLink = OtherLink_Serialize | OtherLink_Deserialize;
 
@@ -2908,6 +2990,83 @@ export type PhoneAudioStatus_Serialize = {
 	volume: number,
 	/**  Why it stopped or can't play, if it did. */
 	error: string | null,
+};
+
+/**  A phone notification as shown here. */
+export type PhoneNotif = PhoneNotif_Serialize | PhoneNotif_Deserialize;
+
+/**  A phone notification as shown here. */
+export type PhoneNotif_Deserialize = {
+	id: number,
+	/**  The device it came from (node id). */
+	from: string,
+	/**  The app's name ("" when it didn't say). */
+	app: string,
+	pkg?: string | null,
+	title: string,
+	body: string,
+	/**  Its key on the phone; without one it can't be acted on. */
+	key?: string | null,
+	/**  Its buttons (not the reply one). */
+	buttons: NotifButton[],
+	/**  The button that takes a reply, if any. */
+	reply?: NotifButton | null,
+	conv?: string | null,
+	conv_title?: string | null,
+	group_chat: boolean,
+	sender?: string | null,
+	messages: NotifLine[],
+	/**  The sender's picture, as a data URL. */
+	avatar?: string | null,
+	/**  A picture in it, as a data URL. */
+	picture?: string | null,
+	/**  Its app icon's id. */
+	icon?: string | null,
+	/**  Its content was left out (private mode). */
+	private: boolean,
+	/**  A quiet update (no pop-up). */
+	silent: boolean,
+	/**  When it arrived here, in ms since 1970. */
+	ts: number | null,
+	/**  A button was pressed or a reply sent from here. */
+	handled: boolean,
+};
+
+/**  A phone notification as shown here. */
+export type PhoneNotif_Serialize = {
+	id: number,
+	/**  The device it came from (node id). */
+	from: string,
+	/**  The app's name ("" when it didn't say). */
+	app: string,
+	pkg: string | null,
+	title: string,
+	body: string,
+	/**  Its key on the phone; without one it can't be acted on. */
+	key: string | null,
+	/**  Its buttons (not the reply one). */
+	buttons: NotifButton[],
+	/**  The button that takes a reply, if any. */
+	reply: NotifButton | null,
+	conv: string | null,
+	conv_title: string | null,
+	group_chat: boolean,
+	sender: string | null,
+	messages: NotifLine[],
+	/**  The sender's picture, as a data URL. */
+	avatar: string | null,
+	/**  A picture in it, as a data URL. */
+	picture: string | null,
+	/**  Its app icon's id. */
+	icon: string | null,
+	/**  Its content was left out (private mode). */
+	private: boolean,
+	/**  A quiet update (no pop-up). */
+	silent: boolean,
+	/**  When it arrived here, in ms since 1970. */
+	ts: number | null,
+	/**  A button was pressed or a reply sent from here. */
+	handled: boolean,
 };
 
 /**  What Settings shows. */

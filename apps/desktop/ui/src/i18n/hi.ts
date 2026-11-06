@@ -145,6 +145,13 @@ export const hi: Partial<Messages> = {
   "notifications.dismissLabel": "{title} हटाएँ",
   "notifications.handled": "निपटा दिया गया",
   "notifications.cantAct": "इस सूचना पर यहाँ से कुछ नहीं किया जा सकता।",
+  "notifications.private": "{app} से नई सूचना",
+  "notifications.count": { one: "{count} सूचना", other: "{count} सूचनाएँ" },
+  "notifications.pictureLabel": "सूचना में तस्वीर",
+  "notifications.privateMode": "निजी मोड",
+  "notifications.privateModeHint": "कोड, बैंक, पेमेंट ऐप और पासवर्ड मैनेजर सिर्फ़ “नई सूचना” दिखाते हैं: उनमें क्या लिखा है, वह फ़ोन पर ही रहता है।",
+  "notifications.onlyLocked": "सिर्फ़ तब जब मेरा फ़ोन इस्तेमाल में न हो",
+  "notifications.onlyLockedHint": "जब फ़ोन अनलॉक हो और उसकी स्क्रीन चालू हो, तब यहाँ कोई सूचना नहीं आती: आप उसे पहले से देख रहे हैं।",
 
   // Notification history (screens/device/NotificationHistory.tsx)
   "history.title": "सूचनाओं का इतिहास",

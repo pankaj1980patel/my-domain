@@ -1227,6 +1227,21 @@ impl MdEngine {
         );
     }
 
+    /// Producer: share a notification of package `pkg` with everything it
+    /// has (`notif_json`: title, body, app, key, actions, in_use, conv,
+    /// conv_title, group_chat, sender, messages, avatar, picture,
+    /// sensitive, silent, ts; see mdcore `features::notif_rich`). Each
+    /// subscriber gets what it understands and asked for.
+    pub fn share_app_notification_rich(&self, pkg: String, notif_json: String) {
+        self.inner.share_app_notification_rich(&pkg, &notif_json);
+    }
+
+    /// Producer: app `pkg`'s icon, a small JPEG in base64 (16 KB at most).
+    /// False when it isn't one.
+    pub fn set_app_icon(&self, pkg: String, jpeg_b64: String) -> bool {
+        self.inner.set_app_icon(&pkg, &jpeg_b64)
+    }
+
     /// Producer: notification `key` from package `pkg`, shared with
     /// `share_app_notification_with`, went away here (swiped, opened, or
     /// cancelled by its app). Its subscribers drop it too.

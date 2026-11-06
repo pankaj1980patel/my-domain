@@ -39,6 +39,7 @@ pub mod media;
 pub mod nearby;
 pub mod notes;
 pub mod notif_apps;
+pub mod notif_rich;
 pub mod notification;
 pub mod opus_audio;
 pub mod p2p_ping;
@@ -114,6 +115,10 @@ impl<'a> ControlMsg<'a> {
     pub fn json(&self, key: &str) -> Value {
         self.value.get(key).cloned().unwrap_or(Value::Null)
     }
+    /// The whole message body.
+    pub fn json_root(&self) -> &Value {
+        &self.value
+    }
 }
 
 /// One feature's inbound handler. A handler may claim several `"type"` values
@@ -167,6 +172,7 @@ impl<P: Platform> ControlRegistry<P> {
         insert_capture: bool,
         print: bool,
         remote_download: bool,
+        notif_rich: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -237,6 +243,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if remote_download {
             r.register(Arc::new(remote_download::RemoteDownloadHandler));
+        }
+        if notif_rich {
+            r.register(Arc::new(notif_rich::NotifRichHandler));
         }
         r
     }

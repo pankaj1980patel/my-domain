@@ -76,6 +76,19 @@ pub enum CoreEvent {
         /// `reply` ones take text.
         #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
         actions: serde_json::Value,
+        /// Conversation, pictures, private mode... (`features::notif_rich`),
+        /// each field only when it came.
+        #[serde(flatten)]
+        extra: crate::features::notif_rich::NotifExtra,
+    },
+    /// App `pkg`'s icon on device `from` (asked for with
+    /// `Engine::request_notification_icon`): a small JPEG, base64, and its
+    /// id (`hash`, what notifications name it by).
+    NotificationIcon {
+        from: String,
+        pkg: String,
+        hash: String,
+        data: String,
     },
     /// Another device asks this one to press button `index` of its
     /// notification `key` (with `text` for a reply), or to dismiss it
@@ -538,6 +551,7 @@ impl CoreEvent {
             CoreEvent::Notification { .. } => "notification-event",
             CoreEvent::NotificationAction { .. } => "notification-action-event",
             CoreEvent::NotificationRemoved { .. } => "notification-removed-event",
+            CoreEvent::NotificationIcon { .. } => "notification-icon-event",
             CoreEvent::CallNotification { .. } => "call-notification-event",
             CoreEvent::CallHistory { .. } => "call-history-event",
             CoreEvent::AppsList { .. } => "apps-list-event",
@@ -636,7 +650,39 @@ mod tests {
             app: None,
             key: None,
             actions: serde_json::Value::Null,
+            extra: Default::default(),
         }
+    }
+
+    #[test]
+    fn a_rich_notification_carries_its_extra_fields_flat() {
+        let ev = CoreEvent::Notification {
+            from: "phone".into(),
+            title: "Asha".into(),
+            body: "hi".into(),
+            app: Some("Chat".into()),
+            key: Some("k".into()),
+            actions: json!([]),
+            extra: crate::features::notif_rich::NotifExtra {
+                pkg: Some("com.chat".into()),
+                conv: Some("c1".into()),
+                private: true,
+                ..Default::default()
+            },
+        };
+        let v = ev.ui_payload();
+        assert_eq!(v["pkg"], "com.chat");
+        assert_eq!(v["conv"], "c1");
+        assert_eq!(v["private"], true);
+        assert!(v.get("avatar").is_none() && v.get("sensitive").is_none());
+        let icon = CoreEvent::NotificationIcon {
+            from: "phone".into(),
+            pkg: "com.chat".into(),
+            hash: "ab".into(),
+            data: "x".into(),
+        };
+        assert_eq!(icon.name(), "notification-icon-event");
+        assert_eq!(icon.ui_payload()["pkg"], "com.chat");
     }
 
     #[test]

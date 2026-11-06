@@ -1,7 +1,8 @@
 //! Notification sharing: mirror a peer's OS notification locally, and act
 //! on one (press a button, reply, dismiss) from another device.
 //!
-//!   notification  { from, title, body, app?, key?, actions? }
+//!   notification  { from, title, body, app?, key?, actions?, ... }
+//!                 (the extra fields of `features::notif_rich`)
 //!   notif_action  { from, key, index, text? }   (index -1: dismiss)
 //!   notif_removed { from, key }                 (gone on the sending device)
 //!
@@ -44,6 +45,13 @@ impl<P: Platform> ControlHandler<P> for NotificationHandler {
             }
             return;
         }
+        // The extra fields only from a build that knows them (and only
+        // when this one does).
+        let extra = if ctx.config.notif_rich {
+            super::notif_rich::NotifExtra::from_value(msg.json_root())
+        } else {
+            super::notif_rich::NotifExtra::default()
+        };
         if let Some(n) = ctx.platform.notifier() {
             n.post(&msg.str("title"), &msg.str("body"));
         }
@@ -54,6 +62,7 @@ impl<P: Platform> ControlHandler<P> for NotificationHandler {
             app: msg.opt("app"),
             key: msg.opt("key"),
             actions: msg.json("actions"),
+            extra,
         });
     }
 }
