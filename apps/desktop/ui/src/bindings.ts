@@ -655,6 +655,21 @@ export const commands = {
 	 *  narrows to a device and a time span. Only local data is read.
 	 */
 	search: (query: string, limitPerKind: number, kinds: string[] | null, filter: SearchFilter_Deserialize | null) => __TAURI_INVOKE<SearchResults_Serialize>("search", { query, limitPerKind, kinds, filter }),
+	/**  One page of the timeline (see `ActivityQuery`). Only local data is read. */
+	activityFeed: (query: ActivityQuery_Deserialize) => __TAURI_INVOKE<ActivityPage_Serialize>("activity_feed", { query }),
+	/**  Hide these kinds from the timeline (the others show); the kinds hidden. */
+	setActivityHidden: (kinds: string[]) => __TAURI_INVOKE<string[]>("set_activity_hidden", { kinds }),
+	/**
+	 *  "Clear activity": empties the timeline's own record and hides what came
+	 *  before now. The transfer, clipboard, message and notification histories
+	 *  are not touched.
+	 */
+	clearActivity: () => __TAURI_INVOKE<void>("clear_activity"),
+	/**
+	 *  Show the rows from before "Clear activity" again (those still kept in
+	 *  their histories).
+	 */
+	restoreActivity: () => __TAURI_INVOKE<void>("restore_activity"),
 	/**  Whether a left click on the menu-bar icon opens the quick panel. */
 	quickPanelEnabled: () => __TAURI_INVOKE<boolean>("quick_panel_enabled"),
 	/**  Turn the quick panel on the icon's left click on or off (off: the menu). */
@@ -740,6 +755,169 @@ export const commands = {
 };
 
 /* Types */
+/**
+ *  One row of the timeline. The window words it from `action`:
+ * 
+ *   - files: `file_sent`, `file_received`, `file_send_failed`,
+ *     `file_receive_failed`, `file_sending`, `file_receiving` (`subject` the
+ *     file's name, `bytes` its size, `via` how it went, `path` where it is);
+ *   - clipboard: `clip_in`, `clip_out` (`subject`: the clip's first line);
+ *   - messages: `msg_in`, `msg_out`, `msg_failed` (`subject`: its first line);
+ *   - notifications: `notification` (`subject` its title, `detail` the app);
+ *   - calls: `call` (`subject` who, `detail` "ringing", "missed", "ended"…);
+ *   - connections: `link_up` (`detail` the link: "quic", "relay"…),
+ *     `link_down`, `key_changed`, `wake`;
+ *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
+ *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     (`detail` "done", "queued", "woken" or "failed").
+ */
+export type ActivityItem = ActivityItem_Serialize | ActivityItem_Deserialize;
+
+/**
+ *  One row of the timeline. The window words it from `action`:
+ * 
+ *   - files: `file_sent`, `file_received`, `file_send_failed`,
+ *     `file_receive_failed`, `file_sending`, `file_receiving` (`subject` the
+ *     file's name, `bytes` its size, `via` how it went, `path` where it is);
+ *   - clipboard: `clip_in`, `clip_out` (`subject`: the clip's first line);
+ *   - messages: `msg_in`, `msg_out`, `msg_failed` (`subject`: its first line);
+ *   - notifications: `notification` (`subject` its title, `detail` the app);
+ *   - calls: `call` (`subject` who, `detail` "ringing", "missed", "ended"…);
+ *   - connections: `link_up` (`detail` the link: "quic", "relay"…),
+ *     `link_down`, `key_changed`, `wake`;
+ *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
+ *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     (`detail` "done", "queued", "woken" or "failed").
+ */
+export type ActivityItem_Deserialize = {
+	/**
+	 *  Unique over the timeline: its source and its id there
+	 *  ("transfer:…", "clip:12", "log:40"…).
+	 */
+	id: string,
+	kind: string,
+	action: string,
+	/**  The other device, if any. */
+	node?: string | null,
+	/**  When, in ms since 1970. */
+	ts: number | null,
+	subject: string,
+	detail: string,
+	bytes?: number | null,
+	via?: string | null,
+	/**
+	 *  Its id in its own list, to open it (a transfer's, a clip's number,
+	 *  a note's…; the node id for a connection).
+	 */
+	target: string,
+	/**  A file's place on this computer, to show it in its folder. */
+	path?: string | null,
+};
+
+/**
+ *  One row of the timeline. The window words it from `action`:
+ * 
+ *   - files: `file_sent`, `file_received`, `file_send_failed`,
+ *     `file_receive_failed`, `file_sending`, `file_receiving` (`subject` the
+ *     file's name, `bytes` its size, `via` how it went, `path` where it is);
+ *   - clipboard: `clip_in`, `clip_out` (`subject`: the clip's first line);
+ *   - messages: `msg_in`, `msg_out`, `msg_failed` (`subject`: its first line);
+ *   - notifications: `notification` (`subject` its title, `detail` the app);
+ *   - calls: `call` (`subject` who, `detail` "ringing", "missed", "ended"…);
+ *   - connections: `link_up` (`detail` the link: "quic", "relay"…),
+ *     `link_down`, `key_changed`, `wake`;
+ *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
+ *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     (`detail` "done", "queued", "woken" or "failed").
+ */
+export type ActivityItem_Serialize = {
+	/**
+	 *  Unique over the timeline: its source and its id there
+	 *  ("transfer:…", "clip:12", "log:40"…).
+	 */
+	id: string,
+	kind: string,
+	action: string,
+	/**  The other device, if any. */
+	node: string | null,
+	/**  When, in ms since 1970. */
+	ts: number | null,
+	subject: string,
+	detail: string,
+	bytes: number | null,
+	via: string | null,
+	/**
+	 *  Its id in its own list, to open it (a transfer's, a clip's number,
+	 *  a note's…; the node id for a connection).
+	 */
+	target: string,
+	/**  A file's place on this computer, to show it in its folder. */
+	path: string | null,
+};
+
+/**
+ *  One page, whether there's more after it, the kinds hidden, and since
+ *  when the view was cleared (rows before it aren't listed).
+ */
+export type ActivityPage = ActivityPage_Serialize | ActivityPage_Deserialize;
+
+/**
+ *  One page, whether there's more after it, the kinds hidden, and since
+ *  when the view was cleared (rows before it aren't listed).
+ */
+export type ActivityPage_Deserialize = {
+	items: ActivityItem_Deserialize[],
+	more: boolean,
+	hidden: string[],
+	cleared_at?: number | null,
+};
+
+/**
+ *  One page, whether there's more after it, the kinds hidden, and since
+ *  when the view was cleared (rows before it aren't listed).
+ */
+export type ActivityPage_Serialize = {
+	items: ActivityItem_Serialize[],
+	more: boolean,
+	hidden: string[],
+	cleared_at: number | null,
+};
+
+/**
+ *  What to list: one device, some kinds (all when none), words, and where
+ *  to go on from (the last row shown: its `ts` and `id`).
+ */
+export type ActivityQuery = ActivityQuery_Serialize | ActivityQuery_Deserialize;
+
+/**
+ *  What to list: one device, some kinds (all when none), words, and where
+ *  to go on from (the last row shown: its `ts` and `id`).
+ */
+export type ActivityQuery_Deserialize = {
+	node?: string | null,
+	kinds?: string[] | null,
+	text?: string | null,
+	before_ts?: number | null,
+	before_id?: string | null,
+	limit?: number | null,
+};
+
+/**
+ *  What to list: one device, some kinds (all when none), words, and where
+ *  to go on from (the last row shown: its `ts` and `id`).
+ */
+export type ActivityQuery_Serialize = {
+	node: string | null,
+	kinds: string[] | null,
+	text: string | null,
+	before_ts: number | null,
+	before_id: string | null,
+	limit: number | null,
+};
+
 /**  Where a device says it can be reached. */
 export type Addresses = Addresses_Serialize | Addresses_Deserialize;
 

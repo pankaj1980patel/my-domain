@@ -352,13 +352,28 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onTimers = { timers = true },
                     onReadLater = { foundLink = null; readLater = true },
                     onLinksMap = { linksMap = true },
+                    onActivity = { tab = Tab.Activity },
                 )
                 tab == Tab.Notes -> NotesScreen(
                     onHelp = { openHelp("notes") },
                     openNote = foundNote,
                     onOpened = { foundNote = null },
                 )
-                tab == Tab.Activity -> ActivityScreen(onTransfers = { foundTransfer = null; transfers = true })
+                tab == Tab.Activity -> ActivityScreen(
+                    onTransfers = { foundTransfer = null; transfers = true },
+                    onOpen = { a ->
+                        // A row opens where it lives: the found-item ways Search uses.
+                        when {
+                            a.kind == "files" -> { foundTransfer = a.target; transfers = true }
+                            a.kind == "messages" && a.node != null -> { deviceFocus = "msg:" + a.target; device = a.node }
+                            a.kind == "clipboard" && a.node != null -> { deviceFocus = "clip:" + a.target; device = a.node }
+                            a.action == "note" -> { foundNote = a.target; tab = Tab.Notes }
+                            a.action == "read_later" -> { foundLink = a.target; readLater = true }
+                            a.action == "timer" -> timers = true
+                            a.node != null -> { deviceFocus = null; device = a.node }
+                        }
+                    },
+                )
                 else -> SettingsScreen(
                     prefs,
                     onDeveloper = { developer = true },

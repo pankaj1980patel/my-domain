@@ -439,6 +439,13 @@ fn tell(app: &AppHandle, s: &Schedule, result: &Result<String, CoreError>) {
     } else {
         s.label.clone()
     };
+    let how = match result {
+        Ok(via) if via == "queued" => "queued",
+        Ok(via) if via == "woken" => "woken",
+        Ok(_) => "done",
+        Err(_) => "failed",
+    };
+    crate::activity::record(app, "schedule", Some(&s.node), &what, how);
     match result {
         Ok(via) if via == "queued" => crate::notify::post(
             app,

@@ -275,6 +275,7 @@ object Core {
         DeviceLabels.load(app)
         PageLayoutStore.load(app)
         TransferLog.load(app)
+        ActivityLog.load(app)
     }
 
     fun str(@StringRes id: Int, vararg args: Any): String = app.getString(id, *args)
@@ -470,6 +471,8 @@ object Core {
 
     private fun apply(o: JSONObject, peersNow: List<PeerInfo>?) {
         val node = o.optString("node_id")
+        // What the Activity timeline keeps that no history does.
+        ActivityLog.onEvent(o)
         when (o.optString("kind")) {
             "peers_updated" -> peersNow?.let { peers = it }
             // Labels set on your other devices: take them here.
@@ -1162,7 +1165,8 @@ object Core {
 
     /** Wake [node] from sleep: its magic packet, broadcast on this network,
      *  and sent by your other devices linked now on its network ([WakeResult.relays]). */
-    suspend fun wake(node: String): com.mydomain.android.ffi.WakeResult = call { it.wakeDevice(node) }
+    suspend fun wake(node: String): com.mydomain.android.ffi.WakeResult =
+        call { it.wakeDevice(node) }.also { ActivityLog.record("wake", node) }
 
     /** Start ([on]) or stop watching [node]'s screen; null when it went out. */
     fun screenWatch(node: String, on: Boolean): Throwable? =

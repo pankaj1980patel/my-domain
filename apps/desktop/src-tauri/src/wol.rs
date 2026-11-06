@@ -162,9 +162,12 @@ pub fn can_wake(node_id: String, engine: tauri::State<crate::Eng>) -> bool {
 pub fn wake_device(
     node_id: String,
     engine: tauri::State<crate::Eng>,
+    app: tauri::AppHandle,
 ) -> Result<mdcore::model::WakeReport, mdcore::CoreError> {
     // A few UDP sends and queued messages: never blocks.
-    engine.wake_device(&node_id)
+    let report = engine.wake_device(&node_id)?;
+    crate::activity::record(&app, "wake", Some(&node_id), "", "");
+    Ok(report)
 }
 
 /// `aa:bb:cc:dd:ee:ff` for a 6-byte card address (not all zeros).

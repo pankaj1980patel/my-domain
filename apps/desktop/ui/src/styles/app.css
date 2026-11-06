@@ -4193,3 +4193,73 @@ html.kvm-window body {
 @media (max-width: 520px) {
   .kvm-grid { grid-template-columns: 1fr 1fr 1fr; }
 }
+
+/* --- activity timeline ------------------------------------------------------------ */
+
+.activity-actions {
+  display: flex;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}
+.activity-confirm,
+.activity-kinds {
+  display: grid;
+  gap: var(--s-2);
+  margin-bottom: var(--s-4);
+}
+.activity-kinds {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  border: 1px solid var(--border);
+}
+.activity-kind-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.activity-day {
+  margin-top: var(--s-4);
+}
+.activity-day-head {
+  margin: 0 0 var(--s-2);
+  font-weight: 600;
+}
+.activity-glyph {
+  width: 1.5em;
+  flex: none;
+  text-align: center;
+}
+.activity-main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  text-align: start;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.activity-main:disabled {
+  cursor: default;
+}
+.activity-main .activity-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.activity-main:not(:disabled):hover .activity-text {
+  text-decoration: underline;
+}
+.activity-more {
+  display: flex;
+  justify-content: center;
+  margin: var(--s-4) 0;
+}
+.activity-cleared {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  flex-wrap: wrap;
+}

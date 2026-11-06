@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod activity;
 mod automations;
 mod away_lock;
 mod battery_log;
@@ -381,6 +382,7 @@ impl EventSink for TauriSink {
         }
         // Ring / open-link need the desktop to act, not just the UI. Off the
         // core's thread: these look up peers and talk to the OS.
+        activity_record(&self.app, &ev);
         match &ev {
             // A stream moved to (or off) a nearby link: the phone's audio
             // here may buffer less.
@@ -692,6 +694,48 @@ impl EventSink for TauriSink {
             _ => {}
         }
         let _ = self.app.emit(ev.name(), ev.ui_payload());
+    }
+}
+
+/// What the Activity timeline keeps of an event that no history keeps:
+/// links coming and going, calls, rings, links opened here, screens and
+/// sounds shared (`activity.rs`).
+fn activity_record(app: &AppHandle, ev: &CoreEvent) {
+    let on_off = |on: bool| if on { "on" } else { "off" };
+    match ev {
+        CoreEvent::PeerConnected { node_id, transport } => activity::record(
+            app,
+            "link_up",
+            Some(node_id),
+            "",
+            &format!("{transport:?}").to_lowercase(),
+        ),
+        CoreEvent::PeerDisconnected { node_id } => {
+            activity::record(app, "link_down", Some(node_id), "", "")
+        }
+        CoreEvent::CallNotification {
+            from,
+            caller,
+            state,
+            ..
+        } => activity::record(app, "call", Some(from), caller, state),
+        CoreEvent::Ring { from } => activity::record(app, "ring", Some(from), "", ""),
+        CoreEvent::OpenUrl { from, url, .. } => {
+            activity::record(app, "open_url", Some(from), url, "")
+        }
+        CoreEvent::ScreenWatch { from, on } => {
+            activity::record(app, "screen_watch", Some(from), "", on_off(*on))
+        }
+        CoreEvent::ScreenOffer { from, on } => {
+            activity::record(app, "screen_offer", Some(from), "", on_off(*on))
+        }
+        CoreEvent::AudioOffer { from, on, .. } => {
+            activity::record(app, "audio_offer", Some(from), "", on_off(*on))
+        }
+        CoreEvent::AudioListen { from, on } => {
+            activity::record(app, "audio_listen", Some(from), "", on_off(*on))
+        }
+        _ => {}
     }
 }
 
@@ -1780,6 +1824,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync_folders::sync_set_max_size_mb,
         sync_folders::sync_open_folder,
         search::search,
+        activity::activity_feed,
+        activity::set_activity_hidden,
+        activity::clear_activity,
+        activity::restore_activity,
         quick_panel::quick_panel_enabled,
         quick_panel::set_quick_panel_enabled,
         quick_panel::quick_panel_hide,
@@ -1842,6 +1890,7 @@ pub fn run() {
             // Before the Engine: its first events may already notify.
             app.manage(notify::Prefs::load(&handle));
             app.manage(quiet::Quiet::default());
+            app.manage(activity::ActivityLog::load(&handle));
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
             // Before the Engine: its clipboard watcher asks.

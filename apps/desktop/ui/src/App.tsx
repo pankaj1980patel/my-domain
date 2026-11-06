@@ -348,7 +348,13 @@ export default function App() {
                 <ReadLater />
               </Match>
               <Match when={view().name === "activity"}>
-                <Activity />
+                <Activity
+                  onOpen={(x) =>
+                    x.kind === "timers"
+                      ? go({ name: "timers" })
+                      : openFound({ kind: x.kind, id: x.id, node: x.node, title: "", detail: "", score: 0 })
+                  }
+                />
               </Match>
               <Match when={view().name === "transfers"}>
                 <Transfers />
