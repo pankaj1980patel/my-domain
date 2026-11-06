@@ -198,6 +198,22 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+        <!-- "Read later" in the share sheet, next to the share target above: a
+             shared link is saved to the Read later list on all your devices
+             (ReadLaterShareActivity.kt). -->
+        <activity
+            android:name=".ReadLaterShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/read_later_share_label"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <!-- A share to one device's share-sheet target, sent without the picker. -->
         <activity
             android:name=".DirectShareActivity"

@@ -54,6 +54,7 @@ const LABEL_SEND: &str = "Send a file…";
 const LABEL_SEND_FOLDER: &str = "Send a folder…";
 const LABEL_OPEN: &str = "Open";
 const LABEL_QUIT: &str = "Quit";
+const LABEL_READ_LATER: &str = "Save copied link to Read later";
 const TOOLTIP_QUIET: &str = "my-domain \u{b7} Quiet: your phone is on Do Not Disturb";
 const LABEL_NO_DEVICES: &str = "No devices yet";
 const CONNECTED_SUFFIX: &str = " · connected";
@@ -70,6 +71,7 @@ const CLIP_PREVIEW: usize = 40;
 const ID_OPEN_APP: &str = "app:open";
 const ID_QUICK_PANEL: &str = "app:panel";
 const ID_QUIT: &str = "app:quit";
+const ID_READ_LATER: &str = "app:read-later";
 const ID_NONE: &str = "app:none";
 
 /// Pop-ups are held (`set_quiet`): the tooltip says so.
@@ -453,6 +455,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     }
     menu.separator()
         .item(&clips.build()?)
+        .text(ID_READ_LATER, LABEL_READ_LATER)
         .separator()
         .text(ID_QUIT, LABEL_QUIT)
         .build()
@@ -471,6 +474,7 @@ fn clip_label(text: &str, device: &str) -> String {
 fn on_menu(app: &AppHandle, id: &str) {
     match id {
         ID_OPEN_APP => show_window(app),
+        ID_READ_LATER => crate::read_later::tray_save_clipboard(app),
         ID_QUICK_PANEL => {
             let icon = app
                 .tray_by_id(TRAY_ID)

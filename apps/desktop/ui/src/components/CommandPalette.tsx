@@ -2,7 +2,8 @@
 // opens a search box over everything you can do. For each paired device:
 // open its page, ring it, send it the clipboard or a file, and the actions it
 // lists in its status (the device page's buttons); this computer's own
-// actions; your notes ("New note", and each note by its title); and the
+// actions; your notes ("New note", and each note by its title); Read later
+// ("Save copied link to Read later", and each unread link to open); and the
 // app's places (Settings and its sections, Help and each of its topics).
 //
 // Actions that need more from you (a number to call, a lost-mode message)
@@ -36,6 +37,7 @@ import {
 } from "../lib/core";
 import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../lib/presets";
 import { sortedNotes } from "../lib/notes";
+import { openLink, saveCopiedLink, sortedReadLater } from "../lib/readLater";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { TOPICS } from "../help/topics";
@@ -43,7 +45,7 @@ import { KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup } from "
 import { FoundText } from "./Found";
 import { t, tn, type Key } from "../i18n";
 
-export type Place = "home" | "notes" | "timers" | "activity" | "transfers" | "settings" | "help";
+export type Place = "home" | "notes" | "timers" | "readLater" | "activity" | "transfers" | "settings" | "help";
 
 type Cmd = {
   /** Stable across openings: the recents list keeps these. */
@@ -72,6 +74,7 @@ type Entry = { type: "cmd"; cmd: Cmd } | { type: "hit"; hit: Found } | { type: "
 function sameAs(f: Found): string | null {
   if (f.kind === "devices") return `open:${f.id}`;
   if (f.kind === "notes") return `note.${f.id}`;
+  if (f.kind === "read_later") return `readLater.${f.id}`;
   if (f.kind === "help") return `place.help.${f.id}`;
   if (f.kind === "settings") return `place.settings.${f.id}`;
   return null;
@@ -312,6 +315,7 @@ export default function CommandPalette(props: {
       { id: "place.home", label: t("palette.devices"), group, run: go("home") },
       { id: "place.notes", label: t("palette.notes"), group, run: go("notes") },
       { id: "place.timers", label: t("palette.timers"), group, run: go("timers") },
+      { id: "place.readLater", label: t("palette.readLater"), group, run: go("readLater") },
       { id: "place.activity", label: t("palette.activity"), group, run: go("activity") },
       { id: "place.transfers", label: t("palette.transfers"), group, run: go("transfers") },
       { id: "place.settings", label: t("palette.settings"), group, run: go("settings") },
@@ -364,10 +368,32 @@ export default function CommandPalette(props: {
     ];
   };
 
+  /** "Save copied link to Read later", and each unread link to open in
+   *  the browser. */
+  const readLaterCommands = (): Cmd[] => {
+    const group = t("palette.readLaterGroup");
+    return [
+      {
+        id: "readLater.saveCopied",
+        label: t("palette.saveCopiedLink"),
+        group,
+        run: () => saveCopiedLink().then((i) => toast(t("readLater.saved", { title: i.title }), "ok"), fail),
+      },
+      ...sortedReadLater()
+        .filter((i) => !i.read)
+        .map((i) => ({
+          id: `readLater.${i.id}`,
+          label: t("palette.readLink", { title: i.title || i.host }),
+          group,
+          run: () => openLink(i.id).catch(fail),
+        })),
+    ];
+  };
+
   const all = createMemo(() => {
     if (!open()) return [] as Cmd[];
     const devices = state.peers.flatMap((p) => deviceCommands(p.node_id, peerName(p.node_id), props.onDevice));
-    return [...devices, ...localCommands(), ...noteCommands(), ...places()];
+    return [...devices, ...localCommands(), ...noteCommands(), ...readLaterCommands(), ...places()];
   });
 
   /** Matches, the recent ones first (newest first), then in list order. */

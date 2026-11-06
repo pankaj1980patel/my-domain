@@ -938,6 +938,7 @@
     <string name="search_kind_devices">डिवाइस</string>
     <string name="search_kind_messages">मैसेज</string>
     <string name="search_kind_notes">नोट्स</string>
+    <string name="search_kind_read_later">बाद में पढ़ें</string>
     <string name="search_kind_clipboard">क्लिपबोर्ड</string>
     <string name="search_kind_transfers">ट्रांसफ़र</string>
     <string name="search_kind_folders">सिंक किए गए फ़ोल्डर</string>
@@ -956,6 +957,38 @@
     <string name="a11y_key_hidden">कुंजी छिपी हुई है</string>
 
     <!-- Notes: a notepad that’s the same on all your devices (ui/NotesScreen.kt) -->
+    <!-- Read later: links saved to read later on all your devices (ReadLaterScreen, ReadLaterShareActivity). -->
+    <string name="read_later_title">बाद में पढ़ें</string>
+    <string name="read_later_subtitle">बाद में पढ़ने के लिए सहेजे गए लिंक, आपके सभी डिवाइस पर एक जैसे। वेब से कुछ नहीं लाया जाता।</string>
+    <string name="read_later_link_label">लिंक (https://…)</string>
+    <string name="read_later_title_label">शीर्षक (वैकल्पिक)</string>
+    <string name="read_later_save">सहेजें</string>
+    <string name="read_later_paste">कॉपी किया लिंक चिपकाएँ</string>
+    <string name="read_later_saved">बाद में पढ़ें में सहेजा गया: %1$s</string>
+    <string name="read_later_deleted">“%1$s” हटाया गया</string>
+    <string name="read_later_undo">वापस लाएँ</string>
+    <string name="read_later_no_copied_link">कोई लिंक कॉपी नहीं है। पहले कोई वेब लिंक कॉपी करें।</string>
+    <string name="read_later_search">लिंक खोजें</string>
+    <string name="read_later_unread">बिना पढ़े</string>
+    <string name="read_later_all">सभी</string>
+    <string name="read_later_empty_title">बाद में पढ़ने को कुछ नहीं</string>
+    <string name="read_later_empty_body">किसी भी ऐप से लिंक शेयर करें और बाद में पढ़ें चुनें, या ऊपर लिंक चिपकाएँ। यह आपके सभी डिवाइस पर दिखता है।</string>
+    <string name="read_later_no_match">किसी लिंक में “%1$s” नहीं है।</string>
+    <string name="read_later_all_read">यहाँ सब पढ़ा जा चुका है। सभी चुनने पर पढ़े हुए भी दिखते हैं।</string>
+    <string name="read_later_saved_on">%1$s पर सहेजा गया</string>
+    <string name="read_later_mark_read">पढ़ा हुआ मानें</string>
+    <string name="read_later_mark_unread">बिना पढ़ा मानें</string>
+    <string name="read_later_delete">हटाएँ</string>
+    <string name="read_later_none_unread">कुछ भी बिना पढ़ा नहीं</string>
+    <plurals name="read_later_unread_count">
+        <item quantity="one">%1$d बिना पढ़ा</item>
+        <item quantity="other">%1$d बिना पढ़े</item>
+    </plurals>
+    <string name="read_later_share_label">बाद में पढ़ें</string>
+    <string name="read_later_share_no_link">शेयर की गई चीज़ में कोई वेब लिंक नहीं है।</string>
+    <string name="read_later_share_failed">सहेजा नहीं जा सका: my-domain अभी तैयार नहीं है। थोड़ी देर में फिर कोशिश करें।</string>
+    <string name="read_later_read_tag">पढ़ा हुआ</string>
+    <string name="read_later_unread_tag">बिना पढ़ा</string>
     <string name="notes_title">नोट्स</string>
     <string name="notes_subtitle">आपके सभी डिवाइस पर एक जैसे, सीधे उनके बीच भेजे जाते हैं, एन्क्रिप्टेड। क्लाउड में कुछ नहीं रखा जाता।</string>
     <string name="notes_new">नया नोट</string>

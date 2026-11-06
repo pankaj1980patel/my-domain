@@ -3,7 +3,8 @@
 //
 //  - devices (their names and the nicknames you gave them), the saved
 //    messages (chat_history.rs), the notes (the core's notepad; deleted
-//    ones are never listed), the clipboard history (clip_history.rs),
+//    ones are never listed), the links saved to read later (by title,
+//    host and link), the clipboard history (clip_history.rs),
 //    the notification history (notif_history.rs),
 //    transfers (transfers.rs), synced folders (their names and folders),
 //    automations, schedules and keyboard shortcuts;
@@ -30,7 +31,7 @@ use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use mdcore::model::Note;
+use mdcore::model::{Note, ReadLaterItem};
 use tauri::{AppHandle, Manager};
 
 use crate::automations::Automation;
@@ -44,10 +45,11 @@ use crate::sync_folders::SyncPairView;
 use crate::transfers::{TransferEntry, TransferState};
 
 /// What can be searched here (`kinds`), in the order the groups come back.
-pub const KINDS: [&str; 10] = [
+pub const KINDS: [&str; 11] = [
     "devices",
     "messages",
     "notes",
+    "read_later",
     "clipboard",
     "notifications",
     "transfers",
@@ -100,7 +102,7 @@ pub struct SearchHit {
     /// A kind's own short note: a clip's way ("in" / "out"), a
     /// notification's app, a transfer's state ("active" / "done" /
     /// "failed"), a folder's state, a shortcut's keys, "conflict" for a
-    /// note that's a conflict copy.
+    /// note that's a conflict copy, "read" / "unread" for a saved link.
     pub tag: Option<String>,
     pub score: f64,
 }
@@ -410,6 +412,8 @@ pub struct Sources {
     pub messages: Vec<ChatRecord>,
     /// The notes (`Engine::notes`: deleted ones aren't in it).
     pub notes: Vec<Note>,
+    /// The links saved to read later (`Engine::read_later`).
+    pub read_later: Vec<ReadLaterItem>,
     pub clips: Vec<ClipRecord>,
     pub notifications: Vec<HistoryEntry>,
     pub transfers: Vec<TransferEntry>,
@@ -448,6 +452,23 @@ fn note_candidates(notes: &[Note]) -> impl Iterator<Item = Candidate<'_>> {
             title: Cow::Borrowed(title),
             tag: n.conflict_of.is_some().then_some(Cow::Borrowed("conflict")),
         }
+    })
+}
+
+/// Saved links as candidates: found by title, host and link, dated by when
+/// they were saved, tagged read or unread.
+fn read_later_candidates(items: &[ReadLaterItem]) -> impl Iterator<Item = Candidate<'_>> {
+    items.iter().map(|i| Candidate {
+        id: Cow::Borrowed(&i.id),
+        node: (!i.by.is_empty()).then_some(i.by.as_str()),
+        ts: (i.saved_at > 0).then_some(i.saved_at as f64),
+        fields: Fields {
+            title: &i.title,
+            secondary: &i.host,
+            body: &i.url,
+        },
+        title: Cow::Borrowed(non_empty(&i.title, &i.url)),
+        tag: Some(Cow::Borrowed(if i.read { "read" } else { "unread" })),
     })
 }
 
@@ -532,6 +553,14 @@ pub fn run(
                 }),
             ),
             "notes" => rank(kind, &q, filter, limit, now, note_candidates(&src.notes)),
+            "read_later" => rank(
+                kind,
+                &q,
+                filter,
+                limit,
+                now,
+                read_later_candidates(&src.read_later),
+            ),
             "clipboard" => rank(
                 kind,
                 &q,
@@ -705,6 +734,11 @@ fn gather(app: &AppHandle, kinds: &[String]) -> Sources {
     if wanted("notes") {
         if let Some(engine) = app.try_state::<crate::Eng>() {
             src.notes = engine.notes();
+        }
+    }
+    if wanted("read_later") {
+        if let Some(engine) = app.try_state::<crate::Eng>() {
+            src.read_later = engine.read_later();
         }
     }
     if wanted("clipboard") {
@@ -952,6 +986,7 @@ mod tests {
             labels,
             messages: Vec::new(),
             notes: Vec::new(),
+            read_later: Vec::new(),
             clips: vec![
                 clip(
                     3,
@@ -1342,6 +1377,54 @@ mod tests {
         assert_eq!(r.groups[0].hits.len(), 1);
         assert_eq!(r.groups[0].hits[0].id, "n2");
         assert!(run(&src, "nothing", 10, &[], &none, NOW).groups.is_empty());
+    }
+
+    #[test]
+    fn saved_links_are_found_by_title_host_and_link() {
+        let mut src = seeded();
+        let link = |id: &str, url: &str, title: &str, read: bool, at: f64| ReadLaterItem {
+            id: id.into(),
+            url: url.into(),
+            title: title.into(),
+            host: mdcore::features::read_later::host_of(url).unwrap(),
+            read,
+            saved_at: at as u64,
+            updated_at: at as u64,
+            by: "p".into(),
+            ..ReadLaterItem::default()
+        };
+        // What `Engine::read_later` hands over (deleted ones never are).
+        src.read_later = vec![
+            link(
+                "u1",
+                "https://www.rust-lang.org/learn",
+                "Learn Rust",
+                false,
+                NOW,
+            ),
+            link(
+                "u2",
+                "https://blog.dev/posts/zebra-crossings",
+                "blog.dev",
+                true,
+                NOW - DAY_MS,
+            ),
+        ];
+        let none = SearchFilter::default();
+        let only = ["read_later".to_string()];
+
+        let r = run(&src, "learn rust", 10, &only, &none, NOW);
+        assert_eq!(kinds_of(&r), ["read_later"]);
+        let hit = &r.groups[0].hits[0];
+        assert_eq!((hit.id.as_str(), hit.title.as_str()), ("u1", "Learn Rust"));
+        assert_eq!(hit.tag.as_deref(), Some("unread"));
+        // By host, and by a word only in the link.
+        let r = run(&src, "blog.dev", 10, &only, &none, NOW);
+        assert_eq!(r.groups[0].hits[0].id, "u2");
+        assert_eq!(r.groups[0].hits[0].tag.as_deref(), Some("read"));
+        let r = run(&src, "zebra", 10, &only, &none, NOW);
+        assert_eq!(r.groups[0].total, 1);
+        assert!(r.groups[0].hits[0].detail.contains("zebra"));
     }
 
     #[test]

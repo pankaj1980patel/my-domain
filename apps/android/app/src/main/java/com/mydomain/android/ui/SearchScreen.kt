@@ -75,6 +75,7 @@ import com.mydomain.android.core.HelpMarkdown
 import com.mydomain.android.core.HelpTopic
 import com.mydomain.android.core.NoteSource
 import com.mydomain.android.core.Notes
+import com.mydomain.android.core.ReadLater
 import com.mydomain.android.core.Search
 import com.mydomain.android.core.SessionMessage
 import com.mydomain.android.core.TransferLog
@@ -88,7 +89,8 @@ import kotlinx.coroutines.withContext
 
 /*
  * Search everything on the phone: one query over what my-domain keeps here
- * (devices, the saved messages and this session's, notes, the clipboard
+ * (devices, the saved messages and this session's, notes, links saved to
+ * read later, the clipboard
  * history, transfers,
  * synced folders, automations, the automation apps' history, Settings and
  * Help), with the desktop's rules (core/Search.kt). Read through each
@@ -102,6 +104,7 @@ fun kindLabel(kind: FoundKind): Int = when (kind) {
     FoundKind.DEVICES -> R.string.search_kind_devices
     FoundKind.MESSAGES -> R.string.search_kind_messages
     FoundKind.NOTES -> R.string.search_kind_notes
+    FoundKind.READ_LATER -> R.string.search_kind_read_later
     FoundKind.CLIPBOARD -> R.string.search_kind_clipboard
     FoundKind.TRANSFERS -> R.string.search_kind_transfers
     FoundKind.FOLDERS -> R.string.search_kind_folders
@@ -189,12 +192,15 @@ private fun rememberFindables(ctx: Context): List<Findable> {
     val underWay = stringResource(R.string.transfers_active)
     val failed = stringResource(R.string.search_tag_failed)
     val conflict = stringResource(R.string.notes_conflict_tag)
+    val readTag = stringResource(R.string.read_later_read_tag)
+    val unreadTag = stringResource(R.string.read_later_unread_tag)
 
     val peers = Core.peers
     // The saved history (empty with it off) and this session's chat.
     val saved = ChatHistory.snapshot()
     val messages = Core.messages.toList()
     val notes = Notes.byId.values.toList()
+    val links = ReadLater.byId.values.toList()
     val clips = ClipLog.list
     val transfers = TransferLog.list
     val folders = Core.syncPairs.toList()
@@ -203,7 +209,7 @@ private fun rememberFindables(ctx: Context): List<Findable> {
     // Names can change (a nickname): part of the key.
     val names = peers.map { Core.peerName(it.nodeId) }
 
-    return remember(peers, names, saved, messages, notes, clips, transfers, folders, automations, runs, fixed) {
+    return remember(peers, names, saved, messages, notes, links, clips, transfers, folders, automations, runs, fixed) {
         buildList {
             peers.forEachIndexed { i, p ->
                 add(Findable(FoundKind.DEVICES, p.nodeId, names[i], niceName(p.name), node = p.nodeId))
@@ -216,6 +222,7 @@ private fun rememberFindables(ctx: Context): List<Findable> {
                 NoteSource(n.id, n.title, n.body, n.updatedAt, n.by.takeIf { it in known }, n.conflictOf != null)
             }
             addAll(Search.noteFindables(sources, conflict))
+            addAll(Search.readLaterFindables(links.map(ReadLater::item), readTag, unreadTag))
             clips.forEach { c ->
                 add(
                     Findable(

@@ -34,6 +34,7 @@ pub mod notes;
 pub mod notif_apps;
 pub mod notification;
 pub mod p2p_ping;
+pub mod read_later;
 pub mod screen;
 pub mod share;
 pub mod signal_fwd;
@@ -128,7 +129,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// `notes*` messages (`CoreConfig::notes`), `ping` with the ping
     /// and speed-test messages (`CoreConfig::diag`), `wake_relay`
     /// (`CoreConfig::wake_relay`), `camera_ctl` (`CoreConfig::camera`),
-    /// and `timers` (`CoreConfig::timers`).
+    /// `timers` (`CoreConfig::timers`), and the `read_later*` messages
+    /// (`CoreConfig::read_later`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -139,6 +141,7 @@ impl<P: Platform> ControlRegistry<P> {
         wake_relay: bool,
         camera: bool,
         timers: bool,
+        read_later: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -185,6 +188,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if timers {
             r.register(Arc::new(timers::TimersHandler));
+        }
+        if read_later {
+            r.register(Arc::new(read_later::ReadLaterHandler));
         }
         r
     }

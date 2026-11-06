@@ -457,6 +457,31 @@ pub struct Timer {
     pub by_name: String,
 }
 
+/// A link in the "Read later" list shared between your devices
+/// (`features::read_later`): `Engine::read_later`, and the
+/// `ReadLaterChanged` event.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReadLaterItem {
+    /// Made from the link, the same on every device.
+    pub id: String,
+    /// An `http` or `https` link.
+    pub url: String,
+    /// The title the share gave, else the link's host (nothing is fetched).
+    pub title: String,
+    /// The link's host, for showing (`example.com`).
+    pub host: String,
+    /// Marked read (on any device).
+    pub read: bool,
+    /// Unix ms, when it was (last) saved: the list's order.
+    pub saved_at: u64,
+    /// The name of the device it was saved on.
+    pub saved_on: String,
+    /// Unix ms, when it last changed ...
+    pub updated_at: u64,
+    /// ... and on which device (node id).
+    pub by: String,
+}
+
 /// A synced folder: one folder kept the same on this device and another
 /// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
 /// event whenever any of them changes.

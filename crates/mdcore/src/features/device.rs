@@ -80,6 +80,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::labels::extend_status(ctx, &mut status);
                 // Whether it shares notes.
                 super::notes::extend_status(ctx, &mut status);
+                // Whether it shares the read-later list.
+                super::read_later::extend_status(ctx, &mut status);
                 // Whether it answers pings and speed tests.
                 super::diag::extend_status(ctx, &mut status);
                 // Whether it knows the camera messages.
@@ -109,6 +111,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::folder_sync::remember(ctx, &from, &status);
                 super::labels::remember(ctx, &from, &status[super::labels::FLAG]);
                 super::notes::remember(ctx, &from, &status[super::notes::FLAG]);
+                super::read_later::remember(ctx, &from, &status[super::read_later::FLAG]);
                 super::diag::remember(ctx, &from, &status[super::diag::FLAG]);
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
                 super::timers::remember(ctx, &from, &status[super::timers::FLAG]);

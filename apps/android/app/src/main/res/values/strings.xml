@@ -936,6 +936,7 @@
     <string name="search_kind_devices">Devices</string>
     <string name="search_kind_messages">Messages</string>
     <string name="search_kind_notes">Notes</string>
+    <string name="search_kind_read_later">Read later</string>
     <string name="search_kind_clipboard">Clipboard</string>
     <string name="search_kind_transfers">Transfers</string>
     <string name="search_kind_folders">Synced folders</string>
@@ -954,6 +955,38 @@
     <string name="a11y_key_hidden">Key hidden</string>
 
     <!-- Notes: a notepad that’s the same on all your devices (ui/NotesScreen.kt) -->
+    <!-- Read later: links saved to read later on all your devices (ReadLaterScreen, ReadLaterShareActivity). -->
+    <string name="read_later_title">Read later</string>
+    <string name="read_later_subtitle">Links you saved to read later, the same on all your devices. Nothing is fetched from the web.</string>
+    <string name="read_later_link_label">Link (https://…)</string>
+    <string name="read_later_title_label">Title (optional)</string>
+    <string name="read_later_save">Save</string>
+    <string name="read_later_paste">Paste copied link</string>
+    <string name="read_later_saved">Saved to Read later: %1$s</string>
+    <string name="read_later_deleted">Deleted “%1$s”</string>
+    <string name="read_later_undo">Undo</string>
+    <string name="read_later_no_copied_link">No link is copied. Copy a web link first.</string>
+    <string name="read_later_search">Search links</string>
+    <string name="read_later_unread">Unread</string>
+    <string name="read_later_all">All</string>
+    <string name="read_later_empty_title">Nothing to read later</string>
+    <string name="read_later_empty_body">Share a link from any app and choose Read later, or paste one above. It shows up on all your devices.</string>
+    <string name="read_later_no_match">No link has “%1$s”.</string>
+    <string name="read_later_all_read">Everything here is read. All shows the read ones too.</string>
+    <string name="read_later_saved_on">saved on %1$s</string>
+    <string name="read_later_mark_read">Mark read</string>
+    <string name="read_later_mark_unread">Mark unread</string>
+    <string name="read_later_delete">Delete</string>
+    <string name="read_later_none_unread">Nothing unread</string>
+    <plurals name="read_later_unread_count">
+        <item quantity="one">%1$d unread</item>
+        <item quantity="other">%1$d unread</item>
+    </plurals>
+    <string name="read_later_share_label">Read later</string>
+    <string name="read_later_share_no_link">There’s no web link in what was shared.</string>
+    <string name="read_later_share_failed">Couldn’t save it: my-domain isn’t ready. Try again in a moment.</string>
+    <string name="read_later_read_tag">Read</string>
+    <string name="read_later_unread_tag">Unread</string>
     <string name="notes_title">Notes</string>
     <string name="notes_subtitle">The same on all your devices, sent straight between them, encrypted. Nothing is kept in a cloud.</string>
     <string name="notes_new">New note</string>

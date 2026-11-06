@@ -39,6 +39,7 @@ mod labels;
 mod ladder;
 mod media;
 mod notes;
+mod read_later;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
@@ -337,6 +338,7 @@ impl<P: Platform> Engine<P> {
             config.wake_relay,
             config.camera,
             config.timers,
+            config.read_later,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

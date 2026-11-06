@@ -37,7 +37,7 @@ The **6-digit code** is for a device that can't scan. So that it can bring the d
 
 ## Copied passwords
 
-A password copied from a password manager is never synced to your other devices or kept in a clipboard history, and if you send it on purpose the other device keeps it out of its history and notifications too. On the computer you can also exclude apps whose copies should never be synced. See [Messages, clipboard and clipboard history](help:messages-clipboard).
+A password copied from a password manager is never synced to your other devices, kept in a clipboard history or saved to [Read later](help:read-later), and if you send it on purpose the other device keeps it out of its history and notifications too. On the computer you can also exclude apps whose copies should never be synced. See [Messages, clipboard and clipboard history](help:messages-clipboard).
 
 ## What stays on each device
 
@@ -49,6 +49,6 @@ Clipboard history, notification history, transfer history and battery history ar
 
 What the backup holds: your preferences and switches, theme, automations, scheduled actions, commands, keyboard shortcuts, webhook on/off and port, device names and icons, page layouts, sharing switches, battery alerts and which folders are synced with which device (not the files in them).
 
-What it never holds: your password, device key or any encryption key, your sign-in, the webhook token or the automation-apps key, push-notification credentials, or the content of any message, notification, clipboard item or note. The file isn't encrypted, so keep it somewhere you trust all the same: it lists your devices' names and your folder paths.
+What it never holds: your password, device key or any encryption key, your sign-in, the webhook token or the automation-apps key, push-notification credentials, or the content of any message, notification, clipboard item, note or saved link. The file isn't encrypted, so keep it somewhere you trust all the same: it lists your devices' names and your folder paths.
 
 A backup from a computer restores on a computer, one from the phone on the phone. Most restored settings take effect when the app restarts; it offers to restart.

@@ -357,6 +357,7 @@ object Core {
         }
         Notes.refresh()
         Timers.refresh()
+        ReadLater.refresh()
     }
 
     /** Re-read every live link's quality (called every few seconds while
@@ -468,6 +469,8 @@ object Core {
             "notes_changed" -> Notes.applyChanged(o)
             // Timers started or changed on your other devices (every timer shown).
             "timers_changed" -> Timers.applyChanged(o)
+            // Links saved to read later changed on your other devices.
+            "read_later_changed" -> ReadLater.applyChanged(o)
             "peer_connected" -> {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")

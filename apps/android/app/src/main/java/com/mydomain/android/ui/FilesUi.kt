@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,9 +31,12 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.FileActions
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ReadLater
+import com.mydomain.android.core.ReadLaterLinks
 import com.mydomain.android.core.Transfer
 import com.mydomain.android.core.TransferState
 import com.mydomain.android.core.friendlyError
+import kotlinx.coroutines.launch
 
 /** Files: send some or a whole folder (system pickers), and this device's
  *  transfers. */
@@ -136,6 +140,8 @@ private fun TransferRow(t: Transfer) {
 /** Files or text shared from another app: pick the device that gets them. */
 @Composable
 fun ShareChooser() {
+    // Kept while the dialog closes: a save to Read later outlives it.
+    val scope = rememberCoroutineScope()
     val uris = Core.pendingShare
     val text = Core.pendingText.takeIf { uris.isEmpty() }
     if (uris.isEmpty() && text == null) return
@@ -149,6 +155,20 @@ fun ShareChooser() {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Muted(if (text != null) stringResource(R.string.share_text_body) else pluralStringResource(R.plurals.share_body, uris.size, uris.size))
+                // A shared link can go to Read later (all your devices) instead.
+                val link = text?.let { ReadLaterLinks.fromShare(it, null) }
+                if (link != null) {
+                    val savedMsg = stringResource(R.string.read_later_saved)
+                    SoftButton(stringResource(R.string.read_later_share_label), {
+                        Core.clearShare()
+                        scope.launch {
+                            runCatching { ReadLater.save(link.url, link.title) }.fold(
+                                { toast(String.format(savedMsg, it.title)) },
+                                { toast(friendlyError(it)) },
+                            )
+                        }
+                    }, Modifier.fillMaxWidth())
+                }
                 if (peers.isEmpty()) Muted(stringResource(R.string.share_no_devices))
                 peers.forEach { p ->
                     val name = Core.peerName(p.nodeId)

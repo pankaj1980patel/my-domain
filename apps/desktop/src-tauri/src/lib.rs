@@ -41,6 +41,7 @@ mod phone_audio;
 mod phone_screen;
 mod quick_panel;
 mod quiet;
+mod read_later;
 mod remote_input;
 mod schedule;
 mod screen_share;
@@ -1628,6 +1629,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notes::notes_list,
         notes::note_save,
         notes::note_delete,
+        read_later::read_later_list,
+        read_later::read_later_save,
+        read_later::read_later_save_clipboard,
+        read_later::read_later_mark,
+        read_later::read_later_delete,
+        read_later::read_later_open,
         note_reminders::note_remind_done,
         note_reminders::note_remind_at,
         timers::timers_list,

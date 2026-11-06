@@ -46,6 +46,9 @@ export function foundMeta(f: Found): string {
       // The device that last changed it (not when it was this computer).
       if (f.node && state.peers.some((p) => p.node_id === f.node)) parts.push(t("search.changedOn", { name }));
       break;
+    case "read_later":
+      parts.push(t(f.tag === "read" ? "readLater.readTag" : "readLater.unreadTag"));
+      break;
     case "settings":
       parts.push(t("nav.settings"));
       break;
@@ -64,7 +67,7 @@ export function foundMeta(f: Found): string {
 
 /** Kinds whose text says more than the title (a notification's or a
  *  note's text, a file's folder). */
-const WITH_DETAIL = new Set<Found["kind"]>(["notes", "notifications", "transfers", "folders"]);
+const WITH_DETAIL = new Set<Found["kind"]>(["notes", "read_later", "notifications", "transfers", "folders"]);
 
 /** The result's two lines. `title` empty: the text's snippet is the line. */
 export function FoundText(props: { f: Found; words: string[]; class?: string }) {

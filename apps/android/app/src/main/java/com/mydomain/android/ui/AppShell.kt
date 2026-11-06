@@ -59,7 +59,7 @@ private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 
 /** Sign-in until ready; then tabs (Devices, Notes, Activity, Settings) plus the
  *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
- *  this phone, Timers and Search (from Home) and Help screens. */
+ *  this phone, Timers, Read later and Search (from Home) and Help screens. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -101,6 +101,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var transfers by rememberSaveable { mutableStateOf(false) }
     var setup by rememberSaveable { mutableStateOf(false) }
     var timers by rememberSaveable { mutableStateOf(false) }
+    var readLater by rememberSaveable { mutableStateOf(false) }
     // Help: open (the topic list) and the topic shown, if any. Shown over
     // whichever screen opened it, which comes back on Back.
     var help by rememberSaveable { mutableStateOf(false) }
@@ -124,6 +125,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var foundAutomation by rememberSaveable { mutableStateOf<String?>(null) }
     var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var foundNote by rememberSaveable { mutableStateOf<String?>(null) }
+    var foundLink by rememberSaveable { mutableStateOf<String?>(null) }
     // A result opened a Settings tile or a note (a tab, not a pushed
     // screen): Back goes back to Search. And Help opened from Search closes
     // in one Back.
@@ -147,6 +149,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             FoundKind.TRANSFERS -> { foundTransfer = f.id; transfers = true }
             FoundKind.AUTOMATIONS -> { foundAutomation = f.id; automations = true }
             FoundKind.HELP -> { helpFromSearch = true; openHelp(f.id) }
+            FoundKind.READ_LATER -> { foundLink = f.id; readLater = true }
             FoundKind.NOTES -> {
                 foundNote = f.id
                 notesFromSearch = true
@@ -169,6 +172,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     val closeTransfers = { transfers = false; foundTransfer = null }
     val closeAutomations = { automations = false; foundAutomation = null }
     val closeHelp = { help = false; helpFromSearch = false }
+    val closeReadLater = { readLater = false; foundLink = null }
     val backToSearch = {
         settingsFromSearch = false
         notesFromSearch = false
@@ -193,6 +197,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations = false
             transfers = false
             setup = false
+            readLater = false
             help = false
             leaveSearch()
             tab = Tab.Settings
@@ -207,6 +212,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations = false
             transfers = false
             setup = false
+            readLater = false
             help = false
             leaveSearch()
             tab = Tab.Devices
@@ -240,6 +246,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations = false
             transfers = false
             setup = false
+            readLater = false
             help = false
             leaveSearch()
             foundNote = id
@@ -248,7 +255,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
-    val pushed = help || device != null || developer || automations || transfers || setup || timers || search
+    val pushed = help || device != null || developer || automations || transfers || setup || timers || readLater || search
     BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
         when {
             help && helpTopic != null && !helpFromSearch -> helpTopic = null
@@ -259,6 +266,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             transfers -> closeTransfers()
             setup -> setup = false
             timers -> timers = false
+            readLater -> closeReadLater()
             search -> search = false
             settingsFromSearch && tab == Tab.Settings -> backToSearch()
             notesFromSearch && tab == Tab.Notes -> backToSearch()
@@ -308,6 +316,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 automations -> AutomationsScreen(onBack = closeAutomations, found = foundAutomation)
                 setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
                 timers -> TimersScreen(onBack = { timers = false }, onHelp = { openHelp("timers") })
+                readLater -> ReadLaterScreen(onBack = closeReadLater, onHelp = { openHelp("read-later") }, found = foundLink)
                 transfers -> TransfersScreen(
                     onBack = closeTransfers,
                     onOpenDevice = { deviceFocus = null; device = it },
@@ -329,6 +338,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onSearch = { search = true },
                     onBattery = { settingsFocus = "battery"; tab = Tab.Settings },
                     onTimers = { timers = true },
+                    onReadLater = { foundLink = null; readLater = true },
                 )
                 tab == Tab.Notes -> NotesScreen(
                     onHelp = { openHelp("notes") },

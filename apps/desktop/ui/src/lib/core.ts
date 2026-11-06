@@ -14,6 +14,7 @@ import { onSpeedEvent, type SpeedRun } from "./diag";
 import { niceName } from "./words";
 import { applyNotesChanged, loadNotes, onReminder, type Note } from "./notes";
 import { applyTimersChanged, loadTimers, onTimerRing, type Timer } from "./timers";
+import { applyReadLaterChanged, applySaved as applyReadLaterSaved, loadReadLater, type ReadLaterItem } from "./readLater";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
@@ -530,6 +531,10 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
     on<Record<string, DeviceLabel>>("device-labels", (labels) => setState("labels", reconcile(labels ?? {}))),
     // Notes changed on your other devices (and ones deleted there).
     on<{ notes: Note[]; removed: string[] }>("notes-changed", applyNotesChanged),
+    // Links saved to read later changed on your other devices (and ones
+    // deleted there); one saved here from the tray.
+    on<{ items: ReadLaterItem[]; removed: string[] }>("read-later-changed", applyReadLaterChanged),
+    on<ReadLaterItem>("read-later-saved", applyReadLaterSaved),
     // A note's reminder came due here (the backend showed it too).
     on<Note>("note-reminder", onReminder),
     // Timers started or changed on your other devices (every timer shown).
@@ -711,6 +716,7 @@ export async function loadAll() {
   commands.syncPairs().then((p) => setState("syncPairs", reconcile(p)), () => {});
   loadNotes().catch(() => {});
   loadTimers().catch(() => {});
+  loadReadLater().catch(() => {});
   setState({
     me,
     peers,

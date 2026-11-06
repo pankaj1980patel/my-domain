@@ -405,6 +405,21 @@ export const commands = {
 	noteSave: (id: string | null, title: string, body: string, pinned: boolean, checklist: boolean, color: string | null, remindAt: number | null, remindDone: boolean) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_save", { id, title, body, pinned, checklist, color, remindAt, remindDone })),
 	/**  Delete a note on all your devices. */
 	noteDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("note_delete", { id })),
+	/**  Every saved link, the most recently saved first. */
+	readLaterList: () => __TAURI_INVOKE<ReadLaterView[]>("read_later_list"),
+	/**
+	 *  Save a link (`text`: the link, or text with one in it; `title` null or
+	 *  blank: the link's host). Goes to your other devices.
+	 */
+	readLaterSave: (text: string, title: string | null) => typedError<ReadLaterView, string>(__TAURI_INVOKE("read_later_save", { text, title })),
+	/**  Save the link that's copied on this computer. */
+	readLaterSaveClipboard: () => typedError<ReadLaterView, string>(__TAURI_INVOKE("read_later_save_clipboard")),
+	/**  Mark a saved link read, or unread again. */
+	readLaterMark: (id: string, read: boolean) => typedError<ReadLaterView, string>(__TAURI_INVOKE("read_later_mark", { id, read })),
+	/**  Delete a saved link on all your devices. */
+	readLaterDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("read_later_delete", { id })),
+	/**  Open a saved link in the browser, and mark it read. */
+	readLaterOpen: (id: string) => typedError<ReadLaterView, string>(__TAURI_INVOKE("read_later_open", { id })),
 	/**  Mark a note's reminder Done (on every device, as they sync). */
 	noteRemindDone: (id: string) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_remind_done", { id })),
 	/**  Remind at `at` (unix ms: snooze, or a new time), or no more (null). */
@@ -1942,6 +1957,22 @@ export type Quality = "excellent" | "good" | "weak" |
 /**  Not measured on this kind of link. */
 "unknown";
 
+/**  One saved link, as the UI shows it (the core's `ReadLaterItem`). */
+export type ReadLaterView = {
+	id: string,
+	url: string,
+	/**  The title the share gave, else the host. */
+	title: string,
+	host: string,
+	read: boolean,
+	/**  Unix ms, when it was (last) saved. */
+	saved_at: number | null,
+	/**  The name of the device it was saved on. */
+	saved_on: string,
+	/**  Unix ms. */
+	updated_at: number | null,
+};
+
 /**  The relay server, the fallback when no direct path works. */
 export type RelayInfo = RelayInfo_Serialize | RelayInfo_Deserialize;
 
@@ -2164,7 +2195,7 @@ export type SearchHit_Deserialize = {
 	 *  A kind's own short note: a clip's way ("in" / "out"), a
 	 *  notification's app, a transfer's state ("active" / "done" /
 	 *  "failed"), a folder's state, a shortcut's keys, "conflict" for a
-	 *  note that's a conflict copy.
+	 *  note that's a conflict copy, "read" / "unread" for a saved link.
 	 */
 	tag?: string | null,
 	score: number | null,
@@ -2189,7 +2220,7 @@ export type SearchHit_Serialize = {
 	 *  A kind's own short note: a clip's way ("in" / "out"), a
 	 *  notification's app, a transfer's state ("active" / "done" /
 	 *  "failed"), a folder's state, a shortcut's keys, "conflict" for a
-	 *  note that's a conflict copy.
+	 *  note that's a conflict copy, "read" / "unread" for a saved link.
 	 */
 	tag: string | null,
 	score: number | null,

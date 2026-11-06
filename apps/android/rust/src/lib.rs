@@ -401,6 +401,41 @@ impl From<mdcore::model::Timer> for TimerItem {
     }
 }
 
+/// A link in the "Read later" list shared with your other devices
+/// (`read_later_list`, and `read_later_changed` events with the same fields
+/// under `items`).
+#[derive(uniffi::Record)]
+pub struct ReadLaterEntry {
+    /// Made from the link, the same on every device.
+    pub id: String,
+    pub url: String,
+    /// The title the share gave, else the host (nothing is fetched).
+    pub title: String,
+    pub host: String,
+    pub read: bool,
+    /// Unix ms, when it was (last) saved.
+    pub saved_at: i64,
+    /// The name of the device it was saved on.
+    pub saved_on: String,
+    /// Unix ms.
+    pub updated_at: i64,
+}
+
+impl From<mdcore::model::ReadLaterItem> for ReadLaterEntry {
+    fn from(i: mdcore::model::ReadLaterItem) -> Self {
+        ReadLaterEntry {
+            id: i.id,
+            url: i.url,
+            title: i.title,
+            host: i.host,
+            read: i.read,
+            saved_at: i64::try_from(i.saved_at).unwrap_or(i64::MAX),
+            saved_on: i.saved_on,
+            updated_at: i64::try_from(i.updated_at).unwrap_or(i64::MAX),
+        }
+    }
+}
+
 /// Battery alerts this phone sends your other devices.
 #[derive(uniffi::Record)]
 pub struct BatteryAlertConfig {
@@ -1629,5 +1664,36 @@ impl MdEngine {
     /// Device `node_id` shares timers (its app is new enough).
     pub fn timers_supported(&self, node_id: String) -> bool {
         self.inner.timers_supported(&node_id)
+    }
+
+    // --- read later, shared with your other devices (features::read_later) ---
+
+    /// Every saved link, the most recently saved first. Links changed on
+    /// your other devices arrive as `read_later_changed` events.
+    pub fn read_later_list(&self) -> Vec<ReadLaterEntry> {
+        self.inner
+            .read_later()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    /// Save a link to read later (`text`: the link, or a share's text with
+    /// one in it; `title` none or blank: the link's host). Saving one that's
+    /// there puts it back on top, unread. Goes to your other devices.
+    pub fn read_later_save(&self, text: String, title: Option<String>) -> MdResult<ReadLaterEntry> {
+        let url = mdcore::features::read_later::find_url(&text)
+            .ok_or_else(|| CoreError::InvalidInput("That isn't a web link.".into()))?;
+        Ok(self.inner.save_read_later(&url, title.as_deref())?.into())
+    }
+
+    /// Mark a saved link read, or unread again, on all your devices.
+    pub fn read_later_mark(&self, id: String, read: bool) -> MdResult<ReadLaterEntry> {
+        Ok(self.inner.mark_read_later(&id, read)?.into())
+    }
+
+    /// Delete a saved link on all your devices.
+    pub fn read_later_delete(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.delete_read_later(&id)?)
     }
 }

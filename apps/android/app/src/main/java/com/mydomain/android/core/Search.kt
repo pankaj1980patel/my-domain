@@ -7,12 +7,14 @@ import java.text.Normalizer
  *
  * Messages are the saved history ([ChatHistory]) and this session's chat
  * ([Core.messages]) together; with "Keep message history" off, only this
- * session's. Notes are the notepad's ([Notes]; deleted ones aren't there).
+ * session's. Notes are the notepad's ([Notes]; deleted ones aren't there);
+ * saved links are Read later's ([ReadLater]), found by title, site and link.
  */
 enum class FoundKind {
     DEVICES,
     MESSAGES,
     NOTES,
+    READ_LATER,
     CLIPBOARD,
     TRANSFERS,
     FOLDERS,
@@ -313,6 +315,16 @@ object Search {
             tag = if (n.conflict) conflictTag else null,
         )
     }
+
+    /** Saved links as searched: by title, host and link, dated by when they
+     *  were saved; tagged [readTag] or [unreadTag]. */
+    fun readLaterFindables(items: List<ReadLaterLinks.Item>, readTag: String, unreadTag: String): List<Findable> =
+        items.map { i ->
+            Findable(
+                FoundKind.READ_LATER, i.id, i.title.ifEmpty { i.url }, i.host, i.url,
+                ts = i.savedAt.takeIf { it > 0 }, tag = if (i.read) readTag else unreadTag,
+            )
+        }
 
     // --- ranking -------------------------------------------------------------
 

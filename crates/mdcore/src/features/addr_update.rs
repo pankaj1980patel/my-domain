@@ -41,6 +41,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
             msg[super::labels::FLAG] = 1.into();
         }
         super::notes::extend_status(ctx, &mut msg);
+        super::read_later::extend_status(ctx, &mut msg);
         super::diag::extend_status(ctx, &mut msg);
         super::camera::extend_status(ctx, &mut msg);
         super::timers::extend_status(ctx, &mut msg);
@@ -93,6 +94,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         };
         super::labels::remember(ctx, &from, &msg.json(super::labels::FLAG));
         super::notes::remember(ctx, &from, &msg.json(super::notes::FLAG));
+        super::read_later::remember(ctx, &from, &msg.json(super::read_later::FLAG));
         super::diag::remember(ctx, &from, &msg.json(super::diag::FLAG));
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));

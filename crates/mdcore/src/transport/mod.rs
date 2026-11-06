@@ -164,6 +164,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::labels::link_up(&ctx, &peer);
         crate::features::notes::link_up(&ctx, &peer);
         crate::features::timers::link_up(&ctx, &peer);
+        crate::features::read_later::link_up(&ctx, &peer);
     });
 }
 

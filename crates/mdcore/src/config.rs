@@ -140,6 +140,12 @@ pub struct CoreConfig {
     /// like an app from before reminders, `notes: 1` (tests use it to play
     /// an older peer).
     pub note_reminders: bool,
+    /// The "Read later" list shared between your devices
+    /// (`features::read_later`): this end says `read_later` in its status
+    /// and `addr_update` and understands the `read_later` and
+    /// `read_later_digest` messages. On by default; off behaves like an app
+    /// from before (tests use it to play an older peer).
+    pub read_later: bool,
     /// "Check connection" (`features::diag`): this end says `ping` in its
     /// status and answers pings and speed tests. On by default; off
     /// behaves like an app from before (tests use it to play an older
@@ -200,6 +206,7 @@ impl Default for CoreConfig {
             shared_labels: true,
             notes: true,
             note_reminders: true,
+            read_later: true,
             diag: true,
             wake_relay: true,
             camera: true,

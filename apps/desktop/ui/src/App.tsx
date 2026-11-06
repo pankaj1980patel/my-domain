@@ -1,4 +1,4 @@
-// App shell: sign in first, then a sidebar with Devices / Notes / Timers / Activity /
+// App shell: sign in first, then a sidebar with Devices / Notes / Timers / Read later / Activity /
 // Transfers / Search / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
@@ -27,6 +27,8 @@ import Timers from "./screens/Timers";
 import TimerAlarm from "./components/TimerAlarm";
 import { timers } from "./lib/timers";
 import { notes } from "./lib/notes";
+import ReadLater from "./screens/ReadLater";
+import { readLater, unreadCount } from "./lib/readLater";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
@@ -37,6 +39,7 @@ type View =
   | { name: "device"; node: string }
   | { name: "notes"; request?: NoteRequest }
   | { name: "timers" }
+  | { name: "readLater" }
   | { name: "activity" }
   | { name: "transfers" }
   | { name: "settings" }
@@ -62,6 +65,7 @@ export default function App() {
     device: "nav.devices",
     notes: "nav.notes",
     timers: "nav.timers",
+    readLater: "nav.readLater",
     activity: "nav.activity",
     transfers: "nav.transfers",
     settings: "nav.settings",
@@ -112,6 +116,10 @@ export default function App() {
       case "notes":
         if (notes.loaded && !notes.byId[f.id]) return missing();
         return go({ name: "notes", request: { id: f.id, at: Date.now() } });
+      case "read_later":
+        if (readLater.loaded && !readLater.byId[f.id]) return missing();
+        go({ name: "readLater" });
+        return revealFound({ kind: f.kind, id: f.id }, missing);
       case "messages":
       case "clipboard":
       case "notifications":
@@ -216,6 +224,21 @@ export default function App() {
               </li>
               <li>
                 <button
+                  class={`nav-item ${is("readLater") ? "active" : ""}`}
+                  aria-current={is("readLater") ? "page" : undefined}
+                  onClick={() => go({ name: "readLater" })}
+                >
+                  {t("nav.readLater")}
+                  <Show when={unreadCount() > 0}>
+                    <span class="nav-count" aria-hidden="true">
+                      {unreadCount()}
+                    </span>
+                    <span class="sr-only">, {tn("a11y.unreadLinks", unreadCount())}</span>
+                  </Show>
+                </button>
+              </li>
+              <li>
+                <button
                   class={`nav-item ${is("activity") ? "active" : ""}`}
                   aria-current={is("activity") ? "page" : undefined}
                   onClick={() => go({ name: "activity" })}
@@ -306,6 +329,9 @@ export default function App() {
               </Match>
               <Match when={view().name === "timers"}>
                 <Timers />
+              </Match>
+              <Match when={view().name === "readLater"}>
+                <ReadLater />
               </Match>
               <Match when={view().name === "activity"}>
                 <Activity />

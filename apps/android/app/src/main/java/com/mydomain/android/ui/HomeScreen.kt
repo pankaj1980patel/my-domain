@@ -35,6 +35,7 @@ fun HomeScreen(
     onSearch: () -> Unit = {},
     onBattery: () -> Unit = {},
     onTimers: () -> Unit = {},
+    onReadLater: () -> Unit = {},
 ) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
@@ -83,6 +84,8 @@ fun HomeScreen(
             item { SearchEntry(onSearch) }
             // Countdown timers shared with your other devices (TimersScreen).
             item { TimersEntry(onTimers) }
+            // Links saved to read later, the same on all your devices.
+            item { ReadLaterEntryCard(onReadLater) }
             // Once after sign-in: what this phone can turn on (SetupScreen).
             item { SetupHomeCard(onSetup) }
             // While heavy background work waits to save battery (SaveBatteryTile).

@@ -279,6 +279,13 @@ pub enum CoreEvent {
     /// it was cancelled or dismissed). Starting or changing one here makes
     /// no event.
     TimersChanged { timers: Vec<crate::model::Timer> },
+    /// The "Read later" list changed on your other devices
+    /// (`features::read_later`): the changed or new links and the ids of
+    /// ones deleted. Saving here makes no event.
+    ReadLaterChanged {
+        items: Vec<crate::model::ReadLaterItem>,
+        removed: Vec<String>,
+    },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -407,6 +414,7 @@ impl CoreEvent {
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::TimersChanged { .. } => "timers-changed",
+            CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
@@ -543,6 +551,32 @@ mod tests {
                 "dnd-changed",
                 json!({"kind": "dnd", "from": "phone", "on": true})
             )
+        );
+    }
+
+    #[test]
+    fn read_later_changes_keep_their_shape() {
+        let ev = CoreEvent::ReadLaterChanged {
+            items: vec![crate::model::ReadLaterItem {
+                id: "u1".into(),
+                url: "https://x.io/a".into(),
+                title: "x.io".into(),
+                host: "x.io".into(),
+                read: true,
+                saved_at: 5,
+                saved_on: "Mac".into(),
+                updated_at: 6,
+                by: "node".into(),
+            }],
+            removed: vec!["u2".into()],
+        };
+        assert_eq!(ev.name(), "read-later-changed");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "read_later_changed", "items": [{
+                "id": "u1", "url": "https://x.io/a", "title": "x.io", "host": "x.io",
+                "read": true, "saved_at": 5, "saved_on": "Mac", "updated_at": 6, "by": "node",
+            }], "removed": ["u2"]})
         );
     }
 

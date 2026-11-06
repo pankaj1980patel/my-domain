@@ -325,6 +325,22 @@ class SearchTest {
     }
 
     @Test
+    fun savedLinksMapAndRank() {
+        val links = listOf(
+            ReadLaterLinks.Item("u1", "https://www.rust-lang.org/learn", "Learn Rust", "rust-lang.org", read = false, savedAt = now),
+            ReadLaterLinks.Item("u2", "https://blog.dev/posts/zebra", "blog.dev", "blog.dev", read = true, savedAt = now - day),
+        )
+        val items = Search.readLaterFindables(links, readTag = "Read", unreadTag = "Unread")
+        assertTrue(items.all { it.kind == FoundKind.READ_LATER })
+        assertEquals(listOf("Unread", "Read"), items.map { it.tag })
+        assertEquals(now - day, items[1].ts)
+        // By title, by site, and by a word only in the link.
+        assertEquals(listOf("u1"), Search.search("learn rust", items, now = now).single().hits.map { it.item.id })
+        assertEquals(listOf("u2"), Search.search("blog.dev", items, now = now).single().hits.map { it.item.id })
+        assertEquals(listOf("u2"), Search.search("zebra", items, now = now).single().hits.map { it.item.id })
+    }
+
+    @Test
     fun notesGroupComesAfterMessages() {
         val items = listOf(
             item(FoundKind.CLIPBOARD, "c", body = "plan"),

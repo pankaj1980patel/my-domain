@@ -3867,3 +3867,86 @@ html.qp-window body {
     transition: none;
   }
 }
+
+/* --- Read later: links saved to read later (screens/ReadLater.tsx) --------- */
+.rl-add {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
+  gap: var(--s-2);
+  align-items: center;
+  margin-bottom: var(--s-4);
+}
+.rl-tools {
+  display: flex;
+  gap: var(--s-3);
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--s-3);
+}
+.rl-tools input[type="search"] {
+  flex: 1 1 220px;
+  width: auto;
+}
+.rl-filter {
+  display: flex;
+  gap: var(--s-1);
+}
+.rl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.rl-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  flex-wrap: wrap;
+}
+.rl-item + .rl-item {
+  border-top: 1px solid var(--border);
+}
+.rl-open {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.rl-title {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rl-open:hover .rl-title,
+.rl-open:focus-visible .rl-title {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.rl-meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rl-read .rl-title {
+  font-weight: 400;
+  color: var(--text-2);
+}
+@media (max-width: 640px) {
+  .rl-add {
+    grid-template-columns: 1fr;
+  }
+}
