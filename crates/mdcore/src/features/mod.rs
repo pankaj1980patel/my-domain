@@ -10,6 +10,7 @@
 //! (protocol v2) instead; that seam is documented in `crate::service`.
 
 pub mod addr_update;
+pub mod app_info;
 pub mod audio_codec;
 pub mod audio_jitter;
 pub mod audio_share;
@@ -31,6 +32,7 @@ pub mod files;
 pub mod folder_sync;
 pub mod folders;
 pub mod gallery;
+pub mod health;
 pub mod input;
 pub mod insert_capture;
 pub mod kvm;
@@ -43,6 +45,7 @@ pub mod notes;
 pub mod notif_apps;
 pub mod notif_rich;
 pub mod notification;
+pub mod onboarding;
 pub mod opus_audio;
 pub mod p2p_ping;
 pub mod print;

@@ -40,6 +40,10 @@ import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.Findable
 import com.mydomain.android.core.FoundKind
+import com.mydomain.android.core.Health
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -109,6 +113,9 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var timers by rememberSaveable { mutableStateOf(false) }
     var readLater by rememberSaveable { mutableStateOf(false) }
     var linksMap by rememberSaveable { mutableStateOf(false) }
+    // The health check and first-run setup (HealthScreen.kt).
+    var health by rememberSaveable { mutableStateOf(false) }
+    var onboarding by rememberSaveable { mutableStateOf(false) }
     // Help: open (the topic list) and the topic shown, if any. Shown over
     // whichever screen opened it, which comes back on Back.
     var help by rememberSaveable { mutableStateOf(false) }
@@ -188,6 +195,32 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         search = true
     }
 
+    // The health check: with the server now and every 10 minutes, quickly
+    // every minute in between (the Home card and the Settings tab's badge).
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) {
+        var i = 0
+        while (true) {
+            Health.run(ctx, server = i % 10 == 0)
+            i++
+            delay(60_000)
+        }
+    }
+    // Signed in or joined just now: first-run setup, unless done here before.
+    LaunchedEffect(Health.justSignedIn) {
+        if (Health.justSignedIn) {
+            Health.justSignedIn = false
+            val s = Health.loadSetup()
+            if (s != null && !s.finished) onboarding = true
+        }
+    }
+    val healthNav = HealthNav(
+        onDevice = { deviceFocus = null; device = it },
+        onMap = { linksMap = true },
+        onSettings = { health = false; onboarding = false; tab = Tab.Settings },
+        onHelp = { openHelp(it) },
+    )
+
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
         while (true) {
@@ -206,6 +239,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             setup = false
             readLater = false
             linksMap = false
+            health = false
+            onboarding = false
             help = false
             leaveSearch()
             tab = Tab.Settings
@@ -222,6 +257,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             setup = false
             readLater = false
             linksMap = false
+            health = false
+            onboarding = false
             help = false
             leaveSearch()
             tab = Tab.Devices
@@ -257,6 +294,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             setup = false
             readLater = false
             linksMap = false
+            health = false
+            onboarding = false
             help = false
             leaveSearch()
             foundNote = id
@@ -265,7 +304,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
-    val pushed = help || device != null || developer || automations || transfers || setup || timers || readLater || linksMap || search
+    val pushed = help || device != null || developer || automations || transfers || setup || timers || readLater || linksMap ||
+        health || onboarding || search
     BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
         when {
             help && helpTopic != null && !helpFromSearch -> helpTopic = null
@@ -278,6 +318,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             timers -> timers = false
             readLater -> closeReadLater()
             linksMap -> linksMap = false
+            onboarding -> onboarding = false
+            health -> health = false
             search -> search = false
             settingsFromSearch && tab == Tab.Settings -> backToSearch()
             notesFromSearch && tab == Tab.Notes -> backToSearch()
@@ -301,7 +343,14 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                                 settingsFocus = null
                                 tab = t
                             },
-                            icon = { Icon(t.icon, contentDescription = null) },
+                            icon = {
+                                // Something red in the health check: a dot on Settings.
+                                if (t == Tab.Settings && Health.bad > 0) {
+                                    BadgedBox(badge = { Badge(containerColor = T.danger) }) { Icon(t.icon, contentDescription = null) }
+                                } else {
+                                    Icon(t.icon, contentDescription = null)
+                                }
+                            },
                             label = { Text(stringResource(t.label)) },
                             colors = NavigationBarItemDefaults.colors(
                                 // Active navigation is the accent (kit rule).
@@ -322,7 +371,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onTopic = { if (it == null && helpFromSearch) closeHelp() else helpTopic = it },
                     onBack = closeHelp,
                 )
-                device != null -> DeviceScreen(device!!, onBack = closeDevice, focus = deviceFocus)
+                device != null -> DeviceScreen(device!!, onBack = closeDevice, focus = deviceFocus, onHealth = { closeDevice(); health = true })
                 developer -> DeveloperScreen(onBack = { developer = false })
                 automations -> AutomationsScreen(onBack = closeAutomations, found = foundAutomation)
                 setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
@@ -333,6 +382,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onHelp = { openHelp("troubleshooting") },
                     onDevice = { deviceFocus = null; device = it },
                 )
+                onboarding -> OnboardingScreen(onClose = { onboarding = false }, nav = healthNav)
+                health -> HealthScreen(onBack = { health = false }, nav = healthNav)
                 transfers -> TransfersScreen(
                     onBack = closeTransfers,
                     onOpenDevice = { deviceFocus = null; device = it },
@@ -357,6 +408,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onReadLater = { foundLink = null; readLater = true },
                     onLinksMap = { linksMap = true },
                     onActivity = { tab = Tab.Activity },
+                    onHealth = { health = true },
+                    onOnboarding = { onboarding = true },
                 )
                 tab == Tab.Notes -> NotesScreen(
                     onHelp = { openHelp("notes") },
@@ -384,6 +437,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onAutomations = { foundAutomation = null; automations = true },
                     onSetup = { setup = true },
                     onHelp = { openHelp(null) },
+                    onHealth = { health = true },
+                    onOnboarding = { onboarding = true },
                     focus = settingsFocus,
                 )
             }

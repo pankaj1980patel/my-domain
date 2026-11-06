@@ -812,6 +812,8 @@ object Core {
             runCatching { engine.refresh() }
         }
         reload()
+        // First-run setup opens once (the app shell watches this).
+        Health.justSignedIn = true
     }
 
     /** "Add a device": a one-time QR code and 6-digit code (5 minutes). */
@@ -835,6 +837,7 @@ object Core {
             runCatching { engine.refresh() }
         }
         reload()
+        Health.justSignedIn = true
     }
 
     suspend fun refreshDevices() {

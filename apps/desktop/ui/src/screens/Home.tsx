@@ -5,8 +5,15 @@ import { connect, peerName, refreshDevices, state } from "../lib/core";
 import { friendlyError } from "../lib/words";
 import { DeviceCard, Empty, toast } from "../components/ui";
 import { t } from "../i18n";
+import { badCount } from "../lib/health";
+import { SetupCard } from "./Setup";
 
-export default function Home(props: { onOpen: (node: string) => void; onMap: () => void }) {
+export default function Home(props: {
+  onOpen: (node: string) => void;
+  onMap: () => void;
+  onHealth: () => void;
+  onSetup: () => void;
+}) {
   const devices = createMemo(() =>
     [...state.peers].sort((a, b) => {
       const la = state.links[a.node_id] ? 0 : 1;
@@ -49,6 +56,21 @@ export default function Home(props: { onOpen: (node: string) => void; onMap: () 
         </button>
         </div>
       </header>
+
+      {/* Setup not finished: carry on where it stopped. */}
+      <SetupCard onOpen={props.onSetup} />
+      {/* The health check found something red. */}
+      <Show when={badCount() > 0}>
+        <article class="tile health-card">
+          <h2>{t("health.homeTitle")}</h2>
+          <p class="muted">{t("health.homeBody", { n: badCount() })}</p>
+          <div class="row">
+            <button class="btn btn-primary" onClick={props.onHealth}>
+              {t("health.open")}
+            </button>
+          </div>
+        </article>
+      </Show>
 
       <Show
         when={devices().length > 0}

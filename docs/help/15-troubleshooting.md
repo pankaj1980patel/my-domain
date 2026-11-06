@@ -1,8 +1,22 @@
 ---
 title: Troubleshooting
-keywords: problem, help, reconnect, reconnect time, asleep, waking, push, autostart, doze, drops, dropped, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key, security key, key changed, reinstall, reinstalled, cleared data, trust new key
+keywords: problem, help, reconnect, reconnect time, asleep, waking, push, autostart, doze, drops, dropped, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key, security key, key changed, reinstall, reinstalled, cleared data, trust new key, health check, health, red, amber, older app, update, version, push test, disk space, permission
 platforms: desktop, android
 ---
+## Start with the health check
+
+Open **Settings → Health check** (or tap **Something needs attention** on Home or in the sidebar). Each line has a dot and, when something's off, one button:
+
+- **Can't reach the server** (red): check the internet connection, then **Try again**.
+- **Push messages not confirmed** or **No push token yet** (amber): **Test push** asks the server to push this device; the line turns green when it arrives. Without pushes your other devices can't wake this one while it sleeps.
+- **A permission is off** (red when the feature can't work without it, amber otherwise): **Open settings** opens the system's own page or prompt. Only permissions for the features you picked in setup are listed. Lines my-domain can't read (Local Network and Bluetooth on a Mac, the phone maker's autostart page) are grey: check them on their page.
+- **Only through the relay server** (amber): the line says why a direct link didn't work, for example "both networks are strict". **Why?** opens the connection map.
+- **Security key changed** (red): open the device and compare the codes before trusting the new key (see below).
+- **Getting low on space** (amber under 5 GB, red under 1 GB): received files will fail until there's room.
+- **Runs an older app** (amber when it lacks features this one has, which it lists): update my-domain on that device. **Runs a newer app**: update this one.
+
+**Run again** checks everything, the server included. The check also runs by itself every few minutes.
+
 ## A device doesn't appear
 
 - Check that both are signed in to the **same account** with the **same device key**. A device with a different key can't read the others.
@@ -91,7 +105,7 @@ Hover over it (or read the line under it): it says why, for example a permission
 
 ## A feature needs a permission
 
-On the phone, see [Set up this phone](help:setup-phone). On a Mac, check System Settings → Privacy & Security (Accessibility, Screen Recording, Location) for my-domain.
+The health check lists the permissions the features you use need, each with a button to its page. On the phone, see also [Set up this phone](help:setup-phone). On a Mac, check System Settings → Privacy & Security (Accessibility, Screen Recording, Location) for my-domain.
 
 ## Sign-in problems
 

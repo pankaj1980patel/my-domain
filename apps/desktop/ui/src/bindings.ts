@@ -415,6 +415,29 @@ export const commands = {
 	/**  This computer's own kind (with its icon). */
 	ownDeviceKind: () => __TAURI_INVOKE<DeviceKind_Serialize | null>("own_device_kind"),
 	/**
+	 *  The health check. `check_server` asks the server too (a few seconds),
+	 *  so it runs off the UI's thread.
+	 */
+	healthCheck: (checkServer: boolean) => typedError<HealthReport_Serialize, string>(__TAURI_INVOKE("health_check", { checkServer })),
+	/**
+	 *  Open the OS page for permission `id` (the health check's and setup's
+	 *  "Open settings"). False: this OS has no such page.
+	 */
+	openPermissionPage: (id: string) => typedError<boolean, string>(__TAURI_INVOKE("open_permission_page", { id })),
+	/**  Open the folder received files go to (the disk check's fix). */
+	openDownloads: () => typedError<null, string>(__TAURI_INVOKE("open_downloads")),
+	/**  Where first-run setup stands on this computer. */
+	onboardingState: () => __TAURI_INVOKE<Onboarding_Serialize>("onboarding_state"),
+	/**
+	 *  A tap in first-run setup ("next", "back", "skip", "goto" with `step`,
+	 *  "skip_all", "finish", "restart").
+	 */
+	onboardingAct: (action: string, step: string | null) => typedError<Onboarding_Serialize, string>(__TAURI_INVOKE("onboarding_act", { action, step })),
+	/**  The feature groups picked in setup. */
+	setOnboardingFeatures: (features: string[]) => __TAURI_INVOKE<Onboarding_Serialize>("set_onboarding_features", { features }),
+	/**  Name this computer (setup's first step). Returns the name as kept. */
+	setDeviceName: (name: string) => typedError<string, string>(__TAURI_INVOKE("set_device_name", { name })),
+	/**
 	 *  Give a device a nickname, an icon and a colour (each optional; all
 	 *  blank clears its label). Answers with every label.
 	 */
@@ -2008,6 +2031,103 @@ export type FirewallStatus = {
 	inbound_blocked: boolean,
 };
 
+/**  One line of the report. */
+export type HealthCheck = HealthCheck_Serialize | HealthCheck_Deserialize;
+
+/**  One line of the report. */
+export type HealthCheck_Deserialize = {
+	/**
+	 *  What's checked: "server", "push", "disk", "permission", "key",
+	 *  "link", "version".
+	 */
+	id: string,
+	level: HealthLevel,
+	/**  A code saying how it came out (see each check). */
+	reason: string,
+	/**  The device it's about, and its name. */
+	node_id?: string | null,
+	name?: string | null,
+	/**
+	 *  More to show: the permission's id, how a link is carried, the
+	 *  reason it isn't direct, a device's version, free space in MB.
+	 */
+	detail?: string | null,
+	/**
+	 *  Feature flags an older app lacks (`version`), or the feature groups
+	 *  that need a permission (`permission`).
+	 */
+	features: string[],
+	/**  The last reconnect's time (`link`). */
+	reconnect_ms?: number | null,
+	/**
+	 *  What the button does: "retry", "push_test", "open_permission",
+	 *  "free_space", "trust_key", "encryption_key", "connect",
+	 *  "links_map", "update_other", "update_app". None: no button.
+	 */
+	fix?: string | null,
+};
+
+/**  One line of the report. */
+export type HealthCheck_Serialize = {
+	/**
+	 *  What's checked: "server", "push", "disk", "permission", "key",
+	 *  "link", "version".
+	 */
+	id: string,
+	level: HealthLevel,
+	/**  A code saying how it came out (see each check). */
+	reason: string,
+	/**  The device it's about, and its name. */
+	node_id: string | null,
+	name: string | null,
+	/**
+	 *  More to show: the permission's id, how a link is carried, the
+	 *  reason it isn't direct, a device's version, free space in MB.
+	 */
+	detail: string | null,
+	/**
+	 *  Feature flags an older app lacks (`version`), or the feature groups
+	 *  that need a permission (`permission`).
+	 */
+	features: string[],
+	/**  The last reconnect's time (`link`). */
+	reconnect_ms: number | null,
+	/**
+	 *  What the button does: "retry", "push_test", "open_permission",
+	 *  "free_space", "trust_key", "encryption_key", "connect",
+	 *  "links_map", "update_other", "update_app". None: no button.
+	 */
+	fix: string | null,
+};
+
+/**  How a check came out, worst last. */
+export type HealthLevel = "ok" | 
+/**  Nothing to fix (or it can't be read): shown grey. */
+"info" | "warn" | "bad";
+
+/**  The whole report, worst first. */
+export type HealthReport = HealthReport_Serialize | HealthReport_Deserialize;
+
+/**  The whole report, worst first. */
+export type HealthReport_Deserialize = {
+	checks: HealthCheck_Deserialize[],
+	/**  The worst level (`Ok` when there's nothing). */
+	worst: HealthLevel,
+	/**  How many are red, and amber. */
+	bad: number,
+	warn: number,
+};
+
+/**  The whole report, worst first. */
+export type HealthReport_Serialize = {
+	checks: HealthCheck_Serialize[],
+	/**  The worst level (`Ok` when there's nothing). */
+	worst: HealthLevel,
+	/**  How many are red, and amber. */
+	bad: number,
+	warn: number,
+};
+
 /**  One notification as kept. */
 export type HistoryEntry = HistoryEntry_Serialize | HistoryEntry_Deserialize;
 
@@ -2935,6 +3055,35 @@ export type NotifLine = {
 export type NotifPrefs = {
 	private_mode: boolean,
 	only_locked: boolean,
+};
+
+/**  Where setup stands on this device. */
+export type Onboarding = Onboarding_Serialize | Onboarding_Deserialize;
+
+/**  Where setup stands on this device. */
+export type Onboarding_Deserialize = {
+	step: Step,
+	/**  Ended: by finishing or "Skip setup". Not shown by itself again. */
+	finished: boolean,
+	/**  Ended with "Skip setup". */
+	skipped_all: boolean,
+	/**  Steps skipped (each once, in the order skipped). */
+	skipped: Step[],
+	/**  The feature groups picked; none: not picked yet (all count). */
+	features?: string[] | null,
+};
+
+/**  Where setup stands on this device. */
+export type Onboarding_Serialize = {
+	step: Step,
+	/**  Ended: by finishing or "Skip setup". Not shown by itself again. */
+	finished: boolean,
+	/**  Ended with "Skip setup". */
+	skipped_all: boolean,
+	/**  Steps skipped (each once, in the order skipped). */
+	skipped: Step[],
+	/**  The feature groups picked; none: not picked yet (all count). */
+	features: string[] | null,
 };
 
 /**  A link between two of your other devices, as one of them said. */
@@ -3876,6 +4025,9 @@ export type Spot = {
 	y: number | null,
 	connected: boolean,
 };
+
+/**  A step of the stepper. */
+export type Step = "name" | "devices" | "features" | "permissions" | "connection" | "done";
 
 /**  One synced folder, as the UI shows it (the core's `SyncPair`). */
 export type SyncPairView = SyncPairView_Serialize | SyncPairView_Deserialize;

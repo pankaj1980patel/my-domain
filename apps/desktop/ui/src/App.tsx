@@ -33,6 +33,9 @@ import { timers } from "./lib/timers";
 import { notes } from "./lib/notes";
 import ReadLater from "./screens/ReadLater";
 import LinksMap from "./screens/LinksMap";
+import Health, { type HealthNav } from "./screens/Health";
+import Setup from "./screens/Setup";
+import { badCount, loadSetup, watchHealth } from "./lib/health";
 import { readLater, unreadCount } from "./lib/readLater";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
@@ -48,6 +51,8 @@ type View =
   | { name: "timers" }
   | { name: "readLater" }
   | { name: "linksMap" }
+  | { name: "health" }
+  | { name: "setup" }
   | { name: "activity" }
   | { name: "transfers" }
   | { name: "settings" }
@@ -75,6 +80,8 @@ export default function App() {
     timers: "nav.timers",
     readLater: "nav.readLater",
     linksMap: "map.title",
+    health: "health.title",
+    setup: "setup.title",
     activity: "nav.activity",
     transfers: "nav.transfers",
     settings: "nav.settings",
@@ -112,6 +119,26 @@ export default function App() {
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ block: "start" })),
     );
+  };
+  // Health check and setup: where their buttons go.
+  const healthNav: HealthNav = {
+    onDevice: (node) => go({ name: "device", node }),
+    onMap: () => go({ name: "linksMap" }),
+    onSettings: (section) => goPlace("settings", section),
+    onHelp: (topic) => go({ name: "help", topic }),
+  };
+  // The health check runs while signed in (the sidebar's badge).
+  createEffect(
+    on(signedIn, (yes) => {
+      if (!yes) return;
+      const stop = watchHealth();
+      onCleanup(stop);
+    }),
+  );
+  /** Signed in or joined just now: first-run setup, unless done here before. */
+  const signedInNow = () => {
+    setSignedIn(true);
+    loadSetup().then((s) => !s.finished && go({ name: "setup" }), () => {});
   };
   // The map's "Connection details": the device's page, at its Connection tile.
   const openConnection = (node: string) => {
@@ -190,7 +217,7 @@ export default function App() {
   return (
     <>
       <Show when={signedIn() !== null}>
-        <Show when={signedIn()} fallback={<SignIn onDone={() => setSignedIn(true)} />}>
+        <Show when={signedIn()} fallback={<SignIn onDone={signedInNow} />}>
         <a class="skip-link" href="#main" onClick={skip}>
           {t("a11y.skip")}
         </a>
@@ -293,8 +320,8 @@ export default function App() {
               </li>
               <li>
                 <button
-                  class={`nav-item ${is("settings") || is("developer") ? "active" : ""}`}
-                  aria-current={is("settings") || is("developer") ? "page" : undefined}
+                  class={`nav-item ${is("settings") || is("developer") || is("health") || is("setup") ? "active" : ""}`}
+                  aria-current={is("settings") || is("developer") || is("health") || is("setup") ? "page" : undefined}
                   onClick={() => go({ name: "settings" })}
                 >
                   {t("nav.settings")}
@@ -310,6 +337,13 @@ export default function App() {
                 </button>
               </li>
             </ul>
+            {/* The health check found something red. */}
+            <Show when={badCount() > 0}>
+              <button class="health-badge small" onClick={() => go({ name: "health" })}>
+                <span class="health-badge-dot" aria-hidden="true" />
+                {t("health.badge")}
+              </button>
+            </Show>
             {/* Pop-ups held while a phone is on Do Not Disturb. */}
             <Show when={state.quietPhones.length > 0}>
               <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
@@ -341,13 +375,30 @@ export default function App() {
             <UpdateBanner />
             <Switch>
               <Match when={view().name === "home"}>
-                <Home onOpen={(node) => go({ name: "device", node })} onMap={() => go({ name: "linksMap" })} />
+                <Home
+                  onOpen={(node) => go({ name: "device", node })}
+                  onMap={() => go({ name: "linksMap" })}
+                  onHealth={() => go({ name: "health" })}
+                  onSetup={() => go({ name: "setup" })}
+                />
+              </Match>
+              <Match when={view().name === "health"}>
+                <Health {...healthNav} />
+              </Match>
+              <Match when={view().name === "setup"}>
+                <Setup onClose={() => go({ name: "home" })} nav={healthNav} />
               </Match>
               <Match when={view().name === "linksMap"}>
                 <LinksMap onDevice={openConnection} />
               </Match>
               <Match when={view().name === "device" && view()}>
-                {(v) => <Device node={(v() as { node: string }).node} onBack={() => go({ name: "home" })} />}
+                {(v) => (
+                  <Device
+                    node={(v() as { node: string }).node}
+                    onBack={() => go({ name: "home" })}
+                    onHealth={() => go({ name: "health" })}
+                  />
+                )}
               </Match>
               <Match when={view().name === "notes" && view()}>
                 {(v) => <Notes request={(v() as { request?: NoteRequest }).request} />}
@@ -371,7 +422,11 @@ export default function App() {
                 <Transfers />
               </Match>
               <Match when={view().name === "settings"}>
-                <Settings onDeveloper={() => go({ name: "developer" })} />
+                <Settings
+                  onDeveloper={() => go({ name: "developer" })}
+                  onHealth={() => go({ name: "health" })}
+                  onSetup={() => go({ name: "setup" })}
+                />
               </Match>
               <Match when={view().name === "help" && view()}>
                 {(v) => <Help topic={(v() as { topic?: string }).topic} onTopic={(topic) => go({ name: "help", topic })} />}

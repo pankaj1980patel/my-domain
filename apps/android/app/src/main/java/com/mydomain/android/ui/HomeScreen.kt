@@ -38,6 +38,8 @@ fun HomeScreen(
     onReadLater: () -> Unit = {},
     onLinksMap: () -> Unit = {},
     onActivity: () -> Unit = {},
+    onHealth: () -> Unit = {},
+    onOnboarding: () -> Unit = {},
 ) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
@@ -92,8 +94,10 @@ fun HomeScreen(
             item { LinksMapEntry(onLinksMap) }
             // One timeline of what happened between your devices (ActivityScreen).
             item { ActivityHomeEntry(onActivity) }
-            // Once after sign-in: what this phone can turn on (SetupScreen).
-            item { SetupHomeCard(onSetup) }
+            // First-run setup not finished: carry on where it stopped.
+            item { SetupResumeCard(onOnboarding) }
+            // The health check found something red.
+            item { HealthHomeCard(onHealth) }
             // While heavy background work waits to save battery (SaveBatteryTile).
             item { SavingBatteryBanner(onBattery) }
             if (devices.isEmpty()) {

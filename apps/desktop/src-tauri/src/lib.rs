@@ -33,6 +33,7 @@ mod device_kind;
 mod device_labels;
 mod diagnostics;
 mod fcm;
+mod health;
 mod hotspot;
 mod insert_capture;
 mod key_changes;
@@ -1862,6 +1863,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         device_labels::get_device_labels,
         device_kind::device_kinds,
         device_kind::own_device_kind,
+        health::health_check,
+        health::open_permission_page,
+        health::open_downloads,
+        health::onboarding_state,
+        health::onboarding_act,
+        health::set_onboarding_features,
+        health::set_device_name,
         device_labels::set_device_label,
         device_labels::labels_share,
         device_labels::set_labels_share,
@@ -2109,6 +2117,8 @@ pub fn run() {
                     device_labels::seed(&handle, &engine);
                     // What kind of computer this is (its icon elsewhere).
                     device_kind::init(&handle, &engine);
+                    // This app's version, for your other devices' health check.
+                    engine.set_app_version(&handle.package_info().version.to_string());
                     // "Use nearby mode for media", as saved.
                     nearby::init(&handle, &engine);
                     // A mute left by a crash while the sound played on a

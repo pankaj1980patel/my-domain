@@ -39,6 +39,7 @@ import { OwnFingerprint } from "../components/VerifyDevice";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
+import { setupAct } from "../lib/health";
 
 
 /** Which OS's location permission the "find my computer" hint explains. */
@@ -49,7 +50,7 @@ const locationHintKey: Key = (() => {
   return "settings.shareLocationHintLinux";
 })();
 
-export default function Settings(props: { onDeveloper: () => void }) {
+export default function Settings(props: { onDeveloper: () => void; onHealth: () => void; onSetup: () => void }) {
   const [taps, setTaps] = createSignal(0);
   const [newKey, setNewKey] = createSignal("");
   const [pass, setPass] = createSignal("");
@@ -161,6 +162,19 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <AddDevice />
           <button class="btn btn-ghost" onClick={signOut}>
             {t("settings.signOut")}
+          </button>
+        </div>
+      </article>
+
+      <article class="tile" id="settings-health">
+        <h2>{t("health.settingsTile")}</h2>
+        <p class="muted small">{t("health.settingsHint")}</p>
+        <div class="row">
+          <button class="btn btn-soft" onClick={props.onHealth}>
+            {t("health.open")}
+          </button>
+          <button class="btn btn-ghost" onClick={() => setupAct("restart").then(props.onSetup, () => {})}>
+            {t("setup.again")}
           </button>
         </div>
       </article>

@@ -1,6 +1,6 @@
 ---
 title: Getting started and pairing
-keywords: sign in, account, create account, pair, add device, add a device, join, join with a code, qr, qr code, scan, device key, password, username, first time, setup, connect, icon, device icon, change icon, model, laptop, desktop, tablet, foldable
+keywords: sign in, account, create account, pair, add device, add a device, join, join with a code, qr, qr code, scan, device key, password, username, first time, setup, connect, icon, device icon, change icon, model, laptop, desktop, tablet, foldable, first run, setup, set up, name this device, rename, choose features, health check, health
 platforms: desktop, android
 ---
 my-domain links your own phone and computers so they can send things to each other and do small jobs for each other: share the clipboard, send files, ring a lost phone, show notifications on the computer, and more.
@@ -13,6 +13,22 @@ my-domain links your own phone and computers so they can send things to each oth
 4. On every other device, choose **Sign in** with the same username, password **and the same device key**.
 
 There is no separate pairing step: devices signed in to the same account find each other on their own and show up under **Devices**.
+
+## First-run setup
+
+Right after you sign in (or join with a code), a short setup opens. Five steps, each one skippable:
+
+1. **Name this device.** It starts with the device's name or model; your other devices list it by what you type.
+2. **Add your other devices.** The same QR code and 6-digit code as **Settings → Add a device**. Already added? Go on.
+3. **Choose what to use:** Clipboard, Notifications, Files, Audio and screen, Find and ring, each with a line on what it does. Clipboard sync follows your pick; leaving a group out turns its sharing off. Nothing that shares more is turned on behind your back.
+4. **Allow what that needs.** Only the permissions the groups you picked need. Each button opens the system's own prompt or page: my-domain never turns anything on by itself.
+5. **Test the connection.** Live: how this device reaches each of your others (local network, directly over the internet, or only through the relay) and how long the last reconnect took.
+
+**Later** closes it; Home shows **Finish setting up** and carries on at the same step. **Skip setup** ends it. Each device remembers its own setup, and **Settings → Health check → Run setup again** starts it over.
+
+## Health check
+
+**Settings → Health check** lists everything my-domain needs, each with a coloured dot and one button that fixes it: green is fine, grey is just so you know, amber is worth a look, red stops something from working. It checks permissions for the features you use, battery and autostart on a phone, Local Network, Accessibility and Screen Recording on a Mac, the server, push messages, how each device is linked (and why only through the relay), security keys that changed, space for received files, and whether a device runs an older app that lacks features. When something is red, Home and the sidebar (Settings on the phone) say so, and so does that device's page. See [Troubleshooting](help:troubleshooting).
 
 ## Add a device without typing
 
@@ -45,5 +61,6 @@ Each device shows whether it is connected right now: directly (same network, fas
 
 ## Next steps
 
-- On the phone, open **Settings → Set up this phone** to see which optional permissions each feature needs. See [Set up this phone](help:setup-phone).
+- Open **Settings → Health check** to see what works and fix what doesn't.
+- On the phone, open **Settings → Set up this phone** to see every optional permission and what each is for. See [Set up this phone](help:setup-phone).
 - If two devices don't see each other, see [Troubleshooting](help:troubleshooting).

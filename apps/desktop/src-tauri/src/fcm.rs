@@ -292,6 +292,10 @@ fn run(
                 // Receiving it proves the full push path works; don't forward it
                 // to the Engine (it isn't a real Signal).
                 if let Some(sid) = sig.strip_prefix("selfping:") {
+                    // Pushes reach this computer (the health check's push line).
+                    if let Some(engine) = handle.try_state::<Eng>() {
+                        engine.push_seen();
+                    }
                     emit_fcm(
                         &handle,
                         "info",

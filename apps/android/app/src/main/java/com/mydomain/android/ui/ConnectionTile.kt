@@ -53,7 +53,7 @@ private fun verdictRes(v: String): Int? = when (v) {
     else -> null
 }
 
-private fun reasonRes(r: String?): Int? = when (r) {
+internal fun reasonRes(r: String?): Int? = when (r) {
     "push_failed" -> R.string.conn_reason_push_failed
     "no_answer" -> R.string.conn_reason_no_answer
     "relay_no_answer" -> R.string.conn_reason_relay_no_answer

@@ -2073,6 +2073,60 @@ impl MdEngine {
         serde_json::to_string(&self.inner.device_kinds()).unwrap_or_else(|_| "{}".into())
     }
 
+    // --- first-run setup and the health check (mdcore features::onboarding,
+    // features::health, features::app_info) ---
+
+    /// This app's version (BuildConfig.VERSION_NAME): said to your other
+    /// devices for their health check. Call once at start.
+    pub fn set_app_version(&self, version: String) {
+        self.inner.set_app_version(&version);
+    }
+
+    /// The health check as JSON (the core's `HealthReport`: `checks`
+    /// worst first, `worst`, `bad`, `warn`). `facts_json` is what the app
+    /// read (`PlatformFacts`: `permissions` [{id, features, state,
+    /// critical}], `disk_free_mb`, `disk_total_mb`). `check_server` asks
+    /// the server (blocks up to 5 s: call off the main thread).
+    pub fn health_json(&self, facts_json: String, check_server: bool) -> MdResult<String> {
+        let facts: mdcore::features::health::PlatformFacts = serde_json::from_str(&facts_json)
+            .map_err(|e| MdError::Failed(format!("health facts: {e}")))?;
+        serde_json::to_string(&self.inner.health(&facts, check_server))
+            .map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// Where first-run setup stands on this phone, as JSON (`step`,
+    /// `finished`, `skipped_all`, `skipped`, `features`).
+    pub fn onboarding_json(&self) -> String {
+        serde_json::to_string(&self.inner.onboarding()).unwrap_or_else(|_| "{}".into())
+    }
+
+    /// A tap in first-run setup: "next", "back", "skip", "goto" (with
+    /// `step`), "skip_all", "finish", "restart". Returns the new state as
+    /// JSON.
+    pub fn onboarding_act(&self, action: String, step: Option<String>) -> MdResult<String> {
+        let s = self.inner.onboarding_act(&action, step.as_deref())?;
+        serde_json::to_string(&s).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// The feature groups picked in setup ("clipboard", "notifications",
+    /// "files", "media", "find"). Returns the new state as JSON.
+    pub fn set_onboarding_features(&self, groups: Vec<String>) -> String {
+        serde_json::to_string(&self.inner.set_onboarding_features(&groups))
+            .unwrap_or_else(|_| "{}".into())
+    }
+
+    /// The health check's "Test push": the server pushes a ping back to
+    /// this phone; when it arrives (as a signal) the push line turns green.
+    /// Returns the ping's id.
+    pub fn fcm_selftest(&self) -> MdResult<String> {
+        Ok(self.inner.fcm_selftest()?)
+    }
+
+    /// Name this phone (kept, told to the server). Returns the name as kept.
+    pub fn set_device_name(&self, name: String) -> MdResult<String> {
+        Ok(self.inner.set_device_name(&name)?)
+    }
+
     // --- notes shared with your other devices (mdcore features::notes) ---
 
     /// Every note, pinned first, then the most recently changed. Notes

@@ -704,6 +704,11 @@ fn read_storage(dir: &std::path::Path) -> Option<(u64, u64)> {
     parse_df(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// Free and total bytes on the disk holding `dir` (the health check).
+pub(crate) fn storage_of(dir: &std::path::Path) -> Option<(u64, u64)> {
+    read_storage(dir)
+}
+
 #[cfg(not(unix))]
 fn read_storage(_dir: &std::path::Path) -> Option<(u64, u64)> {
     None

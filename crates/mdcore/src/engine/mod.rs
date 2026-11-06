@@ -36,6 +36,7 @@ pub(crate) use ble::{ble_linked, ble_send_media, is_ble_link};
 mod control;
 mod device_kind;
 mod diag;
+mod health;
 mod join;
 mod nearby;
 pub use join::{JoinInvite, JoinStatus};
@@ -306,7 +307,11 @@ impl<P: Platform> Engine<P> {
         } else {
             raw_id
         };
-        let name = platform.device_name();
+        // The name the user gave it in first-run setup, else the platform's.
+        let name = platform
+            .kv_get(health::NAME_KEY)
+            .and_then(|n| crate::features::onboarding::clean_name(&n))
+            .unwrap_or_else(|| platform.device_name());
 
         // Same QUIC port as last run when it's free: peers' cached addresses
         // and the router mapping then survive a restart.

@@ -86,7 +86,7 @@ private fun toneColor(t: Tone): Color = when (t) {
     Tone.NONE -> T.text3
 }
 
-private fun howRes(how: String?): Int = when (how) {
+internal fun howRes(how: String?): Int = when (how) {
     "lan" -> R.string.map_how_lan
     "direct" -> R.string.map_how_direct
     "punched" -> R.string.map_how_punched
@@ -156,7 +156,7 @@ private val WHY: Map<String, Pair<Int, Int>> = mapOf(
     "device_bad_key" to (R.string.map_why_device_bad_key to R.string.map_fix_device_bad_key),
 )
 
-private fun whyRes(code: String): Pair<Int, Int> = WHY[code] ?: (R.string.map_why_unknown to R.string.map_fix_unknown)
+internal fun whyRes(code: String): Pair<Int, Int> = WHY[code] ?: (R.string.map_why_unknown to R.string.map_fix_unknown)
 
 /** What was tapped: a device (its line from this phone) or a line between two others. */
 private sealed interface Picked

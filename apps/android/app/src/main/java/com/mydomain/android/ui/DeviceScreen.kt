@@ -76,7 +76,7 @@ import kotlinx.coroutines.launch
  *  search result opened ("msg:<id>" a message, "clip:<id>" a clip), brought
  *  into view and marked. */
 @Composable
-fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
+fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHealth: () -> Unit = {}) {
     val peer = Core.peers.firstOrNull { it.nodeId == node }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
@@ -168,6 +168,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
             }
             // Its security key changed: refused until you decide.
             item(key = "key-change") { KeyChangeBanner(node) }
+            // The health check found something red about this device.
+            item(key = "health") { HealthDeviceBanner(node, onHealth) }
             // Compare security keys with it; "Verified" once you have.
             item(key = "verify") { VerifyRow(node) }
             if (editing) item { DeviceLabelEditor(node) { editing = false } }

@@ -82,7 +82,7 @@ fun rememberSetupRows(): SetupRows {
 }
 
 @StringRes
-private fun titleOf(item: SetupItem): Int = when (item) {
+internal fun titleOf(item: SetupItem): Int = when (item) {
     SetupItem.NOTIFICATIONS -> R.string.setup_notifications_title
     SetupItem.NOTIFICATION_ACCESS -> R.string.setup_notif_access_title
     SetupItem.ACCESSIBILITY_HELPER -> R.string.setup_helper_title
@@ -101,7 +101,7 @@ private fun titleOf(item: SetupItem): Int = when (item) {
 }
 
 @StringRes
-private fun purposeOf(item: SetupItem): Int = when (item) {
+internal fun purposeOf(item: SetupItem): Int = when (item) {
     SetupItem.NOTIFICATIONS -> R.string.setup_notifications_for
     SetupItem.NOTIFICATION_ACCESS -> R.string.setup_notif_access_for
     SetupItem.ACCESSIBILITY_HELPER -> R.string.setup_helper_for
@@ -119,23 +119,16 @@ private fun purposeOf(item: SetupItem): Int = when (item) {
     SetupItem.QUICK_TILES -> R.string.setup_tiles_for
 }
 
-/** "Set up this phone": every optional permission and setting, what it's
- *  for, whether it's on, and the button that opens Android's screen for
- *  it. The app never turns any of them on itself. */
+/** Turn a checklist item on the way it's done here: Android's own
+ *  prompt when it asks for a runtime permission (and this app's page
+ *  after "Don't allow" twice), else the Settings screen for it. Never
+ *  turns anything on by itself. [after] runs once something was opened
+ *  or answered. */
 @Composable
-fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
+fun rememberTurnOn(after: () -> Unit): (SetupItem) -> Unit {
     val ctx = LocalContext.current
     val toast = LocalToast.current
-    val setup = rememberSetupRows()
     val noScreen = stringResource(R.string.setup_no_screen)
-    // Accessibility and Shizuku change outside any prompt: look again every
-    // few seconds while this is on screen (cheap reads).
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(3_000)
-            setup.refresh()
-        }
-    }
     var asking by remember { mutableStateOf<SetupItem?>(null) }
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
         val item = asking
@@ -149,9 +142,9 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
             val silenced = activity != null && result.keys.none { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
             if (denied && silenced) SetupState.openAppDetails(ctx)
         }
-        setup.refresh()
+        after()
     }
-    val turnOn = { item: SetupItem ->
+    return { item: SetupItem ->
         val perms = SetupState.permissions(item)
         val askable = perms != null &&
             perms.any { ContextCompat.checkSelfPermission(ctx, it) != PackageManager.PERMISSION_GRANTED }
@@ -161,8 +154,26 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
         } else if (!SetupState.open(ctx, item)) {
             toast(noScreen)
         }
-        setup.refresh()
+        after()
     }
+}
+
+/** "Set up this phone": every optional permission and setting, what it's
+ *  for, whether it's on, and the button that opens Android's screen for
+ *  it. The app never turns any of them on itself. */
+@Composable
+fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
+    val ctx = LocalContext.current
+    val setup = rememberSetupRows()
+    // Accessibility and Shizuku change outside any prompt: look again every
+    // few seconds while this is on screen (cheap reads).
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(3_000)
+            setup.refresh()
+        }
+    }
+    val turnOn = rememberTurnOn { setup.refresh() }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),

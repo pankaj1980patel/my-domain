@@ -54,6 +54,7 @@ import { fileFailReason, friendlyError, humanSize, progressLabel } from "../lib/
 import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
 import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
 import KeyChangeBanner from "../components/KeyChangeBanner";
+import { deviceProblems } from "../lib/health";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
@@ -160,7 +161,7 @@ const TILES: TileDef[] = [
   { id: "apps", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
 ];
 
-export default function Device(props: { node: string; onBack: () => void }) {
+export default function Device(props: { node: string; onBack: () => void; onHealth?: () => void }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
   const s = () => linkStateOf(props.node);
   const [editing, setEditing] = createSignal(false);
@@ -280,6 +281,15 @@ export default function Device(props: { node: string; onBack: () => void }) {
             </Show>
           </header>
           <KeyChangeBanner node={props.node} />
+          {/* The health check found something wrong with this device. */}
+          <Show when={props.onHealth && deviceProblems(props.node).some((c) => c.level === "bad")}>
+            <div class="health-banner" role="status">
+              <span>{t("health.deviceBanner")}</span>
+              <button class="btn btn-soft btn-sm" onClick={() => props.onHealth?.()}>
+                {t("health.open")}
+              </button>
+            </div>
+          </Show>
           <Show when={editing()}>
             <DeviceLabelForm node={props.node} onClose={() => setEditing(false)} />
           </Show>

@@ -116,6 +116,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::wake::extend_status(ctx, &mut status);
                 // What kind of device it is (its icon).
                 super::device_kind::extend_status(ctx, &mut status);
+                // Which app it runs (the health check's version line).
+                super::app_info::extend_status(ctx, &mut status);
                 // It's looking at this device: tell it when the song changes.
                 super::media::watch(ctx, &from);
                 let playing = super::media::current_for(ctx, &from);
@@ -170,6 +172,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::batches::remember(ctx, &from, &status[super::batches::FLAG]);
                 super::media::remember(ctx, &from, &status[super::media::FLAG]);
                 super::media::saw(ctx, &from, &status["now_playing"]);
+                super::app_info::remember(ctx, &from, &status);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

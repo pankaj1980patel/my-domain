@@ -390,6 +390,8 @@ fun SettingsScreen(
     onAutomations: () -> Unit = {},
     onSetup: () -> Unit = {},
     onHelp: () -> Unit = {},
+    onHealth: () -> Unit = {},
+    onOnboarding: () -> Unit = {},
     focus: String? = null,
 ) {
     // [focus]: the tile a search result opened (SearchScreen's Settings ids),
@@ -410,6 +412,9 @@ fun SettingsScreen(
         PageHead(stringResource(R.string.settings_title))
 
         SetupSettingsTile(onSetup)
+
+        // The health check, and first-run setup again.
+        HealthSettingsTile(onHealth, onOnboarding)
 
         Tile(Modifier.foundMark(focus == "help"), title = stringResource(R.string.help_title), onClick = onHelp) {
             Muted(stringResource(R.string.help_settings_hint))

@@ -105,6 +105,8 @@ impl<P: Platform> Engine<P> {
     /// Handle an inbound signal (delivered by the platform's FCM receiver as the
     /// raw JSON `payload`). Drives the responder side of the connection ladder.
     pub fn on_signal(&self, from: &str, payload: &str) {
+        // Pushes reach this device (the health check's push line).
+        crate::features::app_info::push_seen(&self.ctx);
         handle_signal(&self.ctx, from, payload);
     }
 }

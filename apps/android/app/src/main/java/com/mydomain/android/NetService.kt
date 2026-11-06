@@ -117,6 +117,8 @@ class NetService : Service() {
         // What kind of device this is (phone, tablet, foldable, TV; its
         // model): your other devices draw its icon from it.
         Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
+        // This app's version, for your other devices' health check.
+        Core.engine()?.let { e -> runCatching { e.setAppVersion(BuildConfig.VERSION_NAME) } }
         PhotoBackup.start(this)
         // Save battery: heavy background work waits while the battery is low,
         // Battery Saver is on or the phone dozes (and big transfers on mobile data).

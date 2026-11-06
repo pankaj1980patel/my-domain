@@ -63,6 +63,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::batches::extend_status(ctx, &mut msg);
         super::media::extend_status(ctx, &mut msg);
         super::device_kind::extend_status(ctx, &mut msg);
+        super::app_info::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -138,6 +139,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::print::remember(ctx, &from, &msg.json(super::print::FLAG));
         super::remote_download::remember(ctx, &from, &msg.json(super::remote_download::FLAG));
         super::batches::remember(ctx, &from, &msg.json(super::batches::FLAG));
+        super::app_info::remember(ctx, &from, msg.json_root());
         super::media::remember(ctx, &from, &msg.json(super::media::FLAG));
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {

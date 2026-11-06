@@ -4472,3 +4472,115 @@ html.kvm-window body {
 .device-model {
   margin: 0;
 }
+
+/* --- Health check and first-run setup ----------------------------------- */
+.health-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.health-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.health-text {
+  display: grid;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.health-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+  background: var(--text-3);
+}
+.health-ok .health-dot {
+  background: var(--success);
+}
+.health-warn .health-dot {
+  background: var(--warning);
+}
+.health-bad .health-dot {
+  background: var(--danger);
+  box-shadow: 0 0 var(--glow) var(--danger);
+}
+.health-info .health-dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-3);
+}
+/* The sidebar's "Something needs attention". */
+.health-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+  padding: var(--s-1) var(--s-2);
+  border-radius: var(--r-full);
+  border: 1px solid var(--danger);
+  background: var(--danger-soft);
+  color: var(--danger);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+.health-badge-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-full);
+  background: var(--danger);
+}
+.health-card,
+.health-banner {
+  border-left: 4px solid var(--danger);
+}
+.health-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  background: var(--danger-soft);
+}
+.setup-card {
+  border-left: 4px solid var(--accent);
+}
+.setup-dots {
+  list-style: none;
+  display: flex;
+  gap: var(--s-2);
+  margin: 0 0 var(--s-4);
+  padding: 0;
+}
+.setup-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+.setup-dot.on {
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  border-color: var(--accent);
+}
+.setup-dot.skipped {
+  border-style: dashed;
+}
+.setup-foot {
+  justify-content: flex-end;
+  margin-top: var(--s-4);
+}
