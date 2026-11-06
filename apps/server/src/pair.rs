@@ -52,6 +52,16 @@ const FAILS_PER_CLIENT: u32 = 10;
 /// most a 1-in-3,000 chance over its 5 minutes.
 const FAILS_GLOBAL: u32 = 60;
 const FAIL_WINDOW: Duration = Duration::from_secs(60);
+/// Pairings with a code the device chose, per account in `FAIL_WINDOW`.
+/// "Code in use" answers say a code is live somewhere, so making pairings
+/// with chosen codes is itself a way to walk the codes: an honest device
+/// makes one (and very rarely a second after a clash).
+const CHOSEN_CODES_PER_USER: u32 = 5;
+/// The same, server-wide: with these caps a walk of chosen codes over a
+/// pairing's 5 minutes sees at most 600 of the million codes.
+const CHOSEN_CODES_GLOBAL: u32 = 120;
+/// Most pairings waiting at once, server-wide.
+const MAX_PAIRINGS: usize = 10_000;
 /// Longest `code_box` accepted (a sealed 32-byte key is far less).
 const MAX_BOX: usize = 512;
 
@@ -88,6 +98,9 @@ struct Inner {
     pairings: HashMap<String, Pairing>,
     fails: HashMap<String, Fails>,
     global: Option<Fails>,
+    /// user id -> pairings made with a chosen code lately.
+    chosen: HashMap<String, Fails>,
+    chosen_global: Option<Fails>,
 }
 
 #[derive(Clone)]
@@ -181,8 +194,36 @@ async fn create(
     let now = Instant::now();
     let mut inner = s.inner.lock().unwrap();
     inner.purge(now);
+    // A chosen code is a guess at the codes in use: limited per account and
+    // server-wide, and counted before it's checked.
+    if req.code.is_some() {
+        inner
+            .chosen
+            .retain(|_, f| now.saturating_duration_since(f.since) < FAIL_WINDOW);
+        let mine = *inner
+            .chosen
+            .entry(user.user_id.clone())
+            .or_insert(Fails { since: now, n: 0 })
+            .current(now);
+        let all = *inner
+            .chosen_global
+            .get_or_insert(Fails { since: now, n: 0 })
+            .current(now);
+        if mine >= CHOSEN_CODES_PER_USER || all >= CHOSEN_CODES_GLOBAL {
+            return Err(AppError::TooMany);
+        }
+        if let Some(f) = inner.chosen.get_mut(&user.user_id) {
+            *f.current(now) += 1;
+        }
+        if let Some(f) = inner.chosen_global.as_mut() {
+            *f.current(now) += 1;
+        }
+    }
     // Replaces this account's earlier pairing (so its code is free again).
     inner.pairings.remove(&user.user_id);
+    if inner.pairings.len() >= MAX_PAIRINGS {
+        return Err(AppError::TooMany);
+    }
     if inner
         .pairings
         .values()
@@ -518,6 +559,43 @@ mod tests {
             "/pair/create",
             Some(&tok("ann")),
             json!({"claim": claim_hex(12), "code": "424242"}),
+        )
+        .await;
+        assert_eq!(c, 200);
+    }
+
+    #[tokio::test]
+    async fn chosen_codes_cannot_be_walked_to_find_another_accounts_pairing() {
+        let base = start(PairState::new(SECRET.into())).await;
+        let (c, _) = post(
+            &base,
+            "/pair/create",
+            Some(&tok("ann")),
+            json!({"claim": claim_hex(20), "code": "777777"}),
+        )
+        .await;
+        assert_eq!(c, 200);
+        // Mallory walks codes: a few tries, then she is refused before the
+        // code is even looked at (so a later hit tells her nothing).
+        let mut answers = Vec::new();
+        for i in 0..8u32 {
+            let (c, _) = post(
+                &base,
+                "/pair/create",
+                Some(&tok("mallory")),
+                json!({"claim": claim_hex(21), "code": format!("{:06}", 777770 + i)}),
+            )
+            .await;
+            answers.push(c);
+        }
+        assert_eq!(&answers[..5], &[200; 5]);
+        assert!(answers[5..].iter().all(|c| *c == 429), "{answers:?}");
+        // A pairing with a server-picked code is not limited this way.
+        let (c, _) = post(
+            &base,
+            "/pair/create",
+            Some(&tok("mallory")),
+            json!({"claim": claim_hex(22)}),
         )
         .await;
         assert_eq!(c, 200);

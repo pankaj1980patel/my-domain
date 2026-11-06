@@ -63,3 +63,32 @@ fn a_new_link_carries_addresses_the_server_never_had() {
         seen_by(&phone, &laptop).mapped_quic == expected
     });
 }
+
+#[test]
+fn a_device_cannot_rewrite_another_devices_address() {
+    let (laptop, phone, tablet) = (
+        TestNode::start("addr-spoof-laptop"),
+        TestNode::start("addr-spoof-phone"),
+        TestNode::start("addr-spoof-tablet"),
+    );
+    TestNode::pair(&laptop, &phone);
+    TestNode::pair(&laptop, &tablet);
+    TestNode::pair(&phone, &tablet);
+    let before = seen_by(&laptop, &tablet).ip;
+    // The phone claims to be the tablet and says it moved.
+    let spoof = format!(
+        r#"{{"type":"addr_update","from":"{}","ip":"127.0.0.77","quic_port":1}}"#,
+        tablet.node_id()
+    );
+    phone.engine.send(&laptop.node_id(), &spoof).unwrap();
+    // A real message after it, so the spoof has surely been handled.
+    phone.engine.send(&laptop.node_id(), "after").unwrap();
+    laptop.sink.wait_for_message("after");
+    std::thread::sleep(Duration::from_millis(200));
+    let now = seen_by(&laptop, &tablet);
+    assert_eq!(
+        now.ip, before,
+        "the tablet's address was rewritten by the phone"
+    );
+    assert_ne!(now.quic_port, 1);
+}

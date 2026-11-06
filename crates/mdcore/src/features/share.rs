@@ -49,7 +49,11 @@ impl<P: Platform> ControlHandler<P> for ShareHandler {
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
         let from = msg.sender();
         let (text, mode) = (msg.str("text"), msg.str("mode"));
-        if from.is_empty() || text.trim().is_empty() || text.len() > MAX_TEXT || !is_mode(&mode) {
+        if !super::known(ctx, &from)
+            || text.trim().is_empty()
+            || text.len() > MAX_TEXT
+            || !is_mode(&mode)
+        {
             return;
         }
         let sensitive = msg.flag("sensitive");

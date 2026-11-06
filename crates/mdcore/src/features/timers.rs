@@ -626,6 +626,11 @@ impl<P: Platform> ControlHandler<P> for TimersHandler {
         set_caps(ctx, &from, true);
         let now = now_ms();
         let mut theirs = parse(&msg.json("timers"));
+        // Nothing stamped (or ending) further ahead than a clock can be off.
+        theirs.retain(|_, t| {
+            super::not_ahead(t.updated_at, now)
+                && super::not_ahead(t.ends_at, now.saturating_add(MAX_DURATION_MS))
+        });
         // What's been over long enough is forgotten here: never taken back.
         let all_theirs = theirs.clone();
         prune(&mut theirs, now);

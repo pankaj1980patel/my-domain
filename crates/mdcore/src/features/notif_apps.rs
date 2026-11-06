@@ -38,6 +38,26 @@ use super::{ControlHandler, ControlMsg};
 /// module docs).
 pub const ALL_APPS: &str = "*";
 
+/// Most apps one device may subscribe to.
+pub const MAX_SUBSCRIBED: usize = 2_000;
+
+/// The apps a `subscribe_apps` names: package names (or `ALL_APPS`) only,
+/// each once, at most `MAX_SUBSCRIBED`.
+pub fn subscribed_apps(v: &serde_json::Value) -> Vec<String> {
+    let mut seen = std::collections::HashSet::new();
+    v.as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str())
+                .filter(|p| super::notif_rich::pkg_ok(p))
+                .filter(|p| seen.insert(p.to_string()))
+                .take(MAX_SUBSCRIBED)
+                .map(String::from)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 pub struct NotifAppsHandler;
 
 impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
@@ -68,18 +88,13 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
             // Producer: store this peer's subscription (full enabled set).
             "subscribe_apps" => {
                 let from = msg.sender();
-                if from.is_empty() {
+                // Kept (and saved) per device: only for your own devices,
+                // and only well-formed, distinct names, at most
+                // `MAX_SUBSCRIBED`.
+                if from.is_empty() || !ctx.peers.lock().contains_key(&from) {
                     return;
                 }
-                let apps: Vec<String> = msg
-                    .json("apps")
-                    .as_array()
-                    .map(|a| {
-                        a.iter()
-                            .filter_map(|v| v.as_str().map(String::from))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                let apps = subscribed_apps(&msg.json("apps"));
                 let mut removal_subs = ctx.removal_subs.lock();
                 if msg.json("removals").as_bool() == Some(true) {
                     removal_subs.insert(from.clone());
@@ -102,5 +117,21 @@ impl<P: Platform> ControlHandler<P> for NotifAppsHandler {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn a_subscription_keeps_only_distinct_package_names_up_to_the_cap() {
+        let v = json!(["com.a", "com.a", "../etc", "", "x y", 7, "*", "com.b"]);
+        assert_eq!(subscribed_apps(&v), vec!["com.a", "*", "com.b"]);
+        let many: Vec<String> = (0..MAX_SUBSCRIBED + 500).map(|i| format!("p{i}")).collect();
+        assert_eq!(subscribed_apps(&json!(many)).len(), MAX_SUBSCRIBED);
+        assert!(subscribed_apps(&json!("nope")).is_empty());
+        assert!(subscribed_apps(&json!(["a".repeat(10_000)])).is_empty());
     }
 }

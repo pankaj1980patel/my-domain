@@ -851,7 +851,9 @@ impl<P: Platform> ControlHandler<P> for ReadLaterHandler {
             send_items(ctx, &from, &send, &want);
             return;
         }
-        let incoming = parse(&msg.json("items"));
+        let mut incoming = parse(&msg.json("items"));
+        let now = now_ms();
+        incoming.retain(|e| super::not_ahead(e.updated_at, now));
         let want: Vec<String> = msg
             .json("want")
             .as_array()
@@ -864,7 +866,6 @@ impl<P: Platform> ControlHandler<P> for ReadLaterHandler {
                     .collect()
             })
             .unwrap_or_default();
-        let now = now_ms();
         let (merged, items, removed) = with_map(ctx, |m| {
             let merged = merge(m, incoming, now);
             let mut items = Vec::new();

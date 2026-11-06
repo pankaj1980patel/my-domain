@@ -32,7 +32,7 @@
 //! `GET /relay/stats` reports aggregate counters (no per-user data).
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -64,6 +64,15 @@ enum Out {
     Bin(Vec<u8>),
 }
 
+impl Out {
+    fn len(&self) -> usize {
+        match self {
+            Out::Text(t) => t.len(),
+            Out::Bin(b) => b.len(),
+        }
+    }
+}
+
 /// Split a client's binary frame into (target node id, payload): `None` for
 /// another version or a malformed one.
 fn parse_bin(frame: &[u8]) -> Option<(&str, &[u8])> {
@@ -90,7 +99,43 @@ fn bin_out(from: &str, payload: &[u8]) -> Option<Vec<u8>> {
 type Key = (String, String); // (user_id, node_id)
 /// Connected devices: (user, node) -> (connection id, outgoing queue, when
 /// we last heard from it in ms since `RelayState::epoch`).
-type Conns = Arc<Mutex<HashMap<Key, (u64, mpsc::UnboundedSender<Out>, Arc<AtomicU64>)>>>;
+type Conns = Arc<Mutex<HashMap<Key, (u64, Queue, Arc<AtomicU64>)>>>;
+
+/// Most bytes waiting for one device. A device that stops reading (stuck,
+/// or on purpose) must not make the server hold frames without end: past
+/// this the sender is told the target is offline, as if it had gone.
+pub const MAX_QUEUED: usize = 16 * 1024 * 1024;
+/// Longest node id accepted (clients use short ids).
+const MAX_NODE_ID: usize = 128;
+/// Most relay connections one account may hold at once.
+pub const MAX_CONNS_PER_USER: usize = 16;
+/// A socket that says nothing (not even a ping; clients ping every 20 s)
+/// for this long is closed.
+const IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+
+/// One device's outgoing queue, with the bytes in it counted.
+#[derive(Clone)]
+struct Queue {
+    tx: mpsc::UnboundedSender<Out>,
+    bytes: Arc<AtomicUsize>,
+}
+
+impl Queue {
+    /// Queue `out` unless the device already has `MAX_QUEUED` bytes waiting.
+    fn push(&self, out: Out) -> bool {
+        let n = out.len();
+        let prev = self.bytes.fetch_add(n, Ordering::AcqRel);
+        if prev.saturating_add(n) > MAX_QUEUED {
+            self.bytes.fetch_sub(n, Ordering::AcqRel);
+            return false;
+        }
+        if self.tx.send(out).is_err() {
+            self.bytes.fetch_sub(n, Ordering::AcqRel);
+            return false;
+        }
+        true
+    }
+}
 
 /// Clients ping every 20 s. A socket silent for longer than this belongs to
 /// a device that went to sleep (a phone with the screen off) or vanished:
@@ -193,7 +238,7 @@ impl RelayState {
             .get(&(user_id.to_string(), to.to_string()))
             .filter(|(_, _, heard)| now.saturating_sub(heard.load(Ordering::Relaxed)) <= fresh)
             .map(|(_, q, _)| q.clone());
-        target.is_some_and(|q| q.send(Out::Text(frame)).is_ok())
+        target.is_some_and(|q| q.push(Out::Text(frame)))
     }
 
     /// Charge `n` bytes to `user`; how long to pause before forwarding.
@@ -243,12 +288,34 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     let key: Key = (user_id.clone(), node_id.clone());
     let my_id = s.next_id.fetch_add(1, Ordering::Relaxed);
     let (tx, mut rx) = mpsc::unbounded_channel::<Out>();
+    let queued = Arc::new(AtomicUsize::new(0));
+    let queue = Queue {
+        tx,
+        bytes: Arc::clone(&queued),
+    };
     let heard = Arc::new(AtomicU64::new(s.now_ms()));
-    // A reconnecting device replaces its old connection.
-    s.conns
-        .lock()
-        .unwrap()
-        .insert(key.clone(), (my_id, tx, Arc::clone(&heard)));
+    let admitted = {
+        let mut conns = s.conns.lock().unwrap();
+        // A reconnecting device replaces its old connection; a new one must
+        // fit under the account's cap.
+        let others = conns
+            .keys()
+            .filter(|(u, n)| *u == user_id && *n != node_id)
+            .count();
+        let ok = others < MAX_CONNS_PER_USER;
+        if ok {
+            conns.insert(key.clone(), (my_id, queue, Arc::clone(&heard)));
+        }
+        ok
+    };
+    if !admitted {
+        let _ = socket
+            .send(Message::Text(
+                json!({"error": "too many connections"}).to_string(),
+            ))
+            .await;
+        return;
+    }
     if socket
         .send(Message::Text(
             json!({"ok": true, "bin": BIN_VERSION}).to_string(),
@@ -265,7 +332,8 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     //    this device go out on its socket.
     loop {
         tokio::select! {
-            incoming = socket.recv() => {
+            incoming = tokio::time::timeout(IDLE_TIMEOUT, socket.recv()) => {
+                let Ok(incoming) = incoming else { break }; // silent too long
                 heard.store(s.now_ms(), Ordering::Relaxed);
                 let (len, to, out) = match incoming {
                     Some(Ok(Message::Text(text))) => {
@@ -296,7 +364,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                 let target = s.conns.lock().unwrap()
                     .get(&(user_id.clone(), to.clone()))
                     .map(|(_, q, _)| q.clone());
-                let delivered = target.map(|q| q.send(out).is_ok()).unwrap_or(false);
+                let delivered = target.map(|q| q.push(out)).unwrap_or(false);
                 if delivered {
                     s.stats.frames.fetch_add(1, Ordering::Relaxed);
                     s.stats.bytes.fetch_add(len as u64, Ordering::Relaxed);
@@ -306,6 +374,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                 }
             }
             Some(out) = rx.recv() => {
+                queued.fetch_sub(out.len(), Ordering::AcqRel);
                 let msg = match out {
                     Out::Text(t) => Message::Text(t),
                     Out::Bin(b) => Message::Binary(b),
@@ -339,7 +408,7 @@ async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String,
     let v: Value = serde_json::from_str(&text).ok()?;
     let user = verify_token(&s.jwt_secret, v["auth"].as_str()?)?;
     let node_id = v["node_id"].as_str()?.trim().to_string();
-    (!node_id.is_empty()).then_some((user.user_id, node_id))
+    (!node_id.is_empty() && node_id.len() <= MAX_NODE_ID).then_some((user.user_id, node_id))
 }
 
 /// Remove the registration only if it's still this connection's (a newer one
@@ -652,5 +721,53 @@ mod tests {
         let port = start();
         let mut ws = client(port, "not-a-jwt", "x");
         assert_eq!(next_json(&mut ws)["error"], "unauthorized");
+    }
+
+    #[test]
+    fn a_device_that_stops_reading_cannot_make_the_server_hold_frames_without_end() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let q = Queue {
+            tx,
+            bytes: Arc::default(),
+        };
+        let chunk = vec![0u8; 1024 * 1024];
+        let mut taken = 0;
+        while q.push(Out::Bin(chunk.clone())) {
+            taken += 1;
+            assert!(taken <= MAX_QUEUED / chunk.len(), "queue never filled");
+        }
+        assert_eq!(taken, MAX_QUEUED / chunk.len());
+        assert!(!q.push(Out::Text("x".into())));
+        // Draining (as the socket pump does) makes room again.
+        let out = rx.try_recv().unwrap();
+        q.bytes.fetch_sub(out.len(), Ordering::AcqRel);
+        assert!(q.push(Out::Bin(chunk)));
+    }
+
+    #[test]
+    fn rejects_an_overlong_node_id() {
+        let port = start();
+        let mut ws = client(port, &tok("alice"), &"n".repeat(MAX_NODE_ID + 1));
+        assert_eq!(next_json(&mut ws)["error"], "unauthorized");
+    }
+
+    #[test]
+    fn caps_connections_per_account() {
+        let port = start();
+        let t = tok("alice");
+        let mut held = Vec::new();
+        for i in 0..MAX_CONNS_PER_USER {
+            let mut ws = client(port, &t, &format!("dev-{i}"));
+            assert_eq!(next_json(&mut ws)["ok"], true);
+            held.push(ws);
+        }
+        let mut extra = client(port, &t, "one-too-many");
+        assert_eq!(next_json(&mut extra)["error"], "too many connections");
+        // A device reconnecting under its own id still gets in.
+        let mut again = client(port, &t, "dev-0");
+        assert_eq!(next_json(&mut again)["ok"], true);
+        // Another account is unaffected.
+        let mut bob = client(port, &tok("bob"), "dev-0");
+        assert_eq!(next_json(&mut bob)["ok"], true);
     }
 }

@@ -14,6 +14,9 @@ impl<P: Platform> ControlHandler<P> for CallNotificationHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        if !super::known(ctx, &msg.sender()) {
+            return;
+        }
         ctx.sink.emit(CoreEvent::CallNotification {
             from: msg.str("from"),
             caller: msg.str("caller"),

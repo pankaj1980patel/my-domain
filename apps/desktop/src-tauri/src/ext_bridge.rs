@@ -251,6 +251,9 @@ pub fn safe_name(name: &str) -> String {
     let cut = cut.trim_end_matches(['.', ' ']).to_string();
     if cut.is_empty() {
         "image".to_string()
+    } else if mdcore::features::link_fetch::windows_reserved(&cut) {
+        // `CON.png` would open a device on Windows, not make a file.
+        format!("_{cut}")
     } else {
         cut
     }
@@ -1605,6 +1608,10 @@ mod tests {
         assert_eq!(safe_name(""), "image");
         assert_eq!(safe_name("a<b>:c?.png"), "a_b__c_.png");
         assert_eq!(safe_name("tab\there.png"), "tabhere.png");
+        assert_eq!(safe_name("https://x/CON.png"), "_CON.png");
+        assert_eq!(safe_name("nul.jpg"), "_nul.jpg");
+        assert_eq!(safe_name("com1"), "_com1");
+        assert_eq!(safe_name("console.png"), "console.png");
         assert_eq!(safe_name(&"n".repeat(500)).chars().count(), 120);
     }
 

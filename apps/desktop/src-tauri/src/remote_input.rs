@@ -94,7 +94,8 @@ impl Player {
         }
         for e in events {
             if let Err(err) = self.one(e) {
-                eprintln!("[input] {e:?}: {err}");
+                // The kind only: a text event may be a password.
+                eprintln!("[input] {}: {err}", input_kind(e));
             }
         }
     }
@@ -259,6 +260,21 @@ fn tell_once(app: &AppHandle, why: &str) {
     crate::notify::post_always(app, "my-domain can't use your phone as a touchpad", body);
 }
 
+/// What kind of event `e` is, for the log (never what it carries).
+fn input_kind(e: &InputEvent) -> &'static str {
+    match e {
+        InputEvent::Move { .. } => "move",
+        InputEvent::Click { .. } => "click",
+        InputEvent::Scroll { .. } => "scroll",
+        InputEvent::Text { .. } => "text",
+        InputEvent::Key { .. } => "key",
+        InputEvent::Gesture { .. } => "gesture",
+        InputEvent::Point { .. } => "point",
+        InputEvent::Tap { .. } => "tap",
+        InputEvent::Swipe { .. } => "swipe",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{shortcut, steps};
@@ -273,6 +289,14 @@ mod tests {
         assert!(shortcut(3, SwipeDir::Left).0.contains(&Key::Shift));
         assert_eq!(shortcut(4, SwipeDir::Left).1, Key::RightArrow);
         assert_eq!(shortcut(4, SwipeDir::Right).1, Key::LeftArrow);
+    }
+
+    #[test]
+    fn the_log_names_the_kind_never_the_typed_text() {
+        let e = mdcore::model::InputEvent::Text {
+            text: "hunter2".into(),
+        };
+        assert_eq!(super::input_kind(&e), "text");
     }
 
     #[test]

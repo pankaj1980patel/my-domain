@@ -178,6 +178,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::app_info::remember(ctx, &from, &status);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
+            // What acts on this device: only for devices in its list.
+            "ring" | "open_url" | "action" if !super::known(ctx, &from) => {}
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),
             "open_url" => {
                 let url = msg.str("url");

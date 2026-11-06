@@ -339,3 +339,40 @@ fn an_app_from_before_never_gets_the_request() {
     // And the old one doesn't offer it either.
     assert!(!old.engine.remote_download_supported(&new.node_id()));
 }
+
+#[test]
+fn a_device_cannot_pile_up_requests() {
+    let base = server(1_000);
+    let (phone, mac, _dir) = pair("flood", "ask");
+    let limit = mdcore::features::remote_download::MAX_OPEN_PER_DEVICE;
+    let mut ids = Vec::new();
+    for _ in 0..limit + 3 {
+        let it = phone
+            .engine
+            .request_remote_download(&mac.node_id(), &format!("{base}/file.bin"))
+            .unwrap();
+        ids.push(it.id);
+    }
+    // The ones past the limit are refused, and say why.
+    for id in &ids[limit..] {
+        let r = wait_state(&phone, id, "refused");
+        assert!(r.error.unwrap().contains("too many"), "{id}");
+    }
+    let open = mac
+        .engine
+        .remote_downloads()
+        .into_iter()
+        .filter(|i| i.here && !i.finished())
+        .count();
+    assert!(open <= limit, "{open} open");
+    // Answering one makes room again.
+    mac.engine
+        .answer_remote_download(&ids[0], false, false)
+        .unwrap();
+    wait_state(&phone, &ids[0], "refused");
+    let again = phone
+        .engine
+        .request_remote_download(&mac.node_id(), &format!("{base}/file.bin"))
+        .unwrap();
+    wait_state(&mac, &again.id, "asking");
+}

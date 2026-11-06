@@ -157,12 +157,64 @@ impl DeviceKey {
 
 /// The Ed25519 key in a certificate, base64; `None` for any other kind
 /// (a device from before device keys).
+///
+/// Read from the certificate's own subject public key (walking the DER
+/// structure), never from wherever the key's bytes happen to appear: a
+/// certificate for another key could otherwise carry this device's key in
+/// its names and pass for it.
 pub fn key_in_cert(cert: &[u8]) -> Option<String> {
-    let at = cert
-        .windows(ED25519_SPKI.len())
-        .position(|w| w == ED25519_SPKI)?;
-    let key = cert.get(at + ED25519_SPKI.len()..at + ED25519_SPKI.len() + 32)?;
-    Some(B64.encode(key))
+    let spki = cert_spki(cert)?;
+    let key = spki.strip_prefix(&ED25519_SPKI[..])?;
+    (key.len() == 32).then(|| B64.encode(key))
+}
+
+/// One DER element: (tag, whole element, contents, what follows).
+type DerElement<'a> = (u8, &'a [u8], &'a [u8], &'a [u8]);
+
+/// The DER element at the start of `der`.
+fn der_next(der: &[u8]) -> Option<DerElement<'_>> {
+    let tag = *der.first()?;
+    let first = *der.get(1)?;
+    let (len, head) = if first < 0x80 {
+        (first as usize, 2)
+    } else {
+        let n = (first & 0x7f) as usize;
+        if n == 0 || n > 4 {
+            return None;
+        }
+        let mut len = 0usize;
+        for b in der.get(2..2 + n)? {
+            len = (len << 8) | *b as usize;
+        }
+        (len, 2 + n)
+    };
+    let end = head.checked_add(len)?;
+    let whole = der.get(..end)?;
+    Some((tag, whole, &whole[head..], &der[end..]))
+}
+
+/// The SubjectPublicKeyInfo element of an X.509 certificate.
+fn cert_spki(cert: &[u8]) -> Option<&[u8]> {
+    const SEQ: u8 = 0x30;
+    let (tag, _, body, _) = der_next(cert)?;
+    if tag != SEQ {
+        return None;
+    }
+    let (tag, _, tbs, _) = der_next(body)?;
+    if tag != SEQ {
+        return None;
+    }
+    let mut rest = tbs;
+    // [0] version is optional.
+    if rest.first() == Some(&0xa0) {
+        rest = der_next(rest)?.3;
+    }
+    // serial, signature algorithm, issuer, validity, subject.
+    for _ in 0..5 {
+        rest = der_next(rest)?.3;
+    }
+    let (tag, spki, _, _) = der_next(rest)?;
+    (tag == SEQ).then_some(spki)
 }
 
 /// What to do with a connection from a device (`check`).
@@ -722,6 +774,30 @@ mod tests {
         );
         let other = DeviceKey::load_or_create(&Mem::default());
         assert_ne!(a.public(), other.public());
+    }
+
+    #[test]
+    fn a_certificate_for_another_key_cannot_pass_for_a_device_by_naming_its_key() {
+        // The attacker's own (ECDSA) key signs; the victim's Ed25519 key
+        // header and bytes are planted in the certificate's names, which
+        // come before the real key in the DER.
+        let victim = [b'A'; 32];
+        let mut planted = ED25519_SPKI.to_vec();
+        planted.extend_from_slice(&victim);
+        let planted = String::from_utf8(planted).unwrap();
+        let mut params = rcgen::CertificateParams::new(vec!["mydomain".into()]).unwrap();
+        params
+            .distinguished_name
+            .push(rcgen::DnType::CommonName, planted);
+        let pair = rcgen::KeyPair::generate().unwrap();
+        let cert = params.self_signed(&pair).unwrap();
+        let der = cert.der().as_ref();
+        assert!(der.windows(ED25519_SPKI.len()).any(|w| w == ED25519_SPKI));
+        assert_eq!(key_in_cert(der), None);
+        // Garbage and truncated input are refused, not panicked on.
+        assert_eq!(key_in_cert(&[]), None);
+        assert_eq!(key_in_cert(&[0x30, 0x84, 0xff, 0xff, 0xff, 0xff]), None);
+        assert_eq!(key_in_cert(&der[..der.len() / 2]), None);
     }
 
     #[test]

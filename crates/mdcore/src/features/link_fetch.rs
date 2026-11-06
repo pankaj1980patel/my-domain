@@ -101,6 +101,8 @@ pub fn is_public_ip(ip: IpAddr) -> bool {
                 || (s[0] & 0xffc0) == 0xfe80 // link-local
                 || (s[0] & 0xffc0) == 0xfec0 // site-local (old)
                 || (s[0] == 0x2001 && s[1] == 0x0db8) // documentation
+                || (s[0] == 0x2001 && s[1] == 0) // Teredo (carries an IPv4)
+                || (s[0] == 0x0064 && s[1] == 0xff9b && s[2] == 1) // local NAT64
                 || (s[0] == 0x0100 && s[1] == 0 && s[2] == 0 && s[3] == 0)) // discard
         }
     }
@@ -135,6 +137,10 @@ fn embedded_v4(v6: &Ipv6Addr) -> Option<Ipv4Addr> {
     }
     if s[0] == 0x2002 {
         return Some(Ipv4Addr::new(o[2], o[3], o[4], o[5]));
+    }
+    // IPv4-compatible (`::a.b.c.d`, deprecated); `::` and `::1` are not.
+    if s[..6].iter().all(|x| *x == 0) && !v6.is_unspecified() && !v6.is_loopback() {
+        return Some(Ipv4Addr::new(o[12], o[13], o[14], o[15]));
     }
     None
 }
@@ -396,20 +402,25 @@ pub fn safe_name(name: &str) -> String {
     if n == "file" && clean.trim().trim_matches('.').is_empty() {
         n = "download".to_string();
     }
-    let stem = n
+    if windows_reserved(&n) {
+        n = format!("_{n}");
+    }
+    capped(&n)
+}
+
+/// Whether Windows takes `name` for a device (`CON`, `NUL`, `COM1`, ...,
+/// with any extension): such a file can't be made there.
+pub fn windows_reserved(name: &str) -> bool {
+    let stem = name
         .split('.')
         .next()
         .unwrap_or("")
         .trim()
         .to_ascii_uppercase();
-    let reserved = matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
         || ((stem.starts_with("COM") || stem.starts_with("LPT"))
             && stem.len() == 4
-            && stem.as_bytes()[3].is_ascii_digit());
-    if reserved {
-        n = format!("_{n}");
-    }
-    capped(&n)
+            && stem.as_bytes()[3].is_ascii_digit())
 }
 
 /// `n` cut to `MAX_NAME` bytes, its (short) extension kept.
@@ -547,6 +558,40 @@ pub struct Fetched {
     pub name: String,
     pub size: u64,
     pub final_url: String,
+}
+
+/// A download slower than `MIN_SPEED` bytes a second over a whole
+/// `SPEED_WINDOW` is given up (it can be tried again): a server that sends
+/// a byte just inside the read timeout would otherwise hold the one
+/// download slot for ever.
+pub const MIN_SPEED: u64 = 1024;
+pub const SPEED_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Watches a download's speed (`MIN_SPEED` over `SPEED_WINDOW`).
+pub struct Stall {
+    since: std::time::Instant,
+    bytes: u64,
+}
+
+impl Stall {
+    pub fn new(now: std::time::Instant) -> Self {
+        Stall {
+            since: now,
+            bytes: 0,
+        }
+    }
+
+    /// Count `n` more bytes at `now`; true if the last window was too slow.
+    pub fn too_slow(&mut self, n: u64, now: std::time::Instant) -> bool {
+        self.bytes = self.bytes.saturating_add(n);
+        let took = now.saturating_duration_since(self.since);
+        if took < SPEED_WINDOW {
+            return false;
+        }
+        let slow = self.bytes < MIN_SPEED.saturating_mul(took.as_secs());
+        *self = Stall::new(now);
+        slow
+    }
 }
 
 fn agent(allow_lan: bool) -> ureq::Agent {
@@ -798,6 +843,7 @@ fn fetch_once(
     progress(done, known.total, &name);
     let mut reader = resp.into_reader();
     let mut buf = vec![0u8; 64 * 1024];
+    let mut stall = Stall::new(std::time::Instant::now());
     loop {
         if opts.cancel.load(Ordering::Relaxed) {
             return Err(FetchError::Cancelled);
@@ -813,6 +859,10 @@ fn fetch_once(
         };
         file.write_all(&buf[..n]).map_err(disk)?;
         done += n as u64;
+        if stall.too_slow(n as u64, std::time::Instant::now()) {
+            let _ = file.flush();
+            return Err(FetchError::Net("the server is too slow".into()));
+        }
         if opts.max_bytes > 0 && done > opts.max_bytes {
             return Err(FetchError::TooBig(done));
         }
@@ -830,6 +880,36 @@ fn fetch_once(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ipv6_forms_that_carry_a_private_ipv4_are_not_public() {
+        for a in [
+            "::7f00:1",         // ::127.0.0.1, IPv4-compatible
+            "::a00:1",          // ::10.0.0.1
+            "::c0a8:101",       // ::192.168.1.1
+            "2001:0:1:2::1",    // Teredo
+            "64:ff9b:1::a00:1", // local-use NAT64
+        ] {
+            let ip: IpAddr = a.parse().unwrap();
+            assert!(!ip_allowed(ip, false), "{a}");
+        }
+        assert!(ip_allowed("::808:808".parse().unwrap(), false), "::8.8.8.8");
+        assert!(ip_allowed("2606:4700::1111".parse().unwrap(), false));
+    }
+
+    #[test]
+    fn a_trickling_server_is_given_up_but_a_slow_one_is_not() {
+        let t0 = std::time::Instant::now();
+        let mut s = Stall::new(t0);
+        // One byte every 29 s (just inside the read timeout).
+        assert!(!s.too_slow(1, t0 + std::time::Duration::from_secs(29)));
+        assert!(s.too_slow(1, t0 + std::time::Duration::from_secs(58 + 2)));
+        // 2 KB/s: slow, but going.
+        let mut s = Stall::new(t0);
+        for i in 1..=180u64 {
+            assert!(!s.too_slow(2048, t0 + std::time::Duration::from_secs(i)));
+        }
+    }
     use std::collections::HashMap;
     use std::io::BufRead;
     use std::net::TcpListener;

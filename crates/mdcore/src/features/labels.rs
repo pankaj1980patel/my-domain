@@ -462,7 +462,9 @@ impl<P: Platform> ControlHandler<P> for LabelsHandler {
         if !sharing(ctx) {
             return;
         }
-        let theirs = parse(&msg.json("labels"));
+        let mut theirs = parse(&msg.json("labels"));
+        let now = now_ms();
+        theirs.retain(|_, e| super::not_ahead(e.updated_at, now));
         let (changed, answer) = with_map(ctx, |m| {
             let changed: Vec<SharedLabel> = merge(m, &theirs)
                 .into_iter()

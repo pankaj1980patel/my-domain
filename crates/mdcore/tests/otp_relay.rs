@@ -274,3 +274,60 @@ fn the_status_says_otp_relay() {
         .unwrap();
     assert_eq!(st["otp_relay"], 1);
 }
+
+#[test]
+fn a_flood_of_codes_still_expires_each_one() {
+    let (phone, mac) = phone_and_mac("flood");
+    let now = now_ms();
+    // Many distinct codes (one expiry thread for all, not one each); a
+    // few soon-expiring ones among them.
+    for i in 0..200u32 {
+        let at = if i % 50 == 0 {
+            now + 1_500
+        } else {
+            now + 60_000
+        };
+        phone
+            .engine
+            .send(
+                &mac.node_id(),
+                &format!(
+                    r#"{{"type":"otp_code","code":"{}","app":"Bank","expires_at":{at}}}"#,
+                    100_000 + i
+                ),
+            )
+            .unwrap();
+    }
+    link(&phone, &mac, "after the flood");
+    assert!(
+        mac.engine.verification_codes().len() <= 4,
+        "at most four kept"
+    );
+    // The last code (a long-lived one) stays; a short-lived one sent last
+    // goes on time.
+    phone
+        .engine
+        .send(
+            &mac.node_id(),
+            &format!(
+                r#"{{"type":"otp_code","code":"424242","app":"Bank","expires_at":{}}}"#,
+                now_ms() + 1_000
+            ),
+        )
+        .unwrap();
+    wait_code(&mac, "424242");
+    mac.sink
+        .wait_until(Duration::from_secs(5), |e| match e {
+            CoreEvent::VerificationCodeGone { .. }
+                if !mac
+                    .engine
+                    .verification_codes()
+                    .iter()
+                    .any(|c| c.code == "424242") =>
+            {
+                Some(())
+            }
+            _ => None,
+        })
+        .expect("the short-lived code expired");
+}

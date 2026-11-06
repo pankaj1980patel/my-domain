@@ -566,6 +566,11 @@ fn keep_copy(map: &mut NoteMap, loser: &Entry, out: &mut Merged) {
     let copy = conflict_copy(loser);
     let id = copy.id.clone();
     if !map.contains_key(&id) {
+        // Copies count against the limits like any note: a peer sending
+        // many losing versions must not grow the notes without end.
+        if !fits(map, &copy, None) {
+            return;
+        }
         make_room(map);
         map.insert(id.clone(), copy);
         out.changed.push(id.clone());
@@ -1100,6 +1105,8 @@ impl<P: Platform> ControlHandler<P> for NotesHandler {
             return;
         }
         let mut incoming = parse(&msg.json("notes"));
+        let now = now_ms();
+        incoming.retain(|e| super::not_ahead(e.updated_at, now));
         if !ctx.config.note_reminders {
             // An app from before reminders never kept them.
             for e in &mut incoming {
@@ -1118,7 +1125,6 @@ impl<P: Platform> ControlHandler<P> for NotesHandler {
                     .collect()
             })
             .unwrap_or_default();
-        let now = now_ms();
         let (merged, notes, removed) = with_map(ctx, |m| {
             let merged = merge(m, incoming, now);
             let mut notes = Vec::new();
@@ -1236,6 +1242,31 @@ mod tests {
         assert!(ma.answer.contains(&copy.id) && mb.answer.contains(&copy.id));
         let again = merge(&mut a, vec![b[&copy.id].wire(true)], 31);
         assert_eq!(again, Merged::default());
+    }
+
+    #[test]
+    fn losing_versions_cannot_grow_the_notes_past_their_limits() {
+        let mut a = NoteMap::new();
+        let n = put(&mut a, None, edit("Mine", "kept"), A, 1_000_000).unwrap();
+        // A peer sends hundreds of older, conflicting versions of the note,
+        // each with its own 60 KB text: each would make a conflict copy.
+        let incoming: Vec<Entry> = (0..400u64)
+            .map(|i| Entry {
+                body: format!("{i}{}", "x".repeat(60_000)),
+                updated_at: 10 + i,
+                by: B.0.into(),
+                seen: vec![],
+                ..a[&n.id].clone()
+            })
+            .collect();
+        let m = merge(&mut a, incoming, 1_000_001);
+        assert!(
+            !m.conflicts.is_empty(),
+            "copies are still made while they fit"
+        );
+        assert!(total_size(&a) <= MAX_TOTAL, "{}", total_size(&a));
+        assert!(live_count(&a) <= MAX_NOTES);
+        assert_eq!(a[&n.id].body, "kept");
     }
 
     #[test]

@@ -180,7 +180,7 @@ fn on_list<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         Ok(all) => {
             let page: Vec<&RemoteEntry> = all.iter().skip(offset).take(PAGE).collect();
             reply["entries"] = json!(page);
-            if offset + PAGE < all.len() {
+            if offset.saturating_add(PAGE) < all.len() {
                 reply["next"] = json!(offset + PAGE);
             }
         }
@@ -226,7 +226,7 @@ impl<P: Platform> ControlHandler<P> for BrowseHandler {
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
         let from = msg.sender();
-        if from.is_empty() {
+        if !super::known(ctx, &from) {
             return;
         }
         match msg.kind() {

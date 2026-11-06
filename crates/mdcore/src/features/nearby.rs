@@ -189,8 +189,12 @@ pub fn is_local_link(kind: TransportKind, addr: Option<SocketAddr>) -> bool {
 /// sent at `t0`, answered at `t1` (their clock), back at `t3`.
 pub fn clock_offset(t0: u64, t1: u64, t3: u64) -> (i64, u32) {
     let rtt = t3.saturating_sub(t0);
-    let mid = t0 as i64 + (rtt / 2) as i64;
-    (t1 as i64 - mid, u32::try_from(rtt).unwrap_or(u32::MAX))
+    // Wrapping: `t1` is another device's word, and may be anything.
+    let mid = (t0 as i64).wrapping_add((rtt / 2) as i64);
+    (
+        (t1 as i64).wrapping_sub(mid),
+        u32::try_from(rtt).unwrap_or(u32::MAX),
+    )
 }
 
 /// End-to-end latency from arrival samples (arrival − sent, mixed clocks)
@@ -288,7 +292,8 @@ fn touch<P: Platform>(ctx: &NetCtx<P>, node: &str, ts_ms: Option<u64>) {
         let p = peers.entry(node.to_string()).or_default();
         p.media_at = Some(now);
         if let Some(ts) = ts_ms {
-            p.samples.push_back(now_ms() as i64 - ts as i64);
+            p.samples
+                .push_back((now_ms() as i64).wrapping_sub(ts as i64));
             while p.samples.len() > SAMPLES {
                 p.samples.pop_front();
             }
@@ -704,5 +709,8 @@ mod tests {
         assert_eq!(latency_from(&s, None, Some(40)), Some(20));
         assert_eq!(latency_from(&[], Some(off), None), None);
         assert_eq!(latency_from(&[-2000], Some(off), None), Some(0));
+        // Any time another device sends is taken without a panic.
+        let _ = clock_offset(10_000, u64::MAX, 10_040);
+        let _ = clock_offset(u64::MAX, 0, u64::MAX);
     }
 }

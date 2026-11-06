@@ -14,6 +14,9 @@ impl<P: Platform> ControlHandler<P> for CallHistoryHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        if !super::known(ctx, &msg.sender()) {
+            return;
+        }
         ctx.sink.emit(CoreEvent::CallHistory {
             from: msg.str("from"),
             entries: msg.json("entries"),

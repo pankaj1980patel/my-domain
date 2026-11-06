@@ -85,7 +85,9 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
-        let from = msg.str("from");
+        // The device the link belongs to, never the body's `from`: one
+        // device must not rewrite another's addresses or abilities.
+        let from = msg.sender();
         let changed = {
             let mut peers = ctx.peers.lock();
             let Some(p) = peers.get_mut(&from) else {

@@ -74,6 +74,9 @@ const RETRIES: u32 = 4;
 const RETRY_WAIT: Duration = Duration::from_secs(2);
 /// Finished downloads kept in the list.
 const KEEP_FINISHED: usize = 50;
+/// Most downloads one device may have waiting or running here at once:
+/// each holds a thread (asking can take `ASK_FOR`) and a prompt.
+pub const MAX_OPEN_PER_DEVICE: usize = 8;
 const MB: u64 = 1024 * 1024;
 
 const POLICIES: [&str; 3] = ["ask", "always", "never"];
@@ -638,6 +641,21 @@ fn on_request<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     };
     if ctx.files.download_dir.lock().is_none() {
         return refuse(ctx, from, &id, &url, "that device has no downloads folder");
+    }
+    let open = state(ctx)
+        .jobs
+        .lock()
+        .values()
+        .filter(|j| j.item.here && j.item.node_id == from && !j.item.finished())
+        .count();
+    if open >= MAX_OPEN_PER_DEVICE {
+        return refuse(
+            ctx,
+            from,
+            &id,
+            &url,
+            "too many downloads are waiting on that device",
+        );
     }
     let now = now_ms();
     let item = RemoteDownloadItem {

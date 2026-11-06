@@ -15,6 +15,15 @@ use crate::platform::Platform;
 
 use super::{ControlHandler, ControlMsg};
 
+/// Longest title and text handed to the system's notifications.
+pub const MAX_POSTED_TITLE: usize = 256;
+pub const MAX_POSTED_BODY: usize = 4096;
+
+/// `s` cut to at most `max` characters.
+pub fn clip_chars(s: &str, max: usize) -> String {
+    s.chars().take(max).collect()
+}
+
 pub struct NotificationHandler;
 
 impl<P: Platform> ControlHandler<P> for NotificationHandler {
@@ -23,6 +32,9 @@ impl<P: Platform> ControlHandler<P> for NotificationHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        if !super::known(ctx, &msg.sender()) {
+            return;
+        }
         if msg.kind() == "notif_removed" {
             let key = msg.str("key");
             if !key.is_empty() {
@@ -53,7 +65,10 @@ impl<P: Platform> ControlHandler<P> for NotificationHandler {
             super::notif_rich::NotifExtra::default()
         };
         if let Some(n) = ctx.platform.notifier() {
-            n.post(&msg.str("title"), &msg.str("body"));
+            n.post(
+                &clip_chars(&msg.str("title"), MAX_POSTED_TITLE),
+                &clip_chars(&msg.str("body"), MAX_POSTED_BODY),
+            );
         }
         ctx.sink.emit(CoreEvent::Notification {
             from: msg.str("from"),

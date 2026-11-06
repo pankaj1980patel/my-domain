@@ -326,6 +326,43 @@ fn a_concealed_copy_is_neither_synced_kept_nor_handed_to_a_pull() {
 }
 
 #[test]
+fn a_removed_device_cannot_pull_the_clipboard() {
+    let (a, b) = pair("clip-removed");
+    b.clip().user_copies("secret on b");
+    // Linked first, so the link outlives the removal.
+    assert_eq!(a.engine.get_clipboard(&b.node_id()).unwrap(), "secret on b");
+    b.engine.remove_peer(&a.node_id());
+    assert!(a.engine.get_clipboard(&b.node_id()).is_err());
+}
+
+#[test]
+fn an_oversized_clipboard_push_is_ignored() {
+    use mdcore::features::clipboard::MAX_CLIP;
+    let (a, b) = pair("clip-huge");
+    a.engine.send(&b.node_id(), "hi").unwrap();
+    b.sink.wait_for_message("hi");
+    b.engine.enable_clipboard_sync();
+    b.clip().user_copies("mine");
+    let huge = format!(
+        r#"{{"type":"clipboard","content":"{}"}}"#,
+        "x".repeat(MAX_CLIP + 1)
+    );
+    a.engine.send(&b.node_id(), &huge).unwrap();
+    a.engine
+        .send(&b.node_id(), r#"{"type":"clipboard","content":"small"}"#)
+        .unwrap();
+    let deadline = std::time::Instant::now() + WAIT;
+    while b.clip().current().as_deref() != Some("small") {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the small push never came"
+        );
+        assert_ne!(b.clip().current().map(|c| c.len()), Some(MAX_CLIP + 1));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
 fn clipboard_push_is_ignored_when_receiver_disabled_sync() {
     let (a, b) = pair("clip-push-off");
     a.engine.enable_clipboard_sync();
@@ -458,4 +495,48 @@ fn a_resent_message_is_shown_once_and_still_acknowledged() {
         .filter(|e| matches!(e, CoreEvent::MessageReceived(m) if m.text == "only once"))
         .count();
     assert_eq!(copies, 1, "shown once");
+}
+
+#[test]
+fn a_removed_device_can_no_longer_act_here_over_a_link_still_up() {
+    let (a, b) = pair("removed-acts");
+    a.engine.send(&b.node_id(), "linked").unwrap();
+    b.sink.wait_for_message("linked");
+    b.engine.remove_peer(&a.node_id());
+    for raw in [
+        r#"{"type":"ring"}"#.to_string(),
+        r#"{"type":"open_url","url":"https://example.com/"}"#.to_string(),
+        r#"{"type":"notification","title":"t","body":"b"}"#.to_string(),
+        r#"{"type":"share","text":"pasted","mode":"clipboard"}"#.to_string(),
+        r#"{"type":"fs_list","req":"r1","path":""}"#.to_string(),
+    ] {
+        a.engine.send(&b.node_id(), &raw).unwrap();
+    }
+    // Plain chat still shows (it says who it's from), and comes after.
+    a.engine.send(&b.node_id(), "after").unwrap();
+    b.sink.wait_for_message("after");
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(!b.sink.all().iter().any(|e| matches!(
+        e,
+        CoreEvent::Ring { .. } | CoreEvent::Notification { .. } | CoreEvent::OpenUrl { .. }
+    )));
+    assert!(b.notifier.posted().is_empty());
+    assert_ne!(b.clip().current().as_deref(), Some("pasted"));
+}
+
+#[test]
+fn a_huge_notification_is_cut_before_the_system_shows_it() {
+    use mdcore::features::notification::{MAX_POSTED_BODY, MAX_POSTED_TITLE};
+    let (a, b) = pair("notif-huge");
+    a.engine
+        .share_notification(&"T".repeat(10_000), &"B".repeat(100_000), None);
+    b.sink
+        .wait_until(WAIT, |e| {
+            matches!(e, CoreEvent::Notification { .. }).then_some(())
+        })
+        .expect("notification event");
+    let posted = b.notifier.posted();
+    assert_eq!(posted.len(), 1);
+    assert!(posted[0].0.chars().count() <= MAX_POSTED_TITLE);
+    assert!(posted[0].1.chars().count() <= MAX_POSTED_BODY);
 }

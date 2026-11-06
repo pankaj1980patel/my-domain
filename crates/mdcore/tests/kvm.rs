@@ -396,3 +396,45 @@ fn an_app_from_before_never_gets_kvm() {
     )));
     assert!(old.engine.kvm_layout().is_empty());
 }
+
+#[test]
+fn only_the_computer_placed_on_that_side_can_take_control() {
+    let (mac, pc) = pair_side_by_side("kvm-side-mac", "kvm-side-pc");
+    // A third device, paired and linked, but placed nowhere.
+    let other = TestNode::start("kvm-side-other");
+    TestNode::pair(&other, &pc);
+    link(&other, &pc, "hello");
+    let enter = |edge: &str| {
+        format!(
+            r#"{{"type":"kvm_enter","from":"{}","edge":"{edge}","pos":5000}}"#,
+            other.node_id()
+        )
+    };
+    for edge in ["left", "right", "top", "bottom"] {
+        other.engine.send(&pc.node_id(), &enter(edge)).unwrap();
+    }
+    // A layout from far in the future can't place it either.
+    other
+        .engine
+        .send(
+            &pc.node_id(),
+            r#"{"type":"kvm_layout","from":"x","side":"right","at":18446744073709551615}"#,
+        )
+        .unwrap();
+    other.engine.send(&pc.node_id(), &enter("left")).unwrap();
+    link(&other, &pc, "after");
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(!pc
+        .sink
+        .all()
+        .iter()
+        .any(|e| matches!(e, CoreEvent::KvmChanged { state } if state.role == "controlled")));
+    assert!(pc
+        .engine
+        .kvm_layout()
+        .iter()
+        .all(|n| n.node_id != other.node_id()));
+    // The mac, placed on the left of the pc, still can.
+    mac.engine.kvm_start(&pc.node_id(), "right", 1).unwrap();
+    wait_state(&pc, "controlled", |s| s.role == "controlled");
+}

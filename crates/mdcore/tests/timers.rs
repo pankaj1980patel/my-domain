@@ -162,3 +162,37 @@ fn an_app_from_before_never_gets_timers() {
     // The old one can't start one at all.
     assert!(old.engine.start_timer("x", MIN, &[]).is_err());
 }
+
+#[test]
+fn a_timer_stamped_far_in_the_future_is_left_out() {
+    let phone = TestNode::start("timers-future-phone");
+    let mac = TestNode::start("timers-future-mac");
+    TestNode::pair(&phone, &mac);
+    link(&phone, &mac, "hi");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let timer = |id: &str, ends_at: u64, updated_at: u64| {
+        serde_json::json!({
+            "id": id, "label": "x", "duration_ms": 10 * MIN, "state": "running",
+            "ends_at": ends_at, "updated_at": updated_at,
+            "by": phone.node_id(), "by_name": "Phone",
+        })
+    };
+    let msg = serde_json::json!({
+        "type": "timers",
+        "from": phone.node_id(),
+        "timers": [
+            // Would win every later edit for ever.
+            timer("t-forever", now + 10 * MIN, u64::MAX),
+            // Would show (and count against the limit) for ever.
+            timer("t-neverends", u64::MAX, now),
+            timer("t-fine", now + 10 * MIN, now),
+        ],
+    });
+    phone.engine.send(&mac.node_id(), &msg.to_string()).unwrap();
+    let got = wait_timers(&mac, "the fine one", |l| l.iter().any(|t| t.id == "t-fine"));
+    assert!(got.iter().all(|t| t.id == "t-fine"), "{got:?}");
+    assert!(mac.engine.timers().iter().all(|t| t.id == "t-fine"));
+}

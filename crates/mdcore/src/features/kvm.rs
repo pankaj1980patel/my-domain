@@ -1052,6 +1052,9 @@ impl<P: Platform> ControlHandler<P> for KvmHandler {
     }
 }
 
+/// How far ahead of this clock a layout setting's time may be.
+const MAX_CLOCK_AHEAD_MS: u64 = 24 * 3600 * 1000;
+
 fn on_layout<P: Platform>(ctx: &NetCtx<P>, from: &str, msg: &ControlMsg) {
     let side_v = msg.json("side");
     let side = match &side_v {
@@ -1065,6 +1068,10 @@ fn on_layout<P: Platform>(ctx: &NetCtx<P>, from: &str, msg: &ControlMsg) {
     let Some(at) = msg.json("at").as_u64() else {
         return;
     };
+    // A setting from the future would win over every later one here.
+    if at > media::now_ms().saturating_add(MAX_CLOCK_AHEAD_MS) {
+        return;
+    }
     // It says where this computer sits around it: it sits on the other
     // side here.
     let (applied, displaced) = with_layout(ctx, |m| {
@@ -1094,6 +1101,12 @@ fn on_enter<P: Platform>(ctx: &NetCtx<P>, from: &str, msg: &ControlMsg) {
         return;
     };
     if !allowed(ctx) {
+        refuse("off");
+        return;
+    }
+    // Only the computer placed on that side here may bring the pointer in
+    // across it (as the controller itself checks before it starts).
+    if neighbor_at(ctx, edge).as_deref() != Some(from) {
         refuse("off");
         return;
     }

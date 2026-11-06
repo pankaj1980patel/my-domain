@@ -20,6 +20,84 @@ use crate::models::User;
 use crate::state::AppState;
 
 const TOKEN_TTL_SECS: u64 = 7 * 24 * 3600;
+/// Wrong passwords allowed per username in `GUESS_WINDOW` (login and
+/// verify together), so a password can't be guessed online.
+const GUESSES_PER_USER: u32 = 10;
+const GUESS_WINDOW: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// Most usernames tracked at once (older windows are dropped first).
+const MAX_TRACKED: usize = 50_000;
+/// Longest username / password looked at (Argon2 over megabytes is a CPU sink).
+const MAX_USERNAME: usize = 64;
+const MAX_PASSWORD: usize = 256;
+
+/// Wrong-password counts per username: (window start, count).
+#[derive(Default)]
+pub(crate) struct Guesses {
+    map: std::collections::HashMap<String, (std::time::Instant, u32)>,
+}
+
+impl Guesses {
+    /// Whether `user` may try a password now.
+    pub(crate) fn allowed(&mut self, user: &str, now: std::time::Instant) -> bool {
+        match self.map.get(user) {
+            Some((since, n)) if now.saturating_duration_since(*since) < GUESS_WINDOW => {
+                *n < GUESSES_PER_USER
+            }
+            _ => true,
+        }
+    }
+
+    /// Count a wrong password for `user`.
+    pub(crate) fn failed(&mut self, user: &str, now: std::time::Instant) {
+        if self.map.len() >= MAX_TRACKED {
+            self.map
+                .retain(|_, (since, _)| now.saturating_duration_since(*since) < GUESS_WINDOW);
+            if self.map.len() >= MAX_TRACKED {
+                self.map.clear();
+            }
+        }
+        let e = self.map.entry(user.to_string()).or_insert((now, 0));
+        if now.saturating_duration_since(e.0) >= GUESS_WINDOW {
+            *e = (now, 0);
+        }
+        e.1 += 1;
+    }
+}
+
+fn guesses() -> &'static std::sync::Mutex<Guesses> {
+    static G: std::sync::OnceLock<std::sync::Mutex<Guesses>> = std::sync::OnceLock::new();
+    G.get_or_init(Default::default)
+}
+
+/// Check `pw` against `user`'s stored hash, limited per username, with the
+/// Argon2 work off the async workers. A missing user costs the same work.
+async fn check_password(username: &str, pw: &str, hash: Option<String>) -> Result<(), AppError> {
+    let now = std::time::Instant::now();
+    if !guesses().lock().unwrap().allowed(username, now) {
+        return Err(AppError::TooMany);
+    }
+    let pw = pw.to_string();
+    let ok = tokio::task::spawn_blocking(move || match hash {
+        Some(h) => verify_password(&pw, &h),
+        None => {
+            // Same cost as a real check, so timing doesn't say who exists.
+            let _ = hash_password(&pw);
+            false
+        }
+    })
+    .await
+    .unwrap_or(false);
+    if ok {
+        Ok(())
+    } else {
+        guesses().lock().unwrap().failed(username, now);
+        Err(AppError::Unauthorized)
+    }
+}
+
+fn too_long(username: &str, pw: &str) -> bool {
+    username.len() > MAX_USERNAME || pw.len() > MAX_PASSWORD
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
@@ -128,9 +206,10 @@ pub async fn register(
     Json(req): Json<AuthReq>,
 ) -> Result<Json<TokenResp>, AppError> {
     let username = req.username.trim().to_lowercase();
-    if username.is_empty() || req.password.len() < 6 {
+    if username.is_empty() || req.password.len() < 6 || too_long(&username, &req.password) {
         return Err(AppError::BadRequest(
-            "username required and password must be at least 6 characters".into(),
+            "username required (at most 64 characters) and password must be 6-256 characters"
+                .into(),
         ));
     }
     let users = s.db.collection::<User>(crate::models::USERS_COLL);
@@ -141,7 +220,10 @@ pub async fn register(
     {
         return Err(AppError::Conflict("username already taken".into()));
     }
-    let password_hash = hash_password(&req.password)?;
+    let pw = req.password.clone();
+    let password_hash = tokio::task::spawn_blocking(move || hash_password(&pw))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))??;
     let res = users
         .insert_one(User {
             id: None,
@@ -163,14 +245,18 @@ pub async fn login(
     Json(req): Json<AuthReq>,
 ) -> Result<Json<TokenResp>, AppError> {
     let username = req.username.trim().to_lowercase();
-    let users = s.db.collection::<User>(crate::models::USERS_COLL);
-    let user = users
-        .find_one(doc! { "username": &username })
-        .await?
-        .ok_or(AppError::Unauthorized)?;
-    if !verify_password(&req.password, &user.password_hash) {
+    if too_long(&username, &req.password) {
         return Err(AppError::Unauthorized);
     }
+    let users = s.db.collection::<User>(crate::models::USERS_COLL);
+    let found = users.find_one(doc! { "username": &username }).await?;
+    check_password(
+        &username,
+        &req.password,
+        found.as_ref().map(|u| u.password_hash.clone()),
+    )
+    .await?;
+    let user = found.ok_or(AppError::Unauthorized)?;
     let uid = user
         .id
         .map(|o| o.to_hex())
@@ -185,14 +271,37 @@ pub async fn verify(
     Json(req): Json<AuthReq>,
 ) -> Result<StatusCode, AppError> {
     let username = req.username.trim().to_lowercase();
+    if too_long(&username, &req.password) {
+        return Err(AppError::Unauthorized);
+    }
     let users = s.db.collection::<User>(crate::models::USERS_COLL);
-    let user = users
-        .find_one(doc! { "username": &username })
-        .await?
-        .ok_or(AppError::Unauthorized)?;
-    if verify_password(&req.password, &user.password_hash) {
-        Ok(StatusCode::OK)
-    } else {
-        Err(AppError::Unauthorized)
+    let found = users.find_one(doc! { "username": &username }).await?;
+    check_password(&username, &req.password, found.map(|u| u.password_hash)).await?;
+    Ok(StatusCode::OK)
+}
+
+#[cfg(test)]
+mod guess_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn wrong_passwords_are_limited_per_username_and_the_limit_lifts() {
+        let mut g = Guesses::default();
+        let t0 = Instant::now();
+        for _ in 0..GUESSES_PER_USER {
+            assert!(g.allowed("ann", t0));
+            g.failed("ann", t0);
+        }
+        assert!(!g.allowed("ann", t0));
+        assert!(g.allowed("bob", t0), "other accounts are not affected");
+        assert!(g.allowed("ann", t0 + GUESS_WINDOW + Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn overlong_credentials_are_refused_before_hashing() {
+        assert!(too_long(&"u".repeat(65), "secret"));
+        assert!(too_long("ann", &"p".repeat(257)));
+        assert!(!too_long("ann", "secret"));
     }
 }

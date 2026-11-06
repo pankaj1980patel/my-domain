@@ -28,7 +28,14 @@ impl IntoResponse for AppError {
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many tries, wait a minute".to_string(),
             ),
-            AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m),
+            AppError::Internal(m) => {
+                // Details (database or push errors) stay in the log.
+                tracing::warn!("internal error: {m}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal error".to_string(),
+                )
+            }
         };
         (status, Json(json!({ "error": msg }))).into_response()
     }

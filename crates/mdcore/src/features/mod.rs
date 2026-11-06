@@ -68,6 +68,25 @@ use serde_json::Value;
 use crate::engine::NetCtx;
 use crate::platform::Platform;
 
+/// Whether `node` is one of your devices in this device's list: a device
+/// removed from it (or never in it) is listened to no more, even over a
+/// link that's still up.
+pub fn known<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    !node.is_empty() && ctx.peers.lock().contains_key(node)
+}
+
+/// How far ahead of this device's clock another device's time may be.
+/// Replicated stores are last-writer-wins by time: an entry stamped far in
+/// the future (a wrong clock, or a device misbehaving) would win over
+/// every later edit, so it is left out instead.
+pub const MAX_CLOCK_AHEAD_MS: u64 = 24 * 3600 * 1000;
+
+/// Whether `ts` (unix ms, from another device) isn't too far ahead of
+/// `now` (`MAX_CLOCK_AHEAD_MS`).
+pub fn not_ahead(ts: u64, now: u64) -> bool {
+    ts <= now.saturating_add(MAX_CLOCK_AHEAD_MS)
+}
+
 /// A parsed control message handed to a [`ControlHandler`]. `from`/`ip`/`protocol`
 /// describe the carrying chat envelope; field accessors read the JSON body.
 pub struct ControlMsg<'a> {

@@ -1397,7 +1397,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         .and_then(|p| p.as_str())
         .map(str::to_string);
     let (dir, dest) = if let Some(pair) = &sync {
-        match super::folder_sync::offer_dir(ctx, from, pair) {
+        match super::folder_sync::offer_dir(ctx, from, pair, &id, size) {
             Ok(dir) => {
                 let dest = dir.join("in");
                 (dir, dest)
@@ -1768,7 +1768,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
         let from = msg.sender();
-        if from.is_empty() {
+        if !super::known(ctx, &from) {
             return;
         }
         let id = msg.str("id");

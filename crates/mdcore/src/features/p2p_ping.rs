@@ -18,7 +18,9 @@ impl<P: Platform> ControlHandler<P> for P2pPingHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
-        let from = msg.str("from");
+        // The link's own device (not the body's `from`): a ping can only
+        // vouch for the link it came over.
+        let from = msg.sender();
         if from.is_empty() {
             return;
         }

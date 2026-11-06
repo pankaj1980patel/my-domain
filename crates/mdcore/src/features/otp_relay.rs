@@ -22,7 +22,7 @@
 //!   never kept in the clipboard history, activity or any other history.
 
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 use parking_lot::Mutex;
@@ -124,6 +124,8 @@ pub struct OtpRelay {
     pending: Mutex<Vec<Pending>>,
     received: Mutex<VecDeque<VerificationCode>>,
     next_id: AtomicU64,
+    /// Whether the one thread that drops expired codes is running.
+    sweeping: AtomicBool,
 }
 
 fn st<P: Platform>(ctx: &NetCtx<P>) -> &OtpRelay {
@@ -405,13 +407,43 @@ pub fn dismiss<P: Platform>(ctx: &NetCtx<P>, id: &str) -> bool {
     gone
 }
 
-/// Drop code `id` when it expires.
-fn expire_later<P: Platform>(ctx: &NetCtx<P>, id: String, at: u64) {
+/// How often the sweeper looks again while codes are shown.
+const SWEEP_EVERY: Duration = Duration::from_secs(1);
+
+/// Drop codes when they expire: one thread for all of them (not one per
+/// code, which a flood of codes would turn into a flood of threads), that
+/// ends once none are left.
+fn expire_later<P: Platform>(ctx: &NetCtx<P>) {
+    if st(ctx).sweeping.swap(true, Ordering::AcqRel) {
+        return;
+    }
     let ctx = ctx.clone();
-    std::thread::spawn(move || {
-        let wait = Duration::from_millis(at.saturating_sub(now_ms()));
-        if ctx.shutdown.wait(wait) {
+    std::thread::spawn(move || loop {
+        let now = now_ms();
+        let (expired, left): (Vec<String>, bool) = {
+            let r = st(&ctx).received.lock();
+            (
+                r.iter()
+                    .filter(|c| c.expires_at <= now)
+                    .map(|c| c.id.clone())
+                    .collect(),
+                r.iter().any(|c| c.expires_at > now),
+            )
+        };
+        for id in expired {
             dismiss(&ctx, &id);
+        }
+        if !left {
+            st(&ctx).sweeping.store(false, Ordering::Release);
+            // A code that came in just now saw the sweeper running.
+            if st(&ctx).received.lock().is_empty() || st(&ctx).sweeping.swap(true, Ordering::AcqRel)
+            {
+                return;
+            }
+            continue;
+        }
+        if !ctx.shutdown.wait(SWEEP_EVERY) {
+            return;
         }
     });
 }
@@ -468,7 +500,7 @@ impl<P: Platform> ControlHandler<P> for OtpRelayHandler {
             r.push_front(c.clone());
             r.truncate(MAX_KEPT);
         }
-        expire_later(ctx, c.id.clone(), c.expires_at);
+        expire_later(ctx);
         ctx.sink.emit(CoreEvent::VerificationCode(c));
     }
 }

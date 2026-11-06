@@ -736,3 +736,55 @@ fn two_names_one_in_nfc_both_arrive_where_the_disk_takes_them_for_one() {
         let _ = std::fs::remove_dir_all(d);
     }
 }
+
+/// Every file (hidden ones too) under `root` whose name has `part` in it.
+fn files_named(root: &Path, part: &str) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                stack.push(p);
+            } else if p.file_name().unwrap().to_string_lossy().contains(part) {
+                out.push(p);
+            }
+        }
+    }
+    out
+}
+
+#[test]
+fn a_synced_folder_takes_only_the_files_it_asked_for() {
+    let (a, b) = linked("unasked");
+    let (da, db) = (temp_dir("unasked-a"), temp_dir("unasked-b"));
+    std::fs::write(da.join("one.txt"), b"one").unwrap();
+    let id = start_pair(&a, &b, &da, &db, "both");
+    wait_content(&db.join("one.txt"), b"one");
+    wait_in_sync(&b, &id);
+    // a offers b a file b never asked for, and sends its bytes.
+    let tid = "feedface00112233445566778899aabb";
+    let offer = serde_json::json!({
+        "type": "file_offer", "from": a.node_id(), "id": tid,
+        "name": "junk.bin", "size": 5,
+        "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+        "sync": { "pair": id },
+    });
+    a.engine.send(&b.node_id(), &offer.to_string()).unwrap();
+    let chunk = serde_json::json!({
+        "type": "file_chunk", "from": a.node_id(), "id": tid, "off": 0, "data": "aGVsbG8=",
+    });
+    a.engine.send(&b.node_id(), &chunk.to_string()).unwrap();
+    a.engine.send(&b.node_id(), "after the offer").unwrap();
+    b.sink.wait_for_message("after the offer");
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(
+        files_named(&db, tid).is_empty(),
+        "{:?}",
+        files_named(&db, tid)
+    );
+    assert!(files_named(&db, "junk").is_empty());
+    for d in [&da, &db] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}

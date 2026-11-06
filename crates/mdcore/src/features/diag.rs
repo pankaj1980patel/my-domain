@@ -484,14 +484,30 @@ fn run_send<P: Platform>(
     cancel: Option<&AtomicBool>,
     progress: &dyn Fn(u64),
 ) -> Result<Duration, String> {
-    let s = Arc::new(Sending {
+    let s = new_sending(node);
+    diag(ctx).sending.lock().insert(id.to_string(), s.clone());
+    run_reserved(ctx, &s, id, total, cancel, progress)
+}
+
+fn new_sending(node: &str) -> Arc<Sending> {
+    Arc::new(Sending {
         node: node.to_string(),
         acked: Mutex::new(0),
         cv: Condvar::new(),
         cancel: AtomicBool::new(false),
-    });
-    diag(ctx).sending.lock().insert(id.to_string(), s.clone());
-    let out = send_loop(ctx, &s, id, total, cancel, progress);
+    })
+}
+
+/// Send with `s` already registered under `id`; unregisters it after.
+fn run_reserved<P: Platform>(
+    ctx: &NetCtx<P>,
+    s: &Arc<Sending>,
+    id: &str,
+    total: u64,
+    cancel: Option<&AtomicBool>,
+    progress: &dyn Fn(u64),
+) -> Result<Duration, String> {
+    let out = send_loop(ctx, s, id, total, cancel, progress);
     diag(ctx).sending.lock().remove(id);
     out
 }
@@ -808,15 +824,20 @@ fn on_get<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     if id.is_empty() || bytes == 0 || bytes > u64::from(MAX_SPEED_BYTES) {
         return;
     }
-    {
-        let s = diag(ctx).sending.lock();
+    // Checked and taken under one lock: a burst of requests can't all
+    // pass the check before any of them is counted.
+    let sending = {
+        let mut s = diag(ctx).sending.lock();
         if s.len() >= MAX_RUNNING || s.contains_key(&id) {
             return;
         }
-    }
-    let (ctx, from) = (ctx.clone(), from.to_string());
+        let sending = new_sending(from);
+        s.insert(id.clone(), sending.clone());
+        sending
+    };
+    let ctx = ctx.clone();
     std::thread::spawn(move || {
-        let _ = run_send(&ctx, &from, &id, bytes, None, &|_| {});
+        let _ = run_reserved(&ctx, &sending, &id, bytes, None, &|_| {});
     });
 }
 
@@ -855,7 +876,8 @@ impl<P: Platform> ControlHandler<P> for DiagHandler {
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
         let from = msg.sender();
-        if from.is_empty() {
+        // Your own devices only (a speed test sends up to 32 MB back).
+        if from.is_empty() || !ctx.peers.lock().contains_key(&from) {
             return;
         }
         match msg.kind() {

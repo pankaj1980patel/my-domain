@@ -40,6 +40,9 @@ pub fn remember<P: Platform>(ctx: &NetCtx<P>, text: &str, from: Option<&str>) {
     ctx.sink.emit(CoreEvent::ClipboardHistory { entries });
 }
 
+/// Largest clipboard text written here from another device.
+pub const MAX_CLIP: usize = super::share::MAX_TEXT;
+
 pub struct ClipboardHandler;
 
 impl<P: Platform> ControlHandler<P> for ClipboardHandler {
@@ -48,6 +51,12 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        // Your own devices only: nothing is read or written for a device
+        // that isn't (or is no longer) in this device's list.
+        let sender = msg.sender();
+        if sender.is_empty() || !ctx.peers.lock().contains_key(&sender) {
+            return;
+        }
         match msg.kind() {
             // Unsolicited push from a peer in active mode: only apply if we too
             // have auto-sync enabled and a clipboard.
@@ -55,6 +64,9 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
                 if ctx.clip_active.load(Ordering::Relaxed) {
                     if let Some(clip) = ctx.platform.clipboard() {
                         let c = msg.str("content");
+                        if c.len() > MAX_CLIP {
+                            return;
+                        }
                         *ctx.clip_last.lock() = c.clone();
                         clip.set(&c);
                         remember(ctx, &c, msg.opt("from").as_deref());

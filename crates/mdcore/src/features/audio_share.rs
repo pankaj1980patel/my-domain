@@ -1011,10 +1011,10 @@ fn deliver_opus<P: Platform>(ctx: &NetCtx<P>, from: &str, h: &media::Header, pay
         let count = out.len() as u64;
         let mut seq = h.seq.saturating_sub(count.saturating_sub(1));
         if let Some(l) = r.last_out {
-            seq = seq.max(l + 1);
+            seq = seq.max(l.saturating_add(1));
         }
         if count > 0 {
-            r.last_out = Some(seq + count - 1);
+            r.last_out = Some(seq.saturating_add(count - 1));
         }
         (seq, out)
     };

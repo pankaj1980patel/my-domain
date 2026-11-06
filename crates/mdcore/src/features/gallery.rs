@@ -193,7 +193,7 @@ impl<P: Platform> ControlHandler<P> for GalleryHandler {
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
         let from = msg.sender();
-        if from.is_empty() {
+        if !super::known(ctx, &from) {
             return;
         }
         match msg.kind() {

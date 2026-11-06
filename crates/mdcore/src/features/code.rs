@@ -32,6 +32,9 @@ impl<P: Platform> ControlHandler<P> for CodeHandler {
     }
 
     fn handle(&self, ctx: &NetCtx<P>, msg: &ControlMsg) {
+        if !super::known(ctx, &msg.sender()) {
+            return;
+        }
         let code = msg.str("code");
         let Some(clip) = ctx.platform.clipboard() else {
             return; // nowhere to paste it here

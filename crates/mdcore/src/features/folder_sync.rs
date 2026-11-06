@@ -1988,10 +1988,16 @@ fn clean_up(root: &Path, now: u64) {
 /// Where `from`'s file for pair `pair` is received (`features::files` puts
 /// the partial file under it, and the finished file in its `in`), or why
 /// it isn't taken.
+///
+/// Only a file this side asked for (transfer `id`, of the `size` it was
+/// when asked): the other device can't fill the folder with files nobody
+/// wanted.
 pub fn offer_dir<P: Platform>(
     ctx: &NetCtx<P>,
     from: &str,
     pair: &str,
+    id: &str,
+    size: u64,
 ) -> Result<PathBuf, &'static str> {
     let Some(c) = cfg(ctx, pair) else {
         return Err("that synced folder isn't here");
@@ -2005,6 +2011,15 @@ pub fn offer_dir<P: Platform>(
     let root = Path::new(&c.path);
     if !root.is_dir() {
         return Err("the synced folder is missing");
+    }
+    let asked = {
+        let slot = slot(ctx, pair);
+        let mut work = slot.work.lock();
+        let idx = work.get_or_insert_with(|| load_index(root, pair));
+        idx.pulls.values().any(|p| p.id == id && p.s == size)
+    };
+    if !asked {
+        return Err("that file wasn't asked for");
     }
     Ok(root.join(STATE_DIR))
 }
