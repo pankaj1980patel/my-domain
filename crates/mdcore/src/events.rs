@@ -304,6 +304,31 @@ pub enum CoreEvent {
     /// owner's choice: watch it (`Engine::screen_watch`) to see it. Or it
     /// stopped (`!on`).
     ScreenOffer { from: String, on: bool },
+    /// A computer started (`on`) or stopped asking to see this phone's
+    /// camera (`features::camera`): ask the owner, then send its frames
+    /// with `Engine::camera_frame_to` while it watches
+    /// (`Engine::camera_watchers`). A renewal is not reported.
+    CameraWatch { from: String, on: bool },
+    /// A picture from a phone's camera this computer asked to see: a JPEG,
+    /// base64, as `ScreenFrame`.
+    CameraFrame {
+        from: String,
+        seq: u64,
+        jpeg: String,
+    },
+    /// A phone's camera is on for this computer (`on`; its owner said yes),
+    /// with which camera and the torch (`None`: it has none), or it's off
+    /// (`reason`: "declined", "stopped", "locked", ...).
+    CameraOffer {
+        from: String,
+        on: bool,
+        front: bool,
+        torch: Option<bool>,
+        reason: Option<String>,
+    },
+    /// The computer watching this camera asks it to `op`: "switch" the
+    /// camera, "torch" (`on`), or take a "photo" (sent as a file).
+    CameraControl { from: String, op: String, on: bool },
     /// A device started (`on`) or stopped listening to this device's
     /// audio (`features::audio_share`; a computer to a phone's, or a phone
     /// to a computer's): while any does (`Engine::audio_listeners`),
@@ -380,6 +405,10 @@ impl CoreEvent {
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
             CoreEvent::ScreenOffer { .. } => "screen-offer",
+            CoreEvent::CameraWatch { .. } => "camera-watch",
+            CoreEvent::CameraFrame { .. } => "camera-frame",
+            CoreEvent::CameraOffer { .. } => "camera-offer",
+            CoreEvent::CameraControl { .. } => "camera-control",
             CoreEvent::AudioListen { .. } => "audio-listen",
             CoreEvent::AudioOffer { .. } => "audio-offer",
             CoreEvent::AudioFrame { .. } => "audio-frame",
@@ -509,6 +538,39 @@ mod tests {
                 json!({"kind": "dnd", "from": "phone", "on": true})
             )
         );
+    }
+
+    #[test]
+    fn camera_events_keep_their_shape() {
+        let ev = CoreEvent::CameraOffer {
+            from: "phone".into(),
+            on: true,
+            front: false,
+            torch: None,
+            reason: None,
+        };
+        assert_eq!(
+            (ev.name(), ev.ui_payload()),
+            (
+                "camera-offer",
+                json!({"from": "phone", "on": true, "front": false, "torch": null, "reason": null})
+            )
+        );
+        let ev = CoreEvent::CameraControl {
+            from: "pc".into(),
+            op: "torch".into(),
+            on: true,
+        };
+        // Android reads the tag.
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "camera_control", "from": "pc", "op": "torch", "on": true})
+        );
+        let ev = CoreEvent::CameraWatch {
+            from: "pc".into(),
+            on: true,
+        };
+        assert_eq!(ev.to_json()["kind"], "camera_watch");
     }
 
     #[test]

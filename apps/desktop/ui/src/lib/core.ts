@@ -113,6 +113,9 @@ export type DeviceStatus = {
   /** A phone that can play this computer's sound (`audio_sink`; the
    *  first phone apps with audio only sent theirs). */
   audioSink?: boolean;
+  /** It knows the camera messages (`camera_view`): a phone that can show
+   *  its camera here. */
+  cameraView?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -286,6 +289,9 @@ type State = {
   /** node_id -> when a phone offered to share its screen with this
    *  computer (`screen-offer`); its screen tile starts watching and clears it. */
   screenOffers: Record<string, number>;
+  /** node_id -> when this computer asked that phone's camera for a photo;
+   *  the photo that arrives then gets a toast with "Show in folder". */
+  cameraPhotos: Record<string, number>;
   /** This computer's sound on your phones (`computer-audio`): where it
    *  plays and who was asked; null until known. */
   computerAudio: ComputerAudioStatus_Serialize | null;
@@ -313,6 +319,7 @@ export const [state, setState] = createStore<State>({
   transfers: {},
   labels: {},
   screenOffers: {},
+  cameraPhotos: {},
   computerAudio: null,
   syncPairs: [],
   devLog: [],
@@ -554,6 +561,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         screenControl: status?.screen_control === true,
         audioSource: status?.audio_source === true,
         audioSink: status?.audio_sink === true,
+        cameraView: typeof status?.camera_view === "number" && status.camera_view >= 1,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
@@ -636,7 +644,17 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
       });
       const device = peerName(from);
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.fileSaved", { name, device }) });
-      if (!secondary) toast(t("files.savedToast", { name, device }), "ok");
+      // The photo this computer asked the phone's camera for.
+      const asked = state.cameraPhotos[from];
+      if (asked && now() - asked < 120_000 && name.startsWith("camera-")) {
+        setState("cameraPhotos", from, undefined!);
+        if (!secondary) {
+          toast(t("camera.photoSaved", { device }), "ok", {
+            label: t("files.show"),
+            run: () => void revealFile(path).catch(() => {}),
+          });
+        }
+      } else if (!secondary) toast(t("files.savedToast", { name, device }), "ok");
     }),
     on<{ id: string; node_id: string; name: string }>("file-sent", ({ id, node_id, name }) => {
       const cur = state.transfers[id];

@@ -28,6 +28,13 @@
          Android's playback capture needs it. Asked in the app, with why;
          nothing is recorded from the microphone. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- The phone's camera on your computers (CameraShare.kt): asked for in
+         the app, with the reason, the first time a computer asks to see it. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.flash" android:required="false" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Find my phone: keep the CPU up while the ring plays (MediaPlayer wake mode),
          and vibrate with the ring notification. -->
@@ -201,6 +208,17 @@
             android:name=".ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <!-- This phone's camera on a computer (CameraShare.kt): asks every
+             time, then streams in the foreground with Stop. -->
+        <activity
+            android:name=".CameraConsentActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <service
+            android:name=".CameraShareService"
+            android:exported="false"
+            android:foregroundServiceType="camera" />
         <!-- This phone's audio on a computer (PhoneAudio.kt): the
              microphone permission, then Android's own prompt, every time. -->
         <activity

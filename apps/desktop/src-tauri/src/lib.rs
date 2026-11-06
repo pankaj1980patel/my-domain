@@ -1634,6 +1634,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_screen_allowed,
         screen_watch,
         phone_screen::phone_touch,
+        phone_screen::phone_camera_watch,
+        phone_screen::phone_camera_control,
         phone_audio::phone_audio_status,
         phone_audio::phone_audio_outputs,
         phone_audio::phone_audio_start,

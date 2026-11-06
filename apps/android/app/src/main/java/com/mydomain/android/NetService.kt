@@ -371,6 +371,10 @@ class NetService : Service() {
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)
                         "screen_watch" -> ScreenShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        // A computer asks to see this phone's camera (the phone
+                        // asks first), or stopped; and turns it about.
+                        "camera_watch" -> CameraShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        "camera_control" -> CameraShare.onControl(o.optString("from"), o.optString("op"), o.optBoolean("on"))
                         // Taps and swipes on a computer's picture of this screen.
                         "input" -> ScreenShare.onInput(this@NetService, o.optString("from"), o.optJSONArray("events"))
                         // A computer asks to play this phone's audio, or stopped listening.
@@ -381,6 +385,7 @@ class NetService : Service() {
                         "peer_disconnected" -> {
                             PhoneAudio.linkLost(o.optString("node_id"))
                             ComputerAudio.linkLost(o.optString("node_id"))
+                            CameraShare.linkLost(o.optString("node_id"))
                             PhoneAutomations.linksChanged()
                         }
                         "peer_connected" -> {

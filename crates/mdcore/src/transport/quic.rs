@@ -94,8 +94,8 @@ struct PeerConn {
 /// opened on first use and fed by a bounded queue.
 #[derive(Default)]
 struct MediaLanes {
-    /// Audio, screen.
-    lanes: Mutex<[Option<tokio::sync::mpsc::Sender<Vec<u8>>>; 2]>,
+    /// Audio, screen, camera.
+    lanes: Mutex<[Option<tokio::sync::mpsc::Sender<Vec<u8>>>; 3]>,
 }
 
 /// Frames a media lane holds before it drops new ones: a second of 20 ms
@@ -103,7 +103,7 @@ struct MediaLanes {
 fn lane_depth(kind: MediaKind) -> usize {
     match kind {
         MediaKind::Audio => 50,
-        MediaKind::Screen => 8,
+        MediaKind::Screen | MediaKind::Camera => 8,
     }
 }
 

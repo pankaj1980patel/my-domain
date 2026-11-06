@@ -12,6 +12,7 @@
 //! header    = [kind u8][f0 u8][f1 u16][f2 u32][session u32][seq u64][ts_ms u64]   (28 bytes, big-endian)
 //!   kind 1  = audio:  f0 channels, f1 0, f2 rate (Hz); payload s16le PCM, interleaved
 //!   kind 2  = screen: f0 quality, f1 width, f2 height (0: not said); payload a JPEG
+//!   kind 3  = camera: as kind 2, a phone camera's picture (`features::camera`)
 //! ```
 //!
 //! - Sealed with the same key and cipher as every other message
@@ -60,6 +61,7 @@ pub const OVERHEAD: usize = 1 + 24 + HEADER_LEN + 16;
 pub enum MediaKind {
     Audio = 1,
     Screen = 2,
+    Camera = 3,
 }
 
 /// What the payload is.
@@ -73,6 +75,12 @@ pub enum Format {
         height: u16,
         quality: u8,
     },
+    /// A camera's picture, a JPEG (as `Jpeg`).
+    Camera {
+        width: u16,
+        height: u16,
+        quality: u8,
+    },
 }
 
 impl Format {
@@ -80,6 +88,7 @@ impl Format {
         match self {
             Format::Pcm { .. } => MediaKind::Audio,
             Format::Jpeg { .. } => MediaKind::Screen,
+            Format::Camera { .. } => MediaKind::Camera,
         }
     }
 }
@@ -113,6 +122,11 @@ fn header_bytes(h: &Header) -> [u8; HEADER_LEN] {
             height,
             quality,
         } => (MediaKind::Screen, quality, width, u32::from(height)),
+        Format::Camera {
+            width,
+            height,
+            quality,
+        } => (MediaKind::Camera, quality, width, u32::from(height)),
     };
     let mut b = [0u8; HEADER_LEN];
     b[0] = kind as u8;
@@ -140,6 +154,11 @@ fn parse_header(b: &[u8]) -> Option<Header> {
             channels: b[1],
         },
         2 => Format::Jpeg {
+            width: u16_at(2),
+            height: u16::try_from(u32_at(4)).ok()?,
+            quality: b[1],
+        },
+        3 => Format::Camera {
             width: u16_at(2),
             height: u16::try_from(u32_at(4)).ok()?,
             quality: b[1],
@@ -239,6 +258,7 @@ pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8])
             crate::features::audio_share::deliver(ctx, from, h.seq, rate, channels, &payload)
         }
         Format::Jpeg { .. } => crate::features::screen::deliver(ctx, from, h.seq, &payload),
+        Format::Camera { .. } => crate::features::camera::deliver(ctx, from, h.seq, &payload),
     }
 }
 
@@ -281,6 +301,19 @@ mod tests {
         assert_eq!(h, jpeg);
         assert_eq!(h.format.kind(), MediaKind::Screen);
         assert_eq!(back, b"\xff\xd8jpeg");
+
+        // A camera's picture keeps its own kind.
+        let cam = Header {
+            format: Format::Camera {
+                width: 1280,
+                height: 720,
+                quality: 60,
+            },
+            ..audio(8)
+        };
+        let (h, _) = decode(&KEY, &encode(&KEY, &cam, b"\xff\xd8").unwrap()).unwrap();
+        assert_eq!(h, cam);
+        assert_eq!(h.format.kind(), MediaKind::Camera);
     }
 
     #[test]

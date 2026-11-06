@@ -9,6 +9,10 @@
 // page and starts watching. The snapshots are shown by the UI and never
 // kept on disk.
 //
+// The phone's camera rides the same path (`phone_camera_watch`, mdcore
+// `features::camera`): the phone asks its owner every time, and shows its
+// camera only to the computers allowed.
+//
 // With "Control" on here, and "Allow control" on at the phone (its sharing
 // notification), presses on the picture become taps and swipes the phone
 // plays with its Accessibility helper (`touch`).
@@ -90,6 +94,30 @@ pub fn phone_touch(
     engine: State<Eng>,
 ) -> Result<(), CoreError> {
     engine.send_input(&node_id, vec![touch(x, y, x2, y2, ms)])
+}
+
+/// Ask a phone to show its camera here (`on`; it asks its owner, and the
+/// tile renews it every 10 s while it shows), or stop. Pictures arrive as
+/// `camera-frame` events, the phone's answers as `camera-offer`. Only a
+/// phone that says `camera_view` is asked.
+#[tauri::command]
+#[specta::specta]
+pub fn phone_camera_watch(node_id: String, on: bool, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.camera_watch(&node_id, on)
+}
+
+/// Turn the phone's camera about while it shows here: `op` "switch"
+/// (front / back), "torch" (`on`), or "photo" (a full-size picture, sent
+/// as a file to Downloads).
+#[tauri::command]
+#[specta::specta]
+pub fn phone_camera_control(
+    node_id: String,
+    op: String,
+    on: bool,
+    engine: State<Eng>,
+) -> Result<(), CoreError> {
+    engine.camera_control(&node_id, &op, on)
 }
 
 #[cfg(test)]

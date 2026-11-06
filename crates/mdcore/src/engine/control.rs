@@ -153,6 +153,52 @@ impl<P: Platform> Engine<P> {
         crate::features::screen::offer(&self.ctx, node_id, on)
     }
 
+    // --- a phone's camera on a computer (features::camera) ---
+
+    /// Whether `node` said it knows the camera messages (`camera_view`):
+    /// only then is a camera asked for, offered or turned about.
+    pub fn camera_supported(&self, node_id: &str) -> bool {
+        crate::features::camera::supports(&self.ctx, node_id)
+    }
+
+    /// Computer: ask phone `node` to show its camera here (`on`; its owner
+    /// is asked every time; renew every `features::screen::RENEW_EVERY`
+    /// while it shows), or stop. Frames arrive as `CoreEvent::CameraFrame`,
+    /// its answers as `CoreEvent::CameraOffer`. Fails with `Unsupported`
+    /// for a phone that didn't say `camera_view`, `NoLink` (and starts
+    /// connecting) without a link.
+    pub fn camera_watch(&self, node_id: &str, on: bool) -> crate::Result<()> {
+        crate::features::camera::watch(&self.ctx, node_id, on)
+    }
+
+    /// Computer: ask the phone's camera to `op`: "switch" camera, "torch"
+    /// (`on`), or take a "photo" (it comes as a file).
+    pub fn camera_control(&self, node_id: &str, op: &str, on: bool) -> crate::Result<()> {
+        crate::features::camera::control(&self.ctx, node_id, op, on)
+    }
+
+    /// Phone: the computers asking to see this camera now.
+    pub fn camera_watchers(&self) -> Vec<String> {
+        crate::features::camera::watchers(&self.ctx)
+    }
+
+    /// Phone: send a camera picture (a JPEG, at most
+    /// `features::screen::MAX_FRAME_BYTES`) to those of `nodes` watching:
+    /// the computers its owner allowed. Returns how many it went to.
+    pub fn camera_frame_to(&self, jpeg: &[u8], nodes: &[String]) -> crate::Result<usize> {
+        crate::features::camera::send_frame_to(&self.ctx, jpeg, nodes)
+    }
+
+    /// Phone: tell computer `node` its camera is on for it (and its state),
+    /// or off and why. Over a live link only.
+    pub fn camera_offer(
+        &self,
+        node_id: &str,
+        state: &crate::features::camera::CameraState,
+    ) -> crate::Result<()> {
+        crate::features::camera::offer(&self.ctx, node_id, state)
+    }
+
     // --- Do Not Disturb ---
 
     /// This device's Do Not Disturb state, as the host reads it from the

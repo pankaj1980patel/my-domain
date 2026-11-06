@@ -32,8 +32,8 @@ The **6-digit code** is for a device that can't scan. So that it can bring the d
 
 - **my-domain never grants permissions itself.** Each one is turned on by you, in Android's or your computer's own settings.
 - Sensitive things are off until you turn them on, on the device they concern: sharing a location, letting your devices see a screen, calls on the computer, webhooks.
-- Screen sharing and phone audio are asked for every time, by Android itself.
-- A notification tells you when a device's location is shared, when its screen is being watched, and when an automation or webhook runs.
+- Screen sharing and phone audio are asked for every time, by Android itself. The camera is asked for every time too, on the phone, before anything is shown.
+- A notification tells you when a device's location is shared, when its screen is being watched or its camera is on, and when an automation or webhook runs.
 
 ## Copied passwords
 

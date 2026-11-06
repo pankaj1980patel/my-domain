@@ -438,6 +438,19 @@ export const commands = {
 	 *  owner allows control from here (its status says `screen_control`).
 	 */
 	phoneTouch: (nodeId: string, x: number, y: number, x2: number, y2: number, ms: number) => typedError<null, string>(__TAURI_INVOKE("phone_touch", { nodeId, x, y, x2, y2, ms })),
+	/**
+	 *  Ask a phone to show its camera here (`on`; it asks its owner, and the
+	 *  tile renews it every 10 s while it shows), or stop. Pictures arrive as
+	 *  `camera-frame` events, the phone's answers as `camera-offer`. Only a
+	 *  phone that says `camera_view` is asked.
+	 */
+	phoneCameraWatch: (nodeId: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("phone_camera_watch", { nodeId, on })),
+	/**
+	 *  Turn the phone's camera about while it shows here: `op` "switch"
+	 *  (front / back), "torch" (`on`), or "photo" (a full-size picture, sent
+	 *  as a file to Downloads).
+	 */
+	phoneCameraControl: (nodeId: string, op: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("phone_camera_control", { nodeId, op, on })),
 	/**  Where a phone's audio stands here. */
 	phoneAudioStatus: () => __TAURI_INVOKE<PhoneAudioStatus_Serialize>("phone_audio_status"),
 	/**  This computer's speakers and headphones. */

@@ -1190,4 +1190,19 @@
     <string name="settings_backup_err_version">इस बैकअप का फ़ॉर्मैट यह ऐप नहीं जानता।</string>
     <string name="settings_backup_err_computer">यह बैकअप कंप्यूटर का है: उसे उसी कंप्यूटर पर my-domain में वापस लाएँ।</string>
     <string name="settings_backup_err_damaged">यह बैकअप ख़राब है और इस्तेमाल नहीं हो सकता।</string>
+    <string name="channel_camera">कंप्यूटर पर कैमरा</string>
+    <string name="camera_ask_title">%1$s को अपना कैमरा दिखाएँ?</string>
+    <string name="camera_ask_body">चुनने के लिए टैप करें। आपके हाँ कहने तक कुछ नहीं दिखता।</string>
+    <string name="camera_ask_dialog_body">%1$s वह देख पाएगा जो इस फ़ोन का कैमरा देखता है, और आपके रोकने तक कैमरा बदल सकता है, टॉर्च चालू कर सकता है और फ़ोटो ले सकता है। फ़ोन लॉक करने पर यह रुक जाता है।</string>
+    <string name="camera_permission_why">इसके लिए my-domain को कैमरा की अनुमति चाहिए। अगले चरण में Android पूछेगा; आप इसे कभी भी Android की सेटिंग में वापस ले सकते हैं।</string>
+    <string name="camera_allow">अनुमति दें</string>
+    <string name="camera_deny">अनुमति न दें</string>
+    <string name="camera_permission_denied">कैमरा की अनुमति के बिना आपके कंप्यूटर कैमरा नहीं देख सकते।</string>
+    <string name="camera_on_title">आपका कैमरा %1$s के लिए चालू है</string>
+    <string name="camera_on_title_plain">आपका कैमरा चालू है</string>
+    <string name="camera_on_body">बंद करने के लिए रोकें पर टैप करें।</string>
+    <string name="camera_stop">रोकें</string>
+    <string name="camera_settings_title">कंप्यूटर पर कैमरा</string>
+    <string name="camera_keep_locked">लॉक होने पर भी चलता रहे</string>
+    <string name="camera_keep_locked_hint">बंद: फ़ोन लॉक होते ही या स्क्रीन बंद होते ही कैमरा रुक जाता है। चालू: यह (अपनी सूचना के साथ) तब तक चलता रहता है जब तक आप या कंप्यूटर इसे रोक न दें। आपके कंप्यूटर हर बार पहले पूछते हैं।</string>
 </resources>

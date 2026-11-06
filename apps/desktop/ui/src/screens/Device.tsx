@@ -61,6 +61,7 @@ import { foundId, foundTarget, isFound } from "../lib/search";
 import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
+import CameraTile from "./device/CameraTile";
 import WakeButton from "./device/WakeButton";
 import ConnectionTile from "./device/ConnectionTile";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
@@ -93,6 +94,14 @@ const TILES: TileDef[] = [
     title: (n) => (state.status[n]?.platform === "android" ? t("phoneScreen.title") : t("screen.title")),
     available: (n) => !!state.status[n]?.actions.includes("screen"),
     render: (n) => <ScreenTile node={n} />,
+  },
+  {
+    // A phone that can show its camera here (it says camera_view).
+    id: "camera",
+    title: () => t("camera.title"),
+    kinds: ["phone"],
+    available: (n) => !!state.status[n]?.cameraView && state.status[n]?.platform === "android",
+    render: (n) => <CameraTile node={n} />,
   },
   {
     id: "phone-audio",

@@ -61,6 +61,13 @@ object OutgoingFiles {
         return out
     }
 
+    /** A new, empty file named [name] to send (a photo the camera just
+     *  took): [track] it once sent, [discard] it if it isn't. */
+    fun newFile(ctx: Context, name: String): File {
+        val dir = File(root(ctx), java.util.UUID.randomUUID().toString()).apply { mkdirs() }
+        return File(dir, safeName(name))
+    }
+
     /** The copy [file] is being sent as transfer [id]. */
     fun track(id: String, file: File) {
         paths[id] = file

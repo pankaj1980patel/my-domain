@@ -144,6 +144,10 @@ private val SETTINGS_SECTIONS = listOf(
     ),
     SettingsSection("touchpad", R.string.touchpad_title, listOf(R.string.settings_touchpad_secure_hint)),
     SettingsSection("location", R.string.location_title, listOf(R.string.location_hint)),
+    SettingsSection(
+        "camera", R.string.camera_settings_title,
+        listOf(R.string.camera_keep_locked, R.string.camera_keep_locked_hint),
+    ),
     SettingsSection("helper", R.string.helper_title, listOf(R.string.helper_hint)),
     SettingsSection("shizuku", R.string.shizuku_title, listOf(R.string.shizuku_hint)),
     SettingsSection("key", R.string.settings_device_key, listOf(R.string.settings_key_hint)),

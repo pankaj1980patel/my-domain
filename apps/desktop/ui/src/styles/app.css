@@ -3752,3 +3752,19 @@ html.qp-window body {
 .tray-battery-more select {
   min-width: 0;
 }
+
+/* ---------------------------------------------------------------------------
+   Phone camera: a phone's camera on this computer (CameraTile). The picture
+   uses the phone screen's stage; its buttons wrap under it.
+   --------------------------------------------------------------------------- */
+.camera-stage .screen-view {
+  max-height: 60vh;
+}
+.camera-controls {
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.screen-stage-full.camera-stage .screen-view {
+  max-height: calc(100vh - 80px);
+}

@@ -16,6 +16,7 @@ pub mod battery;
 pub mod browse;
 pub mod call_history;
 pub mod call_notification;
+pub mod camera;
 pub mod clipboard;
 pub mod code;
 pub mod device;
@@ -124,8 +125,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// known here, as in an app from before; likewise `labels` and the
     /// `labels` message (`CoreConfig::shared_labels`), `notes` and the
     /// `notes*` messages (`CoreConfig::notes`), `ping` with the ping
-    /// and speed-test messages (`CoreConfig::diag`), and `wake_relay`
-    /// (`CoreConfig::wake_relay`).
+    /// and speed-test messages (`CoreConfig::diag`), `wake_relay`
+    /// (`CoreConfig::wake_relay`), and `camera_ctl` (`CoreConfig::camera`).
     pub fn with_defaults(
         has_clipboard: bool,
         folder_sync: bool,
@@ -133,6 +134,7 @@ impl<P: Platform> ControlRegistry<P> {
         notes: bool,
         diag: bool,
         wake_relay: bool,
+        camera: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -173,6 +175,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if wake_relay {
             r.register(Arc::new(wake::WakeRelayHandler));
+        }
+        if camera {
+            r.register(Arc::new(camera::CameraHandler));
         }
         r
     }

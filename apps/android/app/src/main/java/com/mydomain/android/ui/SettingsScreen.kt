@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.BuildConfig
+import com.mydomain.android.CameraShare
 import com.mydomain.android.NotifListener
 import com.mydomain.android.PhoneHelper
 import com.mydomain.android.PhoneLocation
@@ -222,6 +223,21 @@ fun LocationSettingsTile() {
     }
 }
 
+/** The camera on your computers (CameraShare): "Keep streaming while
+ *  locked", off by default (the camera stops as the phone locks). */
+@Composable
+fun CameraSettingsTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(CameraShare.keepWhileLocked(ctx)) }
+    Tile(title = stringResource(R.string.camera_settings_title)) {
+        SwitchRow(stringResource(R.string.camera_keep_locked), on) {
+            on = it
+            CameraShare.setKeepWhileLocked(ctx, it)
+        }
+        Muted(stringResource(R.string.camera_keep_locked_hint))
+    }
+}
+
 /** The Accessibility service (PhoneHelper): radios switched and keys
  *  pressed for your computers, on any phone. */
 @Composable
@@ -370,6 +386,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "battery")) { SaveBatteryTile() }
         Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
         Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
+        Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 

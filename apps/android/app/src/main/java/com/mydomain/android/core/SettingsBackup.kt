@@ -39,6 +39,7 @@ object SettingsBackup {
         "share_codes" to Pref("preferences", Type.BOOL),
         "touchpad_secure" to Pref("preferences", Type.BOOL),
         "share_location" to Pref("preferences", Type.BOOL),
+        "camera_keep_locked" to Pref("preferences", Type.BOOL),
         // The switch only: the key itself is in the Keystore, never here.
         "automation_apps" to Pref("preferences", Type.BOOL),
         "computer_notifs_off" to Pref("preferences", Type.STRING_SET),

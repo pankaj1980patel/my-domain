@@ -1295,6 +1295,40 @@ impl MdEngine {
         Ok(self.inner.screen_offer(&node_id, on)?)
     }
 
+    /// The computers asking to see this phone's camera now (its owner
+    /// allows each one first).
+    pub fn camera_watchers(&self) -> Vec<String> {
+        self.inner.camera_watchers()
+    }
+
+    /// Send a camera picture (a JPEG) to those of `nodes` watching: the
+    /// computers its owner allowed. Returns how many it went to.
+    pub fn camera_frame_to(&self, jpeg: Vec<u8>, nodes: Vec<String>) -> MdResult<u32> {
+        let sent = self.inner.camera_frame_to(&jpeg, &nodes)?;
+        Ok(u32::try_from(sent).unwrap_or(u32::MAX))
+    }
+
+    /// Tell a computer the camera is on for it (`on`; which camera, the
+    /// torch, `None` where there's none), or off and why (`reason`:
+    /// "declined", "stopped", "locked", "no_permission", "busy", "error").
+    /// Only to a computer that said `camera_view`; over a live link only.
+    pub fn camera_offer(
+        &self,
+        node_id: String,
+        on: bool,
+        front: bool,
+        torch: Option<bool>,
+        reason: Option<String>,
+    ) -> MdResult<()> {
+        let state = mdcore::features::camera::CameraState {
+            on,
+            front,
+            torch,
+            reason,
+        };
+        Ok(self.inner.camera_offer(&node_id, &state)?)
+    }
+
     /// This phone sends its audio (`source`: Android 10 or later) or
     /// plays another's (`sink`). Said in its status (`audio_source`,
     /// `audio_sink`); off until set.

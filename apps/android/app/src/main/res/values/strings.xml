@@ -1192,4 +1192,19 @@
     <string name="settings_backup_err_version">This backup’s format isn’t one this app knows.</string>
     <string name="settings_backup_err_computer">This backup is from a computer: restore it in my-domain on that computer.</string>
     <string name="settings_backup_err_damaged">This backup is damaged and can’t be used.</string>
+    <string name="channel_camera">Camera on your computers</string>
+    <string name="camera_ask_title">Show your camera to %1$s?</string>
+    <string name="camera_ask_body">Tap to choose. Nothing is shown until you say yes.</string>
+    <string name="camera_ask_dialog_body">%1$s will see what this phone’s camera sees, and can switch cameras, turn the torch on and take photos, until you stop it. It stops when you lock the phone.</string>
+    <string name="camera_permission_why">my-domain needs the camera permission for this. Android asks next; you can take it back any time in Android’s settings.</string>
+    <string name="camera_allow">Allow</string>
+    <string name="camera_deny">Don’t allow</string>
+    <string name="camera_permission_denied">Without the camera permission, your computers can’t see the camera.</string>
+    <string name="camera_on_title">Your camera is on for %1$s</string>
+    <string name="camera_on_title_plain">Your camera is on</string>
+    <string name="camera_on_body">Tap Stop to turn it off.</string>
+    <string name="camera_stop">Stop</string>
+    <string name="camera_settings_title">Camera on your computers</string>
+    <string name="camera_keep_locked">Keep streaming while locked</string>
+    <string name="camera_keep_locked_hint">Off: the camera stops as soon as the phone locks or its screen goes off. On: it keeps going (with its notification) until you or the computer stops it. Your computers always ask first, every time.</string>
 </resources>

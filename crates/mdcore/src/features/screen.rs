@@ -31,6 +31,8 @@
 //! - To a device whose QUIC link reads binary media frames, a frame goes as
 //!   one (the JPEG's bytes, not base64 twice over; `transport::media`); it
 //!   arrives as the same `CoreEvent::ScreenFrame`.
+//! - A phone's camera rides the same messages with `source: "camera"`
+//!   (`features::camera`), to devices that said they know it.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -153,12 +155,7 @@ pub fn send_frame_to<P: Platform>(
     jpeg: &[u8],
     only: Option<&[String]>,
 ) -> crate::Result<usize> {
-    if jpeg.is_empty() || jpeg.len() > MAX_FRAME_BYTES {
-        return Err(CoreError::InvalidInput(format!(
-            "a snapshot must be 1 to {MAX_FRAME_BYTES} bytes, not {}",
-            jpeg.len()
-        )));
-    }
+    check_frame(jpeg)?;
     let mut to = watchers(ctx);
     if let Some(only) = only {
         to.retain(|n| only.contains(n));
@@ -167,36 +164,72 @@ pub fn send_frame_to<P: Platform>(
         return Ok(0);
     }
     let seq = ctx.extras.screen.seq.fetch_add(1, Ordering::Relaxed);
+    Ok(send_jpeg(ctx, &to, jpeg, seq, false))
+}
+
+/// A frame is 1 to `MAX_FRAME_BYTES` bytes of JPEG.
+pub(super) fn check_frame(jpeg: &[u8]) -> crate::Result<()> {
+    if jpeg.is_empty() || jpeg.len() > MAX_FRAME_BYTES {
+        return Err(CoreError::InvalidInput(format!(
+            "a snapshot must be 1 to {MAX_FRAME_BYTES} bytes, not {}",
+            jpeg.len()
+        )));
+    }
+    Ok(())
+}
+
+/// Send frame `seq` (`jpeg`) to each of `to`: a binary record where the
+/// link reads them, else the JSON message. `camera`: a camera frame
+/// (`features::camera`), its own record kind and `source` in the JSON.
+/// Returns how many it went to.
+pub(super) fn send_jpeg<P: Platform>(
+    ctx: &NetCtx<P>,
+    to: &[String],
+    jpeg: &[u8],
+    seq: u64,
+    camera: bool,
+) -> usize {
+    let (width, height, quality) = (0, 0, 0);
     let header = media::Header {
         session: ctx.quic.media_session,
         seq,
         ts_ms: media::now_ms(),
-        format: media::Format::Jpeg {
-            width: 0,
-            height: 0,
-            quality: 0,
+        format: if camera {
+            media::Format::Camera {
+                width,
+                height,
+                quality,
+            }
+        } else {
+            media::Format::Jpeg {
+                width,
+                height,
+                quality,
+            }
         },
     };
     // The JSON message, made only if a peer needs it.
     let mut msg: Option<String> = None;
-    Ok(to
-        .iter()
+    to.iter()
         .filter(|n| match media::send(ctx, n, &header, jpeg) {
             Sent::Yes => true,
             Sent::Dropped => false,
             Sent::NotBinary => {
                 let msg = msg.get_or_insert_with(|| {
                     let me = ctx.identity.lock().node_id.clone();
-                    json!({
+                    let mut m = json!({
                         "type": "screen_frame", "from": me, "seq": seq,
                         "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
-                    })
-                    .to_string()
+                    });
+                    if camera {
+                        m["source"] = super::camera::SOURCE.into();
+                    }
+                    m.to_string()
                 });
                 send(ctx, n, msg).is_ok()
             }
         })
-        .count())
+        .count()
 }
 
 /// A snapshot that came as a binary frame (`transport::media`) from `from`,
@@ -230,6 +263,12 @@ impl<P: Platform> ControlHandler<P> for ScreenHandler {
         // here), and in this device's list.
         if from.is_empty() || !ctx.peers.lock().contains_key(&from) {
             return;
+        }
+        // The phone's camera (`features::camera`): its own watchers, offers
+        // and frames. (An app from before reads these as about the screen,
+        // which is why they only ever go to a device that says it knows.)
+        if ctx.config.camera && msg.str("source") == super::camera::SOURCE {
+            return super::camera::handle_screen(ctx, from, msg);
         }
         match msg.kind() {
             "screen_watch" => {
