@@ -4349,3 +4349,69 @@ html.kvm-window body {
   max-height: 4.5em;
   overflow: hidden;
 }
+
+/* ---------------------------------------------------------------------------
+   Now playing: what plays on another device, with controls (NowPlayingTile).
+   --------------------------------------------------------------------------- */
+.now-playing {
+  gap: var(--s-2);
+}
+.np-head {
+  gap: var(--s-3);
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.np-art {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  border-radius: var(--r-md);
+  object-fit: cover;
+}
+.np-art-empty {
+  display: grid;
+  place-items: center;
+  font-size: var(--text-xl);
+  background: color-mix(in srgb, currentColor 8%, transparent);
+}
+.np-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.np-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.np-app {
+  gap: var(--s-1);
+  align-items: center;
+}
+.np-icon {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--r-xs);
+}
+.np-seek input[type="range"],
+.np-volume input[type="range"] {
+  width: 100%;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.np-times {
+  justify-content: space-between;
+  font-variant-numeric: tabular-nums;
+}
+.np-buttons {
+  justify-content: center;
+  gap: var(--s-2);
+}
+.np-volume {
+  align-items: center;
+  flex-wrap: nowrap;
+}
+.np-sessions select {
+  min-width: 0;
+  flex: 1 1 auto;
+}

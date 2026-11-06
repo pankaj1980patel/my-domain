@@ -40,6 +40,7 @@ mod kvm_keys;
 mod kvm_os;
 mod links_map;
 mod location;
+mod media_ctl;
 mod mute_here;
 mod nearby;
 mod note_reminders;
@@ -714,6 +715,13 @@ impl EventSink for TauriSink {
                     engine.insert_cancel(id, "unsupported");
                 }
             }
+            // One of your devices plays, pauses, skips or seeks here.
+            CoreEvent::MediaCommand {
+                from,
+                action,
+                value,
+                ..
+            } => media_ctl::on_command(&self.app, from, action, *value),
             CoreEvent::KeyChanged { node_id, .. } => {
                 let (app, node) = (self.app.clone(), node_id.clone());
                 std::thread::spawn(move || key_changes::on_changed(&app, &node));
@@ -1897,6 +1905,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         phone_screen::phone_touch,
         phone_screen::phone_camera_watch,
         phone_screen::phone_camera_control,
+        media_ctl::media_command,
+        media_ctl::media_watch,
+        media_ctl::media_supported,
         insert_capture::insert_request,
         insert_capture::insert_cancel,
         insert_capture::insert_supported,
@@ -2104,7 +2115,7 @@ pub fn run() {
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);
             device::spawn_status_reporter(handle.clone());
-            device::spawn_now_playing(handle.clone());
+            media_ctl::spawn_now_playing(handle.clone());
             away_lock::spawn(handle.clone());
             quiet::spawn(handle.clone());
             schedule::spawn(handle.clone());

@@ -1,6 +1,6 @@
 ---
 title: Phone audio on the computer, and the other way round
-keywords: audio, sound, music, speakers, headphones, play, stream, podcast, video, microphone, capture, computer audio, opus, bluetooth, offline, mute
+keywords: audio, sound, music, speakers, headphones, play, stream, podcast, video, microphone, capture, computer audio, opus, bluetooth, offline, mute, now playing, media controls, pause, next, previous, skip, seek, volume, spotify
 platforms: desktop, android
 ---
 Play your phone's music, videos and podcasts through the computer's speakers or headphones, over the same encrypted link.
@@ -75,3 +75,13 @@ While this device's sound plays on the other one, you can mute it here, so the s
 - **Windows:** not offered. Windows records its sound after the speaker mute, so the phone would go quiet too.
 
 The switch is remembered for each device. The sound comes back as it was when the stream stops, when the link drops, and, if my-domain was closed suddenly, the next time it starts. If the device was muted before, or you unmuted it yourself meanwhile, my-domain leaves it alone.
+
+## Now playing and media controls
+
+Each device's page has a **Now playing** tile: what plays there (the artwork, title, artist and app), with **previous**, **play/pause** and **next**, a bar to jump to any point in the track, and its volume. When several apps play at once (Spotify and a podcast, say), choose which one to show and control.
+
+- **On the computer:** open the phone's page. The phone shows what any app with media controls plays (Spotify, YouTube, podcasts and so on); it needs **Notification access**, the same as phone notifications.
+- **On the phone:** open the computer's page. A Mac shows and controls Spotify and Music (macOS asks once whether my-domain may control them); Linux any player that supports MPRIS (most do; needs `playerctl`). Windows isn't supported yet.
+- On the computer, the command palette also has **Play or pause**, **Next track** and **Previous track** on each device that takes them.
+
+While the tile is open, the device keeps you posted as the song changes; the artwork is sent once per song, and changes come at most about once a second. Nothing is sent while nobody is looking, and the controls only work while the two are connected, so a pause never arrives minutes late. Only your own devices can control what plays. A device whose app is older shows what plays, without the controls, until you update it.

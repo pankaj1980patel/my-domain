@@ -228,6 +228,12 @@ private fun deviceTiles(node: String, name: String, foundMessage: Long?, foundCl
         PageTile("screen-share", R.string.screen_share_title, COMPUTER, available = st?.screenView == true) {
             ShareScreenTile(node, name)
         },
+        // What plays there, with play/pause, skip, seek and volume when its
+        // app takes media commands (media_ctl); an older one just shows it.
+        PageTile(
+            "now-playing", R.string.media_title,
+            available = st?.mediaCtl == true || Core.nowPlaying[node] != null,
+        ) { MediaTile(node, name) },
         // A computer that plays this phone's audio (it says audio_sink),
         // from a phone that can capture it (Android 10 or later).
         // (Phones say audio_sink too now, for a computer's sound: only

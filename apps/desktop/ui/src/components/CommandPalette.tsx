@@ -21,6 +21,7 @@ import { listen } from "@tauri-apps/api/event";
 import { commands, type LocalActions } from "../bindings";
 import {
   askInsert,
+  mediaCommand,
   peerName,
   pickAndSendFile,
   pickAndSendFolder,
@@ -246,6 +247,12 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
   if (st?.insertCapture && st.platform === "android") {
     add("insert-photo", t("palette.insertPhoto", { name }), () => askInsert(node, "photo"));
     add("insert-scan", t("palette.insertScan", { name }), () => askInsert(node, "scan"));
+  }
+  // Media controls on what plays there (media_ctl).
+  if (st?.mediaCtl) {
+    add("media-play-pause", t("palette.mediaPlayPause", { name }), () => mediaCommand(node, "play_pause"));
+    add("media-next", t("palette.mediaNext", { name }), () => mediaCommand(node, "next"));
+    add("media-previous", t("palette.mediaPrevious", { name }), () => mediaCommand(node, "previous"));
   }
   if (has("screen_settings")) page("screen_settings", t("palette.screenSettings"));
   if (has("gallery")) page("gallery", t("palette.photos"));

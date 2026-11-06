@@ -396,6 +396,9 @@ class NetService : Service() {
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"), o.optString("app").ifEmpty { null })
                         "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject(), Core.peerName(o.optString("from")))
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
+                        // A computer plays, pauses, skips, seeks or sets the
+                        // volume of what plays here (checked by the core).
+                        "media_command" -> NowPlaying.onCommand(this@NetService, o)
                         // Another device asks this phone to download a link.
                         "remote_download" -> DownloadAsk.onEvent(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)

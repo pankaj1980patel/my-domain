@@ -108,14 +108,17 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::notif_rich::extend_status(ctx, &mut status);
                 // Whether it groups, pauses and re-checks transfers.
                 super::batches::extend_status(ctx, &mut status);
+                // Whether it takes media commands (and sends the fuller
+                // now-playing).
+                super::media::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
-                let playing = super::media::current(ctx);
+                // It's looking at this device: tell it when the song changes.
+                super::media::watch(ctx, &from);
+                let playing = super::media::current_for(ctx, &from);
                 if !playing.is_null() {
                     status["now_playing"] = playing;
                 }
-                // It's looking at this device: tell it when the song changes.
-                super::media::watch(ctx, &from);
                 let reply = serde_json::json!({ "type": "status", "from": me, "status": status })
                     .to_string();
                 // Reliably: a reply lost on a link that just died would
@@ -154,6 +157,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::print::remember(ctx, &from, &status[super::print::FLAG]);
                 super::remote_download::remember(ctx, &from, &status[super::remote_download::FLAG]);
                 super::batches::remember(ctx, &from, &status[super::batches::FLAG]);
+                super::media::remember(ctx, &from, &status[super::media::FLAG]);
+                super::media::saw(ctx, &from, &status["now_playing"]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

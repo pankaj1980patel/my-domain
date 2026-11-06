@@ -1439,11 +1439,44 @@ impl MdEngine {
     // --- now playing ---
 
     /// What's playing on this phone, as JSON `{title, artist, album, app,
-    /// state}` (`state` "playing" / "paused"), or "" for nothing. Call it on
-    /// every change; devices that looked at this phone lately get a
-    /// `now-playing` event, and status replies carry it.
+    /// state}` (`state` "playing" / "paused"), or "" for nothing, plus
+    /// when known `duration` / `position` (ms, as of now), `can_next` /
+    /// `can_prev` / `can_seek`, `volume` / `volume_max`, `art` / `icon`
+    /// (base64 JPEG/PNG, small), `session` (the session shown) and
+    /// `sessions` (`[{id, app, title, state}]` when several apps play).
+    /// Call it on every change; devices that looked at this phone lately
+    /// get a `now-playing` event (throttled, pictures sent once), and
+    /// status replies carry it.
     pub fn set_now_playing(&self, media_json: String) {
         self.inner.set_now_playing(&media_json);
+    }
+
+    /// Whether device `node_id` takes media commands (`media_ctl`).
+    pub fn media_supported(&self, node_id: String) -> bool {
+        self.inner.media_supported(&node_id)
+    }
+
+    /// Control what plays on `node_id`: `action` "play", "pause",
+    /// "play_pause", "next", "previous", "seek" (`value`: ms),
+    /// "volume_up", "volume_down", "volume_set" (`value`: level on its
+    /// `volume_max`) or "session" (`session`: the one to show). Needs a
+    /// live link (else it starts connecting and errs).
+    pub fn media_command(
+        &self,
+        node_id: String,
+        action: String,
+        value: Option<i64>,
+        session: Option<String>,
+    ) -> MdResult<()> {
+        Ok(self
+            .inner
+            .media_command(&node_id, &action, value, session.as_deref())?)
+    }
+
+    /// Ask `node_id` to keep this device posted on what it plays for the
+    /// next few minutes; false when there's no live link (nothing sent).
+    pub fn media_watch(&self, node_id: String) -> MdResult<bool> {
+        Ok(self.inner.media_watch(&node_id)?)
     }
 
     // --- browsing shared folders ---

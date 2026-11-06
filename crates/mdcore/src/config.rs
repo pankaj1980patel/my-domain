@@ -284,6 +284,13 @@ pub struct CoreConfig {
     /// file that arrived damaged. On by default; off behaves like an app
     /// from before (tests use it to play an older peer).
     pub transfer_batches: bool,
+    /// Phone media controls (`features::media`): this end says `media_ctl`
+    /// in its status and `addr_update`, takes `media_cmd` (play, pause,
+    /// next, seek, volume, switch session) and `media_watch`, and sends the
+    /// fuller now-playing (times, artwork, what it can skip). On by
+    /// default; off behaves like an app from before (tests use it to play
+    /// an older peer).
+    pub media_ctl: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -353,6 +360,7 @@ impl Default for CoreConfig {
             remote_download: true,
             notif_rich: true,
             transfer_batches: true,
+            media_ctl: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

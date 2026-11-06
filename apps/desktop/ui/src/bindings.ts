@@ -552,6 +552,23 @@ export const commands = {
 	 */
 	phoneCameraControl: (nodeId: string, op: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("phone_camera_control", { nodeId, op, on })),
 	/**
+	 *  Control what plays on device `node_id`: `action` "play", "pause",
+	 *  "play_pause", "next", "previous", "seek" (`value`: ms), "volume_up",
+	 *  "volume_down", "volume_set" (`value`: level on its `volume_max` scale)
+	 *  or "session" (`session`: the one to show). Needs a live link: without
+	 *  one it starts connecting and says so. (`value` is a number in
+	 *  TypeScript: whole ms up to a week, far inside what a double holds.)
+	 */
+	mediaCommand: (nodeId: string, action: string, value: number | null, session: string | null) => typedError<null, string>(__TAURI_INVOKE("media_command", { nodeId, action, value, session })),
+	/**
+	 *  Ask device `node_id` to keep this computer posted on what it plays for
+	 *  the next few minutes (the tile calls it again while it's open). False:
+	 *  no live link now, nothing sent.
+	 */
+	mediaWatch: (nodeId: string) => typedError<boolean, string>(__TAURI_INVOKE("media_watch", { nodeId })),
+	/**  Whether device `node_id` takes media commands. */
+	mediaSupported: (nodeId: string) => __TAURI_INVOKE<boolean>("media_supported", { nodeId }),
+	/**
 	 *  Ask a phone for a photo (`mode` "photo") or a scan ("scan"). Returns the
 	 *  request's id; `insert-state`, `insert-received` and `insert-ended`
 	 *  events follow.

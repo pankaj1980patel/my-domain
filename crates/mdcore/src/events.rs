@@ -224,6 +224,20 @@ pub enum CoreEvent {
         from: String,
         media: serde_json::Value,
     },
+    /// Device `from` asks this one to control what plays here
+    /// (`features::media`, `media_cmd`): `action` is one of
+    /// `features::media::ACTIONS` ("play", "pause", "play_pause", "next",
+    /// "previous", "seek", "volume_up", "volume_down", "volume_set",
+    /// "session"); `value` is the position in ms for "seek" and the level
+    /// (on the scale this device sent as `volume_max`) for "volume_set";
+    /// `session` the session it's meant for (for "session": the one to
+    /// show from now on). Checked already; the host does it.
+    MediaCommand {
+        from: String,
+        action: String,
+        value: Option<i64>,
+        session: Option<String>,
+    },
     /// Another of your devices sent text to this one (`Engine::send_text`):
     /// `mode` "clipboard" (already on the clipboard if the core has one
     /// here; not in the core's history if `sensitive`) or "notify" (show it).
@@ -583,6 +597,7 @@ impl CoreEvent {
             CoreEvent::FolderListing { .. } => "folder-listing",
             CoreEvent::TextShared { .. } => "text-shared",
             CoreEvent::NowPlaying { .. } => "now-playing",
+            CoreEvent::MediaCommand { .. } => "media-command",
             CoreEvent::GalleryRequest { .. } => "gallery-request",
             CoreEvent::GalleryListing { .. } => "gallery-listing",
             CoreEvent::GalleryThumb { .. } => "gallery-thumb",
@@ -1076,6 +1091,23 @@ mod tests {
         assert_eq!(
             (layout.name(), layout.ui_payload()),
             ("kvm-layout", json!({"layout": []}))
+        );
+    }
+
+    #[test]
+    fn media_command_keeps_its_shape() {
+        let ev = CoreEvent::MediaCommand {
+            from: "pc".into(),
+            action: "seek".into(),
+            value: Some(30_000),
+            session: None,
+        };
+        assert_eq!(
+            (ev.name(), ev.to_json()),
+            (
+                "media-command",
+                json!({"kind": "media_command", "from": "pc", "action": "seek", "value": 30_000, "session": null})
+            )
         );
     }
 

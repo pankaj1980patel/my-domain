@@ -118,6 +118,9 @@ data class DeviceStatus(
     val notifShare: Boolean? = null,
     /** "android" or "desktop" (null: it didn't say). */
     val platform: String? = null,
+    /** It takes media commands (`media_ctl`): play, pause, skip, seek and
+     *  volume from here. */
+    val mediaCtl: Boolean = false,
     val seenAt: Long = System.currentTimeMillis(),
 )
 
@@ -147,17 +150,53 @@ data class FolderListing(
     val entries: List<RemoteFile>, val next: Long?, val error: String?,
 )
 
-/** What's playing on a device (`now_playing`, also in its status). */
-data class Playing(val title: String, val artist: String?, val app: String?, val playing: Boolean)
+/** What's playing on a device (`now_playing`, also in its status). Times
+ *  in ms; [at] is when [position] was true (this phone's clock). An older
+ *  app sends only the title, artist, app and whether it plays. */
+data class Playing(
+    val title: String, val artist: String?, val app: String?, val playing: Boolean,
+    val duration: Long? = null, val position: Long? = null, val at: Long = System.currentTimeMillis(),
+    val canNext: Boolean = true, val canPrev: Boolean = true, val canSeek: Boolean = false,
+    val volume: Int? = null, val volumeMax: Int? = null,
+    /** The artwork as base64 JPEG/PNG. */
+    val art: String? = null,
+    val session: String? = null,
+    /** Other apps playing there: (id, label). */
+    val sessions: List<Pair<String, String>> = emptyList(),
+) {
+    /** Where the track is now (it runs on while playing). */
+    fun positionNow(now: Long = System.currentTimeMillis()): Long? =
+        MediaPlan.positionNow(position, duration, playing, now - at)
+}
 
 private fun playingOf(o: JSONObject?): Playing? {
     val title = o?.optString("title").orEmpty()
     if (o == null || title.isEmpty()) return null
+    val state = o.optString("state")
+    if (state != "playing" && state != "paused") return null
+    fun long(k: String) = if (o.has(k) && !o.isNull(k)) o.optLong(k).takeIf { it >= 0 } else null
+    val vmax = long("volume_max")?.toInt()?.takeIf { it > 0 }
+    val list = o.optJSONArray("sessions")
+    val sessions = (0 until (list?.length() ?: 0)).mapNotNull { i ->
+        val s = list!!.optJSONObject(i) ?: return@mapNotNull null
+        val id = s.optString("id").ifEmpty { return@mapNotNull null }
+        id to (s.optString("app").ifEmpty { id } + s.optString("title").let { if (it.isEmpty()) "" else " · $it" })
+    }
     return Playing(
         title,
         o.optString("artist").ifEmpty { null },
         o.optString("app").ifEmpty { null },
-        o.optString("state") == "playing",
+        state == "playing",
+        duration = long("duration")?.takeIf { it > 0 },
+        position = long("position"),
+        canNext = o.optBoolean("can_next", true),
+        canPrev = o.optBoolean("can_prev", true),
+        canSeek = o.optBoolean("can_seek", false),
+        volume = if (vmax != null) long("volume")?.toInt() else null,
+        volumeMax = vmax,
+        art = o.optString("art").ifEmpty { null },
+        session = o.optString("session").ifEmpty { null },
+        sessions = sessions,
     )
 }
 
@@ -559,6 +598,7 @@ object Core {
                     audioSink = st.optBoolean("audio_sink", false),
                     audioSource = st.optBoolean("audio_source", false),
                     platform = st.optString("platform").ifEmpty { null },
+                    mediaCtl = st.optInt("media_ctl", 0) >= 1,
                     notifShare = if (st.has("notif_share")) st.optBoolean("notif_share") else null,
                     wifiOn = st.optJSONObject("wifi")?.let { if (it.has("on")) it.optBoolean("on") else null },
                     wifiConnected = st.optJSONObject("wifi")?.let { if (it.has("connected")) it.optBoolean("connected") else null },
@@ -868,6 +908,28 @@ object Core {
 
     /** Ring a device (find my device). */
     suspend fun ring(node: String): String = call { it.ring(node) }
+
+    /** Control what plays on [node] (core `media_command`: "play", "pause",
+     *  "next", "previous", "seek" with [value] ms, "volume_up",
+     *  "volume_down", "volume_set" with [value], "session"). A play, pause,
+     *  seek or volume shows at once; the device's next now-playing confirms. */
+    suspend fun mediaCommand(node: String, action: String, value: Long? = null, session: String? = null) {
+        call { it.mediaCommand(node, action, value, session) }
+        val cur = nowPlaying[node] ?: return
+        val now = System.currentTimeMillis()
+        nowPlaying[node] = when (action) {
+            "play", "pause" -> cur.copy(playing = action == "play", position = cur.positionNow(now), at = now)
+            "seek" -> if (value != null) cur.copy(position = value, at = now) else cur
+            "volume_set" -> cur.copy(volume = value?.toInt())
+            else -> cur
+        }
+    }
+
+    /** Keep hearing what plays on [node] for a while (a screen showing it
+     *  calls this every few minutes). */
+    suspend fun mediaWatch(node: String) {
+        runCatching { call { it.mediaWatch(node) } }
+    }
 
     /** Run [name] on [node], then ask for its status again so the buttons
      *  show the new state. */

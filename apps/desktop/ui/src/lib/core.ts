@@ -110,6 +110,9 @@ export type DeviceStatus = {
   insertCapture?: boolean;
   /** It downloads links for your other devices (`remote_download`). */
   remoteDownload?: boolean;
+  /** It takes media commands (`media_ctl`): play, pause, skip, seek and
+   *  volume from here. */
+  mediaCtl?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -322,6 +325,9 @@ type State = {
   /** node_id -> the photo or scan this computer asked that phone for
    *  (insert from phone), and how far it got. */
   inserts: Record<string, InsertAsk>;
+  /** node_id -> what plays there (`now-playing`, also in its status); absent:
+   *  nothing, or not heard. */
+  playing: Record<string, Playing>;
   /** This computer's sound on your phones (`computer-audio`): where it
    *  plays and who was asked; null until known. */
   computerAudio: ComputerAudioStatus_Serialize | null;
@@ -352,6 +358,7 @@ export const [state, setState] = createStore<State>({
   screenOffers: {},
   cameraPhotos: {},
   inserts: {},
+  playing: {},
   computerAudio: null,
   syncPairs: [],
   devLog: [],
@@ -549,7 +556,11 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
       const node = state.peers.find((p) => p.name === a.from || p.node_id === a.from)?.node_id ?? a.from;
       setState("apps", node, { apps: a.apps ?? [], subscribed: a.subscribed ?? [] });
     }),
-    on<{ from: string; status: Record<string, unknown> }>("device-status-event", ({ from, status }) =>
+    // What plays on a device that this computer looks at (pushed while
+    // watching; the status reply carries it too).
+    on<{ from: string; media: unknown }>("now-playing", ({ from, media }) => setPlaying(from, media)),
+    on<{ from: string; status: Record<string, unknown> }>("device-status-event", ({ from, status }) => {
+      setPlaying(from, status?.now_playing);
       setState("status", from, {
         battery: typeof status?.battery === "number" ? Math.round(status.battery) : undefined,
         charging: typeof status?.charging === "boolean" ? status.charging : undefined,
@@ -572,6 +583,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         cameraView: typeof status?.camera_view === "number" && status.camera_view >= 1,
         insertCapture: typeof status?.insert_capture === "number" && status.insert_capture >= 1,
         remoteDownload: typeof status?.remote_download === "number" && status.remote_download >= 1,
+        mediaCtl: typeof status?.media_ctl === "number" && status.media_ctl >= 1,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
@@ -593,8 +605,8 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
           ? RADIOS.filter((r) => (status.radio_direct as unknown[]).includes(r))
           : [],
         ts: now(),
-      }),
-    ),
+      });
+    }),
     // Pop-ups held while a phone is on Do Not Disturb (the sidebar says so).
     on<string[]>("phone-quiet", (phones) => setState("quietPhones", Array.isArray(phones) ? phones : [])),
     // The backend brings the window forward and shows the OS notification;
@@ -1325,4 +1337,129 @@ export function cancelInsert(node: string) {
   if (!cur) return;
   setState("inserts", node, undefined!);
   void commands.insertCancel(cur.id).catch(() => {});
+}
+
+// --- now playing and media controls ---
+
+/** A session that plays on a device (several apps at once). */
+export type MediaSession = { id: string; app?: string; title?: string; playing: boolean };
+
+/** What plays on a device, as its `now-playing` says (mdcore
+ *  `features::media`). Times in ms; `at` is when `position` was true (this
+ *  computer's clock). An older app sends only title, artist, album, app and
+ *  whether it plays. */
+export type Playing = {
+  title: string;
+  artist?: string;
+  album?: string;
+  app?: string;
+  playing: boolean;
+  duration?: number;
+  position?: number;
+  at: number;
+  canNext?: boolean;
+  canPrev?: boolean;
+  canSeek?: boolean;
+  volume?: number;
+  volumeMax?: number;
+  /** The artwork / app icon as data: URLs (from base64 JPEG or PNG). */
+  art?: string;
+  icon?: string;
+  session?: string;
+  sessions: MediaSession[];
+};
+
+const strOf = (v: unknown) => (typeof v === "string" && v.trim() ? v : undefined);
+const numOf = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
+const boolOf = (v: unknown) => (typeof v === "boolean" ? v : undefined);
+
+/** A base64 picture as a data: URL (PNG starts "iVBOR", else JPEG). */
+function pictureUrl(v: unknown): string | undefined {
+  const b = strOf(v);
+  if (!b || !/^[A-Za-z0-9+/=]+$/.test(b)) return undefined;
+  return "data:image/" + (b.startsWith("iVBOR") ? "png" : "jpeg") + ";base64," + b;
+}
+
+/** A `now-playing` media object (or a status's `now_playing`) checked;
+ *  null for nothing playing. */
+export function playingOf(m: unknown, at = Date.now()): Playing | null {
+  if (!m || typeof m !== "object") return null;
+  const o = m as Record<string, unknown>;
+  const title = strOf(o.title);
+  if (!title || (o.state !== "playing" && o.state !== "paused")) return null;
+  const vmax = numOf(o.volume_max);
+  const sessions = Array.isArray(o.sessions)
+    ? o.sessions.flatMap((x) => {
+        const s = (x ?? {}) as Record<string, unknown>;
+        const id = strOf(s.id);
+        return id ? [{ id, app: strOf(s.app), title: strOf(s.title), playing: s.state === "playing" }] : [];
+      })
+    : [];
+  return {
+    title,
+    artist: strOf(o.artist),
+    album: strOf(o.album),
+    app: strOf(o.app),
+    playing: o.state === "playing",
+    duration: numOf(o.duration) || undefined,
+    position: numOf(o.position),
+    at,
+    canNext: boolOf(o.can_next),
+    canPrev: boolOf(o.can_prev),
+    canSeek: boolOf(o.can_seek),
+    volume: vmax ? numOf(o.volume) : undefined,
+    volumeMax: vmax || undefined,
+    art: pictureUrl(o.art),
+    icon: pictureUrl(o.icon),
+    session: strOf(o.session),
+    sessions,
+  };
+}
+
+/** Where a track is at `nowMs`: it runs on while playing, never past the end. */
+export function positionAt(p: Playing, nowMs = Date.now()): number | undefined {
+  if (p.position === undefined) return undefined;
+  const moved = p.playing ? p.position + Math.max(0, nowMs - p.at) : p.position;
+  return p.duration ? Math.min(moved, p.duration) : moved;
+}
+
+/** "3:07", "1:02:05". */
+export function clock(ms: number): string {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = String(s % 60).padStart(2, "0");
+  return h > 0 ? h + ":" + String(m).padStart(2, "0") + ":" + sec : m + ":" + sec;
+}
+
+function setPlaying(from: string, media: unknown) {
+  if (!from) return;
+  const p = playingOf(media);
+  setState("playing", from, p ? reconcile(p) : undefined!);
+}
+
+/** Control what plays on `node` (the backend's `media_command`); toasts why
+ *  it couldn't. A play/pause, seek or volume shows at once (the device's
+ *  next now-playing confirms it). */
+export async function mediaCommand(node: string, action: string, value?: number, session?: string): Promise<boolean> {
+  const r = await commands.mediaCommand(node, action, value ?? null, session ?? null);
+  if (r.status === "error") {
+    toast(friendlyError(r.error), "error");
+    return false;
+  }
+  const cur = state.playing[node];
+  if (cur && (action === "play" || action === "pause" || action === "play_pause")) {
+    const playing = action === "play" ? true : action === "pause" ? false : !cur.playing;
+    setState("playing", node, { playing, position: positionAt(cur), at: Date.now() });
+  } else if (cur && action === "seek" && value !== undefined) {
+    setState("playing", node, { position: value, at: Date.now() });
+  } else if (cur && action === "volume_set" && value !== undefined) {
+    setState("playing", node, "volume", value);
+  }
+  return true;
+}
+
+/** Keep hearing what plays on `node` while its tile is open. */
+export function watchMedia(node: string): void {
+  void commands.mediaWatch(node).catch(() => {});
 }

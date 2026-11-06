@@ -79,6 +79,34 @@ impl<P: Platform> Engine<P> {
         crate::features::media::set(&self.ctx, &v);
     }
 
+    /// Whether `node_id` said it takes media commands (`media_ctl`).
+    pub fn media_supported(&self, node_id: &str) -> bool {
+        crate::features::media::supports(&self.ctx, node_id)
+    }
+
+    /// Control what plays on `node_id` (see `features::media::command`):
+    /// `action` "play", "pause", "play_pause", "next", "previous",
+    /// "seek" (`value`: ms), "volume_up", "volume_down", "volume_set"
+    /// (`value`: level on its `volume_max` scale) or "session" (`session`:
+    /// the one to show). Live link only: `NoLink` starts connecting;
+    /// `Unsupported` for a device without media controls.
+    pub fn media_command(
+        &self,
+        node_id: &str,
+        action: &str,
+        value: Option<i64>,
+        session: Option<&str>,
+    ) -> crate::Result<()> {
+        crate::features::media::send_command(&self.ctx, node_id, action, value, session)
+    }
+
+    /// Ask `node_id` to keep this device posted on what it plays for the
+    /// next few minutes (`media_watch`; call again every few minutes while
+    /// it matters). Never connects: `Ok(false)` when there's no live link.
+    pub fn media_watch(&self, node_id: &str) -> crate::Result<bool> {
+        crate::features::media::ask_watch(&self.ctx, node_id)
+    }
+
     /// Some device asked for this one's status in the last few minutes:
     /// worth reading what's playing (a desktop polls only then).
     pub fn now_playing_watched(&self) -> bool {

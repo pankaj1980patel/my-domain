@@ -71,6 +71,7 @@ import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
 import CameraTile from "./device/CameraTile";
 import InsertTile from "./device/InsertTile";
+import NowPlayingTile from "./device/NowPlayingTile";
 import WakeButton from "./device/WakeButton";
 import ConnectionTile from "./device/ConnectionTile";
 import { NearbyBadge } from "../components/NearbyBadge";
@@ -122,6 +123,14 @@ const TILES: TileDef[] = [
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.insertCapture && state.status[n]?.platform === "android",
     render: (n) => <InsertTile node={n} />,
+  },
+  {
+    // What plays there, with play/pause, skip, seek and volume when its
+    // app takes media commands (media_ctl); an older one just shows it.
+    id: "now-playing",
+    title: () => t("media.title"),
+    available: (n) => !!state.status[n]?.mediaCtl || !!state.playing[n],
+    render: (n) => <NowPlayingTile node={n} />,
   },
   {
     id: "phone-audio",
