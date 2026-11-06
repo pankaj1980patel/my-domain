@@ -454,6 +454,18 @@ pub fn send_payload(
     send_plaintext(ws_conns, p2p, key, node_id, &pt)
 }
 
+/// Encrypt a message body into the frame a link carries.
+pub(crate) fn seal(key: &KeyHolder, pt: &Plaintext) -> crate::Result<String> {
+    let k = key.lock().ok_or(CoreError::NoKey)?;
+    let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
+    let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
+    Ok(serde_json::to_string(&WsFrame::Msg {
+        nonce: env.nonce,
+        ciphertext: env.ciphertext,
+    })
+    .map_err(|e| e.to_string())?)
+}
+
 /// Encrypt a message body and send it to `node_id` over its live link.
 pub fn send_plaintext(
     ws_conns: &WsConns,
@@ -462,14 +474,7 @@ pub fn send_plaintext(
     node_id: &str,
     pt: &Plaintext,
 ) -> crate::Result<()> {
-    let k = key.lock().ok_or(CoreError::NoKey)?;
-    let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
-    let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
-    let frame = serde_json::to_string(&WsFrame::Msg {
-        nonce: env.nonce.clone(),
-        ciphertext: env.ciphertext.clone(),
-    })
-    .map_err(|e| e.to_string())?;
+    let frame = seal(key, pt)?;
     let sender = ws_conns
         .lock()
         .get(node_id)

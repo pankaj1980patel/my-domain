@@ -102,6 +102,11 @@ export default function Transfers() {
   );
 }
 
+/** "via Wi-Fi Direct" / "via phone hotspot". */
+function viaText(via: string): string {
+  return via === "hotspot" ? t("transfers.viaHotspot") : t("transfers.viaWifiDirect");
+}
+
 /** ↑ sent / ↓ received, then the name and the device. */
 function Head(props: { e: Entry }) {
   const device = () => peerName(props.e.node_id);
@@ -174,6 +179,9 @@ function ActiveRow(props: { e: Entry; clock: number }) {
         <Show when={resumedFrom() !== undefined && resumedFrom() !== null && total() > 0}>
           <span class="xfer-resumed">{t("transfers.resumed", { pct: Math.floor(((resumedFrom() ?? 0) / total()) * 100) })}</span>
         </Show>
+        <Show when={props.e.via || state.wifiDirect[props.e.node_id]}>
+          {(via) => <span class="xfer-resumed">{viaText(via())}</span>}
+        </Show>
       </p>
     </li>
   );
@@ -187,7 +195,10 @@ function FinishedRow(props: { e: Entry; clock: number; onChange: () => void }) {
   const size = () => humanSize(props.e.total ?? 0);
   const line = () => {
     const e = props.e;
-    if (e.state === "done") return e.incoming ? t("transfers.doneSaved", { size: size(), when: when() }) : t("transfers.doneSent", { size: size(), when: when() });
+    if (e.state === "done") {
+      const line = e.incoming ? t("transfers.doneSaved", { size: size(), when: when() }) : t("transfers.doneSent", { size: size(), when: when() });
+      return e.via ? `${line} · ${viaText(e.via)}` : line;
+    }
     return t("transfers.failed", { reason: fileFailReason(e.reason ?? undefined, e.incoming), when: when() });
   };
   const reveal = () => unwrap(commands.transferReveal(props.e.id)).catch((err) => toast(friendlyError(err), "error"));

@@ -123,6 +123,22 @@ fn lane_depth(kind: MediaKind, local: bool) -> Option<usize> {
 /// Each peer's registered connection, by node id.
 type PeerConns = Arc<Mutex<HashMap<String, PeerConn>>>;
 
+/// The `lane` a side connection says in its `Hello`: one over Wi-Fi Direct
+/// that carries a file transfer (see `features::wifi_direct`).
+pub const LANE_WIFI_DIRECT: &str = "wifi_direct";
+
+/// A side lane to a peer: a second QUIC connection, over another network,
+/// that only file transfers use. It never becomes the peer's link (that
+/// stays as it was): `features::files` sends on it while it's up.
+struct LaneConn {
+    id: u64,
+    conn: Connection,
+    tx: tokio::sync::mpsc::UnboundedSender<String>,
+}
+
+/// Each peer's side lane, by node id.
+type Lanes = Arc<Mutex<HashMap<String, LaneConn>>>;
+
 /// What the rest of the engine uses: the endpoint plus a handle to the
 /// runtime. Cheap to clone (both are reference-counted inside).
 #[derive(Clone)]
@@ -133,6 +149,8 @@ pub struct QuicLink {
     /// Each peer's registered connection. Lets a peer that moved replace its
     /// stale link, and tells us which links survive OUR network change.
     conns: PeerConns,
+    /// Side lanes (Wi-Fi Direct), apart from the links.
+    lanes: Lanes,
     /// New for every start; sent in our `Hello` (see `WsFrame::Hello`).
     pub(crate) boot: String,
     /// New for every start: `media::Header::session`.
@@ -242,6 +260,7 @@ impl QuicNode {
                 rt: runtime.handle().clone(),
                 port,
                 conns: Arc::default(),
+                lanes: Arc::default(),
                 boot: uuid::Uuid::new_v4().to_string(),
                 media_session: uuid::Uuid::new_v4().as_u128() as u32,
             },
@@ -435,7 +454,7 @@ impl QuicLink {
                 let ctx = ctx.clone();
                 tokio::spawn(async move {
                     if let Ok(conn) = incoming.await {
-                        run_connection(conn, ctx, false, TransportKind::Quic).await;
+                        run_connection(conn, ctx, false, TransportKind::Quic, "").await;
                     }
                 });
             }
@@ -492,8 +511,59 @@ impl QuicLink {
             Err(last_err)
         })?;
         self.rt
-            .spawn(run_connection(conn, ctx, true, TransportKind::Quic));
+            .spawn(run_connection(conn, ctx, true, TransportKind::Quic, ""));
         Ok(())
+    }
+
+    /// Dial `addr` for a side lane (`lane`, e.g. `LANE_WIFI_DIRECT`) to
+    /// the peer there: the same handshake and device-key check as a link,
+    /// but it's kept apart (see `LaneConn`). Blocks for at most
+    /// `CONNECT_TIMEOUT`; the lane then reports itself to the feature.
+    /// Call from a normal thread, not from inside the runtime.
+    pub fn dial_lane<P: Platform>(
+        &self,
+        ctx: NetCtx<P>,
+        addr: SocketAddr,
+        lane: &'static str,
+    ) -> Result<(), String> {
+        let endpoint = self.endpoint.clone();
+        let conn = self.rt.block_on(async move {
+            let connecting = endpoint
+                .connect(addr, "mydomain")
+                .map_err(|e| format!("QUIC connect to {addr} failed: {e}"))?;
+            tokio::time::timeout(CONNECT_TIMEOUT, connecting)
+                .await
+                .map_err(|_| format!("QUIC connect to {addr} timed out"))?
+                .map_err(|e| format!("QUIC handshake with {addr} failed: {e}"))
+        })?;
+        self.rt
+            .spawn(run_connection(conn, ctx, true, TransportKind::Quic, lane));
+        Ok(())
+    }
+
+    /// `peer` has a side lane up.
+    pub fn has_lane(&self, peer: &str) -> bool {
+        self.lanes.lock().contains_key(peer)
+    }
+
+    /// Queue a frame on `peer`'s side lane; false without one.
+    pub fn lane_send(&self, peer: &str, frame: String) -> bool {
+        self.lanes
+            .lock()
+            .get(peer)
+            .is_some_and(|l| l.tx.send(frame).is_ok())
+    }
+
+    /// Close `peer`'s side lane, if it has one.
+    pub fn close_lane(&self, peer: &str) {
+        if let Some(l) = self.lanes.lock().remove(peer) {
+            l.conn.close(0u32.into(), b"done");
+        }
+    }
+
+    /// The side lane's measured round trip.
+    pub fn lane_rtt(&self, peer: &str) -> Option<Duration> {
+        self.lanes.lock().get(peer).map(|l| l.conn.rtt())
     }
 
     /// Run QUIC over an already hole-punched UDP socket: a fresh endpoint on
@@ -540,7 +610,7 @@ impl QuicLink {
                 }
             };
             if let Some(conn) = conn {
-                run_connection(conn, ctx, dial, kind).await;
+                run_connection(conn, ctx, dial, kind, "").await;
             }
             // `endpoint` lives until here: it owns the punched socket.
             endpoint.close(0u32.into(), b"bye");
@@ -556,6 +626,7 @@ async fn run_connection<P: Platform>(
     ctx: NetCtx<P>,
     dialer: bool,
     kind: TransportKind,
+    lane: &'static str,
 ) {
     // The dialer opens the stream; the acceptor waits for it.
     let stream = if dialer {
@@ -578,25 +649,33 @@ async fn run_connection<P: Platform>(
             } else {
                 0
             },
+            lane: lane.to_string(),
         })
         .unwrap_or_default()
     };
     if write_frame(&mut send, &hello).await.is_err() {
         return;
     }
-    let (peer_id, boot, bin_media) =
+    let (peer_id, boot, bin_media, their_lane) =
         match tokio::time::timeout(HELLO_TIMEOUT, read_frame(&mut recv)).await {
             Ok(Ok(bytes)) => match serde_json::from_slice::<WsFrame>(&bytes) {
                 Ok(WsFrame::Hello {
                     node_id,
                     boot,
                     bin_media,
+                    lane,
                     ..
-                }) => (node_id, boot, bin_media),
+                }) => (node_id, boot, bin_media, lane),
                 _ => return,
             },
             _ => return,
         };
+    // A side lane: the dialer said so in its `Hello`.
+    let is_lane = if dialer {
+        !lane.is_empty()
+    } else {
+        their_lane == LANE_WIFI_DIRECT
+    };
 
     // The handshake proved which key the peer holds: it must be the one this
     // node id used before (or a first meeting).
@@ -612,6 +691,10 @@ async fn run_connection<P: Platform>(
             crate::engine::key_refused(&ctx, &peer_id, first);
             return;
         }
+    }
+
+    if is_lane {
+        return run_lane(conn, ctx, peer_id, send, recv).await;
     }
 
     // A hand-entered peer is listed as `manual:<ip>` until we learn its real
@@ -799,6 +882,72 @@ async fn run_connection<P: Platform>(
 }
 
 /// Read `peer`'s binary media frames on `conn` until it closes.
+/// Drive a side lane (see `LaneConn`): only to one of your devices that
+/// this one expects a lane from right now; frames go through the normal
+/// incoming path, so the same encryption applies.
+async fn run_lane<P: Platform>(
+    conn: Connection,
+    ctx: NetCtx<P>,
+    peer_id: String,
+    mut send: SendStream,
+    mut recv: RecvStream,
+) {
+    let wanted = ctx.peers.lock().contains_key(&peer_id)
+        && crate::features::wifi_direct::lane_wanted(&ctx, &peer_id);
+    if !wanted {
+        conn.close(0u32.into(), b"no lane expected");
+        return;
+    }
+    let my_id = QUIC_CONN_SEQ.fetch_add(1, Ordering::Relaxed);
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+    if let Some(old) = ctx.quic.lanes.lock().insert(
+        peer_id.clone(),
+        LaneConn {
+            id: my_id,
+            conn: conn.clone(),
+            tx,
+        },
+    ) {
+        old.conn.close(0u32.into(), b"replaced");
+    }
+    {
+        let (ctx, peer) = (ctx.clone(), peer_id.clone());
+        tokio::task::block_in_place(move || crate::features::wifi_direct::lane_up(&ctx, &peer));
+    }
+    let writer = tokio::spawn(async move {
+        while let Some(frame) = rx.recv().await {
+            if write_frame(&mut send, frame.as_bytes()).await.is_err() {
+                break;
+            }
+        }
+    });
+    let ip = canonical(conn.remote_address()).ip().to_string();
+    while let Ok(bytes) = read_frame(&mut recv).await {
+        if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&bytes) {
+            let env = Envelope { nonce, ciphertext };
+            let (ctx, ip, from) = (ctx.clone(), ip.clone(), peer_id.clone());
+            tokio::task::block_in_place(move || {
+                handle_incoming(&ctx, &env, Some(&from), ip, "Wi-Fi Direct")
+            });
+        }
+    }
+    writer.abort();
+    let ours = {
+        let mut l = ctx.quic.lanes.lock();
+        let ours = l.get(&peer_id).is_some_and(|x| x.id == my_id);
+        if ours {
+            l.remove(&peer_id);
+        }
+        ours
+    };
+    if ours {
+        let ctx2 = ctx.clone();
+        tokio::task::block_in_place(move || {
+            crate::features::wifi_direct::lane_down(&ctx2, &peer_id)
+        });
+    }
+}
+
 async fn read_media<P: Platform>(conn: Connection, ctx: NetCtx<P>, peer: String) {
     let datagrams = {
         let (conn, ctx, peer) = (conn.clone(), ctx.clone(), peer.clone());

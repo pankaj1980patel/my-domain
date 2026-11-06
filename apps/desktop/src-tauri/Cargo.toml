@@ -115,5 +115,7 @@ libc = "0.2"
 [target.'cfg(windows)'.dependencies]
 # Clipboard privacy (`clip_privacy.rs`): the clipboard's concealed formats
 # and the app in front.
-windows = { version = "0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
+# Wi-Fi Direct for big files (`wifi_direct.rs`): this computer hosts a
+# group the phone joins.
+windows = { version = "0.61.3", features = ["Devices_WiFiDirect", "Foundation", "Security_Credentials", "Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 

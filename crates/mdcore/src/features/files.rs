@@ -273,8 +273,12 @@ fn me<P: Platform>(ctx: &NetCtx<P>) -> String {
     ctx.identity.lock().node_id.clone()
 }
 
-/// Send a control message over the peer's current link.
+/// Send a control message over the peer's current link (or its Wi-Fi
+/// Direct lane while one is up, see `features::wifi_direct`).
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &serde_json::Value) -> crate::Result<()> {
+    if super::wifi_direct::send(ctx, node, &msg.to_string()) {
+        return Ok(());
+    }
     let name = ctx.identity.lock().name.clone();
     crate::transport::send_payload(
         &ctx.ws_conns,
@@ -776,6 +780,12 @@ pub fn forget<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     ctx.files.acked.notify_all();
 }
 
+/// A transfer with `node` is going (either way, paused ones included).
+pub fn busy_with<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    ctx.files.out.lock().values().any(|t| t.node == node)
+        || ctx.files.inc.lock().values().any(|t| t.from == node)
+}
+
 /// (bytes confirmed, size) of outgoing transfer `id`, if it's going.
 pub fn outgoing_progress<P: Platform>(ctx: &NetCtx<P>, id: &str) -> Option<(u64, u64)> {
     ctx.files.out.lock().get(id).map(|t| (t.acked, t.size))
@@ -832,7 +842,9 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
             if pos >= size || pos - t.acked >= WINDOW {
                 files.acked.wait_for(&mut out, LINK_CHECK);
                 let Some(t) = out.get_mut(&id) else { return };
-                if !ctx.ws_conns.lock().contains_key(&node) {
+                // A side lane (Wi-Fi Direct, a hotspot) carries it on even
+                // when the link itself went (a computer that left its Wi-Fi).
+                if !ctx.ws_conns.lock().contains_key(&node) && !ctx.quic.has_lane(&node) {
                     return pause(t); // link gone
                 }
                 if t.last_progress.elapsed() >= STALL {
@@ -1373,6 +1385,7 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     incoming: false,
                     resumed: t.resumed,
                 };
+                let left = t.size - t.acked;
                 if !t.running && t.acked < t.size {
                     t.running = true;
                     let (ctx, id, at) = (ctx.clone(), id.clone(), t.acked);
@@ -1383,6 +1396,9 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     save_outgoing(ctx);
                 }
                 ctx.sink.emit(ev);
+                // A big one, not over the local network: Wi-Fi Direct may
+                // carry it faster.
+                super::wifi_direct::transfer_started(ctx, &from, left);
             }
             "file_ack" => {
                 let upto = msg.json("upto").as_u64().unwrap_or(0);

@@ -68,6 +68,10 @@ pub struct TransferEntry {
     /// `path` is still there (filled in when listed).
     #[serde(default)]
     pub exists: bool,
+    /// It went (at least partly) over another route than the link:
+    /// "wifi_direct".
+    #[serde(default)]
+    pub via: Option<String>,
 }
 
 impl TransferEntry {
@@ -86,6 +90,7 @@ impl TransferEntry {
             started: now,
             ended: None,
             exists: false,
+            via: None,
         }
     }
 
@@ -98,6 +103,9 @@ impl TransferEntry {
 #[derive(Default, Debug)]
 pub struct Transfers {
     list: Vec<TransferEntry>,
+    /// Devices whose transfers go over a side route right now, and which
+    /// ("wifi_direct", "hotspot").
+    wifi_direct: std::collections::HashMap<String, String>,
 }
 
 impl Transfers {
@@ -105,7 +113,10 @@ impl Transfers {
     /// comes back through its events).
     pub fn from_saved(mut list: Vec<TransferEntry>) -> Self {
         list.retain(TransferEntry::finished);
-        let mut t = Transfers { list };
+        let mut t = Transfers {
+            list,
+            ..Transfers::default()
+        };
         t.trim();
         t
     }
@@ -146,9 +157,13 @@ impl Transfers {
         resumed: bool,
         now: f64,
     ) {
+        let via = self.wifi_direct.get(node_id).cloned();
         let e = self.entry(id, node_id, name, incoming, now);
         if e.finished() {
             return;
+        }
+        if via.is_some() {
+            e.via = via;
         }
         e.done = done as f64;
         e.total = total as f64;
@@ -224,6 +239,25 @@ impl Transfers {
         e.ended = Some(now);
         self.trim();
         true
+    }
+
+    /// Transfers with `node_id` go over a side route now (`active`, `via`
+    /// "wifi_direct" or "hotspot"), or no longer do. Those under way say
+    /// so from now on (and keep saying it once finished).
+    pub fn wifi_direct(&mut self, node_id: &str, active: bool, via: &str) {
+        if !active {
+            self.wifi_direct.remove(node_id);
+            return;
+        }
+        self.wifi_direct
+            .insert(node_id.to_string(), via.to_string());
+        for e in self
+            .list
+            .iter_mut()
+            .filter(|e| e.node_id == node_id && !e.finished())
+        {
+            e.via = Some(via.to_string());
+        }
     }
 
     /// Forget every finished transfer.
@@ -391,6 +425,13 @@ pub fn on_progress(
     });
 }
 
+pub fn on_wifi_direct(app: &AppHandle, node_id: &str, active: bool, via: &str) {
+    update(app, |t, _| {
+        t.wifi_direct(node_id, active, via);
+        false
+    });
+}
+
 pub fn on_received(app: &AppHandle, id: &str, from: &str, name: &str, path: &str, size: u64) {
     update(app, |t, now| t.received(id, from, name, path, size, now));
 }
@@ -490,6 +531,41 @@ mod tests {
         assert_eq!(list[1].id, format!("t{}", MAX_FINISHED + 20));
         assert_eq!(list.last().unwrap().id, "t21");
         assert_eq!(t.saved().len(), MAX_FINISHED);
+    }
+
+    #[test]
+    fn transfers_over_wifi_direct_say_so() {
+        let mut t = Transfers::default();
+        t.progress("going", "phone", "big.mov", 5, 100, false, false, 0.0);
+        t.progress("other", "laptop", "x.zip", 5, 100, false, false, 0.0);
+        finish(&mut t, 1);
+        t.wifi_direct("phone", true, "wifi_direct");
+        // One that starts while it's up says so too.
+        t.progress("next", "phone", "b.mov", 1, 100, true, false, 1.0);
+        let via = |t: &Transfers, id: &str| t.get(id).unwrap().via.clone();
+        assert_eq!(via(&t, "going").as_deref(), Some("wifi_direct"));
+        assert_eq!(via(&t, "next").as_deref(), Some("wifi_direct"));
+        assert_eq!(via(&t, "other"), None, "another device's transfer");
+        assert_eq!(via(&t, "t1"), None, "one that ended before");
+        // Once it's down: new ones don't, the ones that used it still do.
+        t.wifi_direct("phone", false, "wifi_direct");
+        // Over the phone's hotspot, it says that.
+        t.wifi_direct("mac-phone", true, "hotspot");
+        t.progress("hs", "mac-phone", "d.mov", 1, 100, true, false, 2.0);
+        assert_eq!(via(&t, "hs").as_deref(), Some("hotspot"));
+        t.progress("later", "phone", "c.mov", 1, 100, true, false, 2.0);
+        assert_eq!(via(&t, "later"), None);
+        assert!(t.sent("going", "phone", "big.mov", 3.0));
+        assert_eq!(via(&t, "going").as_deref(), Some("wifi_direct"));
+        // Kept in the saved history; older files without it still read.
+        let saved = serde_json::to_string(&t.saved()).unwrap();
+        assert!(saved.contains("wifi_direct"), "{saved}");
+        let old: TransferEntry = serde_json::from_str(
+            r#"{"id":"o","node_id":"p","name":"a","incoming":false,"state":"done",
+                "done":1,"total":1,"started":0}"#,
+        )
+        .unwrap();
+        assert_eq!(old.via, None);
     }
 
     #[test]

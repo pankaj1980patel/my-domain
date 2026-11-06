@@ -8,7 +8,8 @@ enum class TransferState { Active, Done, Failed }
  * file was picked from (to send it again). [resumedFrom]: it carried on
  * from a partial file at that many bytes. [rate] (bytes a second, smoothed)
  * and [movedAt] (when [done] last moved) are for speed and time left, and
- * aren't saved.
+ * aren't saved. [via]: "wifi_direct" when it went (at least partly) over
+ * Wi-Fi Direct.
  */
 data class TransferRecord(
     val id: String,
@@ -27,6 +28,7 @@ data class TransferRecord(
     val ended: Long? = null,
     val rate: Double = 0.0,
     val movedAt: Long = 0,
+    val via: String? = null,
 ) {
     val finished: Boolean get() = state != TransferState.Active
     val fraction: Float get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f
@@ -49,6 +51,9 @@ data class TransferRecord(
  */
 class TransferBook(saved: List<TransferRecord> = emptyList()) {
     private val items = ArrayList<TransferRecord>()
+    /** Devices whose transfers go over a side route right now, and which
+     *  ([VIA_WIFI_DIRECT], [VIA_HOTSPOT]). */
+    private val wifiDirect = HashMap<String, String>()
 
     init {
         addSaved(saved)
@@ -87,7 +92,23 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                 resumedFrom = t.resumedFrom ?: if (resumed) done else null,
                 rate = rate,
                 movedAt = if (done != t.done || t.movedAt == 0L) now else t.movedAt,
+                via = wifiDirect[node] ?: t.via,
             )
+        }
+    }
+
+    /** Transfers with [node] go over a side route now ([active], [via]),
+     *  or no longer do. Those under way say so from now on (and keep saying
+     *  it once finished). */
+    fun wifiDirect(node: String, active: Boolean, via: String = VIA_WIFI_DIRECT) {
+        if (!active) {
+            wifiDirect.remove(node)
+            return
+        }
+        wifiDirect[node] = via
+        for (i in items.indices) {
+            val t = items[i]
+            if (t.node == node && !t.finished) items[i] = t.copy(via = via)
         }
     }
 
@@ -151,6 +172,11 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
         /** The most finished transfers kept. */
         const val MAX_FINISHED = 100
 
+        /** [TransferRecord.via] for one that went over Wi-Fi Direct. */
+        const val VIA_WIFI_DIRECT = "wifi_direct"
+        /** ...and over the phone's hotspot. */
+        const val VIA_HOTSPOT = "hotspot"
+
         /** The file's text: `{"transfers": [...]}`, finished ones only. */
         fun encode(list: List<TransferRecord>): String = Json.write(
             mapOf(
@@ -170,6 +196,7 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                         "source" to t.source,
                         "started" to t.started,
                         "ended" to t.ended,
+                        "via" to t.via,
                     )
                 },
             ),
@@ -203,6 +230,7 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                     source = o["source"] as? String,
                     started = (o["started"] as? Number)?.toLong() ?: 0,
                     ended = (o["ended"] as? Number)?.toLong(),
+                    via = o["via"] as? String,
                 )
             }.distinctBy { it.id }
         }

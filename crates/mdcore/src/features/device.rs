@@ -93,6 +93,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::camera::extend_status(ctx, &mut status);
                 // Whether it shares timers.
                 super::timers::extend_status(ctx, &mut status);
+                // What it can do with Wi-Fi Direct.
+                super::wifi_direct::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -127,6 +129,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 );
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
                 super::timers::remember(ctx, &from, &status[super::timers::FLAG]);
+                super::wifi_direct::remember(ctx, &from, &status[super::wifi_direct::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

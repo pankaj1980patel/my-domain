@@ -54,6 +54,7 @@ impl<P: Platform> Engine<P> {
                 name: me.name.clone(),
                 boot: String::new(),
                 bin_media: 0,
+                lane: String::new(),
             })
             .unwrap_or_default()
         };

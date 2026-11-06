@@ -100,4 +100,30 @@ class TransferBookTest {
         assertEquals(2, again.list.size)
         assertEquals(emptyList<TransferRecord>(), TransferBook.decode("not json"))
     }
+
+    @Test
+    fun transfersOverASideRouteSaySo() {
+        val b = TransferBook()
+        b.progress("going", "phone", "big.mov", 5, 100, false, false, 0)
+        b.progress("other", "laptop", "x.zip", 5, 100, false, false, 0)
+        finish(b, 1)
+        b.wifiDirect("phone", true, TransferBook.VIA_WIFI_DIRECT)
+        // One that starts while it's up says so too.
+        b.progress("next", "phone", "b.mov", 1, 100, true, false, 1)
+        assertEquals("wifi_direct", b.get("going")?.via)
+        assertEquals("wifi_direct", b.get("next")?.via)
+        assertNull("another device's transfer", b.get("other")?.via)
+        assertNull("one that ended before", b.get("t1")?.via)
+        // Down: new ones don't; the ones that used it still do, saved too.
+        b.wifiDirect("phone", false)
+        b.progress("later", "phone", "c.mov", 1, 100, true, false, 2)
+        assertNull(b.get("later")?.via)
+        assertTrue(b.sent("going", "phone", "big.mov", 3))
+        val back = TransferBook.decode(TransferBook.encode(b.saved()))
+        assertEquals("wifi_direct", back.first { it.id == "going" }.via)
+        // A Mac over the phone's hotspot.
+        b.wifiDirect("mac", true, TransferBook.VIA_HOTSPOT)
+        b.progress("hs", "mac", "d.mov", 1, 100, false, false, 4)
+        assertEquals("hotspot", b.get("hs")?.via)
+    }
 }

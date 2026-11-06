@@ -56,6 +56,7 @@ mod sharing;
 mod signaling;
 mod sync;
 mod timers;
+mod wifi_direct;
 
 pub(crate) use signaling::handle_signal;
 pub use signaling::FirewallStatus;
@@ -345,6 +346,7 @@ impl<P: Platform> Engine<P> {
             config.read_later,
             config.links_map,
             config.nearby,
+            config.wifi_direct,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

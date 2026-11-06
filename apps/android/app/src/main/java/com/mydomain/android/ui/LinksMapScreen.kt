@@ -92,6 +92,8 @@ private fun howRes(how: String?): Int = when (how) {
     "webrtc" -> R.string.map_how_webrtc
     "relay" -> R.string.map_how_relay
     "ble" -> R.string.map_how_ble
+    "wifi_direct" -> R.string.map_how_wifi_direct
+    "hotspot" -> R.string.map_how_hotspot
     else -> R.string.map_how_none
 }
 

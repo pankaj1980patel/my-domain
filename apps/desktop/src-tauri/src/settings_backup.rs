@@ -74,6 +74,8 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "computer_notifs",
             "computer_notif_apps",
             "wake_lan",
+            "wifi_direct",
+            "phone_hotspot",
             "phone_audio_volume",
             "nearby_media",
         ],

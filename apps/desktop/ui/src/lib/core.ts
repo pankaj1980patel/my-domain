@@ -286,6 +286,9 @@ type State = {
   quietPhones: string[];
   /** transfer id -> file transfer (both ways) */
   transfers: Record<string, Transfer>;
+  /** node_id -> how transfers with it go now ("wifi_direct", "hotspot");
+   *  absent or "": over the link. */
+  wifiDirect: Record<string, string>;
   /** node_id -> the nickname, icon and colour you gave it here. */
   labels: Record<string, DeviceLabel>;
   /** node_id -> when a phone offered to share its screen with this
@@ -319,6 +322,7 @@ export const [state, setState] = createStore<State>({
   ringing: null,
   quietPhones: [],
   transfers: {},
+  wifiDirect: {},
   labels: {},
   screenOffers: {},
   cameraPhotos: {},
@@ -639,6 +643,10 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
           ts: cur?.ts ?? now(),
         });
       },
+    ),
+    // Transfers with a device moved to Wi-Fi Direct (or back).
+    on<{ node_id: string; active: boolean; via: string }>("wifi-direct-changed", ({ node_id, active, via }) =>
+      setState("wifiDirect", node_id, active ? via : ""),
     ),
     on<{ id: string; from: string; name: string; path: string; size: number }>("file-received", ({ id, from, name, path, size }) => {
       setState("transfers", id, {

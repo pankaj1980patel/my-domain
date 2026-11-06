@@ -61,6 +61,13 @@ object TransferLog {
         changed(save = false)
     }
 
+    /** Transfers with [node] went over to Wi-Fi Direct or the phone's
+     *  hotspot ([via]), or back. */
+    fun wifiDirect(node: String, active: Boolean, via: String) {
+        book.wifiDirect(node, active, via)
+        changed(save = false)
+    }
+
     fun received(id: String, from: String, name: String, size: Long) {
         if (book.received(id, from, name, size, System.currentTimeMillis())) changed(save = true)
     }

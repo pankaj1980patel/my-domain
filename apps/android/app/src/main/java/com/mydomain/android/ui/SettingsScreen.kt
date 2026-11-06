@@ -39,6 +39,7 @@ import com.mydomain.android.PhoneLocation
 import com.mydomain.android.Privileged
 import com.mydomain.android.R
 import com.mydomain.android.SetupState
+import com.mydomain.android.WifiDirect
 import com.mydomain.android.core.ChatHistory
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.ClipPrivacy
@@ -223,6 +224,22 @@ fun LocationSettingsTile() {
     }
 }
 
+/** "Use Wi-Fi Direct for big files when nearby" (WifiDirect), on by
+ *  default: phone to phone, to a Windows PC, or this phone's own hotspot
+ *  for a Mac or Linux computer. */
+@Composable
+fun WifiDirectTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(WifiDirect.enabled(ctx)) }
+    Tile(title = stringResource(R.string.wifi_direct_title)) {
+        SwitchRow(stringResource(R.string.wifi_direct_switch), on) {
+            on = it
+            WifiDirect.setEnabled(ctx, it)
+        }
+        Muted(stringResource(R.string.wifi_direct_hint))
+    }
+}
+
 /** The camera on your computers (CameraShare): "Keep streaming while
  *  locked", off by default (the camera stops as the phone locks). */
 @Composable
@@ -403,6 +420,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
         Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
         Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
+        Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 

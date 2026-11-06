@@ -403,6 +403,7 @@ pub fn send_hello<P: Platform>(ctx: &NetCtx<P>, peer: &str) {
             } else {
                 0
             },
+            lane: String::new(),
         })
         .unwrap_or_default()
     };

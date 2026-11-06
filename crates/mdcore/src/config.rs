@@ -185,6 +185,21 @@ pub struct CoreConfig {
     /// when the link isn't local. On by default; off behaves like an app
     /// from before.
     pub audio_codec: bool,
+    /// Wi-Fi Direct for big transfers (`features::wifi_direct`): this end
+    /// says `wifi_direct` in its status and `addr_update` (when the
+    /// platform can and the user's switch is on) and understands the
+    /// `wifi_direct_*` messages. On by default; off behaves like an app
+    /// from before (tests use it to play an older peer).
+    pub wifi_direct: bool,
+    /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
+    pub wifi_direct_min: u64,
+    /// How long setting Wi-Fi Direct up may take before the transfer just
+    /// stays on its link.
+    pub wifi_direct_setup: std::time::Duration,
+    /// Try Wi-Fi Direct over a link on the local network too (tests:
+    /// their links are all local). Off: only over the relay, a punched
+    /// path, WebRTC, Bluetooth or a direct link over the internet.
+    pub wifi_direct_on_lan: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -232,6 +247,10 @@ impl Default for CoreConfig {
             links_map: true,
             nearby: true,
             audio_codec: true,
+            wifi_direct: true,
+            wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
+            wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
+            wifi_direct_on_lan: false,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

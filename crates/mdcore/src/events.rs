@@ -286,6 +286,36 @@ pub enum CoreEvent {
         items: Vec<crate::model::ReadLaterItem>,
         removed: Vec<String>,
     },
+    /// A side route for a big transfer (`features::wifi_direct`), `method`
+    /// "wifi_direct" or "hotspot": the platform is asked to `op` "consent"
+    /// (ask the user to leave this computer's Wi-Fi for the phone's
+    /// hotspot; answer `Engine::wifi_direct_consent`), "host" a group (with
+    /// the suggested `ssid` and `passphrase`, none for a hotspot; answer
+    /// `Engine::wifi_direct_hosted` with what it used), "join" the group
+    /// `ssid` with `passphrase` (`host_ip`: the host's address there, when
+    /// it said; answer `Engine::wifi_direct_joined` with the host's
+    /// address), or "leave" it (and go back to the Wi-Fi it was on). Either
+    /// fails with `Engine::wifi_direct_failed`. Carries a passphrase: never
+    /// log it.
+    WifiDirectRequest {
+        sid: String,
+        node_id: String,
+        method: String,
+        op: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        ssid: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        passphrase: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        host_ip: Option<String>,
+    },
+    /// Transfers with `node_id` go over a side route now (`active`), or no
+    /// longer do; `via`: "wifi_direct" or "hotspot".
+    WifiDirect {
+        node_id: String,
+        active: bool,
+        via: String,
+    },
     /// Device `from` sent its list of links (`features::links_map`): the
     /// map (`Engine::links_map`) may have changed. This device's own link
     /// changes come as `PeerConnected` / `PeerDisconnected`.
@@ -438,6 +468,8 @@ impl CoreEvent {
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
             CoreEvent::LinksMapChanged { .. } => "links-map-changed",
             CoreEvent::NearbyMedia(_) => "nearby-media",
+            CoreEvent::WifiDirectRequest { .. } => "wifi-direct-request",
+            CoreEvent::WifiDirect { .. } => "wifi-direct-changed",
             CoreEvent::KeyChanged { .. } => "key-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
@@ -601,6 +633,36 @@ mod tests {
                 "id": "u1", "url": "https://x.io/a", "title": "x.io", "host": "x.io",
                 "read": true, "saved_at": 5, "saved_on": "Mac", "updated_at": 6, "by": "node",
             }], "removed": ["u2"]})
+        );
+    }
+
+    #[test]
+    fn wifi_direct_events_keep_their_shape() {
+        let ev = CoreEvent::WifiDirectRequest {
+            sid: "s1".into(),
+            node_id: "n1".into(),
+            method: "hotspot".into(),
+            op: "join".into(),
+            ssid: Some("DIRECT-md-x".into()),
+            passphrase: Some("secret123".into()),
+            host_ip: None,
+        };
+        assert_eq!(ev.name(), "wifi-direct-request");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "wifi_direct_request", "sid": "s1", "node_id": "n1",
+                   "method": "hotspot", "op": "join", "ssid": "DIRECT-md-x",
+                   "passphrase": "secret123"})
+        );
+        let ev = CoreEvent::WifiDirect {
+            node_id: "n1".into(),
+            active: true,
+            via: "hotspot".into(),
+        };
+        assert_eq!(ev.name(), "wifi-direct-changed");
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"node_id": "n1", "active": true, "via": "hotspot"})
         );
     }
 

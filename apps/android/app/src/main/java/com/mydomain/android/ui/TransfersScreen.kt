@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.FileActions
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.TransferBook
 import com.mydomain.android.core.TransferLog
 import com.mydomain.android.core.TransferRecord
 import com.mydomain.android.core.TransferState
@@ -195,10 +196,15 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
             if (from != null && t.total > 0) {
                 Muted(stringResource(R.string.transfers_resumed, (from * 100 / t.total).toInt()))
             }
+            t.via?.let { Muted(" · " + stringResource(viaRes(it))) }
         }
     }
     HorizontalDivider(color = T.border)
 }
+
+/** "via Wi-Fi Direct" / "via phone hotspot". */
+private fun viaRes(via: String): Int =
+    if (via == TransferBook.VIA_HOTSPOT) R.string.transfers_via_hotspot else R.string.transfers_via_wifi_direct
 
 /** Whether [uri] (a picked file) can still be read. Blocking. */
 private fun readable(ctx: Context, uri: String): Boolean = runCatching {
@@ -213,9 +219,10 @@ private fun FinishedRow(t: TransferRecord, now: Long, onOpenDevice: (String) -> 
     val size = Formatter.formatShortFileSize(ctx, t.total)
     // [now] ticks, so "2 min ago" keeps up.
     val whenText = timeAgo(t.ended ?: t.started, now)
+    val via = t.via?.let { " · " + stringResource(viaRes(it)) } ?: ""
     val line = when {
         t.state == TransferState.Done ->
-            stringResource(if (t.incoming) R.string.transfers_done_saved else R.string.transfers_done_sent, size, whenText)
+            stringResource(if (t.incoming) R.string.transfers_done_saved else R.string.transfers_done_sent, size, whenText) + via
         t.reason == "cancelled" -> stringResource(R.string.transfers_cancelled, whenText)
         else -> stringResource(R.string.transfers_failed, t.reason ?: "", whenText)
     }

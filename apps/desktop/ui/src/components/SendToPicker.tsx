@@ -112,6 +112,12 @@ export default function SendToPicker() {
                       <Show when={p.node_id === last()}>
                         <span class="send-to-tag small">{t("sendTo.last")}</span>
                       </Show>
+                      {/* Only Bluetooth reaches it (no network, no server): a
+                          big file still goes, the offer for Wi-Fi Direct or
+                          the phone's hotspot goes over Bluetooth. */}
+                      <Show when={state.links[p.node_id] === "ble"}>
+                        <span class="send-to-tag small">{t("sendTo.nearbyOffline")}</span>
+                      </Show>
                       <StatusPill node={p.node_id} />
                     </button>
                   </li>

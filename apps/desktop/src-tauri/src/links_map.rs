@@ -48,7 +48,8 @@ pub struct Edge {
     pub b: String,
     /// One end is this computer.
     pub mine: bool,
-    /// "lan", "direct", "punched", "webrtc", "relay", "ble", or "none".
+    /// "lan", "direct", "punched", "webrtc", "relay", "ble",
+    /// "wifi_direct" (file transfers go over Wi-Fi Direct now), or "none".
     pub how: String,
     /// The colour family: "lan", "direct", "relay", "ble", "none".
     pub tone: String,
@@ -188,7 +189,8 @@ pub fn ring(n: usize, w: f64, h: f64) -> Vec<(f64, f64)> {
 /// The colour family for a link's `how`.
 pub fn tone(how: &str) -> &'static str {
     match how {
-        "lan" => "lan",
+        // Wi-Fi Direct: as close as the local network.
+        "lan" | "wifi_direct" | "hotspot" => "lan",
         "direct" | "punched" | "webrtc" => "direct",
         "relay" => "relay",
         "ble" => "ble",
@@ -200,7 +202,7 @@ pub fn tone(how: &str) -> &'static str {
 pub fn dash(how: &str) -> Option<String> {
     match how {
         "ble" => Some("2 5".into()),
-        "lan" | "direct" | "punched" | "webrtc" | "relay" => None,
+        "lan" | "direct" | "punched" | "webrtc" | "relay" | "wifi_direct" | "hotspot" => None,
         _ => Some("6 6".into()),
     }
 }
@@ -208,7 +210,9 @@ pub fn dash(how: &str) -> Option<String> {
 /// The label's i18n key for a link's `how`.
 pub fn label_key(how: &str) -> String {
     let k = match how {
-        "lan" | "direct" | "punched" | "webrtc" | "relay" | "ble" => how,
+        "lan" | "direct" | "punched" | "webrtc" | "relay" | "ble" | "wifi_direct" | "hotspot" => {
+            how
+        }
         _ => "none",
     };
     format!("map.how.{k}")
@@ -485,6 +489,10 @@ mod tests {
         assert_eq!(tone("webrtc"), "direct");
         assert_eq!(tone("ble"), "ble");
         assert_eq!(tone("whatever"), "none");
+        assert_eq!(label_key("wifi_direct"), "map.how.wifi_direct");
+        assert_eq!(tone("wifi_direct"), "lan");
+        assert_eq!(dash("wifi_direct"), None);
+        assert_eq!(label_key("hotspot"), "map.how.hotspot");
         assert_eq!(dash("lan"), None);
         assert_eq!(dash("relay"), None);
         assert_eq!(dash("ble").as_deref(), Some("2 5"));

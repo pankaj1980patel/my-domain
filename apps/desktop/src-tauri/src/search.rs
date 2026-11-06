@@ -959,6 +959,7 @@ mod tests {
             started: ts,
             ended: Some(ts),
             exists: false,
+            via: None,
         }
     }
 

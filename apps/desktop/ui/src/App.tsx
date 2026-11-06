@@ -34,6 +34,7 @@ import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
+import { HotspotAsk } from "./components/HotspotAsk";
 
 type View =
   | { name: "home" }
@@ -376,6 +377,7 @@ export default function App() {
         />
         <CallOverlay />
         <SendToPicker />
+        <HotspotAsk />
         <NoteReminders onOpen={(id) => openNote(id)} />
         <TimerAlarm onOpen={() => go({ name: "timers" })} />
         </Show>

@@ -170,8 +170,12 @@ fun ShareChooser() {
                     }, Modifier.fillMaxWidth())
                 }
                 if (peers.isEmpty()) Muted(stringResource(R.string.share_no_devices))
+                val offline = stringResource(R.string.share_nearby_offline)
                 peers.forEach { p ->
-                    val name = Core.peerName(p.nodeId)
+                    // Only Bluetooth reaches it (no network, no server): a
+                    // big file still goes (the offer for Wi-Fi Direct or the
+                    // hotspot goes over Bluetooth).
+                    val name = Core.peerName(p.nodeId) + if (Core.links[p.nodeId] == "ble") " · $offline" else ""
                     SoftButton(name, {
                         Core.clearShare()
                         toast(String.format(sendingTo, name))

@@ -11,6 +11,9 @@
 //!
 //! `how` is the one word the connection check uses (`Diagnosis::verdict`
 //! for a live link): "lan", "direct", "punched", "webrtc", "relay", "ble".
+//! This device's own map also says "wifi_direct" for a link whose file
+//! transfers go over Wi-Fi Direct right now (`features::wifi_direct`); the
+//! others are told how the link itself is carried.
 //! The list goes over live links only (it never connects or wakes a
 //! device), to every linked device when one of this device's links comes
 //! up, goes down or changes how it's carried (a little after, so a burst of
@@ -72,7 +75,16 @@ const SEEN_PREFIX: &str = "links_seen:";
 
 /// The ways a live link can be carried, in the words of the connection
 /// check.
-pub const HOWS: [&str; 6] = ["lan", "direct", "punched", "webrtc", "relay", "ble"];
+pub const HOWS: [&str; 8] = [
+    "lan",
+    "direct",
+    "punched",
+    "webrtc",
+    "relay",
+    "ble",
+    "wifi_direct",
+    "hotspot",
+];
 
 /// The paths the ladder tries, in the order the map lists them.
 pub const PATHS: [&str; 4] = ["lan", "internet", "relay", "ble"];
@@ -132,7 +144,9 @@ pub struct PathTry {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct MapLink {
-    /// "lan", "direct", "punched", "webrtc", "relay" or "ble".
+    /// "lan", "direct", "punched", "webrtc", "relay" or "ble"; or
+    /// "wifi_direct" or "hotspot" while file transfers go over Wi-Fi
+    /// Direct or the phone's hotspot.
     pub how: String,
     pub transport: TransportKind,
     /// The other end's address, when the link has one.
@@ -687,9 +701,18 @@ pub fn snapshot<P: Platform>(ctx: &NetCtx<P>) -> LinksMap {
         .map(|p| {
             let attempts = diag::attempts(ctx, &p.node_id);
             let link = conns.get(&p.node_id).map(|c| {
-                let (rtt_ms, loss_pct) = rtt_of(ctx, &p.node_id);
+                let (mut rtt_ms, mut loss_pct) = rtt_of(ctx, &p.node_id);
+                let mut how = how(c.kind, diag::is_lan(c.addr));
+                if let Some(via) = super::wifi_direct::active_via(ctx, &p.node_id) {
+                    how = via;
+                    rtt_ms = ctx
+                        .quic
+                        .lane_rtt(&p.node_id)
+                        .map(|d| u32::try_from(d.as_millis()).unwrap_or(u32::MAX));
+                    loss_pct = None;
+                }
                 MapLink {
-                    how: how(c.kind, diag::is_lan(c.addr)).to_string(),
+                    how: how.to_string(),
                     transport: c.kind,
                     remote: c.addr.map(|a| a.to_string()),
                     addr_kind: addr_kind(c.addr, p.mapped_quic.as_deref()),

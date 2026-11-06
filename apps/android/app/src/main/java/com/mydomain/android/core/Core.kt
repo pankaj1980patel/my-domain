@@ -18,6 +18,7 @@ import com.mydomain.android.BuildConfig
 import com.mydomain.android.HomeWidget
 import com.mydomain.android.R
 import com.mydomain.android.ShareTargets
+import com.mydomain.android.WifiDirect
 import com.mydomain.android.ffi.DeviceIdentity
 import com.mydomain.android.ffi.MdEngine
 import com.mydomain.android.ffi.PeerInfo
@@ -438,6 +439,12 @@ object Core {
             onMain { screens[from] = bmp }
             return
         }
+        // Wi-Fi Direct / hotspot requests carry a passphrase: handled here,
+        // never logged or kept.
+        if (name == "wifi-direct-request") {
+            WifiDirect.onRequest(app, payloadJson)
+            return
+        }
         // A code event's payload holds the code itself: never log it.
         labLog(if (name.startsWith("code")) name else "$name ${payloadJson.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
@@ -635,6 +642,9 @@ object Core {
                     o.optBoolean("incoming"), o.optBoolean("resumed"),
                 )
             }
+            // Transfers with a device went over to Wi-Fi Direct or the
+            // phone's hotspot (or back).
+            "wifi_direct" -> TransferLog.wifiDirect(node, o.optBoolean("active"), o.optString("via", TransferBook.VIA_WIFI_DIRECT))
             "file_received" -> {
                 val from = o.optString("from")
                 val name = o.optString("name")

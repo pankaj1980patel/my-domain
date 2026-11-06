@@ -184,6 +184,11 @@ pub enum WsFrame {
         /// ignore it), so they keep getting media as JSON messages.
         #[serde(default, skip_serializing_if = "is_zero")]
         bin_media: u8,
+        /// QUIC only: this connection is a side lane for file transfers
+        /// (`"wifi_direct"`, see `features::wifi_direct`), not the peer's
+        /// link. Older apps leave it out; they're never dialed for one.
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        lane: String,
     },
     #[serde(rename = "msg")]
     Msg { nonce: String, ciphertext: String },
@@ -267,6 +272,7 @@ mod tests {
             name: "x".into(),
             boot: String::new(),
             bin_media,
+            lane: String::new(),
         };
         let old = serde_json::to_string(&hello(0)).unwrap();
         assert!(!old.contains("bin_media"), "{old}");

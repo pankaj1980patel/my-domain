@@ -87,7 +87,7 @@ object LinksMapPlan {
     )
 
     fun tone(how: String?): Tone = when (how) {
-        "lan" -> Tone.LAN
+        "lan", "wifi_direct", "hotspot" -> Tone.LAN
         "direct", "punched", "webrtc" -> Tone.DIRECT
         "relay" -> Tone.RELAY
         "ble" -> Tone.BLE

@@ -21,4 +21,5 @@ pub struct Extras {
     pub read_later: super::read_later::ReadLater,
     pub links_map: super::links_map::LinksMapState,
     pub nearby: super::nearby::NearbyState,
+    pub wifi_direct: super::wifi_direct::WifiDirectState,
 }

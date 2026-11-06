@@ -98,6 +98,8 @@ class NetService : Service() {
         Core.engine()?.setAudioRoles(true, PhoneAudio.supported)
         // "Use nearby mode for media" (Settings).
         NearbyMode.apply(this)
+        // Big files over Wi-Fi Direct or this phone's hotspot (WifiDirect.kt).
+        WifiDirect.init(this)
         // Labels given on this phone before they were shared.
         Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
         PhotoBackup.start(this)

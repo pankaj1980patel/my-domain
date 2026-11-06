@@ -44,6 +44,7 @@ pub mod share;
 pub mod signal_fwd;
 pub mod timers;
 pub mod wake;
+pub mod wifi_direct;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -135,8 +136,9 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::wake_relay`), `camera_ctl` (`CoreConfig::camera`),
     /// `timers` (`CoreConfig::timers`), the `read_later*` messages
     /// (`CoreConfig::read_later`), `links_map`
-    /// (`CoreConfig::links_map`), and the `nearby_*` clock pings
-    /// (`CoreConfig::nearby`).
+    /// (`CoreConfig::links_map`), the `nearby_*` clock pings
+    /// (`CoreConfig::nearby`), and the `wifi_direct_*` messages
+    /// (`CoreConfig::wifi_direct`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -150,6 +152,7 @@ impl<P: Platform> ControlRegistry<P> {
         read_later: bool,
         links_map: bool,
         nearby: bool,
+        wifi_direct: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -205,6 +208,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if nearby {
             r.register(Arc::new(nearby::NearbyHandler));
+        }
+        if wifi_direct {
+            r.register(Arc::new(wifi_direct::WifiDirectHandler));
         }
         r
     }

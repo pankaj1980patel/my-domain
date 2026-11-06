@@ -36,6 +36,8 @@ class LinksMapPlanTest {
     @Test
     fun linesAreDrawnByHow() {
         assertEquals(Tone.LAN, LinksMapPlan.tone("lan"))
+        assertEquals(Tone.LAN, LinksMapPlan.tone("wifi_direct"))
+        assertEquals(Tone.LAN, LinksMapPlan.tone("hotspot"))
         assertEquals(Tone.DIRECT, LinksMapPlan.tone("punched"))
         assertEquals(Tone.DIRECT, LinksMapPlan.tone("webrtc"))
         assertEquals(Tone.RELAY, LinksMapPlan.tone("relay"))

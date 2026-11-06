@@ -63,6 +63,15 @@
          (WifiNetworks.kt); asked for when you first list networks, and the
          location itself is never read. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Big files over Wi-Fi Direct or this phone's local-only hotspot
+         (WifiDirect.kt, PhoneHotspot.kt): an app targeting Android 13
+         needs this instead of location; asked for the first time it's
+         needed, with an explanation. -->
+    <uses-permission
+        android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="33" />
+    <uses-feature android:name="android.hardware.wifi.direct" android:required="false" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <!-- Your computers change brightness, screen timeout and auto-rotate
          (ScreenSettings); the user grants it on a system screen. -->
@@ -230,6 +239,13 @@
             android:name=".ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <!-- Why Wi-Fi Direct and the hotspot need the permission
+             (WifiDirect.kt): asked once, the first time it's needed. -->
+        <activity
+            android:name=".WifiDirectPermissionActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- This phone's camera on a computer (CameraShare.kt): asks every
              time, then streams in the foreground with Stop. -->
         <activity

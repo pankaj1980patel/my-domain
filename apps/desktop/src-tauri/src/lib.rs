@@ -31,6 +31,7 @@ mod device;
 mod device_labels;
 mod diagnostics;
 mod fcm;
+mod hotspot;
 mod key_changes;
 mod links_map;
 mod location;
@@ -60,6 +61,7 @@ mod transfers;
 mod tray;
 mod tray_battery;
 mod webhooks;
+mod wifi_direct;
 mod wifi_share;
 mod wol;
 
@@ -332,6 +334,31 @@ impl EventSink for TauriSink {
             phone_audio::on_frame(from, *seq, *rate, *channels, pcm);
             return;
         }
+        // Wi-Fi Direct: the core asks this computer to host a group (or
+        // leave it). It carries a passphrase: never logged or handed to the
+        // window.
+        if let CoreEvent::WifiDirectRequest {
+            sid,
+            node_id,
+            method,
+            op,
+            ssid,
+            passphrase,
+            host_ip,
+        } = &ev
+        {
+            wifi_direct::on_request(
+                &self.app,
+                sid,
+                node_id,
+                method,
+                op,
+                ssid.as_deref(),
+                passphrase.as_deref(),
+                host_ip.as_deref(),
+            );
+            return;
+        }
         if cfg!(debug_assertions) {
             let payload = ev.ui_payload().to_string();
             let short: String = payload.chars().take(200).collect();
@@ -497,6 +524,14 @@ impl EventSink for TauriSink {
             ),
             CoreEvent::FileSent { id, node_id, name } => {
                 transfers::on_sent(&self.app, id, node_id, name);
+            }
+            // The transfer rows with that device say "via Wi-Fi Direct".
+            CoreEvent::WifiDirect {
+                node_id,
+                active,
+                via,
+            } => {
+                transfers::on_wifi_direct(&self.app, node_id, *active, via);
             }
             CoreEvent::FileFailed {
                 id,
@@ -1600,6 +1635,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         wol::set_wake_setting,
         wol::can_wake,
         wol::wake_device,
+        wifi_direct::wifi_direct_setting,
+        wifi_direct::set_wifi_direct,
+        wifi_direct::set_phone_hotspot,
+        hotspot::hotspot_consent,
         tray_battery::tray_battery_setting,
         tray_battery::set_tray_battery,
         away_lock::away_lock,
@@ -1777,6 +1816,8 @@ pub fn run() {
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(wol::WakePref::load(&handle));
+            app.manage(wifi_direct::WifiDirectPref::load(&handle));
+            app.manage(hotspot::HotspotPref::load(&handle));
             app.manage(device_labels::DeviceLabels::load(&handle));
             app.manage(page_layout::PageLayouts::load(&handle));
             app.manage(away_lock::AwayLockState::load(&handle));
@@ -1835,6 +1876,9 @@ pub fn run() {
                     return Err(Box::new(std::io::Error::other(e)));
                 }
             }
+            // Wi-Fi Direct for big files: what this computer can do (Windows
+            // hosts a group), and the user's switch.
+            wifi_direct::init(&handle);
             // Start the FCM receiver (needs the managed Engine for on_signal).
             app.manage(fcm::FcmToken(fcm_token.clone()));
             fcm::spawn(handle.clone(), fcm_token);

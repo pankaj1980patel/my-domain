@@ -890,6 +890,53 @@ impl MdEngine {
         self.inner.set_ble_state(reason.as_deref());
     }
 
+    /// What this phone can do for big file transfers (1: host a Wi-Fi
+    /// Direct group, 2: join one, 4: start a local hotspot; 0 nothing).
+    pub fn set_wifi_direct_caps(&self, caps: u64) {
+        self.inner.set_wifi_direct_caps(caps);
+    }
+
+    /// "Use Wi-Fi Direct for big files when nearby" (on unless turned off).
+    pub fn set_wifi_direct_enabled(&self, on: bool) {
+        self.inner.set_wifi_direct_enabled(on);
+    }
+
+    /// The group (or hotspot) for `wifi_direct_request` `sid` is up, named
+    /// `ssid` with `passphrase`; `host_ip`: this phone's address on it, ""
+    /// if not known. Never logged.
+    pub fn wifi_direct_hosted(
+        &self,
+        sid: String,
+        ssid: String,
+        passphrase: String,
+        host_ip: String,
+    ) {
+        self.inner
+            .wifi_direct_hosted(&sid, &ssid, &passphrase, &host_ip);
+    }
+
+    /// How transfers with `node_id` go now: "wifi_direct", "hotspot", or
+    /// none.
+    pub fn wifi_direct_via(&self, node_id: String) -> Option<String> {
+        self.inner.wifi_direct_via(&node_id)
+    }
+
+    /// Joined the group for `sid`; its owner is at `host_ip`.
+    pub fn wifi_direct_joined(&self, sid: String, host_ip: String) {
+        self.inner.wifi_direct_joined(&sid, &host_ip);
+    }
+
+    /// Couldn't host or join for `sid` (no permission, Wi-Fi off, ...): the
+    /// transfer stays on its link.
+    pub fn wifi_direct_failed(&self, sid: String, reason: String) {
+        self.inner.wifi_direct_failed(&sid, &reason);
+    }
+
+    /// Transfers with `node_id` go over Wi-Fi Direct right now.
+    pub fn wifi_direct_active(&self, node_id: String) -> bool {
+        self.inner.wifi_direct_active(&node_id)
+    }
+
     /// Start a speed test with a device (`bytes` each way, at most 32 MB).
     /// Returns its id; progress and the result come as `speed_test` events.
     pub fn speed_test(&self, node_id: String, bytes: u32) -> MdResult<String> {

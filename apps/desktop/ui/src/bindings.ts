@@ -278,6 +278,13 @@ export const commands = {
 	 *  devices on its network.
 	 */
 	wakeDevice: (nodeId: string) => typedError<WakeReport, string>(__TAURI_INVOKE("wake_device", { nodeId })),
+	wifiDirectSetting: () => __TAURI_INVOKE<WifiDirectSetting>("wifi_direct_setting"),
+	/**  Turn "Use Wi-Fi Direct for big files when nearby" on or off. */
+	setWifiDirect: (on: boolean) => __TAURI_INVOKE<WifiDirectSetting>("set_wifi_direct", { on }),
+	/**  "Use the phone’s hotspot for big files": ask, always or never. */
+	setPhoneHotspot: (mode: Mode) => __TAURI_INVOKE<WifiDirectSetting>("set_phone_hotspot", { mode }),
+	/**  The user's answer to `hotspot-ask`. */
+	hotspotConsent: (sid: string, yes: boolean) => __TAURI_INVOKE<void>("hotspot_consent", { sid, yes }),
 	/**  The menu-bar battery setting, and your phones to pick from. */
 	trayBatterySetting: () => __TAURI_INVOKE<TrayBatterySetting>("tray_battery_setting"),
 	/**  Change the menu-bar battery setting; the tray follows at once. */
@@ -1475,7 +1482,10 @@ export type Edge_Deserialize = {
 	b: string,
 	/**  One end is this computer. */
 	mine: boolean,
-	/**  "lan", "direct", "punched", "webrtc", "relay", "ble", or "none". */
+	/**
+	 *  "lan", "direct", "punched", "webrtc", "relay", "ble",
+	 *  "wifi_direct" (file transfers go over Wi-Fi Direct now), or "none".
+	 */
 	how: string,
 	/**  The colour family: "lan", "direct", "relay", "ble", "none". */
 	tone: string,
@@ -1510,7 +1520,10 @@ export type Edge_Serialize = {
 	b: string,
 	/**  One end is this computer. */
 	mine: boolean,
-	/**  "lan", "direct", "punched", "webrtc", "relay", "ble", or "none". */
+	/**
+	 *  "lan", "direct", "punched", "webrtc", "relay", "ble",
+	 *  "wifi_direct" (file transfers go over Wi-Fi Direct now), or "none".
+	 */
 	how: string,
 	/**  The colour family: "lan", "direct", "relay", "ble", "none". */
 	tone: string,
@@ -1902,7 +1915,11 @@ export type MapLink = MapLink_Serialize | MapLink_Deserialize;
 
 /**  How this device is linked to one of your devices. */
 export type MapLink_Deserialize = {
-	/**  "lan", "direct", "punched", "webrtc", "relay" or "ble". */
+	/**
+	 *  "lan", "direct", "punched", "webrtc", "relay" or "ble"; or
+	 *  "wifi_direct" or "hotspot" while file transfers go over Wi-Fi
+	 *  Direct or the phone's hotspot.
+	 */
 	how: string,
 	transport: TransportKind,
 	/**  The other end's address, when the link has one. */
@@ -1931,7 +1948,11 @@ export type MapLink_Deserialize = {
 
 /**  How this device is linked to one of your devices. */
 export type MapLink_Serialize = {
-	/**  "lan", "direct", "punched", "webrtc", "relay" or "ble". */
+	/**
+	 *  "lan", "direct", "punched", "webrtc", "relay" or "ble"; or
+	 *  "wifi_direct" or "hotspot" while file transfers go over Wi-Fi
+	 *  Direct or the phone's hotspot.
+	 */
 	how: string,
 	transport: TransportKind,
 	/**  The other end's address, when the link has one. */
@@ -1982,6 +2003,9 @@ export type MapView_Serialize = {
 	/**  The core's data, for the list and the details. */
 	map: LinksMap_Serialize,
 };
+
+/**  "Use the phone’s hotspot for big files". */
+export type Mode = "ask" | "always" | "never";
 
 /**  How our NAT maps a socket's outgoing traffic, as far as hole punching cares. */
 export type NatKind = 
@@ -2913,6 +2937,11 @@ export type TransferEntry_Deserialize = {
 	ended?: number | null,
 	/**  `path` is still there (filled in when listed). */
 	exists?: boolean,
+	/**
+	 *  It went (at least partly) over another route than the link:
+	 *  "wifi_direct".
+	 */
+	via?: string | null,
 };
 
 /**  One transfer, either way. */
@@ -2938,6 +2967,11 @@ export type TransferEntry_Serialize = {
 	ended: number | null,
 	/**  `path` is still there (filled in when listed). */
 	exists: boolean,
+	/**
+	 *  It went (at least partly) over another route than the link:
+	 *  "wifi_direct".
+	 */
+	via: string | null,
 };
 
 /**  Where a transfer is. */
@@ -3090,6 +3124,17 @@ export type Why_Serialize = {
 	fix_key: string,
 	/**  How long ago it was tried (none: a state, not an attempt). */
 	ago_s: number | null,
+};
+
+/**  What Settings shows. */
+export type WifiDirectSetting = {
+	on: boolean,
+	/**  This computer can use it (Windows with Wi-Fi Direct). */
+	supported: boolean,
+	/**  "Use the phone’s hotspot for big files". */
+	hotspot: Mode,
+	/**  This computer has Wi-Fi to join a hotspot with. */
+	hotspot_supported: boolean,
 };
 
 /**  One network card this computer can be woken through. */
