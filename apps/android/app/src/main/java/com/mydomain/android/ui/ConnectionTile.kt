@@ -60,6 +60,7 @@ private fun reasonRes(r: String?): Int? = when (r) {
     "relay_unreachable" -> R.string.conn_reason_relay_unreachable
     "no_path" -> R.string.conn_reason_no_path
     "dropped" -> R.string.conn_reason_dropped
+    "key_changed" -> R.string.conn_reason_key_changed
     else -> null
 }
 
@@ -78,6 +79,8 @@ private fun stageRes(s: String): Int? = when (s) {
     "relay_unreachable" -> R.string.conn_stage_relay_unreachable
     "link_up" -> R.string.conn_stage_link_up
     "link_down" -> R.string.conn_stage_link_down
+    "key_changed" -> R.string.conn_stage_key_changed
+    "key_trusted" -> R.string.conn_stage_key_trusted
     else -> null
 }
 

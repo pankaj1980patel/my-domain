@@ -34,7 +34,8 @@ data class MapDeviceInfo(
     val lastSeenAgoS: Long? = null,
     val sharesLinks: Boolean = false,
     val tries: List<PathTryInfo> = emptyList(),
-    /** "bad_key": what it sends can't be read. */
+    /** "key_changed": its security key changed, refused until you trust
+     *  the new one; "bad_key": what it sends can't be read. */
     val problem: String? = null,
 )
 
@@ -77,7 +78,7 @@ object LinksMapPlan {
         "internet" to setOf("push_failed", "no_answer", "symmetric_nat", "punch_timeout", "no_port_mapping", "timed_out"),
         "relay" to setOf("signed_out", "unreachable", "auth_failed", "relay_full", "peer_offline"),
         "ble" to setOf("off", "not_paired", "out_of_range", "unsupported"),
-        "device" to setOf("bad_key"),
+        "device" to setOf("key_changed", "bad_key"),
     )
 
     fun tone(how: String?): Tone = when (how) {

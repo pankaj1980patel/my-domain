@@ -290,6 +290,17 @@ pub enum CoreEvent {
     /// map (`Engine::links_map`) may have changed. This device's own link
     /// changes come as `PeerConnected` / `PeerDisconnected`.
     LinksMapChanged { from: String },
+    /// Device `node_id` came with another key than the one this device
+    /// remembers (reinstalled, data cleared, or someone else using its id)
+    /// and its direct connections are refused until the user trusts it
+    /// (`Engine::trust_new_key`). Once per new key. Short fingerprints of
+    /// the key it had and the one it came with.
+    KeyChanged {
+        node_id: String,
+        name: String,
+        old_fingerprint: String,
+        new_fingerprint: String,
+    },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -420,6 +431,7 @@ impl CoreEvent {
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
             CoreEvent::LinksMapChanged { .. } => "links-map-changed",
+            CoreEvent::KeyChanged { .. } => "key-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
@@ -689,6 +701,25 @@ mod tests {
                 json!({"from": "phone", "on": false, "rate": 0})
             )
         );
+    }
+
+    #[test]
+    fn key_changes_keep_their_shape() {
+        let ev = CoreEvent::KeyChanged {
+            node_id: "n1".into(),
+            name: "Pixel".into(),
+            old_fingerprint: "AAAA BBBB CCCC DDDD".into(),
+            new_fingerprint: "1111 2222 3333 4444".into(),
+        };
+        let fields = json!({
+            "node_id": "n1",
+            "name": "Pixel",
+            "old_fingerprint": "AAAA BBBB CCCC DDDD",
+            "new_fingerprint": "1111 2222 3333 4444",
+        });
+        assert_eq!((ev.name(), ev.ui_payload()), ("key-changed", fields));
+        // Android matches "key_changed".
+        assert_eq!(ev.to_json()["kind"], "key_changed");
     }
 
     #[test]

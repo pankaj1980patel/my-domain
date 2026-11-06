@@ -11,6 +11,7 @@ import { peerName, state } from "../lib/core";
 import { mapView, myEdge, watchMap, type MapDevice, type MapEdge, type MapView } from "../lib/linksMap";
 import { niceName, timeAgo } from "../lib/words";
 import { HelpLink } from "../help/HelpLink";
+import KeyChangeBanner from "../components/KeyChangeBanner";
 import { t, type Key } from "../i18n";
 
 type Pick = { kind: "device"; node: string } | { kind: "edge"; id: string } | null;
@@ -24,6 +25,7 @@ const REASON: Record<string, Key> = {
   relay_unreachable: "conn.reason.relayUnreachable",
   no_path: "conn.reason.noPath",
   dropped: "conn.reason.dropped",
+  key_changed: "conn.reason.keyChanged",
 };
 
 const TRANSPORT: Record<string, Key> = {
@@ -292,6 +294,9 @@ function Details(props: {
         </button>
       </div>
       <p class={`map-how tone-${e().tone}`}>{t(e().label_key as Key)}</p>
+      <Show when={e().mine && props.device?.problem === "key_changed"}>
+        <KeyChangeBanner node={e().b} showDismissed />
+      </Show>
       <dl class="kv">
         <Show when={e().how !== "none" && PATH[e().how]}>
           <dt>{t("map.d.path")}</dt>

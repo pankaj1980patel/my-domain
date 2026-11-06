@@ -25,6 +25,7 @@ const REASON: Record<string, Key> = {
   relay_unreachable: "conn.reason.relayUnreachable",
   no_path: "conn.reason.noPath",
   dropped: "conn.reason.dropped",
+  key_changed: "conn.reason.keyChanged",
 };
 
 const STAGE: Record<string, Key> = {
@@ -42,6 +43,8 @@ const STAGE: Record<string, Key> = {
   relay_unreachable: "conn.stage.relay_unreachable",
   link_up: "conn.stage.link_up",
   link_down: "conn.stage.link_down",
+  key_changed: "conn.stage.key_changed",
+  key_trusted: "conn.stage.key_trusted",
 };
 
 const TRANSPORT: Record<string, Key> = {

@@ -32,7 +32,9 @@
 //! platform says). A link that comes up over a path clears it. The words
 //! are short codes the apps put into plain words with a hint each (see
 //! `LAN_REASONS` and the others). A message from a device that couldn't
-//! be read marks it "bad_key" (a different device key) for a while.
+//! be read marks it "bad_key" (a different device key) for a while; a
+//! device whose security key changed (`device_key`), refused until the
+//! user trusts it, is marked "key_changed".
 //!
 //! When a link goes down, the time is kept (`links_seen:<node>` in the
 //! platform's store) for "last seen" on the map.
@@ -107,6 +109,10 @@ pub const RELAY_REASONS: [&str; 5] = [
 ];
 /// Why Bluetooth didn't work (as the platform said).
 pub const BLE_REASONS: [&str; 4] = ["off", "not_paired", "out_of_range", "unsupported"];
+/// What can be wrong with a device as a whole (`MapDevice::problem`): its
+/// security key changed and it's refused until the user trusts the new
+/// one, or what it sent couldn't be read.
+pub const DEVICE_PROBLEMS: [&str; 2] = ["key_changed", "bad_key"];
 /// How long a message that couldn't be read keeps "bad_key" on the map.
 const BAD_KEY_FOR: u64 = 15 * 60;
 
@@ -167,8 +173,10 @@ pub struct MapDevice {
     /// What stopped each path the last time it was tried, in `PATHS`
     /// order (a path that worked since, or carries the link, isn't listed).
     pub tries: Vec<PathTry>,
-    /// Something wrong with the device as a whole: "bad_key" (what it sent
-    /// couldn't be read: a different device key).
+    /// Something wrong with the device as a whole: "key_changed" (its
+    /// security key changed: direct links are refused until the user
+    /// trusts the new one), "bad_key" (what it sent couldn't be read: a
+    /// different encryption key).
     pub problem: Option<String>,
 }
 
@@ -694,12 +702,16 @@ pub fn snapshot<P: Platform>(ctx: &NetCtx<P>) -> LinksMap {
                 .get(&p.node_id)
                 .map(|c| path_of(c.kind, diag::is_lan(c.addr)));
             let tries = tries_of(ctx, &p.node_id, linked_by, now);
-            let problem = st(ctx)
+            let bad_key = st(ctx)
                 .bad_key
                 .lock()
                 .get(&p.node_id)
-                .filter(|at| now.saturating_sub(**at) < BAD_KEY_FOR)
-                .map(|_| "bad_key".to_string());
+                .is_some_and(|at| now.saturating_sub(*at) < BAD_KEY_FOR);
+            let problem = if crate::engine::key_changed(ctx, &p.node_id) {
+                Some("key_changed".to_string())
+            } else {
+                bad_key.then(|| "bad_key".to_string())
+            };
             let (state, reason) = match &link {
                 Some(l) => (l.how.clone(), None),
                 None => Diagnosis::judge(None, &attempts),

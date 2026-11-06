@@ -655,6 +655,15 @@ export const commands = {
 	cancelSpeedTest: (id: string) => __TAURI_INVOKE<boolean>("cancel_speed_test", { id }),
 	/**  The map, laid out (quick: nothing is measured). */
 	linksMap: () => __TAURI_INVOKE<MapView_Serialize>("links_map"),
+	/**  The devices whose key changed, newest first (dismissed ones marked). */
+	keyChanges: () => __TAURI_INVOKE<KeyChange[]>("key_changes"),
+	/**
+	 *  Trust `node_id`'s new key: the one whose fingerprint you were shown
+	 *  (`new_fingerprint`). Fails when its key changed again since.
+	 */
+	trustNewKey: (nodeId: string, newFingerprint: string) => typedError<null, string>(__TAURI_INVOKE("trust_new_key", { nodeId, newFingerprint })),
+	/**  "Not now": keep refusing it, stop asking (until another key turns up). */
+	dismissKeyChange: (nodeId: string) => __TAURI_INVOKE<boolean>("dismiss_key_change", { nodeId }),
 	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
@@ -730,7 +739,9 @@ export type Attempt_Deserialize = {
 	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
 	 *  adds: `push_failed` (the server couldn't send the push),
 	 *  `no_answer` (the push went, the device didn't answer),
-	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`.
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+	 *  `key_changed` (it came with another device key: refused until the
+	 *  user trusts it), `key_trusted`.
 	 */
 	stage: string,
 	detail?: string | null,
@@ -745,7 +756,9 @@ export type Attempt_Serialize = {
 	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
 	 *  adds: `push_failed` (the server couldn't send the push),
 	 *  `no_answer` (the push went, the device didn't answer),
-	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`.
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+	 *  `key_changed` (it came with another device key: refused until the
+	 *  user trusts it), `key_trusted`.
 	 */
 	stage: string,
 	detail: string | null,
@@ -1381,7 +1394,8 @@ export type Diagnosis_Deserialize = {
 	/**
 	 *  Why it's unreachable, from the last attempt: "push_failed",
 	 *  "no_answer", "relay_no_answer", "relay_unreachable", "no_path",
-	 *  "dropped".
+	 *  "dropped", "key_changed" (its device key changed: refused until
+	 *  the user trusts the new one).
 	 */
 	reason?: string | null,
 	/**  Seconds since the last connect attempt or link change. */
@@ -1417,7 +1431,8 @@ export type Diagnosis_Serialize = {
 	/**
 	 *  Why it's unreachable, from the last attempt: "push_failed",
 	 *  "no_answer", "relay_no_answer", "relay_unreachable", "no_path",
-	 *  "dropped".
+	 *  "dropped", "key_changed" (its device key changed: refused until
+	 *  the user trusts the new one).
 	 */
 	reason: string | null,
 	/**  Seconds since the last connect attempt or link change. */
@@ -1662,6 +1677,23 @@ export type JoinStatus_Serialize = {
 	name: string | null,
 };
 
+/**  A device whose key changed, for the apps (`Engine::key_changes`). */
+export type KeyChange = {
+	node_id: string,
+	/**  Its name as this device knows it (the node id when it doesn't). */
+	name: string,
+	/**  Short fingerprints of the key it had and the one it came with. */
+	old_fingerprint: string,
+	new_fingerprint: string,
+	/**  Seconds since it first, and last, came with the new key. */
+	first_ago_s: number,
+	last_ago_s: number,
+	/**  Connections refused with that key. */
+	attempts: number,
+	/**  The user said "Not now" (still refused, not asked again). */
+	dismissed: boolean,
+};
+
 /**  Where the layout a page shows came from. */
 export type LayoutScope = 
 /**  Nothing saved: the page's own order. */
@@ -1802,8 +1834,10 @@ export type MapDevice_Deserialize = {
 	 */
 	tries: PathTry[],
 	/**
-	 *  Something wrong with the device as a whole: "bad_key" (what it sent
-	 *  couldn't be read: a different device key).
+	 *  Something wrong with the device as a whole: "key_changed" (its
+	 *  security key changed: direct links are refused until the user
+	 *  trusts the new one), "bad_key" (what it sent couldn't be read: a
+	 *  different encryption key).
 	 */
 	problem?: string | null,
 };
@@ -1836,8 +1870,10 @@ export type MapDevice_Serialize = {
 	 */
 	tries: PathTry[],
 	/**
-	 *  Something wrong with the device as a whole: "bad_key" (what it sent
-	 *  couldn't be read: a different device key).
+	 *  Something wrong with the device as a whole: "key_changed" (its
+	 *  security key changed: direct links are refused until the user
+	 *  trusts the new one), "bad_key" (what it sent couldn't be read: a
+	 *  different encryption key).
 	 */
 	problem: string | null,
 };

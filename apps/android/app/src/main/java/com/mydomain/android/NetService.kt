@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
 import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.KeyChanges
 import com.mydomain.android.core.KeystoreSecrets
 import com.mydomain.android.core.Tone
 import com.mydomain.android.ffi.EventListener
@@ -395,6 +396,8 @@ class NetService : Service() {
                             ComputerNotifs.onConnected(this@NetService, o.optString("node_id"))
                         }
                         "peers_updated" -> PhoneAutomations.linksChanged()
+                        // A device came back with another security key: say so once.
+                        "key_changed" -> KeyChanges.onChanged(this@NetService, o.optString("node_id"), o.optString("name"))
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {

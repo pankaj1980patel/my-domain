@@ -580,6 +580,12 @@ object Core {
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
+            // A device came back with another security key: refused until
+            // the user decides (its screen asks).
+            "key_changed" -> {
+                addActivity(str(R.string.key_change_title, peerName(node)), Tone.Warn)
+                appScope.launch { runCatching { KeyChanges.load() } }
+            }
             "battery_alert" -> {
                 val who = peerName(o.optString("from"))
                 when (o.optString("alert")) {

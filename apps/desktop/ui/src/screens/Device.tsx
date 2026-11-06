@@ -45,6 +45,7 @@ import {
 import { fileFailReason, friendlyError, humanSize, progressLabel } from "../lib/words";
 import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
 import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
+import KeyChangeBanner from "../components/KeyChangeBanner";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn } from "../i18n";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
@@ -245,6 +246,7 @@ export default function Device(props: { node: string; onBack: () => void }) {
               </div>
             </Show>
           </header>
+          <KeyChangeBanner node={props.node} />
           <Show when={editing()}>
             <DeviceLabelForm node={props.node} onClose={() => setEditing(false)} />
           </Show>

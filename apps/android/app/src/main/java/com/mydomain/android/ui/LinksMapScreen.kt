@@ -148,6 +148,7 @@ private val WHY: Map<String, Pair<Int, Int>> = mapOf(
     "ble_not_paired" to (R.string.map_why_ble_not_paired to R.string.map_fix_ble_not_paired),
     "ble_out_of_range" to (R.string.map_why_ble_out_of_range to R.string.map_fix_ble_out_of_range),
     "ble_unsupported" to (R.string.map_why_ble_unsupported to R.string.map_fix_ble_unsupported),
+    "device_key_changed" to (R.string.map_why_device_key_changed to R.string.map_fix_device_key_changed),
     "device_bad_key" to (R.string.map_why_device_bad_key to R.string.map_fix_device_bad_key),
 )
 
@@ -462,6 +463,7 @@ private fun Details(map: LinksMapInfo, pick: Picked, onClose: () -> Unit, onDevi
             val how = l?.how
             Tile(title = name) {
                 Text(stringResource(howRes(how)), color = toneColor(LinksMapPlan.tone(how)), fontWeight = FontWeight.Bold)
+                if (d.problem == "key_changed") KeyChangeBanner(d.nodeId, showDismissed = true)
                 if (how != null) {
                     pathRes(how)?.let { Kv(stringResource(R.string.map_d_path), stringResource(it, me, name)) }
                 }

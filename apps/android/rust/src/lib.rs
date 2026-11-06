@@ -842,6 +842,27 @@ impl MdEngine {
         serde_json::to_string(&self.inner.links_map()).map_err(|e| MdError::Failed(e.to_string()))
     }
 
+    /// Devices whose security key changed (reinstalled, data cleared, or
+    /// someone else using their id), as JSON (the core's `KeyChange`
+    /// list, newest first): their direct connections are refused until the
+    /// user trusts the new key. A new one comes as a `key_changed` event
+    /// (once per key).
+    pub fn key_changes(&self) -> MdResult<String> {
+        serde_json::to_string(&self.inner.key_changes()).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// The user trusts `node_id`'s new key: the one whose fingerprint they
+    /// were shown (`new_fingerprint`); only that key is remembered. Fails
+    /// when no change is recorded or its key changed again since.
+    pub fn trust_new_key(&self, node_id: String, new_fingerprint: String) -> MdResult<()> {
+        Ok(self.inner.trust_new_key(&node_id, &new_fingerprint)?)
+    }
+
+    /// "Not now": keep refusing `node_id`'s new key, stop asking about it.
+    pub fn dismiss_key_change(&self, node_id: String) -> bool {
+        self.inner.dismiss_key_change(&node_id)
+    }
+
     /// The phone's Bluetooth can't link now (`reason`: "off",
     /// "not_paired", "out_of_range", "unsupported"), or can again (none):
     /// the map shows it for devices not linked by Bluetooth.

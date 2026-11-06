@@ -1112,6 +1112,7 @@
     <string name="conn_reason_relay_unreachable">the relay server couldn’t be reached</string>
     <string name="conn_reason_no_path">no way through was found</string>
     <string name="conn_reason_dropped">the connection dropped</string>
+    <string name="conn_reason_key_changed">%1$s’s security key changed, so direct connections are refused</string>
     <string name="conn_tip_unreachable">Make sure my-domain is open on %1$s and it’s online.</string>
     <string name="conn_tip_symmetric">Both networks are strict about incoming connections, so across the internet only the relay server can join them.</string>
     <string name="conn_tip_relay_down">The relay server can’t be reached from this phone. Check your internet connection.</string>
@@ -1155,6 +1156,8 @@
     <string name="conn_stage_relay_unreachable">The relay server couldn’t be reached</string>
     <string name="conn_stage_link_up">Connected</string>
     <string name="conn_stage_link_down">Disconnected</string>
+    <string name="conn_stage_key_changed">Refused: its security key changed</string>
+    <string name="conn_stage_key_trusted">You trusted its new security key</string>
     <string name="conn_speed">Test speed</string>
     <string name="conn_speed_hint">Sends %1$s each way over the current connection.</string>
     <string name="conn_speed_needs_link">Connect to %1$s first to test the speed.</string>
@@ -1361,6 +1364,7 @@
     <string name="map_why_ble_out_of_range">out of Bluetooth range</string>
     <string name="map_why_ble_unsupported">Bluetooth isn’t available here</string>
     <string name="map_why_device_bad_key">what it sends can’t be read: it uses a different device key</string>
+    <string name="map_why_device_key_changed">its security key changed: direct connections are refused until you trust the new key</string>
     <string name="map_fix_lan_no_address">Open my-domain on %1$s so it says where it is.</string>
     <string name="map_fix_lan_old_app">Update my-domain on %1$s.</string>
     <string name="map_fix_lan_not_seen">Put both on the same Wi‑Fi to connect directly.</string>
@@ -1382,6 +1386,18 @@
     <string name="map_fix_ble_out_of_range">Bring them closer together.</string>
     <string name="map_fix_ble_unsupported">Use Wi‑Fi or the internet instead.</string>
     <string name="map_fix_device_bad_key">Use the same device key on both (Settings → Device key).</string>
+    <string name="map_fix_device_key_changed">If you reinstalled the app on %1$s or cleared its data, trust the new key. If not, don’t.</string>
+    <string name="key_change_title">%1$s’s security key changed</string>
+    <string name="key_change_body">This happens when the app is reinstalled or its data is cleared. If you didn’t do that, don’t trust it.</string>
+    <string name="key_change_refused">Until you decide, %1$s is reached only through the relay server, if at all.</string>
+    <string name="key_change_dismissed">You chose “Not now”: %1$s stays refused.</string>
+    <string name="key_change_trust">Trust the new key</string>
+    <string name="key_change_not_now">Not now</string>
+    <string name="key_change_confirm_title">Trust %1$s’s new key?</string>
+    <string name="key_change_confirm_body">Only do this if you reinstalled the app on %1$s or cleared its data.</string>
+    <string name="key_change_old">Old key</string>
+    <string name="key_change_new">New key</string>
+    <string name="key_change_trusted">Trusted %1$s’s new key. Connecting…</string>
     <string name="map_entry">How your devices are connected</string>
     <string name="map_entry_body">See how each device is linked, and why one isn’t</string>
     <string name="map_image">Picture of how your devices are connected. The same is listed below.</string>

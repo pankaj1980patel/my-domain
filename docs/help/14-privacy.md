@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device
+keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -27,6 +27,10 @@ The QR code under **Settings → Add a device** is a one-time join link. It hold
 It **never contains your password**. It signs in **one** device, only within **5 minutes**, and stops working once used or when you close it. Anyone who photographs it in those minutes could join your account, so show it only to your own devices, and close it once your device has joined.
 
 The **6-digit code** is for a device that can't scan. So that it can bring the device key too, the server keeps a copy of the key locked with the code until it's used or expires (at most 5 minutes). Six digits are short, so scanning is the more private way: then the key never reaches the server at all. Wrong codes are limited, so they can't be guessed one after another.
+
+## When a device's security key changes
+
+Besides the device key you share, each install has a security key of its own that proves which device is on the other end of a direct connection. Your devices remember it the first time they meet. If a device turns up with another key (the app was reinstalled, its data cleared, or someone is pretending to be it), direct connections to it are refused until you choose **Trust the new key** on its page, after comparing the old and new fingerprints. Nothing is trusted by itself, and only the exact key you were shown is. See [Troubleshooting](help:troubleshooting).
 
 ## Consent: the device being reached decides
 

@@ -81,7 +81,9 @@ pub struct Attempt {
     /// `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
     /// adds: `push_failed` (the server couldn't send the push),
     /// `no_answer` (the push went, the device didn't answer),
-    /// `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`.
+    /// `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+    /// `key_changed` (it came with another device key: refused until the
+    /// user trusts it), `key_trusted`.
     pub stage: String,
     pub detail: Option<String>,
     /// How long ago, in seconds.
@@ -209,7 +211,8 @@ pub struct Diagnosis {
     pub verdict: String,
     /// Why it's unreachable, from the last attempt: "push_failed",
     /// "no_answer", "relay_no_answer", "relay_unreachable", "no_path",
-    /// "dropped".
+    /// "dropped", "key_changed" (its device key changed: refused until
+    /// the user trusts the new one).
     pub reason: Option<String>,
     /// Seconds since the last connect attempt or link change.
     pub last_try_ago_s: Option<u32>,
@@ -252,6 +255,7 @@ impl Diagnosis {
             }
         }
         let reason = [
+            "key_changed",
             "push_failed",
             "no_answer",
             "relay_no_answer",
@@ -876,6 +880,23 @@ impl<P: Platform> ControlHandler<P> for DiagHandler {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_changed_key_is_the_reason_first() {
+        let a = |stage: &str| Attempt {
+            stage: stage.into(),
+            detail: None,
+            ago_s: 1,
+        };
+        let run = [a("quic"), a("key_changed"), a("no_answer"), a("failed")];
+        assert_eq!(
+            Diagnosis::judge(None, &run),
+            ("unreachable".into(), Some("key_changed".into()))
+        );
+        // From before the link came up: not this run.
+        let run = [a("key_changed"), a("link_up"), a("quic"), a("failed")];
+        assert_eq!(Diagnosis::judge(None, &run).1.as_deref(), Some("no_path"));
+    }
 
     #[test]
     fn rtt_stats_add_up() {

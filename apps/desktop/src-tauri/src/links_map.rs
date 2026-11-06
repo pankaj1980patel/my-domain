@@ -13,7 +13,8 @@
 //    seen" and the details panel from `map`.
 
 use mdcore::features::links_map::{
-    LinksMap, MapDevice, OtherLink, BLE_REASONS, INTERNET_REASONS, LAN_REASONS, RELAY_REASONS,
+    LinksMap, MapDevice, OtherLink, BLE_REASONS, DEVICE_PROBLEMS, INTERNET_REASONS, LAN_REASONS,
+    RELAY_REASONS,
 };
 use serde::Serialize;
 use tauri::State;
@@ -89,7 +90,7 @@ pub fn why_keys(path: &str, reason: &str) -> (String, String, String) {
         "internet" => &INTERNET_REASONS,
         "relay" => &RELAY_REASONS,
         "ble" => &BLE_REASONS,
-        "device" => &["bad_key"],
+        "device" => &DEVICE_PROBLEMS,
         _ => &[],
     };
     let path_key = if known.is_empty() {
@@ -372,7 +373,7 @@ mod tests {
             ("internet", &INTERNET_REASONS[..]),
             ("relay", &RELAY_REASONS[..]),
             ("ble", &BLE_REASONS[..]),
-            ("device", &["bad_key"][..]),
+            ("device", &DEVICE_PROBLEMS[..]),
         ] {
             for r in list {
                 let (p, what, fix) = why_keys(path, r);

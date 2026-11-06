@@ -557,9 +557,17 @@ async fn run_connection<P: Platform>(
     // The handshake proved which key the peer holds: it must be the one this
     // node id used before (or a first meeting).
     let key = peer_key(&conn);
-    if !crate::device_key::accept(&ctx.peer_keys, &*ctx.platform, &peer_id, key.as_deref()) {
-        conn.close(0u32.into(), b"not the key this device had");
-        return;
+    match crate::device_key::check(&ctx.peer_keys, &*ctx.platform, &peer_id, key.as_deref()) {
+        crate::device_key::Verdict::Accept => {}
+        crate::device_key::Verdict::Refuse => {
+            conn.close(0u32.into(), b"not the key this device had");
+            return;
+        }
+        crate::device_key::Verdict::Changed { first } => {
+            conn.close(0u32.into(), b"not the key this device had");
+            crate::engine::key_refused(&ctx, &peer_id, first);
+            return;
+        }
     }
 
     // A hand-entered peer is listed as `manual:<ip>` until we learn its real

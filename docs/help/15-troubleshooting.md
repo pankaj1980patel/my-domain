@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-keywords: problem, help, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key
+keywords: problem, help, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key, security key, key changed, reinstall, reinstalled, cleared data, trust new key
 platforms: desktop, android
 ---
 ## A device doesn't appear
@@ -49,7 +49,18 @@ For a device that isn't connected, or only through the relay or Bluetooth, the d
 - **Internet, directly**: the device didn't answer (asleep, off or offline), both networks are strict (only the relay can join them), getting through the routers timed out, or neither router opens a port (turn on UPnP or NAT-PMP).
 - **Relay server**: not signed in, the server can't be reached, it refused the sign-in (sign out and in again), it's full, or the device didn't answer through it.
 - **Bluetooth**: it's off, not paired, or out of range.
-- **The device**: what it sends can't be read, because it uses a different device key.
+- **The device**: what it sends can't be read, because it uses a different device key; or its **security key changed** (see below).
+
+## "Its security key changed"
+
+Each install of my-domain has a security key of its own, and your devices remember the one each device used the first time. When a device comes back with another key, they refuse to connect to it directly, because it could be someone else using its name. This happens when the app is **reinstalled** or its **data is cleared**.
+
+You'll get a notification once, and the device's page (and its details on the connections map) says that its **security key changed**:
+
+- If you reinstalled the app on it or cleared its data, choose **Trust the new key**. You're shown the old and new keys' short fingerprints first; only that new key is trusted, and it connects directly again.
+- If you didn't, **don't trust it**: choose **Not now**. It stays refused (it may still reach you through the relay server, end-to-end encrypted with your device key) and you won't be asked again, unless yet another key turns up.
+
+Trusting is never automatic, and a key that changes again later is refused again.
 
 ## The phone is slow to answer, or misses things when the screen is off
 

@@ -162,6 +162,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
                     }
                 }
             }
+            // Its security key changed: refused until you decide.
+            item(key = "key-change") { KeyChangeBanner(node) }
             if (editing) item { DeviceLabelEditor(node) { editing = false } }
             if (arranging) {
                 arrangeItems(node, name, kind, tiles, layout, said, { said = it }) { arranging = false }

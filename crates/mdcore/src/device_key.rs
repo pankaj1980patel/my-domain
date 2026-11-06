@@ -13,6 +13,14 @@
 //! node id with another key, or with none, is refused. A device from before
 //! device keys (a throwaway certificate) is still let in, and isn't
 //! remembered, until it updates.
+//!
+//! A device that's reinstalled (or has its data cleared) comes back with a
+//! new key. Its connections are still refused (it could be someone else
+//! using its id), but the refusal is recorded (`Change`: the key it had,
+//! the one it came with, when, how often) and the user is told once per new
+//! key. Only the user can trust it (`trust`), and only the exact key
+//! recorded is then remembered: a third key is refused again. Records are
+//! kept across restarts (kv `peer_key_changes`), at most `MAX_CHANGES`.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -20,6 +28,8 @@ use std::sync::Arc;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
 use parking_lot::Mutex;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 use crate::platform::Platform;
 
@@ -34,6 +44,10 @@ const PUBLIC_KV: &str = "identity_key_public";
 const MISPLACED_KV: &str = "device_key";
 /// kv key holding the keys seen per device (JSON: node id -> base64 key).
 const PINS_KV: &str = "peer_keys";
+/// kv key holding the refused key changes (JSON: node id -> `Change`).
+const CHANGES_KV: &str = "peer_key_changes";
+/// The most key changes kept (the one heard of longest ago goes first).
+pub const MAX_CHANGES: usize = 32;
 
 /// The DER header of an Ed25519 public key in a certificate
 /// (SubjectPublicKeyInfo: algorithm 1.3.101.112, then a 32-byte bit string).
@@ -138,32 +152,239 @@ pub fn key_in_cert(cert: &[u8]) -> Option<String> {
     Some(B64.encode(key))
 }
 
-/// Whether a connection from `node_id` holding `key` may go ahead, and
-/// remember the key the first time.
-pub fn accept(pins: &Pins, store: &dyn Store, node_id: &str, key: Option<&str>) -> bool {
-    let mut map = pins.lock();
-    let map = map.get_or_insert_with(|| {
-        store
-            .get(PINS_KV)
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default()
-    });
-    match (map.get(node_id), key) {
-        (Some(known), Some(key)) => known == key,
-        (Some(_), None) => false, // it had a key before: no downgrade
-        (None, Some(key)) => {
-            map.insert(node_id.to_string(), key.to_string());
-            if let Ok(json) = serde_json::to_string(&*map) {
-                store.set(PINS_KV, &json);
-            }
-            true
-        }
-        (None, None) => true, // not updated yet
+/// What to do with a connection from a device (`check`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    /// Go ahead (the key it had, a first meeting, or a device from before
+    /// device keys).
+    Accept,
+    /// Refused: it had a key and came with none (no downgrade).
+    Refuse,
+    /// Refused: it came with another key than the one remembered, now
+    /// recorded. `first`: the first time this key turned up (tell the user).
+    Changed { first: bool },
+}
+
+/// A refused key change, as kept.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+struct Change {
+    /// The key remembered (base64).
+    old: String,
+    /// The key it came with (base64): the only one `trust` will remember.
+    new: String,
+    first_at: u64,
+    last_at: u64,
+    count: u32,
+    /// "Not now": keep refusing, stop asking (until another key turns up).
+    #[serde(default)]
+    dismissed: bool,
+}
+
+/// A device whose key changed, for the apps (`Engine::key_changes`).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct KeyChange {
+    pub node_id: String,
+    /// Its name as this device knows it (the node id when it doesn't).
+    pub name: String,
+    /// Short fingerprints of the key it had and the one it came with.
+    pub old_fingerprint: String,
+    pub new_fingerprint: String,
+    /// Seconds since it first, and last, came with the new key.
+    pub first_ago_s: u32,
+    pub last_ago_s: u32,
+    /// Connections refused with that key.
+    pub attempts: u32,
+    /// The user said "Not now" (still refused, not asked again).
+    pub dismissed: bool,
+}
+
+/// The keys other devices used, and the changes refused (both loaded from
+/// the kv store on first use).
+#[derive(Default)]
+pub struct PeerKeys {
+    pins: Mutex<Option<HashMap<String, String>>>,
+    changes: Mutex<Option<HashMap<String, Change>>>,
+}
+
+/// The remembered keys (shared by the engine and its threads).
+pub type Pins = Arc<PeerKeys>;
+
+fn load<T: serde::de::DeserializeOwned + Default>(store: &dyn Store, key: &str) -> T {
+    store
+        .get(key)
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save<T: Serialize>(store: &dyn Store, key: &str, value: &T) {
+    if let Ok(json) = serde_json::to_string(value) {
+        store.set(key, &json);
     }
 }
 
-/// The remembered keys, loaded from the kv store on first use.
-pub type Pins = Arc<Mutex<Option<HashMap<String, String>>>>;
+fn now_secs() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// A short fingerprint of a key (base64) for people to compare: the first
+/// 8 bytes of its SHA-256, as four groups of four hex digits.
+pub fn fingerprint(key: &str) -> String {
+    let raw = B64.decode(key).unwrap_or_else(|_| key.as_bytes().to_vec());
+    let hash = Sha256::digest(&raw);
+    hash[..8]
+        .chunks(2)
+        .map(|c| format!("{:02X}{:02X}", c[0], c[1]))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Whether a connection from `node_id` holding `key` may go ahead (and
+/// remember the key the first time).
+pub fn accept(pins: &Pins, store: &dyn Store, node_id: &str, key: Option<&str>) -> bool {
+    check(pins, store, node_id, key) == Verdict::Accept
+}
+
+/// What to do with a connection from `node_id` holding `key`: remember the
+/// key the first time, record another key (see `Change`).
+pub fn check(pins: &Pins, store: &dyn Store, node_id: &str, key: Option<&str>) -> Verdict {
+    let known = {
+        let mut map = pins.pins.lock();
+        let map = map.get_or_insert_with(|| load(store, PINS_KV));
+        match (map.get(node_id), key) {
+            (Some(known), Some(key)) if known == key => return Verdict::Accept,
+            (Some(known), Some(_)) => known.clone(),
+            (Some(_), None) => return Verdict::Refuse, // it had a key before: no downgrade
+            (None, Some(key)) => {
+                map.insert(node_id.to_string(), key.to_string());
+                save(store, PINS_KV, &*map);
+                return Verdict::Accept;
+            }
+            (None, None) => return Verdict::Accept, // not updated yet
+        }
+    };
+    let Some(key) = key else {
+        return Verdict::Refuse;
+    };
+    let now = now_secs();
+    let mut changes = pins.changes.lock();
+    let changes = changes.get_or_insert_with(|| load(store, CHANGES_KV));
+    let first = match changes.get_mut(node_id) {
+        Some(c) if c.new == key && c.old == known => {
+            c.last_at = now;
+            c.count = c.count.saturating_add(1);
+            false
+        }
+        _ => {
+            if !changes.contains_key(node_id) && changes.len() >= MAX_CHANGES {
+                let oldest = changes
+                    .iter()
+                    .min_by_key(|(_, c)| c.last_at)
+                    .map(|(k, _)| k.clone());
+                if let Some(k) = oldest {
+                    changes.remove(&k);
+                }
+            }
+            changes.insert(
+                node_id.to_string(),
+                Change {
+                    old: known,
+                    new: key.to_string(),
+                    first_at: now,
+                    last_at: now,
+                    count: 1,
+                    dismissed: false,
+                },
+            );
+            true
+        }
+    };
+    save(store, CHANGES_KV, &*changes);
+    Verdict::Changed { first }
+}
+
+/// The key changes refused so far, newest first; `name` names a node id.
+pub fn changes(pins: &Pins, store: &dyn Store, name: impl Fn(&str) -> String) -> Vec<KeyChange> {
+    let now = now_secs();
+    let ago = |t: u64| u32::try_from(now.saturating_sub(t)).unwrap_or(u32::MAX);
+    let mut list: Vec<(u64, KeyChange)> = pins
+        .changes
+        .lock()
+        .get_or_insert_with(|| load(store, CHANGES_KV))
+        .iter()
+        .map(|(node, c)| {
+            (
+                c.last_at,
+                KeyChange {
+                    node_id: node.clone(),
+                    name: name(node),
+                    old_fingerprint: fingerprint(&c.old),
+                    new_fingerprint: fingerprint(&c.new),
+                    first_ago_s: ago(c.first_at),
+                    last_ago_s: ago(c.last_at),
+                    attempts: c.count,
+                    dismissed: c.dismissed,
+                },
+            )
+        })
+        .collect();
+    list.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.node_id.cmp(&b.1.node_id)));
+    list.into_iter().map(|(_, c)| c).collect()
+}
+
+/// `node_id` has a key change recorded (waiting, or dismissed): its
+/// connections are being refused for it.
+pub fn has_change(pins: &Pins, store: &dyn Store, node_id: &str) -> bool {
+    pins.changes
+        .lock()
+        .get_or_insert_with(|| load(store, CHANGES_KV))
+        .contains_key(node_id)
+}
+
+/// The user trusts `node_id`'s new key: remember the key recorded for it
+/// (only that one) in place of the old. `new_fingerprint` is the one the
+/// user was shown: when another key turned up since, nothing changes.
+pub fn trust(
+    pins: &Pins,
+    store: &dyn Store,
+    node_id: &str,
+    new_fingerprint: &str,
+) -> Result<(), String> {
+    let mut changes = pins.changes.lock();
+    let changes = changes.get_or_insert_with(|| load(store, CHANGES_KV));
+    let Some(change) = changes.get(node_id) else {
+        return Err("no key change for this device".into());
+    };
+    if fingerprint(&change.new) != new_fingerprint.trim() {
+        return Err("its key changed again: check the new fingerprint".into());
+    }
+    let new = change.new.clone();
+    {
+        let mut map = pins.pins.lock();
+        let map = map.get_or_insert_with(|| load(store, PINS_KV));
+        map.insert(node_id.to_string(), new);
+        save(store, PINS_KV, &*map);
+    }
+    changes.remove(node_id);
+    save(store, CHANGES_KV, &*changes);
+    Ok(())
+}
+
+/// "Not now": keep refusing `node_id`'s new key and stop asking about it
+/// (another key would ask again). False: no change recorded for it.
+pub fn dismiss(pins: &Pins, store: &dyn Store, node_id: &str) -> bool {
+    let mut changes = pins.changes.lock();
+    let changes = changes.get_or_insert_with(|| load(store, CHANGES_KV));
+    let Some(c) = changes.get_mut(node_id) else {
+        return false;
+    };
+    c.dismissed = true;
+    save(store, CHANGES_KV, &*changes);
+    true
+}
 
 /// The storage this module needs (a `Platform` is one).
 pub trait Store {
@@ -308,5 +529,80 @@ mod tests {
         // Remembered across restarts (fresh pins, same store).
         assert!(!accept(&Pins::default(), &kv, "phone", Some("k2")));
         assert!(accept(&Pins::default(), &kv, "phone", Some("k1")));
+    }
+
+    #[test]
+    fn a_new_key_is_recorded_once_and_only_it_can_be_trusted() {
+        let (kv, pins) = (Mem::default(), Pins::default());
+        assert_eq!(check(&pins, &kv, "phone", Some("k1")), Verdict::Accept);
+        assert_eq!(
+            check(&pins, &kv, "phone", Some("k2")),
+            Verdict::Changed { first: true }
+        );
+        assert_eq!(
+            check(&pins, &kv, "phone", Some("k2")),
+            Verdict::Changed { first: false },
+            "once per key, not per attempt"
+        );
+        let list = changes(&pins, &kv, |n| n.to_uppercase());
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].name, "PHONE");
+        assert_eq!(list[0].attempts, 2);
+        assert_eq!(list[0].old_fingerprint, fingerprint("k1"));
+        assert_eq!(list[0].new_fingerprint, fingerprint("k2"));
+        // Kept across restarts.
+        let again = Pins::default();
+        assert_eq!(changes(&again, &kv, str::to_string).len(), 1);
+        assert_eq!(
+            check(&again, &kv, "phone", Some("k2")),
+            Verdict::Changed { first: false }
+        );
+
+        // Not now: still refused, not asked again.
+        assert!(dismiss(&pins, &kv, "phone"));
+        assert!(changes(&pins, &kv, str::to_string)[0].dismissed);
+        assert_eq!(
+            check(&pins, &kv, "phone", Some("k2")),
+            Verdict::Changed { first: false }
+        );
+        // A third key asks again, and trusting needs the fingerprint shown.
+        assert_eq!(
+            check(&pins, &kv, "phone", Some("k3")),
+            Verdict::Changed { first: true }
+        );
+        assert!(trust(&pins, &kv, "phone", &fingerprint("k2")).is_err());
+        assert!(!accept(&pins, &kv, "phone", Some("k3")));
+        trust(&pins, &kv, "phone", &fingerprint("k3")).unwrap();
+        assert!(changes(&pins, &kv, str::to_string).is_empty());
+        assert!(accept(&Pins::default(), &kv, "phone", Some("k3")));
+        assert!(
+            !accept(&pins, &kv, "phone", Some("k1")),
+            "the old one is gone"
+        );
+        // ... and is a new change to ask about, from the trusted key.
+        assert_eq!(
+            changes(&pins, &kv, str::to_string)[0].old_fingerprint,
+            fingerprint("k3")
+        );
+        assert!(!dismiss(&pins, &kv, "laptop"));
+    }
+
+    #[test]
+    fn key_changes_are_capped() {
+        let (kv, pins) = (Mem::default(), Pins::default());
+        for i in 0..MAX_CHANGES + 5 {
+            let node = format!("n{i}");
+            assert!(accept(&pins, &kv, &node, Some("a")));
+            assert!(!accept(&pins, &kv, &node, Some("b")));
+        }
+        assert_eq!(changes(&pins, &kv, str::to_string).len(), MAX_CHANGES);
+    }
+
+    #[test]
+    fn fingerprints_are_short_and_stable() {
+        let fp = fingerprint("AAAA");
+        assert_eq!(fp.len(), 19);
+        assert_eq!(fp, fingerprint("AAAA"));
+        assert_ne!(fp, fingerprint("AAAB"));
     }
 }

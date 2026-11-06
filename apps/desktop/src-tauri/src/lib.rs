@@ -31,6 +31,7 @@ mod device;
 mod device_labels;
 mod diagnostics;
 mod fcm;
+mod key_changes;
 mod links_map;
 mod location;
 mod note_reminders;
@@ -561,6 +562,10 @@ impl EventSink for TauriSink {
                     let device = notify::device_name(&app, &from);
                     notify::post_if_away(&app, "my-domain", &format!("Saved {name} from {device}"));
                 });
+            }
+            CoreEvent::KeyChanged { node_id, .. } => {
+                let (app, node) = (self.app.clone(), node_id.clone());
+                std::thread::spawn(move || key_changes::on_changed(&app, &node));
             }
             CoreEvent::BatteryAlert { from, alert, level } => {
                 let (app, from, alert, level) =
@@ -1711,6 +1716,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         diagnostics::speed_test,
         diagnostics::cancel_speed_test,
         links_map::links_map,
+        key_changes::key_changes,
+        key_changes::trust_new_key,
+        key_changes::dismiss_key_change,
         settings_backup::settings_backup_save,
         settings_backup::settings_restore_open,
         settings_backup::settings_restore_apply,

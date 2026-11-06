@@ -45,6 +45,8 @@ mod messaging;
 pub use messaging::QUEUED;
 pub(crate) use messaging::{reconnect, send_reliably, start_ladder};
 mod netchange;
+mod peer_keys;
+pub(crate) use peer_keys::{key_changed, key_refused};
 mod peers;
 pub(crate) use peers::{emit_peers, learn_unknown};
 mod session;

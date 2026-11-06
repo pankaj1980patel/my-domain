@@ -1110,6 +1110,7 @@
     <string name="conn_reason_relay_unreachable">रिले सर्वर तक पहुँचा नहीं जा सका</string>
     <string name="conn_reason_no_path">कोई रास्ता नहीं मिला</string>
     <string name="conn_reason_dropped">कनेक्शन टूट गया</string>
+    <string name="conn_reason_key_changed">%1$s की सुरक्षा कुंजी बदल गई है, इसलिए सीधे कनेक्शन मना किए जा रहे हैं</string>
     <string name="conn_tip_unreachable">पक्का करें कि %1$s पर my-domain खुला है और वह ऑनलाइन है।</string>
     <string name="conn_tip_symmetric">दोनों नेटवर्क आने वाले कनेक्शनों पर सख़्त हैं, इसलिए इंटरनेट पर इन्हें सिर्फ़ रिले सर्वर ही जोड़ सकता है।</string>
     <string name="conn_tip_relay_down">इस कंप्यूटर से रिले सर्वर तक नहीं पहुँचा जा सकता। अपना इंटरनेट कनेक्शन जाँचें।</string>
@@ -1153,6 +1154,8 @@
     <string name="conn_stage_relay_unreachable">रिले सर्वर तक पहुँचा नहीं जा सका</string>
     <string name="conn_stage_link_up">जुड़ा</string>
     <string name="conn_stage_link_down">डिस्कनेक्ट हुआ</string>
+    <string name="conn_stage_key_changed">मना किया: इसकी सुरक्षा कुंजी बदल गई</string>
+    <string name="conn_stage_key_trusted">आपने इसकी नई सुरक्षा कुंजी पर भरोसा किया</string>
     <string name="conn_speed">स्पीड जाँचें</string>
     <string name="conn_speed_hint">मौजूदा कनेक्शन पर दोनों तरफ़ %1$s भेजता है।</string>
     <string name="conn_speed_needs_link">स्पीड जाँचने के लिए पहले %1$s से जुड़ें।</string>
@@ -1359,6 +1362,7 @@
     <string name="map_why_ble_out_of_range">ब्लूटूथ की पहुँच से बाहर</string>
     <string name="map_why_ble_unsupported">यहाँ ब्लूटूथ उपलब्ध नहीं है</string>
     <string name="map_why_device_bad_key">इसके भेजे संदेश पढ़े नहीं जा सकते: यह दूसरी डिवाइस कुंजी इस्तेमाल करता है</string>
+    <string name="map_why_device_key_changed">इसकी सुरक्षा कुंजी बदल गई: जब तक आप नई कुंजी पर भरोसा न करें, सीधे कनेक्शन मना हैं</string>
     <string name="map_fix_lan_no_address">%1$s पर my-domain खोलें ताकि वह बताए कि वह कहाँ है।</string>
     <string name="map_fix_lan_old_app">%1$s पर my-domain अपडेट करें।</string>
     <string name="map_fix_lan_not_seen">सीधे जुड़ने के लिए दोनों को एक ही Wi‑Fi पर रखें।</string>
@@ -1380,6 +1384,18 @@
     <string name="map_fix_ble_out_of_range">उन्हें पास-पास लाएँ।</string>
     <string name="map_fix_ble_unsupported">इसके बजाय Wi‑Fi या इंटरनेट इस्तेमाल करें।</string>
     <string name="map_fix_device_bad_key">दोनों पर एक ही डिवाइस कुंजी इस्तेमाल करें (सेटिंग्स → डिवाइस कुंजी)।</string>
+    <string name="map_fix_device_key_changed">अगर आपने %1$s पर ऐप दोबारा इंस्टॉल किया या उसका डेटा मिटाया, तो नई कुंजी पर भरोसा करें। नहीं तो न करें।</string>
+    <string name="key_change_title">%1$s की सुरक्षा कुंजी बदल गई</string>
+    <string name="key_change_body">ऐसा तब होता है जब ऐप दोबारा इंस्टॉल किया जाए या उसका डेटा मिटाया जाए। अगर आपने ऐसा नहीं किया, तो इस पर भरोसा न करें।</string>
+    <string name="key_change_refused">जब तक आप तय न करें, %1$s से सिर्फ़ रिले सर्वर से ही जुड़ा जा सकता है, अगर जुड़ सके।</string>
+    <string name="key_change_dismissed">आपने “अभी नहीं” चुना: %1$s मना ही रहेगा।</string>
+    <string name="key_change_trust">नई कुंजी पर भरोसा करें</string>
+    <string name="key_change_not_now">अभी नहीं</string>
+    <string name="key_change_confirm_title">%1$s की नई कुंजी पर भरोसा करें?</string>
+    <string name="key_change_confirm_body">ऐसा सिर्फ़ तभी करें जब आपने %1$s पर ऐप दोबारा इंस्टॉल किया हो या उसका डेटा मिटाया हो।</string>
+    <string name="key_change_old">पुरानी कुंजी</string>
+    <string name="key_change_new">नई कुंजी</string>
+    <string name="key_change_trusted">%1$s की नई कुंजी पर भरोसा किया। जुड़ रहा है…</string>
     <string name="map_entry">आपके डिवाइस कैसे जुड़े हैं</string>
     <string name="map_entry_body">देखें कि हर डिवाइस कैसे जुड़ा है, और कोई क्यों नहीं</string>
     <string name="map_image">आपके डिवाइस कैसे जुड़े हैं, इसकी तस्वीर। यही नीचे सूची में है।</string>
