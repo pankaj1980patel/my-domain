@@ -182,6 +182,12 @@ fn a_speed_test_runs_both_ways_on_loopback() {
     assert!(a.engine.cancel_speed_test(&big));
     let (phase, _) = wait_test_end(&a, &big, WAIT);
     assert_eq!(phase, "cancelled");
+    // The "cancelled" phase can be reported a moment before the test is
+    // forgotten: give the cleanup a moment.
+    let over = Instant::now() + WAIT;
+    while a.engine.cancel_speed_test(&big) && Instant::now() < over {
+        std::thread::sleep(Duration::from_millis(20));
+    }
     assert!(!a.engine.cancel_speed_test(&big), "already over");
     // The link still carries messages after all that.
     link(&b, &a, "still here");

@@ -1478,6 +1478,8 @@ mod tests {
             run(&src, query, 20, &[], &SearchFilter::default(), NOW);
         }
         let each = start.elapsed() / 4;
-        assert!(each.as_millis() < 50, "took {each:?}");
+        // Debug builds on shared CI runners are several times slower.
+        let limit = if cfg!(debug_assertions) { 400 } else { 50 };
+        assert!(each.as_millis() < limit, "took {each:?}");
     }
 }
