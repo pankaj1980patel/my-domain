@@ -135,7 +135,10 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
   );
   add("clip", t("palette.sendClipboard", { name }), () =>
     sendClipboardTo(node).then(
-      (via) => toast(via === "queued" ? t("palette.clipQueued", { name }) : t("palette.clipSent", { name }), "ok"),
+      // "cancelled": it looked like a password and you said not to send it.
+      (via) =>
+        via !== "cancelled" &&
+        toast(via === "queued" ? t("palette.clipQueued", { name }) : t("palette.clipSent", { name }), "ok"),
       fail,
     ),
   );

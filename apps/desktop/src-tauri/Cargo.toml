@@ -113,5 +113,7 @@ libc = "0.2"
 # The same on Windows, from GetAdaptersAddresses: the `windows` version
 # md-geo and md-hfp already use.
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock"] }
+# Clipboard privacy (`clip_privacy.rs`): the clipboard's concealed formats
+# and the app in front.
+windows = { version = "0.61.3", features = ["Win32_NetworkManagement_IpHelper", "Win32_NetworkManagement_Ndis", "Win32_Networking_WinSock", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 

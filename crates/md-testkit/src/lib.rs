@@ -53,16 +53,31 @@ pub const TEST_USER: &str = "tester";
 // ---------------------------------------------------------------------------
 
 /// An in-memory clipboard. `set` from the engine is visible via `get` here.
+/// `user_copies_password` marks the value concealed (as a password manager
+/// does), until the next copy.
 #[derive(Default)]
-pub struct MemClipboard(Mutex<Option<String>>);
+pub struct MemClipboard {
+    text: Mutex<Option<String>>,
+    private: std::sync::atomic::AtomicBool,
+}
 
 impl MemClipboard {
     /// Simulate the user copying something on this device.
     pub fn user_copies(&self, text: &str) {
-        *self.0.lock().unwrap() = Some(text.to_string());
+        self.copy(text, false);
+    }
+    /// Simulate copying a password from a password manager.
+    pub fn user_copies_password(&self, text: &str) {
+        self.copy(text, true);
+    }
+    fn copy(&self, text: &str, private: bool) {
+        let mut g = self.text.lock().unwrap();
+        *g = Some(text.to_string());
+        self.private
+            .store(private, std::sync::atomic::Ordering::Relaxed);
     }
     pub fn current(&self) -> Option<String> {
-        self.0.lock().unwrap().clone()
+        self.text.lock().unwrap().clone()
     }
 }
 
@@ -72,6 +87,9 @@ impl Clipboard for MemClipboard {
     }
     fn set(&self, text: &str) {
         self.user_copies(text);
+    }
+    fn keep_private(&self) -> bool {
+        self.private.load(std::sync::atomic::Ordering::Relaxed)
     }
 }
 

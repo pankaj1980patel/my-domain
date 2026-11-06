@@ -3668,3 +3668,36 @@ html.qp-window body {
 .backup-result {
   margin-top: 12px;
 }
+
+/* ---- Clipboard privacy (Settings: concealed clips, excluded apps) ---- */
+.clip-privacy-title {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+}
+.clip-privacy-apps {
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+.clip-privacy-apps li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+}
+.clip-privacy-app {
+  overflow-wrap: anywhere;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+.clip-privacy-add {
+  display: flex;
+  gap: 8px;
+  margin: 8px 0;
+}
+.clip-privacy-add input {
+  flex: 1;
+  min-width: 0;
+}

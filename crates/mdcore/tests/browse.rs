@@ -375,9 +375,9 @@ fn shared_folder_names_are_checked() {
 fn text_shared(node: &TestNode) -> (String, String, String) {
     node.sink
         .wait_until(WAIT, |e| match e {
-            CoreEvent::TextShared { from, text, mode } => {
-                Some((from.clone(), text.clone(), mode.clone()))
-            }
+            CoreEvent::TextShared {
+                from, text, mode, ..
+            } => Some((from.clone(), text.clone(), mode.clone())),
             _ => None,
         })
         .unwrap_or_else(|| panic!("no text; got {:#?}", node.sink.all()))
@@ -438,4 +438,39 @@ fn a_device_without_a_clipboard_still_hears_the_text() {
         (text.as_str(), mode.as_str()),
         ("pick up milk", "clipboard")
     );
+}
+
+#[test]
+fn a_password_sent_marked_sensitive_lands_but_stays_out_of_the_history() {
+    let (a, b) = pair("share-sensitive");
+    a.engine
+        .send_text_marked(&b.node_id(), "hunter2", "clipboard", true)
+        .unwrap();
+    let sensitive = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::TextShared {
+                text, sensitive, ..
+            } if text == "hunter2" => Some(*sensitive),
+            _ => None,
+        })
+        .expect("text arrives");
+    assert!(sensitive);
+    assert_eq!(b.clip().current().as_deref(), Some("hunter2"));
+    assert!(b.engine.clipboard_history().is_empty());
+    // An unmarked one (what an older device sends) is kept as before.
+    a.engine
+        .send_text(&b.node_id(), "not secret", "clipboard")
+        .unwrap();
+    let sensitive = b
+        .sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::TextShared {
+                text, sensitive, ..
+            } if text == "not secret" => Some(*sensitive),
+            _ => None,
+        })
+        .expect("text arrives");
+    assert!(!sensitive);
+    assert_eq!(b.engine.clipboard_history()[0].text, "not secret");
 }

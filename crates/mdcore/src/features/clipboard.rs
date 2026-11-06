@@ -72,9 +72,11 @@ impl<P: Platform> ControlHandler<P> for ClipboardHandler {
                 let requester = msg.sender();
                 if !requester.is_empty() {
                     let me = ctx.identity.lock().node_id.clone();
+                    // A password on the clipboard isn't handed out.
                     let current = ctx
                         .platform
                         .clipboard()
+                        .filter(|c| !c.keep_private())
                         .and_then(|c| c.get())
                         .unwrap_or_default();
                     let resp = serde_json::json!({

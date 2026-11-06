@@ -123,6 +123,7 @@ private val SETTINGS_SECTIONS = listOf(
         "device", R.string.settings_this_device,
         listOf(
             R.string.settings_clip_sync, R.string.settings_clip_history, R.string.settings_clip_history_hint,
+            R.string.settings_clip_hide_concealed, R.string.settings_clip_hide_concealed_hint,
             R.string.settings_share_codes, R.string.settings_share_codes_hint,
             R.string.settings_share_labels, R.string.settings_share_labels_hint,
         ),

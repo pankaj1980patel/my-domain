@@ -198,11 +198,17 @@ pub enum CoreEvent {
     },
     /// Another of your devices sent text to this one (`Engine::send_text`):
     /// `mode` "clipboard" (already on the clipboard if the core has one
-    /// here) or "notify" (show it).
+    /// here; not in the core's history if `sensitive`) or "notify" (show it).
     TextShared {
         from: String,
         text: String,
         mode: String,
+        /// The sender marked it sensitive (a password copied from a
+        /// password manager): put it on the clipboard marked so (Android:
+        /// `ClipDescription.EXTRA_IS_SENSITIVE`), keep it out of the
+        /// history, and don't show it in a notice.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        sensitive: bool,
     },
     /// Another device wants a page of this device's gallery (`gallery_list`):
     /// the host lists `limit` photos/videos from `offset` (newest first), with

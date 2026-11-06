@@ -19,7 +19,7 @@ use std::sync::Mutex;
 
 use mdcore::kv::FileKv;
 use mdcore::CoreError;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 
 use crate::Eng;
 
@@ -115,16 +115,41 @@ pub(crate) fn send_copied(app: &AppHandle) {
     send_clipboard_to(app, &engine, &phone);
 }
 
+/// How sending the clipboard went.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ClipSent {
+    /// It went now.
+    Now,
+    /// It goes once the device is reachable.
+    Queued,
+    /// Nothing is copied.
+    Nothing,
+    /// It looked like a password and the user said not to send it.
+    Cancelled,
+}
+
 /// Send this computer's clipboard to `node`: text onto its clipboard, else a
-/// copied picture. `Some(true)` when it went now, `Some(false)` when it goes
-/// once the device is reachable, `None` when nothing is copied.
-pub fn clipboard_to(app: &AppHandle, engine: &Eng, node: &str) -> Result<Option<bool>, CoreError> {
+/// copied picture. A password copied from a password manager is sent only
+/// once the user says so (a dialog: never call this on the main thread),
+/// marked sensitive and not kept in the history (`clip_privacy`).
+pub fn clipboard_to(app: &AppHandle, engine: &Eng, node: &str) -> Result<ClipSent, CoreError> {
     let live = engine.links().iter().any(|(id, _)| *id == node);
     match crate::clip_image::copied_text().filter(|t| !t.trim().is_empty()) {
-        Some(text) => engine.send_text(node, &text, "clipboard").map(|how| {
-            crate::clip_history::on_sent(app, node, &text);
-            Some(how != "queued")
-        }),
+        Some(text) => {
+            let (concealed, ask) = crate::clip_privacy::manual_check();
+            if ask && !crate::clip_privacy::confirm_send(app) {
+                return Ok(ClipSent::Cancelled);
+            }
+            let how = engine.send_text_marked(node, &text, "clipboard", concealed)?;
+            if !concealed {
+                crate::clip_history::on_sent(app, node, &text);
+            }
+            Ok(if how == "queued" {
+                ClipSent::Queued
+            } else {
+                ClipSent::Now
+            })
+        }
         None => match crate::clip_image::copied_to_png() {
             Ok(path) => engine
                 .send_clipboard_image(node, &path.to_string_lossy())
@@ -135,29 +160,35 @@ pub fn clipboard_to(app: &AppHandle, engine: &Eng, node: &str) -> Result<Option<
                         node,
                         &path,
                     );
-                    Some(live)
+                    if live {
+                        ClipSent::Now
+                    } else {
+                        ClipSent::Queued
+                    }
                 }),
-            Err(_) => Ok(None),
+            Err(_) => Ok(ClipSent::Nothing),
         },
     }
 }
 
 /// Send this computer's clipboard to `phone` (text onto its clipboard, else
 /// a copied picture), and say how it went. Also the tray's "Send clipboard".
+/// Not on the main thread (it may ask first).
 pub fn send_clipboard_to(app: &AppHandle, engine: &Eng, phone: &str) {
     let name = crate::notify::device_name(app, phone);
     match clipboard_to(app, engine, phone) {
-        Ok(Some(true)) => {
+        Ok(ClipSent::Now) => {
             crate::notify::post_always(app, &format!("Sent to {name}"), "It's on its clipboard.")
         }
-        Ok(Some(false)) => crate::notify::post_always(
+        Ok(ClipSent::Queued) => crate::notify::post_always(
             app,
             &format!("Will send when {name} is reachable"),
             "It goes as soon as your phone is back.",
         ),
-        Ok(None) => {
+        Ok(ClipSent::Nothing) => {
             crate::notify::post_always(app, "Nothing to send", "Copy some text or a picture first.")
         }
+        Ok(ClipSent::Cancelled) => {}
         Err(e) => {
             crate::notify::post_always(app, &format!("Couldn't send to {name}"), &e.to_string())
         }
@@ -165,18 +196,25 @@ pub fn send_clipboard_to(app: &AppHandle, engine: &Eng, phone: &str) {
 }
 
 /// Send this computer's clipboard to a device (the command palette).
-/// Returns "sent", or "queued" when it goes once the device is reachable.
+/// Returns "sent", "queued" when it goes once the device is reachable, or
+/// "cancelled" when it looked like a password and the user said no. Off
+/// the main thread: it may ask first.
 #[tauri::command]
 #[specta::specta]
-pub fn send_clipboard(
-    node_id: String,
-    app: AppHandle,
-    engine: State<Eng>,
-) -> Result<String, CoreError> {
-    match clipboard_to(&app, &engine, &node_id)? {
-        Some(true) => Ok("sent".into()),
-        Some(false) => Ok("queued".into()),
-        None => Err(CoreError::InvalidInput(
+pub async fn send_clipboard(node_id: String, app: AppHandle) -> Result<String, CoreError> {
+    let sent = tauri::async_runtime::spawn_blocking(move || {
+        let engine = app
+            .try_state::<Eng>()
+            .ok_or_else(|| CoreError::InvalidInput("Not ready yet.".into()))?;
+        clipboard_to(&app, &engine, &node_id)
+    })
+    .await
+    .map_err(|e| CoreError::InvalidInput(e.to_string()))??;
+    match sent {
+        ClipSent::Now => Ok("sent".into()),
+        ClipSent::Queued => Ok("queued".into()),
+        ClipSent::Cancelled => Ok("cancelled".into()),
+        ClipSent::Nothing => Err(CoreError::InvalidInput(
             "Nothing to send. Copy some text or a picture first.".into(),
         )),
     }

@@ -24,6 +24,7 @@ import { FileManagerSetting } from "../components/FileManagerSetting";
 import { SyncSetting } from "../components/SyncSetting";
 import { WakeSetting } from "../components/WakeSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
+import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -162,6 +163,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={clipHistory()} onChange={(e) => toggleClipHistory(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.clipHistoryHint")}</p>
+        <ClipPrivacySetting />
         <label class="switch-row">
           <span>{t("settings.chatHistory")}</span>
           <input type="checkbox" role="switch" checked={chatKeep()} onChange={(e) => setChatKeep(e.currentTarget.checked).catch(() => {})} />

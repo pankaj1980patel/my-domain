@@ -124,7 +124,10 @@ class ClipSendActivity : Activity() {
             node == null || Core.engine() == null -> done(getString(R.string.qs_no_computer))
             text.isBlank() -> done(getString(R.string.qs_nothing_copied))
             else -> CoroutineScope(Dispatchers.IO).launch {
-                val via = runCatching { Core.sendText(node, text, "clipboard") }
+                // A password (marked sensitive) goes marked so: the computer
+                // keeps it out of its history and notices.
+                val sensitive = com.mydomain.android.core.ClipPrivacy.isSensitive(clip?.description)
+                val via = runCatching { Core.sendText(node, text, "clipboard", sensitive) }
                 val name = QuickTarget.name(node)
                 val msg = via.fold(
                     { if (it == "queued") getString(R.string.qs_clip_queued, name) else getString(R.string.qs_clip_sent, name) },

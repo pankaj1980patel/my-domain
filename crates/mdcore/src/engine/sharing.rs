@@ -336,6 +336,19 @@ impl<P: Platform> Engine<P> {
     /// Like a message, it waits for the device to be reachable; returns the
     /// transport used, or "queued".
     pub fn send_text(&self, node_id: &str, text: &str, mode: &str) -> crate::Result<String> {
+        self.send_text_marked(node_id, text, mode, false)
+    }
+
+    /// `send_text`, marked `sensitive` (a password copied from a password
+    /// manager, sent anyway): the device keeps it out of its history and
+    /// notices. Older devices ignore the mark.
+    pub fn send_text_marked(
+        &self,
+        node_id: &str,
+        text: &str,
+        mode: &str,
+        sensitive: bool,
+    ) -> crate::Result<String> {
         if !crate::features::share::is_mode(mode) {
             return Err(format!("unknown mode {mode}").into());
         }
@@ -348,8 +361,7 @@ impl<P: Platform> Engine<P> {
                 .into());
         }
         let me = self.ctx.identity.lock().node_id.clone();
-        let m = serde_json::json!({ "type": "share_text", "from": me, "text": text, "mode": mode })
-            .to_string();
+        let m = crate::features::share::message(&me, text, mode, sensitive);
         self.send(node_id, &m)
     }
 

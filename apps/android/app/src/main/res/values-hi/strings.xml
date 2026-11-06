@@ -181,6 +181,8 @@
     <string name="settings_chat_history_hint">आपके डिवाइस के साथ हुई चैट इसी फ़ोन पर रखी जाती हैं (हर डिवाइस की सबसे नई 2,000), ताकि रीस्टार्ट के बाद भी वे मौजूद रहें। कभी सिंक नहीं होतीं। इसे बंद करने पर सब भुला दी जाती हैं।</string>
     <string name="settings_share_labels">नाम और आइकन मेरे दूसरे डिवाइस के साथ शेयर करें</string>
     <string name="settings_share_labels_hint">यहाँ किसी डिवाइस को दिया गया निकनेम, आइकन या रंग आपके दूसरे डिवाइस पर भी दिखता है, और वहाँ सेट किए गए यहाँ दिखते हैं। सबसे नया बदलाव लागू होता है। बंद: यह फ़ोन अपनी सेटिंग रखता है और उनकी सेटिंग अनदेखी करता है।</string>
+    <string name="settings_clip_hide_concealed">पासवर्ड और दूसरी छिपी क्लिप कभी सिंक न करें</string>
+    <string name="settings_clip_hide_concealed_hint">पासवर्ड मैनेजर से कॉपी किया गया पासवर्ड इसी फ़ोन पर रहता है: वह न सिंक होता है, न क्लिपबोर्ड के इतिहास में रखा जाता है। आपका कंप्यूटर जो पासवर्ड भेजता है वे क्लिपबोर्ड पर निजी चिह्नित होकर आते हैं, ताकि कीबोर्ड उन्हें न दिखाए।</string>
     <string name="settings_clip_history_hint">आपके डिवाइस के बीच क्लिपबोर्ड के रूप में भेजा गया टेक्स्ट इसी फ़ोन पर (आखिरी 200), हर डिवाइस की स्क्रीन पर रखा जाता है। इसे बंद करने पर सब भुला दिया जाता है।</string>
     <string name="settings_share_codes_hint">जब किसी सूचना में कोई कोड आता है, तो वह आपके कंप्यूटर पर कॉपी हो जाता है ताकि आप उसे वहाँ पेस्ट कर सकें।</string>
     <string name="settings_device_key">डिवाइस कुंजी</string>
@@ -387,6 +389,7 @@
     <string name="share_no_devices">अभी कोई डिवाइस नहीं है। पहले किसी दूसरे डिवाइस पर साइन इन करें।</string>
     <string name="share_sending">%1$s को भेजा जा रहा है</string>
     <string name="share_text_body">लिंक उस डिवाइस पर खुलता है; बाकी टेक्स्ट उसके क्लिपबोर्ड पर जाता है।</string>
+    <string name="text_password_hidden">एक पासवर्ड (छिपा हुआ)</string>
     <string name="text_copied_title">%1$s से कॉपी किया गया</string>
     <string name="text_from_title">%1$s से</string>
     <string name="search_title">%1$s: “%2$s” खोजें</string>

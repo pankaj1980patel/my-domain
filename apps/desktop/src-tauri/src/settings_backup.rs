@@ -65,6 +65,8 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "calls_answer_audio",
             "chat_history",
             "clip_history",
+            "clip_hide_concealed",
+            "clip_excluded_apps",
             "muted_apps",
             "share_location",
             "computer_notifs",

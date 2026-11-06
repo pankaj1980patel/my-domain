@@ -89,6 +89,13 @@ impl<'a> ControlMsg<'a> {
             .and_then(|x| x.as_str())
             .map(String::from)
     }
+    /// Boolean field, false if absent (or not a boolean).
+    pub fn flag(&self, key: &str) -> bool {
+        self.value
+            .get(key)
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false)
+    }
     /// Raw JSON field (for opaque passthrough payloads).
     pub fn json(&self, key: &str) -> Value {
         self.value.get(key).cloned().unwrap_or(Value::Null)

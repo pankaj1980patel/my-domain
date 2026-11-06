@@ -1018,6 +1018,20 @@ impl MdEngine {
         Ok(self.inner.send_text(&node_id, &text, &mode)?)
     }
 
+    /// `send_text`, marked `sensitive` (a password copied from a password
+    /// manager): the device keeps it out of its history and notices.
+    pub fn send_text_marked(
+        &self,
+        node_id: String,
+        text: String,
+        mode: String,
+        sensitive: bool,
+    ) -> MdResult<String> {
+        Ok(self
+            .inner
+            .send_text_marked(&node_id, &text, &mode, sensitive)?)
+    }
+
     // --- gallery ---
 
     /// This phone lists its gallery (`gallery-request` events). Until set,

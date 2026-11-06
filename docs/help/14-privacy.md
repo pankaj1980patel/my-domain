@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent
+keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -22,6 +22,10 @@ It can't read what you send: it never has your device key. Messages are not stor
 - Sensitive things are off until you turn them on, on the device they concern: sharing a location, letting your devices see a screen, calls on the computer, webhooks.
 - Screen sharing and phone audio are asked for every time, by Android itself.
 - A notification tells you when a device's location is shared, when its screen is being watched, and when an automation or webhook runs.
+
+## Copied passwords
+
+A password copied from a password manager is never synced to your other devices or kept in a clipboard history, and if you send it on purpose the other device keeps it out of its history and notifications too. On the computer you can also exclude apps whose copies should never be synced. See [Messages, clipboard and clipboard history](help:messages-clipboard).
 
 ## What stays on each device
 

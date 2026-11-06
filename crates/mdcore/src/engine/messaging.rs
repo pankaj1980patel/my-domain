@@ -139,9 +139,13 @@ impl<P: Platform> Engine<P> {
         let content = result.map_err(|_| {
             "no clipboard response from peer (is it reachable and using the same key?)".to_string()
         })?;
-        clip.set(&content);
-        *self.ctx.clip_last.lock() = content.clone();
-        crate::features::clipboard::remember(&self.ctx, &content, Some(node_id));
+        // Empty: nothing there (or a password it keeps to itself). This
+        // clipboard is left as it is.
+        if !content.is_empty() {
+            clip.set(&content);
+            *self.ctx.clip_last.lock() = content.clone();
+            crate::features::clipboard::remember(&self.ctx, &content, Some(node_id));
+        }
         Ok(content)
     }
 

@@ -23,6 +23,7 @@ mod calls;
 mod chat_history;
 mod clip_history;
 mod clip_image;
+mod clip_privacy;
 mod commands_run;
 mod computer_audio;
 mod computer_notifs;
@@ -109,6 +110,11 @@ impl Clipboard for DesktopClipboard {
         if let Some(c) = g.as_mut() {
             let _ = c.set_text(text.to_owned());
         }
+    }
+    /// A password copied from a password manager, or a copy from an
+    /// excluded app (`clip_privacy`).
+    fn keep_private(&self) -> bool {
+        clip_privacy::keep_private_now()
     }
 }
 
@@ -432,16 +438,30 @@ impl EventSink for TauriSink {
             // Text another device sent: the core already put a clipboard
             // one on the clipboard; say so (and keep it in the clipboard
             // history), or show a "notify" one.
-            CoreEvent::TextShared { from, text, mode } => {
-                if mode == "clipboard" {
+            // One marked sensitive (a password sent anyway) is neither kept
+            // nor shown.
+            CoreEvent::TextShared {
+                from,
+                text,
+                mode,
+                sensitive,
+            } => {
+                if mode == "clipboard" && !sensitive {
                     clip_history::on_received(&self.app, from, text);
                 }
                 let app = self.app.clone();
-                let (from, text, mode) = (from.clone(), text.clone(), mode.clone());
+                let (from, text, mode, sensitive) =
+                    (from.clone(), text.clone(), mode.clone(), *sensitive);
                 std::thread::spawn(move || {
                     let device = notify::device_name(&app, &from);
                     let short: String = text.chars().take(200).collect();
-                    if mode == "clipboard" {
+                    if mode == "clipboard" && sensitive {
+                        notify::post(
+                            &app,
+                            &format!("Copied from {device}"),
+                            "A password is on your clipboard.",
+                        );
+                    } else if mode == "clipboard" {
                         notify::post(&app, &format!("Copied from {device}"), &short);
                     } else {
                         notify::post(&app, &format!("From {device}"), &short);
@@ -1464,6 +1484,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         clip_history::clear_clip_history,
         clip_history::clip_history_enabled,
         clip_history::set_clip_history_enabled,
+        clip_privacy::clip_privacy,
+        clip_privacy::set_clip_hide_concealed,
+        clip_privacy::set_clip_excluded_apps,
         clip_history::clip_picture,
         clip_history::copy_clip_picture,
         clip_history::send_clip_picture,
@@ -1657,6 +1680,8 @@ pub fn run() {
             app.manage(quiet::Quiet::default());
             app.manage(notif_history::NotifHistory::load(&handle));
             app.manage(clip_history::ClipHistory::load(&handle));
+            // Before the Engine: its clipboard watcher asks.
+            clip_privacy::load(&handle);
             app.manage(chat_history::ChatHistory::load(&handle));
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));

@@ -1,6 +1,6 @@
 ---
 title: Messages, clipboard and clipboard history
-keywords: chat, message, text, message history, chat history, saved messages, copy, paste, clipboard, sync, history, clips, picture, image, copied picture, link, open link, verification code, otp, code
+keywords: chat, message, password, password manager, concealed, sensitive, excluded apps, private clip, text, message history, chat history, saved messages, copy, paste, clipboard, sync, history, clips, picture, image, copied picture, link, open link, verification code, otp, code
 platforms: desktop, android
 ---
 ## Messages
@@ -25,6 +25,18 @@ The history stays on that device only. It's never synced to your other devices o
 - On the computer, you can also give "send my clipboard to my phone" a keyboard shortcut. See [Automations and shortcuts](help:automations).
 
 Copied pictures can be sent too.
+
+## Passwords stay private
+
+A password you copy from a password manager (1Password, Bitwarden, KeePassXC, Keychain and others mark it as concealed) stays on the device you copied it on:
+
+- **Clipboard sync** doesn't send it, it isn't kept in the clipboard history, and a device using **Get clipboard** gets nothing.
+- **Send clipboard** on the computer asks first: "This looks like a password copied from a password manager. Send anyway?" If you send it, it goes marked as a password: the phone puts it on its clipboard marked private (the keyboard and Android's clipboard preview hide it), and neither device keeps it in its history or shows it in a notification.
+- On the phone, a copy an app marks as sensitive stays on the phone the same way.
+- On the computer, **Excluded apps** in Settings lists apps whose copies are never synced (on a Mac by app id, such as com.agilebits.onepassword7; on Windows by program, such as KeePass.exe). Copy something in the app, then use **Add the app you last copied from**.
+- Turn **Never sync passwords and other concealed clips** off in Settings to sync them like any other clip.
+
+On Linux the computer can't tell a copied password from other text (nor which app it came from), so there it is synced like any other clip; passwords sent from your other devices are still kept out of the history.
 
 ## Clipboard history
 

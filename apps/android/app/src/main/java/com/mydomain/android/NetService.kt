@@ -13,6 +13,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
+import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.KeystoreSecrets
 import com.mydomain.android.core.Tone
@@ -416,9 +417,10 @@ class NetService : Service() {
                 if (clip != null && clip.itemCount > 0) {
                     val text = clip.getItemAt(0).text?.toString()
                     // A copy marked sensitive (a password manager's, or the
-                    // automation-apps key from Settings) stays on this phone.
-                    val sensitive = clip.description?.extras?.getBoolean("android.content.extra.IS_SENSITIVE") == true
-                    if (text != null && !sensitive && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
+                    // automation-apps key from Settings) stays on this phone,
+                    // unless "Never sync passwords…" is off (ClipPrivacy).
+                    val stayHere = ClipPrivacy.keepHere(ClipPrivacy.isSensitive(clip.description), ClipPrivacy.hideConcealed(this))
+                    if (text != null && !stayHere && !text.startsWith("SYNC_IGNORE:")) { // Avoid loops if we use a prefix
                         currentLocalClip = text
                         // A copy made on this phone (not one we applied from
                         // a device, nor a recent value copied again).
@@ -440,13 +442,17 @@ class NetService : Service() {
         val from = o.optString("from")
         if (text.isBlank()) return
         val toClipboard = o.optString("mode") == "clipboard"
+        // A password sent anyway: on the clipboard marked sensitive (the
+        // keyboard and Android's preview hide it), not kept, not shown.
+        val sensitive = o.optBoolean("sensitive")
         if (toClipboard) {
             // Not sent back out by the sync: it came from that device.
             lastReceivedClipboard = text
-            updateLocalClipboard(text)
-            Core.recordClip(text, from.ifEmpty { null })
+            updateLocalClipboard(text, sensitive)
+            if (!sensitive) Core.recordClip(text, from.ifEmpty { null })
         }
-        DeviceActions.sharedText(this, Core.peerName(from), text, toClipboard)
+        val shown = if (sensitive) getString(R.string.text_password_hidden) else text
+        DeviceActions.sharedText(this, Core.peerName(from), shown, toClipboard)
     }
 
     private var lastReceivedClipboard: String? = null
@@ -499,12 +505,12 @@ class NetService : Service() {
         }
     }
 
-    private fun updateLocalClipboard(content: String) {
+    private fun updateLocalClipboard(content: String, sensitive: Boolean = false) {
         Handler(Looper.getMainLooper()).post {
             try {
                 // To avoid triggering our own listener and causing a loop, 
                 // we could use a flag or check the content.
-                val clip = ClipData.newPlainText("Synced Clipboard", content)
+                val clip = ClipPrivacy.clipOf("Synced Clipboard", content, sensitive)
                 clipboard.setPrimaryClip(clip)
                 Log.i("NetService", "Clipboard updated from remote")
             } catch (_: Exception) {

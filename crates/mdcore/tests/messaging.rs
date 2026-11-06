@@ -299,6 +299,33 @@ fn the_clipboard_history_keeps_recent_values_newest_first() {
 }
 
 #[test]
+fn a_concealed_copy_is_neither_synced_kept_nor_handed_to_a_pull() {
+    let (a, b) = pair("clip-private");
+    a.engine.enable_clipboard_sync();
+    b.engine.enable_clipboard_sync();
+
+    a.clip().user_copies_password("hunter2");
+    std::thread::sleep(Duration::from_millis(2500));
+    assert_eq!(b.clip().current(), None);
+    assert!(!a
+        .engine
+        .clipboard_history()
+        .iter()
+        .any(|e| e.text == "hunter2"));
+    // Pulled by b: nothing handed out.
+    assert_eq!(b.engine.get_clipboard(&a.node_id()).unwrap(), "");
+    assert_eq!(b.clip().current(), None);
+
+    // The next ordinary copy syncs as usual.
+    a.clip().user_copies("hello");
+    let deadline = std::time::Instant::now() + WAIT;
+    while b.clip().current().as_deref() != Some("hello") {
+        assert!(std::time::Instant::now() < deadline, "b never got it");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
 fn clipboard_push_is_ignored_when_receiver_disabled_sync() {
     let (a, b) = pair("clip-push-off");
     a.engine.enable_clipboard_sync();

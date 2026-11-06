@@ -103,6 +103,10 @@ export const commands = {
 	clipHistoryEnabled: () => __TAURI_INVOKE<boolean>("clip_history_enabled"),
 	/**  Turn the history on or off; off also forgets everything kept. */
 	setClipHistoryEnabled: (on: boolean) => __TAURI_INVOKE<void>("set_clip_history_enabled", { on }),
+	clipPrivacy: () => __TAURI_INVOKE<ClipPrivacy_Serialize>("clip_privacy"),
+	setClipHideConcealed: (on: boolean) => __TAURI_INVOKE<void>("set_clip_hide_concealed", { on }),
+	/**  Replace the excluded apps; returns them as kept. */
+	setClipExcludedApps: (apps: string[]) => __TAURI_INVOKE<string[]>("set_clip_excluded_apps", { apps }),
 	/**  Kept picture `id` at full size, as a `data:image/png` URL (to look at it). */
 	clipPicture: (id: number) => typedError<string, string>(__TAURI_INVOKE("clip_picture", { id })),
 	/**  Put kept picture `id` on this computer's clipboard. */
@@ -467,7 +471,9 @@ export const commands = {
 	sendClipboardImage: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard_image", { nodeId })),
 	/**
 	 *  Send this computer's clipboard to a device (the command palette).
-	 *  Returns "sent", or "queued" when it goes once the device is reachable.
+	 *  Returns "sent", "queued" when it goes once the device is reachable, or
+	 *  "cancelled" when it looked like a password and the user said no. Off
+	 *  the main thread: it may ask first.
 	 */
 	sendClipboard: (nodeId: string) => typedError<string, string>(__TAURI_INVOKE("send_clipboard", { nodeId })),
 	/**  The calls switch, phone, link and call right now. */
@@ -1121,6 +1127,33 @@ export type ClipPicture_Serialize = {
 	bytes: number | null,
 	/**  Its thumbnail as a `data:image/png` URL, if there is one. */
 	thumb: string | null,
+};
+
+/**  The Settings section. */
+export type ClipPrivacy = ClipPrivacy_Serialize | ClipPrivacy_Deserialize;
+
+/**  The Settings section. */
+export type ClipPrivacy_Deserialize = {
+	hide_concealed: boolean,
+	excluded: string[],
+	/**  The app in front at the last copy, if known. */
+	last_app?: string | null,
+	/**  This OS can tell a concealed copy (not Linux). */
+	detects: boolean,
+	/**  This OS can tell which app a copy came from (not Linux). */
+	knows_apps: boolean,
+};
+
+/**  The Settings section. */
+export type ClipPrivacy_Serialize = {
+	hide_concealed: boolean,
+	excluded: string[],
+	/**  The app in front at the last copy, if known. */
+	last_app: string | null,
+	/**  This OS can tell a concealed copy (not Linux). */
+	detects: boolean,
+	/**  This OS can tell which app a copy came from (not Linux). */
+	knows_apps: boolean,
 };
 
 /**  One clip as kept. */

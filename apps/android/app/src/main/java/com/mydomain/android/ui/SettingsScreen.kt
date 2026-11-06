@@ -40,6 +40,7 @@ import com.mydomain.android.R
 import com.mydomain.android.SetupState
 import com.mydomain.android.core.ChatHistory
 import com.mydomain.android.core.ClipLog
+import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.niceName
@@ -85,6 +86,19 @@ fun ClipHistorySwitch() {
     val ctx = LocalContext.current
     SwitchRow(stringResource(R.string.settings_clip_history), ClipLog.enabled) { ClipLog.setEnabled(ctx, it) }
     Muted(stringResource(R.string.settings_clip_history_hint))
+}
+
+/** "Never sync passwords and other concealed clips" ([ClipPrivacy]): on
+ *  by default. */
+@Composable
+fun HideConcealedSwitch() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(ClipPrivacy.hideConcealed(ctx)) }
+    SwitchRow(stringResource(R.string.settings_clip_hide_concealed), on) {
+        on = it
+        ClipPrivacy.setHideConcealed(ctx, it)
+    }
+    Muted(stringResource(R.string.settings_clip_hide_concealed_hint))
 }
 
 /** "Share names and icons with my other devices": the nicknames, icons
@@ -338,6 +352,7 @@ fun SettingsScreen(
             ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
             ChatHistorySwitch()
             ClipHistorySwitch()
+            HideConcealedSwitch()
             ShareCodesSwitch()
             ShareLabelsSwitch()
         }

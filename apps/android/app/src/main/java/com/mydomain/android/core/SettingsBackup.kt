@@ -34,6 +34,7 @@ object SettingsBackup {
         "theme" to Pref("appearance", Type.STRING),
         "clip_sync" to Pref("preferences", Type.BOOL),
         "clip_history" to Pref("preferences", Type.BOOL),
+        "clip_hide_concealed" to Pref("preferences", Type.BOOL),
         "chat_history" to Pref("preferences", Type.BOOL),
         "share_codes" to Pref("preferences", Type.BOOL),
         "touchpad_secure" to Pref("preferences", Type.BOOL),

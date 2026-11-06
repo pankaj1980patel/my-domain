@@ -179,6 +179,8 @@
     <string name="settings_chat_history_hint">Chats with your devices are kept on this phone (the newest 2,000 per device), so they’re still there after a restart. Never synced. Turning this off forgets them all.</string>
     <string name="settings_share_labels">Share names and icons with my other devices</string>
     <string name="settings_share_labels_hint">A nickname, icon or colour you give a device here shows up on your other devices too, and ones set there show up here. The newest change wins. Off: this phone keeps its own and ignores theirs.</string>
+    <string name="settings_clip_hide_concealed">Never sync passwords and other concealed clips</string>
+    <string name="settings_clip_hide_concealed_hint">A password copied from a password manager stays on this phone: it isn’t synced or kept in the clipboard history. Passwords your computer sends go on the clipboard marked private, so the keyboard doesn’t show them.</string>
     <string name="settings_clip_history_hint">Text and pictures sent between your devices as clipboard are kept on this phone (the last 200 clips; the newest 50 pictures, 100 MB at most), on each device’s screen. Turning this off forgets it all.</string>
     <string name="settings_share_codes_hint">When a code arrives in a notification, it\'s copied on your computers so you can paste it there.</string>
     <string name="settings_device_key">Device key</string>
@@ -385,6 +387,7 @@
     <string name="share_no_devices">No devices yet. Sign in on another device first.</string>
     <string name="share_sending">Sending to %1$s</string>
     <string name="share_text_body">A link opens on the device; other text goes onto its clipboard.</string>
+    <string name="text_password_hidden">A password (hidden)</string>
     <string name="text_copied_title">Copied from %1$s</string>
     <string name="text_from_title">From %1$s</string>
     <string name="search_title">%1$s: search for \"%2$s\"</string>

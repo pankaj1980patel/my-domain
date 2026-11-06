@@ -230,7 +230,11 @@ fn clipboard_watcher<P: Platform>(ctx: NetCtx<P>) {
                 false
             }
         };
-        if changed {
+        // A password (or a copy from an excluded app) stays here: not
+        // synced, not kept. `clip_last` already holds it, so it isn't
+        // looked at again until the clipboard changes.
+        let private = ctx.platform.clipboard().is_some_and(|c| c.keep_private());
+        if changed && !private {
             crate::features::clipboard::remember(&ctx, &cur, None);
             let me = ctx.identity.lock().node_id.clone();
             let msg =

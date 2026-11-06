@@ -575,9 +575,12 @@ object Core {
             "open_url" -> addActivity(str(R.string.act_link, peerName(o.optString("from")), o.optString("url")))
             "clipboard" -> addActivity(str(R.string.act_clipboard_synced))
             "text_shared" -> {
-                if (o.optString("mode") == "clipboard") ClipLog.received(o.optString("from"), o.optString("text"))
+                // Marked sensitive (a password): neither kept nor shown.
+                val secret = o.optBoolean("sensitive")
+                if (o.optString("mode") == "clipboard" && !secret) ClipLog.received(o.optString("from"), o.optString("text"))
+                val shown = if (secret) str(R.string.text_password_hidden) else o.optString("text").take(200)
                 addActivity(
-                    str(if (o.optString("mode") == "clipboard") R.string.act_text_copied else R.string.act_text_from, peerName(o.optString("from")), o.optString("text").take(200)),
+                    str(if (o.optString("mode") == "clipboard") R.string.act_text_copied else R.string.act_text_from, peerName(o.optString("from")), shown),
                 )
             }
             "folder_listing" -> {
@@ -885,10 +888,12 @@ object Core {
 
     /** Send [text] to a device: onto its clipboard ([mode] "clipboard") or
      *  shown there as a notification ("notify"). */
-    suspend fun sendText(node: String, text: String, mode: String = "clipboard"): String {
-        val how = call { it.sendText(node, text, mode) }
+    suspend fun sendText(node: String, text: String, mode: String = "clipboard", sensitive: Boolean = false): String {
+        // A [sensitive] one (a password) is marked so: the device keeps it
+        // out of its history and notices ([ClipPrivacy]); not kept here either.
+        val how = call { if (sensitive) it.sendTextMarked(node, text, mode, true) else it.sendText(node, text, mode) }
         // Sent (or queued): kept in the clipboard history.
-        if (mode == "clipboard") ClipLog.sent(node, text)
+        if (mode == "clipboard" && !sensitive) ClipLog.sent(node, text)
         return how
     }
 
