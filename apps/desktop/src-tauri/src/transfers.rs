@@ -72,6 +72,17 @@ pub struct TransferEntry {
     /// "wifi_direct".
     #[serde(default)]
     pub via: Option<String>,
+    /// A link downloaded from the web ("Download on <device>"): here, asked
+    /// by `node_id` (`incoming`), or on `node_id`, asked from here.
+    #[serde(default)]
+    pub link: Option<String>,
+    /// The link's host, for showing.
+    #[serde(default)]
+    pub host: Option<String>,
+    /// A download under way: "requested", "checking", "asking", "queued"
+    /// or "downloading".
+    #[serde(default)]
+    pub stage: Option<String>,
 }
 
 impl TransferEntry {
@@ -91,6 +102,9 @@ impl TransferEntry {
             ended: None,
             exists: false,
             via: None,
+            link: None,
+            host: None,
+            stage: None,
         }
     }
 
@@ -258,6 +272,22 @@ impl Transfers {
         {
             e.via = Some(via.to_string());
         }
+    }
+
+    /// A link downloaded here or on `item.node_id` changed state: the row
+    /// learns the link, the file's name and size, and the stage. Its end
+    /// comes with the transfer events.
+    pub fn remote_download(&mut self, item: &mdcore::model::RemoteDownloadItem, now: f64) {
+        let e = self.entry(&item.id, &item.node_id, &item.name, item.here, now);
+        e.link = Some(item.url.clone());
+        e.host = Some(item.host.clone()).filter(|h| !h.is_empty());
+        if !item.name.is_empty() {
+            e.name = item.name.clone();
+        }
+        if item.size > 0 && !e.finished() {
+            e.total = item.size as f64;
+        }
+        e.stage = (!item.finished()).then(|| item.state.clone());
     }
 
     /// Forget every finished transfer.
@@ -451,6 +481,26 @@ pub fn on_failed(
     update(app, |t, now| {
         t.failed(id, node_id, name, incoming, reason, now)
     });
+}
+
+/// A link downloaded here or on another device changed state.
+pub fn on_remote_download(app: &AppHandle, item: &mdcore::model::RemoteDownloadItem) {
+    update(app, |t, now| {
+        t.remote_download(item, now);
+        false
+    });
+}
+
+/// Transfer `id` is a link downloaded from the web.
+pub fn is_link(app: &AppHandle, id: &str) -> bool {
+    app.try_state::<TransferHistory>()
+        .and_then(|h| {
+            h.inner
+                .lock()
+                .ok()
+                .map(|t| t.get(id).is_some_and(|e| e.link.is_some()))
+        })
+        .unwrap_or(false)
 }
 
 /// `send_file` started sending `path`: remembered for "Send again".

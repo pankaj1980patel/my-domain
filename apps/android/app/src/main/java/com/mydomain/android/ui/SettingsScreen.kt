@@ -454,6 +454,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
         Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
         Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
+        Box(Modifier.foundMark(focus == "remote-download")) { RemoteDownloadSettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 

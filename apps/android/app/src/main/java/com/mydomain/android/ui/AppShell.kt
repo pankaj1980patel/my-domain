@@ -88,6 +88,10 @@ fun App(prefs: SharedPreferences) {
         } else {
             Main(prefs, snack)
             ShareChooser()
+            // "Download on…" for a shared link, and another device asking
+            // this phone to download one.
+            DownloadOnChooser()
+            DownloadAskDialog()
             // A verify code scanned with the camera app: what came of it.
             VerifyScanResult()
         }

@@ -47,6 +47,11 @@ rand_core = { version = "0.6", features = ["getrandom"] }
 # "tls" pulls in the rustls backend + bundled webpki roots so HTTPS works (e.g.
 # an ngrok https tunnel). Matches the android client's stricter feature set.
 ureq = { version = "2", default-features = false, features = ["json", "tls"] }
+# "Download on <device>" (`features::link_fetch`): links parsed the way
+# browsers do (international names to punycode, odd IPv4 forms), and shown
+# back in their own script. Both already come with ureq.
+url = "2.5"
+idna = "1"
 tungstenite = { version = "0.24", default-features = false, features = ["handshake", "rustls-tls-webpki-roots"] }
 # Server TLS trusts the bundled roots plus the OS store (company HTTPS
 # proxies install their CA there). See src/tls.rs.

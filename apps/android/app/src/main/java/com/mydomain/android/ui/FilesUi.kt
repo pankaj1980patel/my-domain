@@ -33,6 +33,7 @@ import com.mydomain.android.R
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.ReadLater
 import com.mydomain.android.core.ReadLaterLinks
+import com.mydomain.android.core.RemoteDownloads
 import com.mydomain.android.core.Transfer
 import com.mydomain.android.core.TransferState
 import com.mydomain.android.core.friendlyError
@@ -92,8 +93,15 @@ private fun TransferRow(t: Transfer) {
     val toast = LocalToast.current
     val noApp = stringResource(R.string.file_no_app)
     val size = { n: Long -> Formatter.formatShortFileSize(ctx, n) }
+    val dlLine = if (t.link != null) dlActiveLine(t.id) else null
     val state = when (t.state) {
         TransferState.Active -> when {
+            // A link downloaded here or on the other device: what it's doing.
+            t.link != null && (dlLine != null || t.done == 0L) ->
+                listOfNotNull(dlLine ?: dlHeadLine(t.incoming, t.node, t.link), t.done.takeIf { it > 0 }?.let { size(it) })
+                    .joinToString(" · ")
+            t.link != null -> dlHeadLine(t.incoming, t.node, t.link) + " · " +
+                stringResource(R.string.file_receiving, size(t.done), size(t.total))
             t.incoming -> stringResource(R.string.file_receiving, size(t.done), size(t.total))
             t.done == 0L && !Core.links.containsKey(t.node) -> stringResource(R.string.file_waiting)
             else -> stringResource(R.string.file_sending, size(t.done), size(t.total))
@@ -158,6 +166,11 @@ fun ShareChooser() {
                 // A shared link can go to Read later (all your devices) instead.
                 val link = text?.let { ReadLaterLinks.fromShare(it, null) }
                 if (link != null) {
+                    // ...or be downloaded by another device itself.
+                    SoftButton(stringResource(R.string.dl_share_label), {
+                        Core.clearShare()
+                        RemoteDownloads.pendingLink = link.url
+                    }, Modifier.fillMaxWidth())
                     val savedMsg = stringResource(R.string.read_later_saved)
                     SoftButton(stringResource(R.string.read_later_share_label), {
                         Core.clearShare()

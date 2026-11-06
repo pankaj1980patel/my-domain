@@ -190,6 +190,9 @@ pub struct Sharing {
     pub remote_input: bool,
     pub labels_share: bool,
     pub battery_alerts: BatteryAlertSettings,
+    /// "Downloads from my devices" (missing in a backup from before).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_downloads: Option<mdcore::model::RemoteDownloadSettings>,
 }
 
 /// One synced folder: which folder, with which device, how. Not its files.
@@ -688,6 +691,9 @@ pub fn preview(dir: &Path, b: &Backup, cur: &Current) -> Vec<SectionPreview> {
                     if t.battery_alerts != n.battery_alerts {
                         k.push("battery_alerts".into());
                     }
+                    if t.remote_downloads.is_some() && t.remote_downloads != n.remote_downloads {
+                        k.push("remote_downloads".into());
+                    }
                 }
                 k
             }
@@ -761,6 +767,7 @@ fn sharing_now(engine: &Eng) -> Sharing {
         remote_input: engine.remote_input_allowed(),
         labels_share: engine.labels_share(),
         battery_alerts: engine.battery_alerts(),
+        remote_downloads: Some(engine.remote_download_settings()),
     }
 }
 
@@ -938,6 +945,11 @@ pub fn settings_restore_apply(
                 if let Err(e) = engine.set_battery_alerts(sh.battery_alerts.clone()) {
                     failed.push(format!("Battery alerts: {e}"));
                 }
+                if let Some(rd) = &sh.remote_downloads {
+                    if let Err(e) = engine.set_remote_download_settings(rd.clone()) {
+                        failed.push(format!("Downloads from my devices: {e}"));
+                    }
+                }
                 applied.push("sharing".into());
                 // The others see what this computer offers now.
                 let app = app.clone();
@@ -1095,6 +1107,10 @@ mod tests {
                 low: 20,
                 charged: 80,
             },
+            remote_downloads: Some(mdcore::model::RemoteDownloadSettings {
+                policy: "always".into(),
+                ..Default::default()
+            }),
         });
         sections.sync_folders = Some(SyncSection {
             max_size_mb: 512,

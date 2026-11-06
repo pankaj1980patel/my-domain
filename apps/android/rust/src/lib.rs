@@ -453,6 +453,86 @@ impl From<mdcore::model::ReadLaterItem> for ReadLaterEntry {
     }
 }
 
+/// A link downloaded on one of your devices at another's request
+/// (`remote_downloads`; `remote_download` events carry the same fields
+/// under `item`). `here`: this phone downloads it.
+#[derive(uniffi::Record)]
+pub struct RemoteDownloadEntry {
+    /// Also its transfer id (file_progress and the others, `cancel_file`).
+    pub id: String,
+    pub node_id: String,
+    pub here: bool,
+    pub url: String,
+    pub host: String,
+    pub name: String,
+    /// Bytes, 0 while not known.
+    pub size: i64,
+    pub done: i64,
+    /// requested, checking, asking, queued, downloading, done, failed,
+    /// cancelled or refused.
+    pub state: String,
+    pub error: Option<String>,
+    pub path: Option<String>,
+    /// Unix ms.
+    pub started_at: i64,
+    pub updated_at: i64,
+}
+
+impl From<mdcore::model::RemoteDownloadItem> for RemoteDownloadEntry {
+    fn from(i: mdcore::model::RemoteDownloadItem) -> Self {
+        let n = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
+        RemoteDownloadEntry {
+            id: i.id,
+            node_id: i.node_id,
+            here: i.here,
+            url: i.url,
+            host: i.host,
+            name: i.name,
+            size: n(i.size),
+            done: n(i.done),
+            state: i.state,
+            error: i.error,
+            path: i.path,
+            started_at: n(i.started_at),
+            updated_at: n(i.updated_at),
+        }
+    }
+}
+
+/// What this phone does when another of your devices asks it to download
+/// a link: `policy` "ask" (the first time for each device), "always" or
+/// "never"; `max_mb` 0 = no limit; `allowed`: devices allowed without
+/// asking.
+#[derive(uniffi::Record)]
+pub struct RemoteDownloadPrefs {
+    pub policy: String,
+    pub allow_lan: bool,
+    pub max_mb: i64,
+    pub allowed: Vec<String>,
+}
+
+impl From<mdcore::model::RemoteDownloadSettings> for RemoteDownloadPrefs {
+    fn from(s: mdcore::model::RemoteDownloadSettings) -> Self {
+        RemoteDownloadPrefs {
+            policy: s.policy,
+            allow_lan: s.allow_lan,
+            max_mb: i64::try_from(s.max_mb).unwrap_or(i64::MAX),
+            allowed: s.allowed,
+        }
+    }
+}
+
+impl From<RemoteDownloadPrefs> for mdcore::model::RemoteDownloadSettings {
+    fn from(s: RemoteDownloadPrefs) -> Self {
+        mdcore::model::RemoteDownloadSettings {
+            policy: s.policy,
+            allow_lan: s.allow_lan,
+            max_mb: u64::try_from(s.max_mb).unwrap_or(0),
+            allowed: s.allowed,
+        }
+    }
+}
+
 /// Battery alerts this phone sends your other devices.
 #[derive(uniffi::Record)]
 pub struct BatteryAlertConfig {
@@ -2007,5 +2087,49 @@ impl MdEngine {
     /// Delete a saved link on all your devices.
     pub fn read_later_delete(&self, id: String) -> MdResult<()> {
         Ok(self.inner.delete_read_later(&id)?)
+    }
+
+    // --- download on <device> (features::remote_download) ---
+
+    /// Ask `node_id` to download the first web link in `text`. What follows
+    /// comes as `remote_download` events and the file_* events (same id).
+    pub fn remote_download_request(
+        &self,
+        node_id: String,
+        text: String,
+    ) -> MdResult<RemoteDownloadEntry> {
+        Ok(self.inner.request_remote_download(&node_id, &text)?.into())
+    }
+
+    /// Device `node_id` downloads links for your other devices.
+    pub fn remote_download_supported(&self, node_id: String) -> bool {
+        self.inner.remote_download_supported(&node_id)
+    }
+
+    /// Answer a download waiting on this phone (state "asking").
+    pub fn remote_download_answer(&self, id: String, allow: bool, always: bool) -> MdResult<()> {
+        Ok(self.inner.answer_remote_download(&id, allow, always)?)
+    }
+
+    /// Stop a download either way. False if it isn't one.
+    pub fn remote_download_cancel(&self, id: String) -> bool {
+        self.inner.cancel_remote_download(&id)
+    }
+
+    /// Downloads either way since the app started, the newest first.
+    pub fn remote_downloads(&self) -> Vec<RemoteDownloadEntry> {
+        self.inner
+            .remote_downloads()
+            .into_iter()
+            .map(Into::into)
+            .collect()
+    }
+
+    pub fn remote_download_settings(&self) -> RemoteDownloadPrefs {
+        self.inner.remote_download_settings().into()
+    }
+
+    pub fn set_remote_download_settings(&self, prefs: RemoteDownloadPrefs) -> MdResult<()> {
+        Ok(self.inner.set_remote_download_settings(prefs.into())?)
     }
 }

@@ -4079,6 +4079,7 @@ dependencies = [
  "base64 0.22.1",
  "chacha20poly1305",
  "crab_nat",
+ "idna",
  "igd-next",
  "md-testkit",
  "mdns-sd",
@@ -4100,6 +4101,7 @@ dependencies = [
  "tungstenite",
  "unicode-normalization",
  "ureq",
+ "url",
  "uuid",
  "webpki-roots 0.26.11",
 ]

@@ -224,6 +224,10 @@ impl<P: Platform> Engine<P> {
 
     /// Stop a transfer (either way); the other device is told.
     pub fn cancel_file(&self, id: &str) {
+        // A link downloaded on a device (either way) is a transfer too.
+        if crate::features::remote_download::cancel(&self.ctx, id) {
+            return;
+        }
         crate::features::files::cancel(&self.ctx, id);
     }
 

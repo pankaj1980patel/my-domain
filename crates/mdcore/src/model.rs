@@ -488,6 +488,81 @@ pub struct ReadLaterItem {
     pub by: String,
 }
 
+/// A link downloaded on one of your devices at another's request
+/// (`features::remote_download`): `Engine::remote_downloads`, and the
+/// `RemoteDownload` event whenever its state changes.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteDownloadItem {
+    /// Also its transfer id (the File* events and `Engine::cancel_file`).
+    pub id: String,
+    /// The other device: the one that asked (`here`), or the one that
+    /// downloads it.
+    pub node_id: String,
+    /// This device downloads it; false: another device does, asked from
+    /// here.
+    pub here: bool,
+    pub url: String,
+    /// The link's host, for showing (`example.com`).
+    pub host: String,
+    /// The file's name (a guess from the link until the server says).
+    pub name: String,
+    /// Bytes, 0 while not known.
+    pub size: u64,
+    /// Bytes downloaded so far.
+    pub done: u64,
+    /// "requested" (sent, no answer yet), "checking", "asking" (waiting
+    /// for the user on the downloading device), "queued", "downloading",
+    /// then "done", "failed", "cancelled" or "refused".
+    pub state: String,
+    /// Why it failed or was refused (for the user).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Here, once done: where the file was saved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Unix ms.
+    pub started_at: u64,
+    pub updated_at: u64,
+}
+
+impl RemoteDownloadItem {
+    /// It ended (done, failed, cancelled or refused).
+    pub fn finished(&self) -> bool {
+        matches!(
+            self.state.as_str(),
+            "done" | "failed" | "cancelled" | "refused"
+        )
+    }
+}
+
+/// What this device does when another of yours asks it to download a link
+/// (`features::remote_download`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoteDownloadSettings {
+    /// "ask" (the first time for each device), "always" or "never".
+    pub policy: String,
+    /// Links to this device or the local network are allowed too.
+    #[serde(default)]
+    pub allow_lan: bool,
+    /// The biggest download, in MB (0: no limit).
+    #[serde(default)]
+    pub max_mb: u64,
+    /// Devices (node ids) allowed without asking.
+    #[serde(default)]
+    pub allowed: Vec<String>,
+}
+
+impl Default for RemoteDownloadSettings {
+    fn default() -> Self {
+        RemoteDownloadSettings {
+            policy: "ask".into(),
+            allow_lan: false,
+            max_mb: 4096,
+            allowed: Vec::new(),
+        }
+    }
+}
+
 /// A synced folder: one folder kept the same on this device and another
 /// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
 /// event whenever any of them changes.

@@ -29,6 +29,9 @@ data class TransferRecord(
     val rate: Double = 0.0,
     val movedAt: Long = 0,
     val via: String? = null,
+    /** A link downloaded on a device ("Download on…"): its host. The
+     *  other device asked ([incoming]) or downloads it. */
+    val link: String? = null,
 ) {
     val finished: Boolean get() = state != TransferState.Active
     val fraction: Float get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f
@@ -111,6 +114,15 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
             if (t.node == node && !t.finished) items[i] = t.copy(via = via)
         }
     }
+
+    /** Transfer [id] is a link from [host] downloaded here ([incoming],
+     *  asked by [node]) or on [node]; [name] is its file's name as known
+     *  now. Before its first progress, it starts the row. */
+    fun link(id: String, node: String, name: String, incoming: Boolean, host: String, now: Long): Boolean =
+        upsert(id, { TransferRecord(id, node, name, incoming, started = now) }) { t ->
+            val next = t.copy(link = host, name = name.ifEmpty { t.name })
+            if (next == t) null else next
+        }
 
     /** We started sending [name] (picked from [source], [size] bytes). */
     fun sending(id: String, node: String, name: String, source: String?, size: Long, now: Long) {
@@ -197,6 +209,7 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                         "started" to t.started,
                         "ended" to t.ended,
                         "via" to t.via,
+                        "link" to t.link,
                     )
                 },
             ),
@@ -231,6 +244,7 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                     started = (o["started"] as? Number)?.toLong() ?: 0,
                     ended = (o["ended"] as? Number)?.toLong(),
                     via = o["via"] as? String,
+                    link = o["link"] as? String,
                 )
             }.distinctBy { it.id }
         }

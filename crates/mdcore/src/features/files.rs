@@ -96,7 +96,7 @@ const SWEEP_EVERY: Duration = Duration::from_secs(60 * 60);
 /// after the gap is answered with one).
 const REWIND_EVERY: Duration = Duration::from_millis(500);
 const PROGRESS_EVERY: Duration = Duration::from_millis(250);
-const PARTIAL_DIR: &str = ".mydomain-partial";
+pub(crate) const PARTIAL_DIR: &str = ".mydomain-partial";
 /// Why a transfer whose file changed under it ends.
 const CHANGED: &str = "the file changed since it was offered";
 
@@ -353,7 +353,7 @@ pub fn free_path(dir: &Path, name: &str) -> PathBuf {
 /// Move `part` into `dir` under `name` or the first free numbered name,
 /// never over an existing file: the name is claimed with `create_new`
 /// (atomic), so two files finishing at once can't take the same one.
-fn move_into(part: &Path, dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn move_into(part: &Path, dir: &Path, name: &str) -> Option<PathBuf> {
     for n in 0..10_000 {
         let dest = numbered(dir, name, n);
         match OpenOptions::new().write(true).create_new(true).open(&dest) {

@@ -102,6 +102,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::kvm::extend_status(ctx, &mut status);
                 // Whether it prints for your phones.
                 super::print::extend_status(ctx, &mut status);
+                // Whether it downloads links for the others.
+                super::remote_download::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -145,6 +147,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     &status[super::kvm::OS_FLAG],
                 );
                 super::print::remember(ctx, &from, &status[super::print::FLAG]);
+                super::remote_download::remember(ctx, &from, &status[super::remote_download::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

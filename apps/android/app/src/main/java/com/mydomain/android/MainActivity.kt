@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.JoinLinks
 import com.mydomain.android.core.KeyVerifyPlan
+import com.mydomain.android.core.RemoteDownloads
 import com.mydomain.android.core.Verify
 import com.mydomain.android.ui.App
 import com.mydomain.android.ui.MdTheme
@@ -66,6 +67,7 @@ class MainActivity : ComponentActivity() {
         askWifiScan(intent)
         openSettings(intent)
         openDevice(intent)
+        takeDownloadLink(intent)
         if (savedInstanceState == null) openNote(intent)
         if (savedInstanceState == null) openTimers(intent)
         if (savedInstanceState == null) takeJoinLink(intent)
@@ -152,6 +154,14 @@ class MainActivity : ComponentActivity() {
         Verify.pendingScan = link
     }
 
+    /** "Download on…" from the share sheet ([DownloadShareActivity]): the
+     *  device chooser shows for the link. */
+    private fun takeDownloadLink(intent: Intent?) {
+        val link = intent?.getStringExtra(DownloadShareActivity.EXTRA_LINK) ?: return
+        intent.removeExtra(DownloadShareActivity.EXTRA_LINK)
+        RemoteDownloads.pendingLink = link
+    }
+
     /** A launcher shortcut ([ShareTargets]) asked for a device's screen. */
     private fun openDevice(intent: Intent?) {
         val node = intent?.getStringExtra(ShareTargets.EXTRA_OPEN_DEVICE) ?: return
@@ -229,6 +239,7 @@ class MainActivity : ComponentActivity() {
         openSettings(intent)
         askWifiScan(intent)
         openDevice(intent)
+        takeDownloadLink(intent)
         openNote(intent)
         openTimers(intent)
         takeJoinLink(intent)
@@ -244,6 +255,9 @@ class MainActivity : ComponentActivity() {
             FileActions.shareFolders(applicationContext)
             // Notification access may have been granted meanwhile.
             NowPlaying.start(applicationContext)
+            // Links being downloaded either way ("Download on…"), and any
+            // question waiting here.
+            com.mydomain.android.core.RemoteDownloads.refresh()
         }.start()
     }
 

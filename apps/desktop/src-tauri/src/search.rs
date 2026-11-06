@@ -960,6 +960,9 @@ mod tests {
             ended: Some(ts),
             exists: false,
             via: None,
+            link: None,
+            host: None,
+            stage: None,
         }
     }
 

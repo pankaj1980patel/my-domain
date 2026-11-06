@@ -318,6 +318,9 @@ pub struct SendItem {
     /// Its last path component.
     pub name: String,
     pub folder: bool,
+    /// A saved web link (`.url`, `.webloc`, a `.desktop` link): its link,
+    /// so the picker can offer to download the file on a device instead.
+    pub link: Option<String>,
 }
 
 /// What the "Send to…" picker shows.
@@ -354,7 +357,43 @@ fn item(path: &str) -> SendItem {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_else(|| path.to_string()),
         folder: p.is_dir(),
+        link: shortcut_link(p),
     }
+}
+
+/// The web link a saved-link file holds: Windows' `.url` (`URL=`), a Mac's
+/// `.webloc` (an XML property list) or a Linux `.desktop` link (`URL=`).
+/// Small files only; http(s) links only.
+pub fn shortcut_link(path: &Path) -> Option<String> {
+    let ext = path.extension()?.to_string_lossy().to_ascii_lowercase();
+    if !matches!(ext.as_str(), "url" | "webloc" | "desktop") {
+        return None;
+    }
+    if std::fs::metadata(path).ok()?.len() > 64 * 1024 {
+        return None;
+    }
+    link_in_shortcut(&ext, &std::fs::read_to_string(path).ok()?)
+}
+
+/// `shortcut_link` on a file's text (`ext` in lower case).
+pub fn link_in_shortcut(ext: &str, text: &str) -> Option<String> {
+    let raw = if ext == "webloc" {
+        let after = &text[text.find("<key>URL</key>")? + 14..];
+        let start = after.find("<string>")? + 8;
+        let end = after[start..].find("</string>")? + start;
+        after[start..end]
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+    } else {
+        text.lines().map(str::trim).find_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            k.trim()
+                .eq_ignore_ascii_case("url")
+                .then(|| v.trim().to_string())
+        })?
+    };
+    mdcore::features::read_later::find_url(raw.trim())
 }
 
 /// Paths to send arrived (handoff, Services menu, this process's own
@@ -854,6 +893,33 @@ mod mac {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_links_are_read() {
+        assert_eq!(
+            link_in_shortcut(
+                "url",
+                "[InternetShortcut]\r\nURL=https://example.com/a.zip\r\n"
+            )
+            .as_deref(),
+            Some("https://example.com/a.zip")
+        );
+        let webloc = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>URL</key><string>https://x.io/f?a=1&amp;b=2</string></dict></plist>";
+        assert_eq!(
+            link_in_shortcut("webloc", webloc).as_deref(),
+            Some("https://x.io/f?a=1&b=2")
+        );
+        assert_eq!(
+            link_in_shortcut(
+                "desktop",
+                "[Desktop Entry]\nType=Link\nURL=http://x.io/r.pdf\n"
+            )
+            .as_deref(),
+            Some("http://x.io/r.pdf")
+        );
+        assert_eq!(link_in_shortcut("url", "URL=file:///etc/passwd"), None);
+        assert_eq!(link_in_shortcut("webloc", "bplist00"), None);
+    }
 
     fn args(v: &[&str]) -> Vec<String> {
         std::iter::once("my-domain")

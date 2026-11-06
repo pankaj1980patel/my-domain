@@ -14,6 +14,7 @@ import { DeviceAvatar } from "./DeviceLabel";
 import { StatusPill, toast } from "./ui";
 import { t, tn } from "../i18n";
 import { rememberFocus, trapTab } from "../lib/a11y";
+import { downloadTargets, requestDownload } from "../lib/remoteDownload";
 
 /** Shown by name; the rest are counted. */
 const NAMED = 3;
@@ -22,6 +23,8 @@ export default function SendToPicker() {
   const [items, setItems] = createSignal<SendItem[]>([]);
   const [last, setLast] = createSignal<string | null>(null);
   const [busy, setBusy] = createSignal(false);
+  /** Devices that download links (for a saved link sent here). */
+  const [targets, setTargets] = createSignal<string[]>([]);
   let dialog: HTMLDivElement | undefined;
   /** Where focus was before it opened; it goes back there on close. */
   let restore: (() => void) | undefined;
@@ -32,6 +35,7 @@ export default function SendToPicker() {
     if (!req) return;
     if (!items().length) restore = rememberFocus();
     setLast(req.last_device);
+    if (req.items.some((i) => i.link)) downloadTargets().then(setTargets, () => setTargets([]));
     setItems((cur) => [...cur, ...req.items.filter((i) => !cur.some((c) => c.path === i.path))]);
     requestAnimationFrame(() => dialog?.querySelector<HTMLButtonElement>(".send-to-device")?.focus());
   };
@@ -54,6 +58,24 @@ export default function SendToPicker() {
       return rank(a.node_id) - rank(b.node_id) || peerName(a.node_id).localeCompare(peerName(b.node_id));
     }),
   );
+
+  /** One saved web link (`.url`, `.webloc`): it can be downloaded on a
+   *  device instead of sent as a file. */
+  const link = () => (items().length === 1 ? (items()[0].link ?? null) : null);
+  const linkDevices = createMemo(() => devices().filter((p) => targets().includes(p.node_id)));
+  const download = async (node: string, url: string) => {
+    if (busy()) return;
+    setBusy(true);
+    try {
+      await requestDownload(node, url);
+      toast(t("download.asked", { device: peerName(node) }), "ok");
+      close();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const what = () => {
     const list = items();
@@ -124,6 +146,25 @@ export default function SendToPicker() {
                 )}
               </For>
             </ul>
+            <Show when={link() && linkDevices().length > 0 ? link() : null}>
+              {(url) => (
+                <>
+                  <p class="muted small">{t("download.sendToHint")}</p>
+                  <ul class="send-to-list" aria-label={t("download.pickTitle")}>
+                    <For each={linkDevices()}>
+                      {(p) => (
+                        <li>
+                          <button class="send-to-device" type="button" disabled={busy()} onClick={() => download(p.node_id, url())}>
+                            <DeviceAvatar node={p.node_id} />
+                            <span class="send-to-name">{t("download.onDevice", { device: peerName(p.node_id) })}</span>
+                          </button>
+                        </li>
+                      )}
+                    </For>
+                  </ul>
+                </>
+              )}
+            </Show>
             <p class="muted small">{t("sendTo.hint")}</p>
             <div class="row send-to-actions">
               <button class="btn btn-ghost" type="button" onClick={close}>

@@ -80,6 +80,14 @@ object TransferLog {
         if (book.failed(id, node, name, incoming, reason, System.currentTimeMillis())) changed(save = true)
     }
 
+    /** Transfer [id] is a link from [host] downloaded here or on [node]
+     *  ("Download on…"). Main thread. */
+    fun link(id: String, node: String, name: String, incoming: Boolean, host: String) {
+        if (book.link(id, node, name, incoming, host, System.currentTimeMillis())) {
+            changed(save = book.get(id)?.finished == true)
+        }
+    }
+
     /** A received file is in Downloads as [uri]. Safe from any thread. */
     fun saved(id: String, uri: String, mime: String?) = onMain {
         if (book.saved(id, uri, mime)) changed(save = book.get(id)?.finished == true)

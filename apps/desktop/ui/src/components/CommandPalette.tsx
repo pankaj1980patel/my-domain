@@ -39,6 +39,7 @@ import {
 import { DEVICE_PRESETS, LOCAL_PRESETS, offeredPresets, type Preset } from "../lib/presets";
 import { sortedNotes } from "../lib/notes";
 import { openLink, saveCopiedLink, sortedReadLater } from "../lib/readLater";
+import { copiedLink, openDownloadPicker, requestDownload } from "../lib/remoteDownload";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { TOPICS } from "../help/topics";
@@ -153,6 +154,16 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
     () => pullClipboard(node).then(() => toast(t("clipboard.copied"), "ok"), fail),
     live ? undefined : t("palette.offline", { name }),
   );
+  // The copied link, downloaded by the device itself (only one that can).
+  if (st?.remoteDownload) {
+    add("download", t("palette.downloadOn", { name }), () =>
+      copiedLink().then((url) =>
+        url
+          ? requestDownload(node, url).then(() => toast(t("download.asked", { device: name }), "ok"), fail)
+          : openDownloadPicker(null),
+      ),
+    );
+  }
   add("file", t("palette.sendFile", { name }), () =>
     pickAndSendFile(node).then((sent) => sent && toast(tn("files.started", 1, { name }), "ok"), fail),
   );
@@ -384,6 +395,13 @@ export default function CommandPalette(props: {
         label: t("palette.saveCopiedLink"),
         group,
         run: () => saveCopiedLink().then((i) => toast(t("readLater.saved", { title: i.title }), "ok"), fail),
+      },
+      // "Download on <device>": the copied link, on the device picked next.
+      {
+        id: "download.copied",
+        label: t("palette.downloadCopiedLink"),
+        group,
+        run: () => copiedLink().then(openDownloadPicker),
       },
       ...sortedReadLater()
         .filter((i) => !i.read)

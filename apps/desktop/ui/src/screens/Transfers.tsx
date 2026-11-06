@@ -10,6 +10,7 @@ import { fileFailReason, friendlyError, humanSize, timeAgo } from "../lib/words"
 import { Empty, toast } from "../components/ui";
 import { foundId, isFound } from "../lib/search";
 import { t } from "../i18n";
+import { downloads } from "../lib/remoteDownload";
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
 /** Speed older than this (no bytes moved) isn't shown. */
@@ -124,7 +125,13 @@ function Head(props: { e: Entry }) {
           {props.e.name}
         </strong>
         <span class="muted small">
-          {props.e.incoming ? t("transfers.from", { device: device() }) : t("transfers.to", { device: device() })}
+          {props.e.link
+            ? props.e.incoming
+              ? t("transfers.dl.here", { host: props.e.host ?? "", device: device() })
+              : t("transfers.dl.there", { host: props.e.host ?? "", device: device() })
+            : props.e.incoming
+              ? t("transfers.from", { device: device() })
+              : t("transfers.to", { device: device() })}
         </span>
       </div>
     </div>
@@ -143,7 +150,20 @@ function ActiveRow(props: { e: Entry; clock: number }) {
     return x.rate;
   };
   const resumedFrom = () => props.e.resumed_from ?? live()?.resumedFrom;
+  /** A link downloaded on a device: where it is before it moves. */
+  const stage = () => (props.e.link ? (downloads[props.e.id]?.state ?? props.e.stage ?? null) : null);
   const line = () => {
+    const device = peerName(props.e.node_id);
+    switch (stage()) {
+      case "requested":
+        return t("transfers.dl.requested", { device });
+      case "checking":
+        return t("transfers.dl.checking");
+      case "asking":
+        return props.e.incoming ? t("transfers.dl.askingHere") : t("transfers.dl.askingThere", { device });
+      case "queued":
+        return t("transfers.dl.queued");
+    }
     if (!total()) return t("transfers.waiting", { device: peerName(props.e.node_id) });
     const parts = [t("transfers.progress", { done: humanSize(done()), total: humanSize(total()) })];
     const r = rate();
@@ -195,6 +215,11 @@ function FinishedRow(props: { e: Entry; clock: number; onChange: () => void }) {
   const size = () => humanSize(props.e.total ?? 0);
   const line = () => {
     const e = props.e;
+    if (e.state === "done" && e.link) {
+      return e.incoming
+        ? t("transfers.dl.doneHere", { size: size(), when: when() })
+        : t("transfers.dl.doneThere", { device: peerName(e.node_id), size: size(), when: when() });
+    }
     if (e.state === "done") {
       const line = e.incoming ? t("transfers.doneSaved", { size: size(), when: when() }) : t("transfers.doneSent", { size: size(), when: when() });
       return e.via ? `${line} · ${viaText(e.via)}` : line;

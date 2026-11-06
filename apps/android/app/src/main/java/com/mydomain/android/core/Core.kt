@@ -487,6 +487,13 @@ object Core {
             "timers_changed" -> Timers.applyChanged(o)
             // Links saved to read later changed on your other devices.
             "read_later_changed" -> ReadLater.applyChanged(o)
+            // A link downloaded here or on another device ("Download on…"):
+            // its transfer row says the link's host.
+            "remote_download" -> RemoteDownloads.onEvent(o)?.let { d ->
+                updateTransfer(d.id, { Transfer(it, d.node, d.name, d.here) }) {
+                    it.copy(name = d.name.ifEmpty { it.name }, link = d.host)
+                }
+            }
             "peer_connected" -> {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")

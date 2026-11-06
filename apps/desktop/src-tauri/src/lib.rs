@@ -53,6 +53,7 @@ mod print;
 mod quick_panel;
 mod quiet;
 mod read_later;
+mod remote_download;
 mod remote_input;
 mod schedule;
 mod screen_share;
@@ -623,6 +624,19 @@ impl EventSink for TauriSink {
                     }
                 });
             }
+            // A link downloaded here ("Download on <device>"): its own
+            // notice came with its `RemoteDownload` event.
+            CoreEvent::FileReceived {
+                id,
+                from,
+                name,
+                path,
+                size,
+                ..
+            } if transfers::is_link(&self.app, id) => {
+                transfers::on_received(&self.app, id, from, name, path, *size);
+            }
+            CoreEvent::RemoteDownload { item } => remote_download::on_event(&self.app, item),
             CoreEvent::FileReceived {
                 id,
                 from,
@@ -1785,6 +1799,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         read_later::read_later_mark,
         read_later::read_later_delete,
         read_later::read_later_open,
+        remote_download::remote_download_request,
+        remote_download::remote_download_copied_link,
+        remote_download::remote_download_targets,
+        remote_download::remote_download_answer,
+        remote_download::remote_downloads,
+        remote_download::remote_download_settings,
+        remote_download::set_remote_download_settings,
         note_reminders::note_remind_done,
         note_reminders::note_remind_at,
         timers::timers_list,

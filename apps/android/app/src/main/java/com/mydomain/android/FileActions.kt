@@ -118,6 +118,8 @@ object FileActions {
     fun onProgress(ctx: Context, o: JSONObject) {
         if (!o.optBoolean("incoming")) return
         val id = o.optString("id")
+        val link = com.mydomain.android.core.RemoteDownloadPlan.isDownloadId(id)
+        if (link && o.optLong("done") == 0L) return
         val now = System.currentTimeMillis()
         synchronized(this) {
             if (id in ended) return
@@ -134,7 +136,7 @@ object FileActions {
         )
         val n = NotificationCompat.Builder(ctx, CH_PROGRESS)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(ctx.getString(R.string.file_receiving_title, o.optString("name")))
+            .setContentTitle(ctx.getString(if (link) R.string.dl_notif_downloading else R.string.file_receiving_title, o.optString("name")))
             .setContentText(ctx.getString(R.string.file_receiving_body, Core.peerName(o.optString("node_id")), pct))
             .setProgress(100, pct, total <= 0)
             .setOngoing(true)
@@ -294,8 +296,13 @@ object FileActions {
 /** The receiving notification's Cancel action. */
 class FileActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != FileActions.ACTION_CANCEL) return
         val id = intent.getStringExtra(FileActions.EXTRA_ID) ?: return
+        // "Download on <device>": the ask notification's buttons.
+        when (intent.action) {
+            DownloadAsk.ACTION_ALLOW -> return DownloadAsk.answer(context, id, true)
+            DownloadAsk.ACTION_DENY -> return DownloadAsk.answer(context, id, false)
+        }
+        if (intent.action != FileActions.ACTION_CANCEL) return
         Core.init(context)
         Thread { Core.engine()?.cancelFile(id) }.start()
     }

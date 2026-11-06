@@ -4263,3 +4263,11 @@ html.kvm-window body {
   gap: var(--s-2);
   flex-wrap: wrap;
 }
+
+/* "Download on…": the link asked about, broken anywhere, at most 3 lines. */
+.download-ask-link {
+  margin: 0;
+  overflow-wrap: anywhere;
+  max-height: 4.5em;
+  overflow: hidden;
+}

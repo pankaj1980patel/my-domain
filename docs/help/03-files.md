@@ -1,6 +1,6 @@
 ---
 title: Sending files and folders
-keywords: file, files, print, printer, folder, send, transfer, transfers, resume, download, share, share sheet, finder, explorer, file manager, drag, drop, photos, backup, browse, wi-fi direct, wifi direct, hotspot, offline, nearby, bluetooth
+keywords: file, files, print, printer, folder, send, transfer, transfers, resume, download, download on, link, url, web, share, share sheet, finder, explorer, file manager, drag, drop, photos, backup, browse, wi-fi direct, wifi direct, hotspot, offline, nearby, bluetooth
 platforms: desktop, android
 ---
 ## Send a file or a folder
@@ -29,6 +29,23 @@ A file over 20 MB with one of your devices that's near you but not on the same n
 - The first time it's needed the phone explains and asks for the permission Android wants for it (called location or nearby devices; your location is never read). If you say no, big files just go the usual way.
 - The new connection is checked with the same device keys as any other, and the hotspot's name and passphrase only ever go, encrypted, to your own device.
 - A Mac has no Wi-Fi Direct, and Linux doesn't use it here: those use the phone's hotspot. On a Mac, going back to your Wi-Fi uses the password the Mac already has saved.
+
+## Download on another device
+
+Found a download link on one device but want the file on another? Have the other device download it itself, straight from the web, with no copying and pasting:
+
+- **On the phone:** share the link from any app and pick **Download on…** in the share sheet (or **Download on…** in my-domain's own share dialog), then the device.
+- **On the computer:** copy the link, then use **Download copied link on…** in the tray menu or the command palette (Ctrl+K / Cmd+K), or the device's own **Download copied link on <device>** command. A saved web link (a `.url` or `.webloc` file) sent with **Send with my-domain** can be downloaded on a device too.
+
+Only devices with an up-to-date my-domain are offered. The device that downloads says how it's going, and so does the one that asked: both show it in **Transfers** ("Downloading report.zip from example.com · requested by Pixel"), with **Cancel** on either side. One download runs at a time; others wait in the queue. If the connection drops, it carries on from where it stopped. The file goes into that device's downloads folder (on a phone, Downloads/my-domain) under the name the site gives it, and is **never opened by itself**.
+
+On the device that downloads, Settings → **Downloads from my devices**:
+
+- **When a device asks:** **Ask the first time for each device** (the default: it shows the site, the file's name and its size when known, with **Allow**, **Always allow <device>** and **Don't allow**), **Always download** or **Never download**. **Forget** clears the devices you always allowed.
+- **Biggest download:** a bigger file is refused (100 MB to 4 GB, or no limit; 4 GB to start with).
+- **Allow links to the local network:** off by default, so a link to the device itself, your router or anything else at home (192.168…, 10…, `.local` names) is refused, even after a redirect.
+
+Only web links (http and https) are downloaded, and only public ones: nothing signs in and no cookies or passwords are sent, so a link that needs you to be logged in (a private cloud file, a mail attachment) may fail. These settings are part of the computer's settings backup.
 
 ## Browse and photos
 

@@ -337,6 +337,15 @@ pub enum CoreEvent {
         items: Vec<crate::model::ReadLaterItem>,
         removed: Vec<String>,
     },
+    /// A link downloaded on one of your devices at another's request
+    /// (`features::remote_download`) changed state: asked, waiting for an
+    /// answer (`state` "asking" on the downloading device: answer with
+    /// `Engine::answer_remote_download`), queued, downloading, done, failed,
+    /// cancelled or refused. Its progress comes as `FileProgress` with the
+    /// same id (and its end as `FileReceived` / `FileSent` / `FileFailed`).
+    RemoteDownload {
+        item: crate::model::RemoteDownloadItem,
+    },
     /// A side route for a big transfer (`features::wifi_direct`), `method`
     /// "wifi_direct" or "hotspot": the platform is asked to `op` "consent"
     /// (ask the user to leave this computer's Wi-Fi for the phone's
@@ -562,6 +571,7 @@ impl CoreEvent {
             CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
+            CoreEvent::RemoteDownload { .. } => "remote-download",
             CoreEvent::LinksMapChanged { .. } => "links-map-changed",
             CoreEvent::NearbyMedia(_) => "nearby-media",
             CoreEvent::WifiDirectRequest { .. } => "wifi-direct-request",

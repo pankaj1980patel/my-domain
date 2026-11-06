@@ -61,7 +61,7 @@ pub enum NoLink {
 }
 
 impl NoLink {
-    fn message(&self) -> &'static str {
+    pub fn message(&self) -> &'static str {
         match self {
             NoLink::Nothing => "No link is copied. Copy a web link first.",
             NoLink::Private => {

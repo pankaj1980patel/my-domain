@@ -384,6 +384,8 @@ class NetService : Service() {
                         "open_url" -> DeviceActions.openUrl(this@NetService, Core.peerName(o.optString("from")), o.optString("url"), o.optString("app").ifEmpty { null })
                         "action" -> Controls.run(this@NetService, o.optString("name"), o.optJSONObject("args") ?: JSONObject(), Core.peerName(o.optString("from")))
                         "file_progress" -> FileActions.onProgress(this@NetService, o)
+                        // Another device asks this phone to download a link.
+                        "remote_download" -> DownloadAsk.onEvent(this@NetService, o)
                         "file_received" -> FileActions.onReceived(this@NetService, o)
                         // A computer asks to sync a folder: say so.
                         "sync_pairs" -> SyncFolders.onPairs(this@NetService, Core.engine()?.syncPairs().orEmpty())

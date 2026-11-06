@@ -59,6 +59,15 @@ export function activityText(a: ActivityItem, device: string): string {
       return t("activity.row.fileSent", { name, device });
     case "file_received":
       return t("activity.row.fileReceived", { name, device });
+    // A link downloaded from the web (`detail`: its host).
+    case "link_downloaded":
+      return t("activity.row.linkDownloaded", { name, device, host: a.detail });
+    case "link_downloaded_there":
+      return t("activity.row.linkDownloadedThere", { name, device, host: a.detail });
+    case "link_download_failed":
+      return t("activity.row.linkDownloadFailed", { name, host: a.detail });
+    case "link_downloading":
+      return t("activity.row.linkDownloading", { name, host: a.detail });
     case "file_send_failed":
       return t("activity.row.fileSendFailed", { name, device });
     case "file_receive_failed":

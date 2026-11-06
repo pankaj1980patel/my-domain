@@ -10,6 +10,8 @@ import { toast, Toasts } from "./components/ui";
 import CommandPalette, { type Place } from "./components/CommandPalette";
 import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
+import { DownloadAsk, DownloadOnPicker } from "./components/DownloadOn";
+import { initRemoteDownloads } from "./lib/remoteDownload";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
 import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
@@ -160,6 +162,11 @@ export default function App() {
   onMount(() => {
     const off = onOpenDevice((node) => go({ name: "device", node }));
     onCleanup(() => off.then((f) => f()));
+  });
+  // Links downloaded on a device (either way), and the "Download on…" picker.
+  onMount(() => {
+    const off = initRemoteDownloads();
+    onCleanup(() => off.then((f) => f()).catch(() => {}));
   });
   // The quick panel's footer: Settings, Timers, or Search with what was typed there
   // ("Open my-domain" just brings the window forward as it is).
@@ -384,6 +391,8 @@ export default function App() {
         />
         <CallOverlay />
         <SendToPicker />
+        <DownloadOnPicker />
+        <DownloadAsk />
         <HotspotAsk />
         <PrintAsk />
         <NoteReminders onOpen={(id) => openNote(id)} />

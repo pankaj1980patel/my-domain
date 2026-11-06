@@ -147,7 +147,11 @@ private fun Head(t: TransferRecord, action: @Composable () -> Unit) {
                 t.name, style = MaterialTheme.typography.bodyMedium, color = T.text,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            Muted(stringResource(if (t.incoming) R.string.transfers_from else R.string.transfers_to, device))
+            val link = t.link
+            Muted(
+                if (link != null) dlHeadLine(t.incoming, t.node, link)
+                else stringResource(if (t.incoming) R.string.transfers_from else R.string.transfers_to, device),
+            )
         }
         Spacer(Modifier.width(8.dp))
         action()
@@ -169,8 +173,14 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
     val ctx = LocalContext.current
     val size = { n: Long -> Formatter.formatShortFileSize(ctx, n) }
     val moving = t.rate > 0 && now - t.movedAt <= STALE_MS
+    val dlLine = if (t.link != null) dlActiveLine(t.id) else null
     val parts = buildList {
-        if (t.total == 0L) {
+        // A link download that isn't moving yet says why (asking, queued...).
+        if (dlLine != null && t.done == 0L) {
+            add(dlLine)
+        } else if (t.total == 0L && t.link != null) {
+            add(stringResource(R.string.transfers_progress_unknown, size(t.done)))
+        } else if (t.total == 0L) {
             add(stringResource(R.string.transfers_waiting, Core.peerName(t.node)))
         } else {
             add(stringResource(R.string.transfers_progress, size(t.done), size(t.total)))

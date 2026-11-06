@@ -121,6 +121,8 @@ export type DeviceStatus = {
   /** It knows insert from phone (`insert_capture`): a phone that can take
    *  a photo or scan documents for this computer. */
   insertCapture?: boolean;
+  /** It downloads links for your other devices (`remote_download`). */
+  remoteDownload?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -584,6 +586,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         audioSink: status?.audio_sink === true,
         cameraView: typeof status?.camera_view === "number" && status.camera_view >= 1,
         insertCapture: typeof status?.insert_capture === "number" && status.insert_capture >= 1,
+        remoteDownload: typeof status?.remote_download === "number" && status.remote_download >= 1,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,

@@ -434,6 +434,21 @@ export const commands = {
 	readLaterDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("read_later_delete", { id })),
 	/**  Open a saved link in the browser, and mark it read. */
 	readLaterOpen: (id: string) => typedError<ReadLaterView, string>(__TAURI_INVOKE("read_later_open", { id })),
+	/**  Ask `node_id` to download the link in `text`. */
+	remoteDownloadRequest: (nodeId: string, text: string) => typedError<RemoteDownloadView_Serialize, string>(__TAURI_INVOKE("remote_download_request", { nodeId, text })),
+	/**
+	 *  The web link copied on this computer, for the "Download on…" picker
+	 *  (none from a password manager's copy).
+	 */
+	remoteDownloadCopiedLink: () => typedError<string, string>(__TAURI_INVOKE("remote_download_copied_link")),
+	/**  The devices that download links (node ids). */
+	remoteDownloadTargets: () => __TAURI_INVOKE<string[]>("remote_download_targets"),
+	/**  Answer a device asking this computer to download a link. */
+	remoteDownloadAnswer: (id: string, allow: boolean, always: boolean) => typedError<null, string>(__TAURI_INVOKE("remote_download_answer", { id, allow, always })),
+	/**  Downloads either way since the app started, the newest first. */
+	remoteDownloads: () => __TAURI_INVOKE<RemoteDownloadView_Serialize[]>("remote_downloads"),
+	remoteDownloadSettings: () => __TAURI_INVOKE<DownloadSettingsView>("remote_download_settings"),
+	setRemoteDownloadSettings: (settings: DownloadSettingsView) => typedError<null, string>(__TAURI_INVOKE("set_remote_download_settings", { settings })),
 	/**  Mark a note's reminder Done (on every device, as they sync). */
 	noteRemindDone: (id: string) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_remind_done", { id })),
 	/**  Remind at `at` (unix ms: snooze, or a new time), or no more (null). */
@@ -1709,6 +1724,18 @@ export type Diagnosis_Serialize = {
 	relay: RelayInfo_Serialize,
 	/**  What connecting did, oldest first. */
 	attempts: Attempt_Serialize[],
+};
+
+/**  Settings → "Downloads from my devices". */
+export type DownloadSettingsView = {
+	/**  "ask" (the first time for each device), "always" or "never". */
+	policy: string,
+	/**  Links to the local network are allowed too. */
+	allow_lan: boolean,
+	/**  The biggest download in MB; 0: no limit. */
+	max_mb: number,
+	/**  Devices allowed without asking. */
+	allowed: string[],
 };
 
 /**  A line on the map. */
@@ -2994,6 +3021,53 @@ export type RelayInfo_Serialize = {
 	error: string | null,
 };
 
+/**  A download either way, as the UI shows it. */
+export type RemoteDownloadView = RemoteDownloadView_Serialize | RemoteDownloadView_Deserialize;
+
+/**  A download either way, as the UI shows it. */
+export type RemoteDownloadView_Deserialize = {
+	/**  Also its transfer id. */
+	id: string,
+	/**  The device that asked (`here`), or the one downloading. */
+	node_id: string,
+	here: boolean,
+	url: string,
+	host: string,
+	name: string,
+	size: number | null,
+	done: number | null,
+	/**
+	 *  "requested", "checking", "asking", "queued", "downloading", "done",
+	 *  "failed", "cancelled" or "refused".
+	 */
+	state: string,
+	error?: string | null,
+	path?: string | null,
+	started_at: number | null,
+};
+
+/**  A download either way, as the UI shows it. */
+export type RemoteDownloadView_Serialize = {
+	/**  Also its transfer id. */
+	id: string,
+	/**  The device that asked (`here`), or the one downloading. */
+	node_id: string,
+	here: boolean,
+	url: string,
+	host: string,
+	name: string,
+	size: number | null,
+	done: number | null,
+	/**
+	 *  "requested", "checking", "asking", "queued", "downloading", "done",
+	 *  "failed", "cancelled" or "refused".
+	 */
+	state: string,
+	error: string | null,
+	path: string | null,
+	started_at: number | null,
+};
+
 /**  A checked backup, ready to restore. */
 export type RestorePreview = RestorePreview_Serialize | RestorePreview_Deserialize;
 
@@ -3255,11 +3329,32 @@ export type SectionPreview = {
 };
 
 /**  One thing to send. */
-export type SendItem = {
+export type SendItem = SendItem_Serialize | SendItem_Deserialize;
+
+/**  One thing to send. */
+export type SendItem_Deserialize = {
 	path: string,
 	/**  Its last path component. */
 	name: string,
 	folder: boolean,
+	/**
+	 *  A saved web link (`.url`, `.webloc`, a `.desktop` link): its link,
+	 *  so the picker can offer to download the file on a device instead.
+	 */
+	link?: string | null,
+};
+
+/**  One thing to send. */
+export type SendItem_Serialize = {
+	path: string,
+	/**  Its last path component. */
+	name: string,
+	folder: boolean,
+	/**
+	 *  A saved web link (`.url`, `.webloc`, a `.desktop` link): its link,
+	 *  so the picker can offer to download the file on a device instead.
+	 */
+	link: string | null,
 };
 
 /**  How a send went. */
@@ -3275,14 +3370,14 @@ export type SendRequest = SendRequest_Serialize | SendRequest_Deserialize;
 
 /**  What the "Send to…" picker shows. */
 export type SendRequest_Deserialize = {
-	items: SendItem[],
+	items: SendItem_Deserialize[],
 	/**  The device chosen last time: offered first. */
 	last_device?: string | null,
 };
 
 /**  What the "Send to…" picker shows. */
 export type SendRequest_Serialize = {
-	items: SendItem[],
+	items: SendItem_Serialize[],
 	/**  The device chosen last time: offered first. */
 	last_device: string | null,
 };
@@ -3499,6 +3594,18 @@ export type TransferEntry_Deserialize = {
 	 *  "wifi_direct".
 	 */
 	via?: string | null,
+	/**
+	 *  A link downloaded from the web ("Download on <device>"): here, asked
+	 *  by `node_id` (`incoming`), or on `node_id`, asked from here.
+	 */
+	link?: string | null,
+	/**  The link's host, for showing. */
+	host?: string | null,
+	/**
+	 *  A download under way: "requested", "checking", "asking", "queued"
+	 *  or "downloading".
+	 */
+	stage?: string | null,
 };
 
 /**  One transfer, either way. */
@@ -3529,6 +3636,18 @@ export type TransferEntry_Serialize = {
 	 *  "wifi_direct".
 	 */
 	via: string | null,
+	/**
+	 *  A link downloaded from the web ("Download on <device>"): here, asked
+	 *  by `node_id` (`incoming`), or on `node_id`, asked from here.
+	 */
+	link: string | null,
+	/**  The link's host, for showing. */
+	host: string | null,
+	/**
+	 *  A download under way: "requested", "checking", "asking", "queued"
+	 *  or "downloading".
+	 */
+	stage: string | null,
 };
 
 /**  Where a transfer is. */

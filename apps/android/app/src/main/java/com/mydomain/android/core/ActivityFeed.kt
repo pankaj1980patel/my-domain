@@ -193,12 +193,15 @@ object ActivityFeed {
 
     fun transferRow(t: TransferRecord) = ActivityRow(
         "transfer:${t.id}", "files",
-        when (t.state) {
-            TransferState.Done -> if (t.incoming) "file_received" else "file_sent"
-            TransferState.Failed -> if (t.incoming) "file_receive_failed" else "file_send_failed"
-            TransferState.Active -> if (t.incoming) "file_receiving" else "file_sending"
+        when {
+            // A link downloaded here, or on the other device ("Download on…").
+            t.link != null && t.state == TransferState.Done -> if (t.incoming) "link_downloaded" else "link_downloaded_there"
+            t.state == TransferState.Done -> if (t.incoming) "file_received" else "file_sent"
+            t.state == TransferState.Failed -> if (t.incoming) "file_receive_failed" else "file_send_failed"
+            else -> if (t.incoming) "file_receiving" else "file_sending"
         },
-        t.node.ifEmpty { null }, t.ended ?: t.started, t.name, t.reason ?: "",
+        t.node.ifEmpty { null }, t.ended ?: t.started, t.name,
+        if (t.link != null && t.state == TransferState.Done) t.link else t.reason ?: "",
         t.total.takeIf { it > 0 }, t.via, t.id,
     )
 

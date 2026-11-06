@@ -328,6 +328,8 @@ fun activityText(ctx: Context, a: ActivityRow, device: String): String {
         "file_receive_failed" -> str(R.string.activity_row_file_receive_failed, s, device)
         "file_sending" -> str(R.string.activity_row_file_sending, s, device)
         "file_receiving" -> str(R.string.activity_row_file_receiving, s, device)
+        "link_downloaded" -> str(R.string.activity_row_link_downloaded, s, a.detail, device)
+        "link_downloaded_there" -> str(R.string.activity_row_link_downloaded_there, device, s, a.detail)
         "clip_in" -> str(R.string.activity_row_clip_in, device, s)
         "clip_out" -> str(R.string.activity_row_clip_out, device, s)
         "msg_in" -> str(R.string.activity_row_msg_in, device, s)

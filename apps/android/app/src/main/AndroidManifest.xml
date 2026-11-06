@@ -246,6 +246,21 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- "Download on…" in the share sheet: a shared link is downloaded by
+             another of your devices itself (DownloadShareActivity.kt). -->
+        <activity
+            android:name=".DownloadShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/dl_share_label"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
         <!-- A share to one device's share-sheet target, sent without the picker. -->
         <activity
             android:name=".DirectShareActivity"

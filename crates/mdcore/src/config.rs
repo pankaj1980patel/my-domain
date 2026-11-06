@@ -213,6 +213,12 @@ pub struct CoreConfig {
     /// behaves like an app from before (tests use it to play an older
     /// peer).
     pub print: bool,
+    /// "Download on <device>" (`features::remote_download`): this end says
+    /// `remote_download` in its status and `addr_update`, downloads links
+    /// the others ask for and understands the `dl_*` messages. On by
+    /// default; off behaves like an app from before (tests use it to play
+    /// an older peer).
+    pub remote_download: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -279,6 +285,7 @@ impl Default for CoreConfig {
             insert_capture: true,
             insert_timeout: crate::features::insert_capture::TIMEOUT,
             print: true,
+            remote_download: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

@@ -29,6 +29,8 @@ data class Transfer(
     val reason: String? = null,
     val uri: String? = null,
     val mime: String? = null,
+    /** A link downloaded on a device ("Download on…"): its host. */
+    val link: String? = null,
 ) {
     val fraction: Float get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f
 }

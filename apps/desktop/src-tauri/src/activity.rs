@@ -381,6 +381,12 @@ fn some_node(n: &str) -> Option<String> {
 
 fn transfer_item(t: &TransferEntry) -> ActivityItem {
     let action = match (t.state, t.incoming) {
+        // A link downloaded from the web: here (asked by the other
+        // device) or on the other device.
+        (TransferState::Done, true) if t.link.is_some() => "link_downloaded",
+        (TransferState::Done, false) if t.link.is_some() => "link_downloaded_there",
+        (TransferState::Failed, _) if t.link.is_some() => "link_download_failed",
+        (TransferState::Active, _) if t.link.is_some() => "link_downloading",
         (TransferState::Done, true) => "file_received",
         (TransferState::Done, false) => "file_sent",
         (TransferState::Failed, true) => "file_receive_failed",
@@ -395,7 +401,11 @@ fn transfer_item(t: &TransferEntry) -> ActivityItem {
         node: some_node(&t.node_id),
         ts: t.ended.unwrap_or(t.started),
         subject: t.name.clone(),
-        detail: t.reason.clone().unwrap_or_default(),
+        // A downloaded link's host ("report.zip from example.com").
+        detail: match &t.host {
+            Some(h) if t.link.is_some() => h.clone(),
+            _ => t.reason.clone().unwrap_or_default(),
+        },
         bytes: (t.total > 0.0).then_some(t.total),
         via: t.via.clone(),
         target: t.id.clone(),
@@ -929,6 +939,9 @@ mod tests {
             ended: Some(ts),
             exists: true,
             via: Some("wifi_direct".into()),
+            link: None,
+            host: None,
+            stage: None,
         }
     }
 

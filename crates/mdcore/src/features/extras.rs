@@ -25,4 +25,5 @@ pub struct Extras {
     pub kvm: super::kvm::Kvm,
     pub insert: super::insert_capture::InsertCapture,
     pub print: super::print::Print,
+    pub remote_download: super::remote_download::RemoteDownloads,
 }

@@ -44,6 +44,7 @@ mod ladder;
 mod media;
 mod notes;
 mod read_later;
+mod remote_download;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
@@ -354,6 +355,7 @@ impl<P: Platform> Engine<P> {
             config.kvm && platform.shares_input(),
             config.insert_capture,
             config.print,
+            config.remote_download,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

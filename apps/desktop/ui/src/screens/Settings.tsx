@@ -29,6 +29,7 @@ import { WifiDirectSetting } from "../components/WifiDirectSetting";
 import { KvmSetting } from "../components/KvmSetting";
 import { InsertSetting } from "../components/InsertSetting";
 import { PrintSetting } from "../components/PrintSetting";
+import { RemoteDownloadSetting } from "../components/RemoteDownloadSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
@@ -297,6 +298,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <FileManagerSetting />
 
       <SyncSetting />
+
+      <RemoteDownloadSetting />
 
       <ShellCommandsSetting />
 
