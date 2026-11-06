@@ -322,7 +322,10 @@ fn a_computer_from_before_gets_the_old_shape_and_no_new_messages() {
         ),
     );
     let n = next_notification(&pc, 0);
-    let keys: Vec<&String> = n.as_object().unwrap().keys().collect();
+    // Sorted: serde_json keeps insertion order when another crate in the
+    // build turns on its preserve_order feature (as a whole-workspace build does).
+    let mut keys: Vec<&String> = n.as_object().unwrap().keys().collect();
+    keys.sort();
     assert_eq!(
         keys,
         ["actions", "app", "body", "from", "key", "title"]
