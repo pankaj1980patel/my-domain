@@ -28,6 +28,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.mydomain.android.core.AudioJitter
+import com.mydomain.android.core.AudioRoutes
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.PlaybackPlan
 import com.mydomain.android.core.friendlyError
@@ -180,6 +181,10 @@ object ComputerAudio {
         val outputUnderruns: Int,
         val driftPpm: Int,
         val lowLatency: Boolean,
+        /** Lost frames Opus made up (its packet-loss concealment). */
+        val plc: Long = 0,
+        /** Coming over Bluetooth now (the buffer keeps more). */
+        val viaBluetooth: Boolean = false,
     )
 
     /** The details of what plays now (null: nothing). */
@@ -369,10 +374,15 @@ class ComputerAudioService : Service() {
     private fun publishStats() {
         val n = node
         if (n.isEmpty()) return ComputerAudio.publishStats(null)
+        val rx = runCatching { JSONObject(Core.engine()?.audioRxStats(n) ?: "{}") }
+            .getOrDefault(JSONObject())
+        val recovered = rx.optLong("recovered")
+        val viaBle = AudioRoutes.viaBluetooth(runCatching { Core.engine()?.audioVia(n) }.getOrNull())
+        // Over Bluetooth the buffer keeps more (records come 60 ms at a time).
+        if (viaBle != jitter.bluetooth()) {
+            if (viaBle) jitter.setBluetooth(true) else jitter.setLowLatency(lowLatency)
+        }
         val s = jitter.stats()
-        val recovered = runCatching {
-            JSONObject(Core.engine()?.audioRxStats(n) ?: "{}").optLong("recovered")
-        }.getOrDefault(0L)
         ComputerAudio.publishStats(
             ComputerAudio.PlayStats(
                 bufferedMs = s.bufferedMs,
@@ -384,6 +394,8 @@ class ComputerAudioService : Service() {
                 outputUnderruns = outputUnderruns,
                 driftPpm = s.driftPpm,
                 lowLatency = jitter.lowLatency(),
+                plc = rx.optLong("concealed"),
+                viaBluetooth = viaBle,
             ),
         )
     }

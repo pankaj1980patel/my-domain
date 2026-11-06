@@ -15,6 +15,7 @@ import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 import { HelpLink } from "../../help/HelpLink";
 import { NearbyBadge } from "../../components/NearbyBadge";
+import { AudioRouteBadge, AudioRoutePicker } from "../../components/AudioRoute";
 
 export default function PhoneAudioTile(props: { node: string }) {
   const [st, setSt] = createSignal<PhoneAudioStatus | null>(null);
@@ -104,6 +105,7 @@ export default function PhoneAudioTile(props: { node: string }) {
                   target: st()?.target_ms ?? 0,
                   concealed: st()?.concealed_ms ?? 0,
                   recovered: st()?.recovered ?? 0,
+                  plc: st()?.plc ?? 0,
                   late: st()?.late ?? 0,
                   ppm: st()?.drift_ppm ?? 0,
                 })}
@@ -111,6 +113,7 @@ export default function PhoneAudioTile(props: { node: string }) {
             </details>
           </Show>
           <NearbyBadge node={props.node} />
+          <AudioRouteBadge node={props.node} />
           <label class="row small">
             <span class="muted">{t("phoneAudio.output")}</span>
             <select aria-label={t("phoneAudio.output")} onFocus={refreshOutputs} onChange={(e) => setOutput(e.currentTarget.value)}>
@@ -163,6 +166,7 @@ export default function PhoneAudioTile(props: { node: string }) {
           </button>
         </Show>
       </div>
+      <AudioRoutePicker node={props.node} />
     </article>
   );
 }

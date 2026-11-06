@@ -23,6 +23,7 @@ fun ComputerAudioTile(node: String, name: String) {
                     Modifier.announce(),
                 )
                 NearbyMediaBadge(node)
+                ViaBluetoothBadge(node)
                 ComputerAudioDetails()
                 GhostButton(stringResource(R.string.audio_stop), { ComputerAudio.stop() })
             }
@@ -35,5 +36,6 @@ fun ComputerAudioTile(node: String, name: String) {
                 SoftButton(stringResource(R.string.caudio_tile_start, name), { ComputerAudio.playHere(ctx, node) })
             }
         }
+        AudioRoutePicker(node)
     }
 }

@@ -1587,10 +1587,31 @@ impl MdEngine {
     }
 
     /// What arrived from audio source `node_id`, as JSON (the core's
-    /// `AudioRxStats`: frames, recovered, duplicates).
+    /// `AudioRxStats`: frames, recovered, duplicates, concealed).
     pub fn audio_rx_stats(&self, node_id: String) -> MdResult<String> {
         serde_json::to_string(&self.inner.audio_rx_stats(&node_id))
             .map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// Which way audio with `node_id` goes: "auto" (a network link first,
+    /// else Bluetooth), "wifi" or "bluetooth". Kept per device.
+    pub fn audio_route(&self, node_id: String) -> String {
+        self.inner.audio_route(&node_id)
+    }
+
+    pub fn set_audio_route(&self, node_id: String, route: String) {
+        self.inner.set_audio_route(&node_id, &route);
+    }
+
+    /// Which way audio with `node_id` went just now: "bluetooth",
+    /// "network" or "" (the "via Bluetooth" badge).
+    pub fn audio_via(&self, node_id: String) -> String {
+        self.inner.audio_via(&node_id)
+    }
+
+    /// `node_id` reads Opus audio, so its audio can go over Bluetooth.
+    pub fn audio_opus(&self, node_id: String) -> bool {
+        self.inner.audio_opus(&node_id)
     }
 
     /// Send a picture copied on this phone (a PNG or JPEG file) to a

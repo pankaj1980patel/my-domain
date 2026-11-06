@@ -1262,11 +1262,19 @@
     <string name="nearby_settings_title">Nearby mode</string>
     <string name="nearby_switch">Use nearby mode for media</string>
     <string name="nearby_switch_hint">While audio, a screen or the camera streams with a device on the same Wi-Fi (or in Bluetooth range), it moves to a direct link on your network for less delay, without a gap. If that link drops, it goes back the way it came.</string>
+    <string name="audio_route_label">Send audio over</string>
+    <string name="audio_route_auto">Auto (Wi-Fi first, Bluetooth when offline)</string>
+    <string name="audio_route_wifi">Wi-Fi or internet only</string>
+    <string name="audio_route_bluetooth">Bluetooth only</string>
+    <string name="audio_route_badge">via Bluetooth</string>
+    <string name="audio_route_badge_hint">There’s no network link, so the sound goes over Bluetooth at a lower quality and with a little more delay.</string>
+    <string name="mute_here_label">Mute this phone while it plays on %1$s</string>
+    <string name="mute_here_active">This phone’s media sound is muted while it plays on the computer. It comes back when it stops.</string>
     <string name="nearby_badge">Nearby · low latency</string>
     <string name="nearby_latency">%1$d ms</string>
     <string name="nearby_latency_was">%1$d ms (was %2$d ms)</string>
     <string name="caudio_stats_buffer">Buffer: %1$d ms (aiming for %2$d ms)</string>
-    <string name="caudio_stats_loss">Ran dry: %1$d · Filled in: %2$d ms · Recovered: %3$d · Output gaps: %4$d</string>
+    <string name="caudio_stats_loss">Ran dry: %1$d · Filled in: %2$d ms · Recovered: %3$d · Output gaps: %4$d · Rebuilt by Opus: %5$d</string>
     <!-- Timers (TimersScreen.kt, TimerAlarms.kt) -->
     <string name="channel_timers">Timers running</string>
     <string name="channel_timer_alarm">Timers ringing</string>

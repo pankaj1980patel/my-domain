@@ -37,6 +37,7 @@ pub mod nearby;
 pub mod notes;
 pub mod notif_apps;
 pub mod notification;
+pub mod opus_audio;
 pub mod p2p_ping;
 pub mod read_later;
 pub mod screen;

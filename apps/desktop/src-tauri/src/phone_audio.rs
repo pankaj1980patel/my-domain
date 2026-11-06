@@ -83,6 +83,10 @@ pub struct PhoneAudioStatus {
     pub drift_ppm: i32,
     /// On a nearby low-latency link now (the badge).
     pub low_latency: bool,
+    /// Coming over Bluetooth now (the badge; the buffer keeps more).
+    pub via_bluetooth: bool,
+    /// Lost frames Opus made up (its packet-loss concealment).
+    pub plc: u32,
     /// End-to-end latency now and before the last move, ms.
     pub latency_ms: Option<u32>,
     pub before_ms: Option<u32>,
@@ -131,11 +135,24 @@ fn status_of(s: Option<&Session>, app: &AppHandle) -> PhoneAudioStatus {
             ..Default::default()
         };
     };
-    let (near, rx) = match app.try_state::<Eng>() {
-        Some(e) => (e.nearby_status(&s.node), e.audio_rx_stats(&s.node)),
+    let (near, rx, via) = match app.try_state::<Eng>() {
+        Some(e) => (
+            e.nearby_status(&s.node),
+            e.audio_rx_stats(&s.node),
+            e.audio_via(&s.node),
+        ),
         None => Default::default(),
     };
-    let j = s.shared.jitter.lock().unwrap_or_else(|e| e.into_inner());
+    let via_bluetooth = via == "bluetooth";
+    let mut j = s.shared.jitter.lock().unwrap_or_else(|e| e.into_inner());
+    // Over Bluetooth the buffer keeps more (records come 60 ms at a time).
+    if via_bluetooth != j.bluetooth() {
+        if via_bluetooth {
+            j.set_bluetooth(true);
+        } else {
+            j.set_low_latency(near.low_latency);
+        }
+    }
     let stats = j.stats();
     let got = s
         .shared
@@ -162,6 +179,8 @@ fn status_of(s: Option<&Session>, app: &AppHandle) -> PhoneAudioStatus {
         recovered: rx.recovered,
         drift_ppm: stats.drift_ppm,
         low_latency: near.low_latency,
+        via_bluetooth,
+        plc: rx.concealed,
         latency_ms: near.latency_ms,
         before_ms: near.before_ms,
         rate: j.rate(),
@@ -239,6 +258,15 @@ fn stop(app: &AppHandle, tell: bool, why: Option<String>) {
 /// Whether a phone's audio plays here now (or was asked to).
 pub fn playing_here() -> bool {
     SESSION.lock().unwrap_or_else(|e| e.into_inner()).is_some()
+}
+
+/// The phone whose audio plays here (or was asked to), if any.
+pub fn playing_from() -> Option<String> {
+    SESSION
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        .map(|s| s.node.clone())
 }
 
 /// Stop if `node` is the phone playing (its link went, it stopped).

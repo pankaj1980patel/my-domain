@@ -66,6 +66,20 @@
 //!   local link it stays PCM. The JSON message carries the time it was
 //!   sent (`ts`), as a binary record does, for the latency
 //!   (`features::nearby`).
+//! - To a device that says `audio_codec: 2`, Opus instead
+//!   (`features::opus_audio`): 20 ms frames, about 96 kbit/s stereo, with
+//!   in-band FEC set from the loss measured on the link (QUIC's count, and
+//!   the `loss` the sink says in its `audio_play` renewals), RED over QUIC,
+//!   and lost frames filled by the copy, FEC or Opus's concealment. Opus
+//!   at any link rate: the source captures at 48 kHz (`offer`).
+//! - Over Bluetooth LE, only to such a device: Opus records (three frames,
+//!   60 ms, a record; about 32 kbit/s) go as binary frames on the
+//!   Bluetooth link (`engine::ble`). Which way a stream goes is the
+//!   route ([`AudioRoute`], per device, `Engine::set_audio_route`): Auto
+//!   (a network link if there is one, else Bluetooth), Wi-Fi only, or
+//!   Bluetooth only (kept even with a network link). The sink says its
+//!   choice in `audio_play` (`route`); the source's own choice wins when
+//!   it made one. `Engine::audio_via` says which way it went last.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -82,6 +96,7 @@ use crate::platform::Platform;
 use crate::transport::media::{self, Sent};
 use crate::transport::TransportKind;
 
+use super::opus_audio::Profile;
 use super::{ControlHandler, ControlMsg};
 
 /// How long a listen lasts without being renewed.
@@ -108,6 +123,61 @@ const CAPS_PREFIX: &str = "audio_caps:";
 /// redundant audio records (`features::audio_codec`).
 pub const CODEC_FLAG: &str = "audio_codec";
 const CODEC_VERSION: u64 = 1;
+/// `audio_codec` from a device that reads Opus too.
+const OPUS_VERSION: u64 = 2;
+/// The route chosen for a device, kept across restarts.
+const ROUTE_PREFIX: &str = "audio_route:";
+/// How long `audio_via` remembers the way frames went.
+const VIA_FOR: Duration = Duration::from_secs(2);
+
+/// Which way audio with a device goes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AudioRoute {
+    /// A network link (Wi-Fi, direct, relay) when there is one, else
+    /// Bluetooth.
+    #[default]
+    Auto,
+    /// Never over Bluetooth.
+    Network,
+    /// Over Bluetooth even with a network link.
+    Bluetooth,
+}
+
+impl AudioRoute {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AudioRoute::Auto => "auto",
+            AudioRoute::Network => "wifi",
+            AudioRoute::Bluetooth => "bluetooth",
+        }
+    }
+    pub fn parse(s: &str) -> AudioRoute {
+        match s {
+            "wifi" | "network" => AudioRoute::Network,
+            "bluetooth" | "ble" => AudioRoute::Bluetooth,
+            _ => AudioRoute::Auto,
+        }
+    }
+}
+
+/// Where a stream's frames go now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AudioPath {
+    /// Over the network link (`ws_conns`' route).
+    Network,
+    /// Over the Bluetooth link, as binary Opus records.
+    Bluetooth,
+}
+
+/// The way frames go with `choice`, given a network link (`ip`) and a
+/// Bluetooth link that carries audio (`ble`).
+pub fn choose_path(choice: AudioRoute, ip: bool, ble: bool) -> Option<AudioPath> {
+    match choice {
+        AudioRoute::Auto if ip => Some(AudioPath::Network),
+        AudioRoute::Auto | AudioRoute::Bluetooth => ble.then_some(AudioPath::Bluetooth),
+        AudioRoute::Network => ip.then_some(AudioPath::Network),
+    }
+}
 /// Seqs remembered per source, to drop repeats.
 const SEEN: usize = 128;
 
@@ -117,10 +187,13 @@ const SEEN: usize = 128;
 pub struct AudioRxStats {
     /// Records played (each 10 or 20 ms).
     pub frames: u32,
-    /// Lost ones recovered from the redundant copy in the next.
+    /// Lost ones recovered from the redundant copy in the next (or,
+    /// with Opus, its in-band FEC).
     pub recovered: u32,
     /// Repeats dropped.
     pub duplicates: u32,
+    /// Lost ones Opus made up (packet-loss concealment).
+    pub concealed: u32,
 }
 
 #[derive(Default)]
@@ -128,6 +201,9 @@ struct Rx {
     session: u32,
     seen: std::collections::VecDeque<u64>,
     stats: AudioRxStats,
+    /// The newest seq delivered (any codec): Opus frames are numbered on
+    /// after it, so the players' buffers see seqs only grow.
+    last_out: Option<u64>,
 }
 
 impl Rx {
@@ -184,7 +260,12 @@ struct Coder {
 /// Say this device reads the smaller audio.
 pub fn extend_codec<P: Platform>(ctx: &NetCtx<P>, status: &mut serde_json::Value) {
     if ctx.config.audio_codec {
-        status[CODEC_FLAG] = CODEC_VERSION.into();
+        let v = if ctx.config.audio_opus {
+            OPUS_VERSION
+        } else {
+            CODEC_VERSION
+        };
+        status[CODEC_FLAG] = v.into();
     }
 }
 
@@ -193,21 +274,116 @@ pub fn remember_codec<P: Platform>(ctx: &NetCtx<P>, node: &str, flag: &serde_jso
     if node.is_empty() {
         return;
     }
-    let on = flag.as_u64().is_some_and(|v| v >= CODEC_VERSION);
-    ctx.extras.audio.codec.lock().insert(node.to_string(), on);
+    let v = flag.as_u64().unwrap_or(0);
+    ctx.extras.audio.codec.lock().insert(node.to_string(), v);
+}
+
+fn codec_version<P: Platform>(ctx: &NetCtx<P>, node: &str) -> u64 {
+    ctx.extras
+        .audio
+        .codec
+        .lock()
+        .get(node)
+        .copied()
+        .unwrap_or(0)
+}
+
+/// `node` reads Opus (and this build sends it).
+pub fn opus_of<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    ctx.config.audio_codec && ctx.config.audio_opus && codec_version(ctx, node) >= OPUS_VERSION
 }
 
 /// `node` reads the smaller audio (and this build sends it).
 pub fn codec_of<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
-    ctx.config.audio_codec
-        && ctx
+    ctx.config.audio_codec && codec_version(ctx, node) >= CODEC_VERSION
+}
+
+/// The route this device's owner chose for `node` (kept across restarts).
+pub fn route_of<P: Platform>(ctx: &NetCtx<P>, node: &str) -> AudioRoute {
+    if let Some(r) = ctx.extras.audio.routes.lock().get(node) {
+        return *r;
+    }
+    let r = AudioRoute::parse(
+        &ctx.platform
+            .kv_get(&format!("{ROUTE_PREFIX}{node}"))
+            .unwrap_or_default(),
+    );
+    ctx.extras.audio.routes.lock().insert(node.to_string(), r);
+    r
+}
+
+/// Choose the route for audio with `node`.
+pub fn set_route<P: Platform>(ctx: &NetCtx<P>, node: &str, route: AudioRoute) {
+    ctx.extras
+        .audio
+        .routes
+        .lock()
+        .insert(node.to_string(), route);
+    ctx.platform
+        .kv_set(&format!("{ROUTE_PREFIX}{node}"), route.as_str());
+}
+
+/// The route that counts for `node`: this device's choice, else the one
+/// the other device said in its `audio_play`.
+pub fn effective_route<P: Platform>(ctx: &NetCtx<P>, node: &str) -> AudioRoute {
+    match route_of(ctx, node) {
+        AudioRoute::Auto => ctx
             .extras
             .audio
-            .codec
+            .their_route
             .lock()
             .get(node)
             .copied()
-            .unwrap_or(false)
+            .unwrap_or_default(),
+        r => r,
+    }
+}
+
+/// Whether the link to `node` now is a network one (not Bluetooth).
+fn network_link<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    let Some(id) = ctx.ws_conns.lock().get(node).map(|(id, _)| *id) else {
+        return false;
+    };
+    !crate::engine::is_ble_link(ctx, id)
+}
+
+/// Where audio with `node` goes now (`None`: no way it can).
+pub fn path_for<P: Platform>(ctx: &NetCtx<P>, node: &str) -> Option<AudioPath> {
+    let ble = opus_of(ctx, node) && crate::engine::ble_linked(ctx, node);
+    choose_path(effective_route(ctx, node), network_link(ctx, node), ble)
+}
+
+/// A stream with `node` wants its Bluetooth link kept (Bluetooth only was
+/// chosen, and it plays or listens), even with a network link.
+pub fn wants_ble<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    effective_route(ctx, node) == AudioRoute::Bluetooth
+        && opus_of(ctx, node)
+        && (ctx.extras.audio.listening.lock().contains(node)
+            || listeners(ctx).iter().any(|n| n == node))
+}
+
+/// Frames went to or came from `node` over Bluetooth (`ble`) or not.
+pub(crate) fn note_via<P: Platform>(ctx: &NetCtx<P>, node: &str, ble: bool) {
+    ctx.extras
+        .audio
+        .via
+        .lock()
+        .insert(node.to_string(), (ble, Instant::now()));
+}
+
+/// Which way audio with `node` went in the last moments: "bluetooth",
+/// "network", or "" (none lately).
+pub fn via<P: Platform>(ctx: &NetCtx<P>, node: &str) -> &'static str {
+    match ctx.extras.audio.via.lock().get(node) {
+        Some((ble, at)) if at.elapsed() < VIA_FOR => {
+            if *ble {
+                "bluetooth"
+            } else {
+                "network"
+            }
+        }
+        _ => "",
+    }
 }
 
 /// What arrived from source `node` so far.
@@ -234,11 +410,23 @@ pub struct AudioShare {
     /// read from `kv`.
     caps: Mutex<HashMap<String, (bool, bool)>>,
     seq: AtomicU64,
-    /// Who said `audio_codec`.
-    codec: Mutex<HashMap<String, bool>>,
+    /// What each device said in `audio_codec` (1 ADPCM, 2 Opus too).
+    codec: Mutex<HashMap<String, u64>>,
     coder: Mutex<Coder>,
     /// Sink: per source, what arrived.
     rx: Mutex<HashMap<String, Rx>>,
+    /// Source: an Opus encoder per sink.
+    opus_enc: Mutex<HashMap<String, super::opus_audio::Enc>>,
+    /// Sink: an Opus decoder per source (with the sender's run).
+    opus_dec: Mutex<HashMap<String, (u32, super::opus_audio::Dec)>>,
+    /// Source: the loss each sink said it saw (percent).
+    their_loss: Mutex<HashMap<String, f32>>,
+    /// The route chosen here per device (read from `kv` once).
+    routes: Mutex<HashMap<String, AudioRoute>>,
+    /// The route each device said in its `audio_play`.
+    their_route: Mutex<HashMap<String, AudioRoute>>,
+    /// Which way frames last went or came, per device, and when.
+    via: Mutex<HashMap<String, (bool, Instant)>>,
 }
 
 /// This device plays (`sink`) or sends (`source`) audio; said in its
@@ -330,14 +518,41 @@ pub fn rate_for(kind: TransportKind) -> Option<u32> {
 /// over Bluetooth.
 fn link_rate<P: Platform>(ctx: &NetCtx<P>, node: &str) -> crate::Result<u32> {
     let kind = ctx.p2p_conns.lock().get(node).map(|c| c.kind);
-    if !ctx.ws_conns.lock().contains_key(node) {
+    let Some(route) = ctx.ws_conns.lock().get(node).map(|(id, _)| *id) else {
         return Err(CoreError::NoLink("not connected".into()));
-    }
+    };
+    let kind = if crate::engine::is_ble_link(ctx, route) {
+        Some(TransportKind::Ble)
+    } else {
+        kind
+    };
     // A route with no link yet (the relay's, before the peer answered):
     // treat as the relay.
     rate_for(kind.unwrap_or(TransportKind::Relay)).ok_or(CoreError::Unsupported(
         "the link is Bluetooth only, too slow for audio: get both on the same Wi-Fi or online",
     ))
+}
+
+/// The rate to capture at for `node`: 48 kHz for Opus whichever way it
+/// goes (a binary path on the network, or Bluetooth), else the link's.
+fn offer_rate<P: Platform>(ctx: &NetCtx<P>, node: &str) -> crate::Result<u32> {
+    if !opus_of(ctx, node) {
+        return link_rate(ctx, node);
+    }
+    match path_for(ctx, node) {
+        Some(AudioPath::Bluetooth) => Ok(RATE_DIRECT),
+        Some(AudioPath::Network) if media::binary_path(ctx, node).is_some() => Ok(RATE_DIRECT),
+        Some(AudioPath::Network) => link_rate(ctx, node),
+        None if !ctx.ws_conns.lock().contains_key(node) => {
+            Err(CoreError::NoLink("not connected".into()))
+        }
+        None => Err(CoreError::Unsupported(match effective_route(ctx, node) {
+            AudioRoute::Bluetooth => {
+                "Bluetooth only was chosen, and there's no Bluetooth link to that device"
+            }
+            _ => "the link is Bluetooth only: choose Auto or Bluetooth for this device's audio",
+        })),
+    }
 }
 
 const OLD_SINK: &str = "that device's my-domain can't play another device's audio yet: update it";
@@ -368,11 +583,22 @@ pub fn listen<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Resu
         ctx.extras.audio.listening.lock().insert(node.to_string());
     }
     let me = ctx.identity.lock().node_id.clone();
-    send(
-        ctx,
-        node,
-        &json!({ "type": "audio_play", "from": me, "on": on }).to_string(),
-    )
+    let mut msg = json!({ "type": "audio_play", "from": me, "on": on });
+    // Newer sources read these; older ones ignore them.
+    if ctx.config.audio_opus {
+        msg["route"] = route_of(ctx, node).as_str().into();
+        let loss = ctx
+            .extras
+            .audio
+            .opus_dec
+            .lock()
+            .get_mut(node)
+            .and_then(|(_, d)| d.take_loss());
+        if let Some(l) = loss {
+            msg["loss"] = (f64::from((l * 10.0).round()) / 10.0).into();
+        }
+    }
+    send(ctx, node, &msg.to_string())
 }
 
 /// Source: the sinks listening now (expired listens are dropped).
@@ -397,7 +623,7 @@ pub fn offer<P: Platform>(ctx: &NetCtx<P>, node: &str, on: bool) -> crate::Resul
         return Err(CoreError::Unsupported(OLD_SINK));
     }
     let rate = if on {
-        link_rate(ctx, node)?
+        offer_rate(ctx, node)?
     } else if ctx.ws_conns.lock().contains_key(node) {
         0
     } else {
@@ -462,9 +688,34 @@ pub fn send_frame_to<P: Platform>(
     let sent = to
         .iter()
         .filter(|n| {
+            let way = if opus_of(ctx, n) {
+                path_for(ctx, n)
+            } else {
+                // Never over Bluetooth to an app without Opus.
+                network_link(ctx, n).then_some(AudioPath::Network)
+            };
+            match way {
+                None => return false,
+                Some(AudioPath::Bluetooth) => {
+                    note_via(ctx, n, true);
+                    return send_opus(ctx, n, &header, pcm, Profile::Bluetooth).unwrap_or(false);
+                }
+                Some(AudioPath::Network) => note_via(ctx, n, false),
+            }
             crate::features::nearby::sent(ctx, n);
             let path = media::binary_path(ctx, n);
-            if path.is_some() && codec_of(ctx, n) && !crate::features::nearby::low_latency(ctx, n) {
+            let low = crate::features::nearby::low_latency(ctx, n);
+            if path.is_some() && !low && opus_of(ctx, n) {
+                let profile = Profile::Network {
+                    lossy: path == Some(true),
+                };
+                if let Some(sent) = send_opus(ctx, n, &header, pcm, profile) {
+                    return sent;
+                }
+            } else {
+                flush_opus(ctx, n);
+            }
+            if path.is_some() && codec_of(ctx, n) && !low {
                 let halves =
                     coded.get_or_insert_with(|| code_halves(ctx, pcm, rate, channels, seq));
                 // Redundancy only where a record can be lost (QUIC
@@ -493,6 +744,82 @@ pub fn send_frame_to<P: Platform>(
         ctx.extras.audio.coder.lock().last = Some((s, data));
     }
     Ok(sent)
+}
+
+/// The loss (percent) to expect sending to `node`: the larger of what it
+/// said and QUIC's own count.
+fn loss_to<P: Platform>(ctx: &NetCtx<P>, node: &str) -> f32 {
+    let said = ctx
+        .extras
+        .audio
+        .their_loss
+        .lock()
+        .get(node)
+        .copied()
+        .unwrap_or(0.0);
+    let quic = ctx
+        .quic
+        .path_stats(node)
+        .and_then(|(_, lost, sent)| crate::transport::quality::loss_pct(lost, sent))
+        .unwrap_or(0.0);
+    said.max(quic)
+}
+
+/// Code `pcm` as Opus for `node` and send what's ready (over Bluetooth
+/// for that profile). `None`: Opus can't take this format (send it
+/// another way).
+fn send_opus<P: Platform>(
+    ctx: &NetCtx<P>,
+    node: &str,
+    header: &media::Header,
+    pcm: &[u8],
+    profile: Profile,
+) -> Option<bool> {
+    use super::opus_audio::{Enc, FLAG_OPUS};
+    let media::Format::Pcm { rate, channels, .. } = header.format else {
+        return None;
+    };
+    let loss = loss_to(ctx, node);
+    let ready = {
+        let mut encs = ctx.extras.audio.opus_enc.lock();
+        let next = encs.get(node).map_or(0, Enc::next);
+        let fits = encs
+            .get(node)
+            .is_some_and(|e| e.format() == (rate, channels, profile));
+        if !fits {
+            encs.insert(node.to_string(), Enc::new(rate, channels, profile, next)?);
+        }
+        let enc = encs.get_mut(node)?;
+        enc.set_loss(loss);
+        enc.push(pcm)
+    };
+    let ble = profile == Profile::Bluetooth;
+    let mut any = ready.is_empty();
+    for (_, payload) in ready {
+        let h = media::Header {
+            format: media::Format::Pcm {
+                rate,
+                channels,
+                flags: FLAG_OPUS,
+            },
+            ..*header
+        };
+        let sent = if ble {
+            crate::engine::ble_send_media(ctx, node, &h, &payload)
+        } else {
+            media::send(ctx, node, &h, &payload)
+        };
+        any |= sent == Sent::Yes;
+    }
+    Some(any)
+}
+
+/// The stream to `node` went another way for now: what the Opus encoder
+/// holds is stale (its frame numbers carry on).
+fn flush_opus<P: Platform>(ctx: &NetCtx<P>, node: &str) {
+    if let Some(e) = ctx.extras.audio.opus_enc.lock().get_mut(node) {
+        e.flush();
+    }
 }
 
 /// A frame as two ADPCM records: (seq, payload, RED payload with the
@@ -576,6 +903,10 @@ pub(crate) fn deliver_coded<P: Platform>(
     else {
         return;
     };
+    if flags == super::opus_audio::FLAG_OPUS {
+        deliver_opus(ctx, from, h, payload);
+        return;
+    }
     if flags & !KNOWN_FLAGS != 0 || !ctx.extras.audio.listening.lock().contains(from) {
         return;
     }
@@ -622,6 +953,77 @@ pub(crate) fn deliver_coded<P: Platform>(
     }
 }
 
+/// An Opus record from `from`: decode it, fill what was lost before it
+/// (the copy, FEC or concealment), drop repeats, deliver in order.
+fn deliver_opus<P: Platform>(ctx: &NetCtx<P>, from: &str, h: &media::Header, payload: &[u8]) {
+    use super::opus_audio::{Dec, Fill};
+    let media::Format::Pcm { rate, channels, .. } = h.format else {
+        return;
+    };
+    if !ctx.config.audio_opus
+        || !ctx.extras.audio.listening.lock().contains(from)
+        || !ctx.peers.lock().contains_key(from)
+    {
+        return;
+    }
+    let out = {
+        let mut decs = ctx.extras.audio.opus_dec.lock();
+        let fresh = !decs
+            .get(from)
+            .is_some_and(|(s, d)| *s == h.session && d.format() == (rate, channels));
+        if fresh {
+            let Some(d) = Dec::new(rate, channels) else {
+                return;
+            };
+            decs.insert(from.to_string(), (h.session, d));
+        }
+        let Some((_, dec)) = decs.get_mut(from) else {
+            return;
+        };
+        let dups = dec.stats.duplicates;
+        let Some(out) = dec.receive(payload) else {
+            return;
+        };
+        let dup = dec.stats.duplicates != dups;
+        let mut rx = ctx.extras.audio.rx.lock();
+        let r = rx.entry(from.to_string()).or_default();
+        if r.session != h.session {
+            *r = Rx {
+                session: h.session,
+                ..Default::default()
+            };
+        }
+        let st = &mut r.stats;
+        if dup {
+            st.duplicates = st.duplicates.saturating_add(1);
+        }
+        for (_, how, _) in &out {
+            match how {
+                Fill::Concealed => st.concealed = st.concealed.saturating_add(1),
+                Fill::Received => st.frames = st.frames.saturating_add(1),
+                Fill::Redundant | Fill::Fec => {
+                    st.frames = st.frames.saturating_add(1);
+                    st.recovered = st.recovered.saturating_add(1);
+                }
+            }
+        }
+        // Seqs for the players: up to the record's own, after the last.
+        let count = out.len() as u64;
+        let mut seq = h.seq.saturating_sub(count.saturating_sub(1));
+        if let Some(l) = r.last_out {
+            seq = seq.max(l + 1);
+        }
+        if count > 0 {
+            r.last_out = Some(seq + count - 1);
+        }
+        (seq, out)
+    };
+    let (first, out) = out;
+    for (i, (_, _, pcm)) in out.into_iter().enumerate() {
+        deliver(ctx, from, first + i as u64, rate, channels, &pcm);
+    }
+}
+
 /// Audio that came as a binary frame (`transport::media`) from `from`, the
 /// link's peer: checked as the JSON one, the same event.
 pub(crate) fn deliver<P: Platform>(
@@ -640,6 +1042,11 @@ pub(crate) fn deliver<P: Platform>(
         || !ctx.extras.audio.listening.lock().contains(from)
     {
         return;
+    }
+    {
+        let mut rx = ctx.extras.audio.rx.lock();
+        let r = rx.entry(from.to_string()).or_default();
+        r.last_out = Some(r.last_out.map_or(seq, |l| l.max(seq)));
     }
     ctx.sink.emit(CoreEvent::AudioFrame {
         from: from.to_string(),
@@ -676,6 +1083,15 @@ impl<P: Platform> ControlHandler<P> for AudioShareHandler {
                 }
                 let on = msg.json("on").as_bool().unwrap_or(false);
                 learned(ctx, &from, true, false);
+                if let Some(r) = msg.json("route").as_str() {
+                    a.their_route
+                        .lock()
+                        .insert(from.clone(), AudioRoute::parse(r));
+                }
+                if let Some(l) = msg.json("loss").as_f64() {
+                    let l = (l as f32).clamp(0.0, 100.0);
+                    a.their_loss.lock().insert(from.clone(), l);
+                }
                 let changed = {
                     let mut l = a.listeners.lock();
                     let now = Instant::now();
@@ -773,7 +1189,8 @@ mod tests {
             AudioRxStats {
                 frames: 4,
                 recovered: 1,
-                duplicates: 2
+                duplicates: 2,
+                concealed: 0,
             }
         );
         // Too old to matter: not played.
@@ -785,6 +1202,24 @@ mod tests {
         // The sender restarted: counting starts over.
         assert_eq!(rx.accept(2, 0, None), (false, true));
         assert_eq!(rx.stats.frames, 1);
+    }
+
+    #[test]
+    fn the_route_picks_the_network_first_on_auto() {
+        use AudioPath as P;
+        use AudioRoute as R;
+        assert_eq!(choose_path(R::Auto, true, true), Some(P::Network));
+        assert_eq!(choose_path(R::Auto, false, true), Some(P::Bluetooth));
+        assert_eq!(choose_path(R::Auto, true, false), Some(P::Network));
+        assert_eq!(choose_path(R::Auto, false, false), None);
+        assert_eq!(choose_path(R::Network, false, true), None);
+        assert_eq!(choose_path(R::Network, true, true), Some(P::Network));
+        assert_eq!(choose_path(R::Bluetooth, true, true), Some(P::Bluetooth));
+        assert_eq!(choose_path(R::Bluetooth, true, false), None);
+        for r in [R::Auto, R::Network, R::Bluetooth] {
+            assert_eq!(AudioRoute::parse(r.as_str()), r);
+        }
+        assert_eq!(AudioRoute::parse("anything"), R::Auto);
     }
 
     #[test]

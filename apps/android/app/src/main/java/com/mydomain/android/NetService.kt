@@ -49,6 +49,9 @@ class NetService : Service() {
     override fun onCreate() {
         super.onCreate()
         Core.init(this)
+        // A mute left by a crash while this phone's audio played on a
+        // computer (MuteHere.kt); nothing plays in a fresh process.
+        if (!PhoneAudioService.running) MuteHere.restore(this)
         clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         
         val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager

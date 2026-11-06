@@ -1260,11 +1260,19 @@
     <string name="nearby_settings_title">पास वाला मोड</string>
     <string name="nearby_switch">मीडिया के लिए पास वाला मोड इस्तेमाल करें</string>
     <string name="nearby_switch_hint">जब ऑडियो, स्क्रीन या कैमरा किसी ऐसे डिवाइस के साथ चल रहा हो जो उसी Wi-Fi पर (या Bluetooth की पहुँच में) है, तो वह बिना रुके आपके नेटवर्क पर सीधे लिंक पर चला जाता है, ताकि देरी कम हो। अगर वह लिंक टूट जाए, तो वह पहले वाले रास्ते पर लौट आता है।</string>
+    <string name="audio_route_label">आवाज़ भेजें</string>
+    <string name="audio_route_auto">अपने आप (पहले Wi-Fi, ऑफ़लाइन होने पर ब्लूटूथ)</string>
+    <string name="audio_route_wifi">सिर्फ़ Wi-Fi या इंटरनेट</string>
+    <string name="audio_route_bluetooth">सिर्फ़ ब्लूटूथ</string>
+    <string name="audio_route_badge">ब्लूटूथ से</string>
+    <string name="audio_route_badge_hint">नेटवर्क लिंक नहीं है, इसलिए आवाज़ ब्लूटूथ से कम क्वालिटी और थोड़ी ज़्यादा देरी के साथ जा रही है।</string>
+    <string name="mute_here_label">%1$s पर बजते समय इस फ़ोन को म्यूट करें</string>
+    <string name="mute_here_active">कंप्यूटर पर बजते समय इस फ़ोन की मीडिया आवाज़ म्यूट है। रुकने पर वापस आ जाएगी।</string>
     <string name="nearby_badge">पास में · कम देरी</string>
     <string name="nearby_latency">%1$d ms</string>
     <string name="nearby_latency_was">%1$d ms (पहले %2$d ms)</string>
     <string name="caudio_stats_buffer">बफ़र: %1$d ms (लक्ष्य %2$d ms)</string>
-    <string name="caudio_stats_loss">खाली हुआ: %1$d · भरा गया: %2$d ms · वापस मिला: %3$d · आउटपुट में रुकावट: %4$d</string>
+    <string name="caudio_stats_loss">खाली हुआ: %1$d · भरा गया: %2$d ms · वापस मिला: %3$d · आउटपुट में रुकावट: %4$d · Opus ने फिर बनाए: %5$d</string>
     <!-- Timers (TimersScreen.kt, TimerAlarms.kt) -->
     <string name="channel_timers">चल रहे टाइमर</string>
     <string name="channel_timer_alarm">बजते टाइमर</string>

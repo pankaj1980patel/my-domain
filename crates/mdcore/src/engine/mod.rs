@@ -30,8 +30,9 @@ use crate::transport::{self, P2pConns};
 
 mod background;
 mod ble;
-pub(crate) use ble::ble_linked;
 pub use ble::BleSender;
+pub use ble::MEDIA_QUEUE as BLE_MEDIA_QUEUE;
+pub(crate) use ble::{ble_linked, ble_send_media, is_ble_link};
 mod control;
 mod diag;
 mod join;

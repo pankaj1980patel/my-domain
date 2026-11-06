@@ -13,6 +13,8 @@ import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 import { NearbyBadge } from "../../components/NearbyBadge";
+import { AudioRouteBadge, AudioRoutePicker } from "../../components/AudioRoute";
+import { MuteHere } from "../../components/MuteHere";
 
 const isMac = () => /mac/i.test(navigator.platform || navigator.userAgent);
 
@@ -49,6 +51,7 @@ export default function ComputerAudioTile(props: { node: string }) {
               {t("computerAudio.playing", { name: name() })}
             </p>
             <NearbyBadge node={props.node} />
+            <AudioRouteBadge node={props.node} />
           </Show>
           <Show when={asked()}>
             <p class="small" aria-live="polite">
@@ -73,6 +76,8 @@ export default function ComputerAudioTile(props: { node: string }) {
             </button>
           </Show>
         </div>
+        <MuteHere node={props.node} name={name()} />
+        <AudioRoutePicker node={props.node} />
       </Show>
     </article>
   );

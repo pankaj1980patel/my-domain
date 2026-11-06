@@ -13,6 +13,8 @@
 //!   kind 1  = audio:  f0 channels, f1 flags, f2 rate (Hz); payload s16le PCM, interleaved
 //!             (f1 0; to a device that says `audio_codec`, f1 may say ADPCM
 //!             and/or a redundant copy of the record before: `features::audio_codec`)
+//!             (f1 4: Opus frames, to a device that says `audio_codec: 2`:
+//!             `features::opus_audio`; these also go over Bluetooth links, `engine::ble`)
 //!   kind 2  = screen: f0 quality, f1 width, f2 height (0: not said); payload a JPEG
 //!   kind 3  = camera: as kind 2, a phone camera's picture (`features::camera`)
 //! ```
@@ -271,6 +273,11 @@ pub(crate) fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, h: &Header, payload
 /// the frame to its feature, which checks it as it checks the JSON one.
 /// One that doesn't open is dropped quietly (counted, never shown).
 pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8]) {
+    on_record_via(ctx, from, record, false);
+}
+
+/// As `on_record`; `ble`: it came over a Bluetooth link.
+pub(crate) fn on_record_via<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8], ble: bool) {
     let Some(key) = *ctx.key.lock() else {
         return;
     };
@@ -281,6 +288,9 @@ pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8])
     };
     super::note_use(&ctx.p2p_conns, from);
     crate::features::nearby::received(ctx, from, h.ts_ms);
+    if h.format.kind() == MediaKind::Audio {
+        crate::features::audio_share::note_via(ctx, from, ble);
+    }
     match h.format {
         Format::Pcm {
             rate,

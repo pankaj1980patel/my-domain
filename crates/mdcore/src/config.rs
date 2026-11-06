@@ -200,6 +200,11 @@ pub struct CoreConfig {
     /// their links are all local). Off: only over the relay, a punched
     /// path, WebRTC, Bluetooth or a direct link over the internet.
     pub wifi_direct_on_lan: bool,
+    /// Opus audio (`features::opus_audio`): this end says `audio_codec: 2`
+    /// (with `audio_codec` on), reads Opus records, sends them to devices
+    /// that say 2, and carries audio over a Bluetooth link to such a
+    /// device. On by default; off behaves like the ADPCM-only app before.
+    pub audio_opus: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -251,6 +256,7 @@ impl Default for CoreConfig {
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,
+            audio_opus: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

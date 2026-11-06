@@ -14,12 +14,26 @@
 //! replaces it. It's what's left when there's no shared network or no
 //! internet. Nothing proves who is on the other end (no TLS): only the
 //! message encryption protects it, as on the relay.
+//!
+//! Audio rides it too, to a device that reads Opus (`audio_codec: 2`): a
+//! frame that starts with the media record version (`transport::media`,
+//! 1; a JSON frame starts with `{`) is a sealed binary record, sent by
+//! `ble_send_media` straight onto the link whatever the device's route is
+//! (a stream may choose Bluetooth with a network link up). At most
+//! [`MEDIA_QUEUE`] records wait for the radio; more are dropped (late audio
+//! is noise).
+
+use std::sync::atomic::AtomicUsize;
 
 use std::sync::atomic::AtomicU64;
 
 use super::*;
 use crate::model::{Envelope, WsFrame};
 use crate::transport::{drop_live, handle_incoming, mark_live, TransportKind};
+
+/// Media records waiting for the radio at most, per link (a quarter
+/// second of Bluetooth audio).
+pub const MEDIA_QUEUE: usize = 4;
 
 /// Link ids in their own range (QUIC 3M, relay 4M, ...).
 static BLE_CONN_SEQ: AtomicU64 = AtomicU64::new(5_000_000);
@@ -28,6 +42,12 @@ static BLE_CONN_SEQ: AtomicU64 = AtomicU64::new(5_000_000);
 pub trait BleSender: Send + Sync {
     /// Send one whole frame to the other end.
     fn send(&self, frame: Vec<u8>);
+
+    /// Frames handed over and not yet on the air (0 if it doesn't count):
+    /// media records wait no more than `MEDIA_QUEUE` in all.
+    fn pending(&self) -> usize {
+        0
+    }
 }
 
 /// One open Bluetooth connection.
@@ -36,6 +56,10 @@ pub(crate) struct BleLink {
     peer: Option<String>,
     /// Its outgoing queue (drained into the platform's sender).
     tx: tokio::sync::mpsc::UnboundedSender<String>,
+    /// The same queue, for binary media records, and how many wait.
+    bin: std::sync::mpsc::Sender<Vec<u8>>,
+    queued: Arc<AtomicUsize>,
+    sender: Arc<dyn BleSender>,
 }
 
 /// Open Bluetooth connections, by link id.
@@ -59,21 +83,59 @@ impl<P: Platform> Engine<P> {
             .unwrap_or_default()
         };
         let _ = tx.send(hello);
-        self.ctx
-            .ble_links
-            .lock()
-            .insert(id, BleLink { peer: None, tx });
+        // One queue to the radio, in order: the messages are moved onto it
+        // by a thread of their own.
+        let (bin, out) = std::sync::mpsc::channel::<Vec<u8>>();
+        let queued = Arc::new(AtomicUsize::new(0));
+        let to_out = bin.clone();
         // Ends when the link is closed (its queue's last sender dropped).
         std::thread::spawn(move || {
             while let Some(frame) = rx.blocking_recv() {
-                sender.send(frame.into_bytes());
+                if to_out.send(frame.into_bytes()).is_err() {
+                    break;
+                }
             }
         });
+        let q = queued.clone();
+        let platform = sender.clone();
+        std::thread::spawn(move || {
+            while let Ok(frame) = out.recv() {
+                let media = frame.first() == Some(&crate::transport::media::VERSION);
+                sender.send(frame);
+                if media {
+                    q.fetch_sub(1, Ordering::Relaxed);
+                }
+            }
+        });
+        self.ctx.ble_links.lock().insert(
+            id,
+            BleLink {
+                peer: None,
+                tx,
+                bin,
+                queued,
+                sender: platform,
+            },
+        );
         id
     }
 
     /// A whole frame arrived on Bluetooth connection `id`.
     pub fn ble_frame(&self, id: u64, frame: &[u8]) {
+        if frame.first() == Some(&crate::transport::media::VERSION) {
+            let Some(peer) = self
+                .ctx
+                .ble_links
+                .lock()
+                .get(&id)
+                .and_then(|l| l.peer.clone())
+            else {
+                return; // no Hello yet
+            };
+            self.route_ble(id, &peer);
+            crate::transport::media::on_record_via(&self.ctx, &peer, frame, true);
+            return;
+        }
         let Ok(frame) = serde_json::from_slice::<WsFrame>(frame) else {
             return;
         };
@@ -135,6 +197,42 @@ impl<P: Platform> Engine<P> {
         }
         mark_live(&self.ctx, peer, TransportKind::Ble, None);
     }
+}
+
+/// Link `id` is a Bluetooth one.
+pub(crate) fn is_ble_link<P: Platform>(ctx: &NetCtx<P>, id: u64) -> bool {
+    ctx.ble_links.lock().contains_key(&id)
+}
+
+/// Send a media frame to `node` as a sealed binary record over its
+/// Bluetooth link (whatever its route is). Dropped when the radio is
+/// behind.
+pub(crate) fn ble_send_media<P: Platform>(
+    ctx: &NetCtx<P>,
+    node: &str,
+    h: &crate::transport::media::Header,
+    payload: &[u8],
+) -> crate::transport::media::Sent {
+    use crate::transport::media::{encode, Sent};
+    let Some(key) = *ctx.key.lock() else {
+        return Sent::NotBinary;
+    };
+    let links = ctx.ble_links.lock();
+    let Some(link) = links.values().find(|l| l.peer.as_deref() == Some(node)) else {
+        return Sent::NotBinary;
+    };
+    if link.queued.load(Ordering::Relaxed) + link.sender.pending() >= MEDIA_QUEUE {
+        return Sent::Dropped;
+    }
+    let Some(record) = encode(&key, h, payload) else {
+        return Sent::NotBinary;
+    };
+    link.queued.fetch_add(1, Ordering::Relaxed);
+    if link.bin.send(record).is_err() {
+        link.queued.fetch_sub(1, Ordering::Relaxed);
+        return Sent::Dropped;
+    }
+    Sent::Yes
 }
 
 /// A Bluetooth connection to `node` is open (it's in range).

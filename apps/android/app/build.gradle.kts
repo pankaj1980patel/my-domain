@@ -128,6 +128,14 @@ cargo {
     // The crate is a member of the repo-root Cargo workspace, so Cargo writes to
     // <repo>/target, not ../rust/target. rootDir = apps/android.
     targetDirectory = "${rootDir}/../../target"
+    // libopus (mdcore's Opus audio, crate opusic-sys) is built from source by
+    // cmake with the NDK's own toolchain file, which it finds through
+    // ANDROID_NDK_HOME; ANDROID_PLATFORM is the oldest Android it targets.
+    // Checked by building opusic-sys for all four ABIs with these two set.
+    exec = { spec, _ ->
+        spec.environment("ANDROID_NDK_HOME", android.ndkDirectory.absolutePath)
+        spec.environment("ANDROID_PLATFORM", "android-${android.defaultConfig.minSdk}")
+    }
 }
 
 // Make sure the Rust libs are built before Gradle packages the JNI libs, and

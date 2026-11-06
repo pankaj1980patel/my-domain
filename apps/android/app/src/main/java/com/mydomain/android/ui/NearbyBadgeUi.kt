@@ -58,7 +58,7 @@ fun ComputerAudioDetails() {
     Muted(
         stringResource(
             R.string.caudio_stats_loss,
-            s.underruns, s.concealedMs, s.recovered.toInt(), s.outputUnderruns,
+            s.underruns, s.concealedMs, s.recovered.toInt(), s.outputUnderruns, s.plc.toInt(),
         ),
     )
 }

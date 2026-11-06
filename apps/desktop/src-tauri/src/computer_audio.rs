@@ -319,6 +319,8 @@ pub struct ComputerAudioStatus {
     pub playing_to: Vec<String>,
     /// Phones asked to play it, waiting for the tap there.
     pub asked: Vec<String>,
+    /// Of `playing_to`, those it goes to over Bluetooth now (the badge).
+    pub via_bluetooth: Vec<String>,
     /// Why it stopped or couldn't start, if it did.
     pub error: Option<String>,
 }
@@ -332,11 +334,33 @@ fn status() -> ComputerAudioStatus {
         playing_to: s.targets.keys().cloned().collect(),
         asked: s.asked.keys().cloned().collect(),
         error: s.error.clone(),
+        via_bluetooth: Vec::new(),
     }
 }
 
+/// The status, with which phones it goes to over Bluetooth.
+fn status_with(app: &AppHandle) -> ComputerAudioStatus {
+    let mut st = status();
+    if let Some(engine) = app.try_state::<Eng>() {
+        st.via_bluetooth = st
+            .playing_to
+            .iter()
+            .filter(|n| engine.audio_via(n) == "bluetooth")
+            .cloned()
+            .collect();
+    }
+    st
+}
+
 fn emit(app: &AppHandle) {
-    let _ = app.emit("computer-audio", status());
+    let _ = app.emit("computer-audio", status_with(app));
+    // Mute here follows who it plays on (`mute_here.rs`).
+    crate::mute_here::sync(app);
+}
+
+/// The phones this computer's sound plays on now.
+pub fn playing_to() -> Vec<String> {
+    state().targets.keys().cloned().collect()
 }
 
 /// Whether this computer's sound is going to a phone now.
@@ -669,6 +693,7 @@ fn run(
         if let Some(engine) = app.try_state::<Eng>() {
             let _ = engine.audio_frame_to(&pcm, rate, 2, &listening);
         }
+        crate::mute_here::heard(app, &pcm);
         pacer.sent();
     }
     drop(capture);
@@ -1226,8 +1251,8 @@ mod mac {
 /// Where this computer's sound stands.
 #[tauri::command]
 #[specta::specta]
-pub fn computer_audio_status() -> ComputerAudioStatus {
-    status()
+pub fn computer_audio_status(app: AppHandle) -> ComputerAudioStatus {
+    status_with(&app)
 }
 
 /// Offer this computer's sound to phone `node_id`: it plays once its owner

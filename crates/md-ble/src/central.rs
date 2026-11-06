@@ -7,6 +7,7 @@
 //! its `Hello` on the first connection and remembered.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use parking_lot::Mutex;
@@ -121,6 +122,8 @@ fn is_direct<P: Platform>(engine: &Engine<P>, node: &str) -> bool {
         .link_stats()
         .iter()
         .any(|l| l.node_id == node && l.direct)
+        // A stream that chose Bluetooth only keeps its link.
+        && !engine.audio_wants_ble(node)
 }
 
 /// Drop connections to devices that are direct now; retry the others.
@@ -216,7 +219,8 @@ async fn open<P: Platform + 'static, E: EngineRef<P>>(
     let mut notes = p.notifications().await.ok()?;
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
-    let link = engine.ble_opened(Arc::new(Queue(tx)));
+    let waiting = Arc::new(AtomicUsize::new(0));
+    let link = engine.ble_opened(Arc::new(Queue(tx, waiting.clone())));
 
     // Writer: the core's frames, chunk by chunk, in order.
     let writer = p.clone();
@@ -231,6 +235,7 @@ async fn open<P: Platform + 'static, E: EngineRef<P>>(
                     return;
                 }
             }
+            waiting.fetch_sub(1, Ordering::Relaxed);
         }
     });
 
@@ -261,11 +266,22 @@ fn hello_from(frame: &[u8]) -> Option<String> {
     (v["type"] == "hello").then(|| v["node_id"].as_str().map(String::from))?
 }
 
-/// The core's outgoing frames, queued for the writer task.
-struct Queue(tokio::sync::mpsc::UnboundedSender<Vec<u8>>);
+/// The core's outgoing frames, queued for the writer task, and how many
+/// wait (the core holds back audio when the radio is behind).
+struct Queue(
+    tokio::sync::mpsc::UnboundedSender<Vec<u8>>,
+    Arc<AtomicUsize>,
+);
 
 impl BleSender for Queue {
     fn send(&self, frame: Vec<u8>) {
-        let _ = self.0.send(frame);
+        self.1.fetch_add(1, Ordering::Relaxed);
+        if self.0.send(frame).is_err() {
+            self.1.fetch_sub(1, Ordering::Relaxed);
+        }
+    }
+
+    fn pending(&self) -> usize {
+        self.1.load(Ordering::Relaxed)
     }
 }

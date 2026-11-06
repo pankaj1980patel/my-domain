@@ -58,6 +58,33 @@ pub fn nearby_status(node_id: String, engine: State<Eng>) -> NearbyStatus {
     engine.nearby_status(&node_id)
 }
 
+/// Which way audio with `node_id` goes: "auto" (Wi-Fi or the internet
+/// first, Bluetooth when there's no network link), "wifi" or "bluetooth".
+/// Kept per device by the core.
+#[tauri::command]
+#[specta::specta]
+pub fn audio_route(node_id: String, engine: State<Eng>) -> String {
+    engine.audio_route(&node_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn set_audio_route(node_id: String, route: String, engine: State<Eng>) {
+    engine.set_audio_route(&node_id, &route);
+    // A listen running here says the choice to the phone at once.
+    if crate::phone_audio::playing_from().as_deref() == Some(node_id.as_str()) {
+        let _ = engine.audio_listen(&node_id, true);
+    }
+}
+
+/// Which way audio with `node_id` went just now: "bluetooth", "network"
+/// or "" (the "via Bluetooth" badge).
+#[tauri::command]
+#[specta::specta]
+pub fn audio_via(node_id: String, engine: State<Eng>) -> String {
+    engine.audio_via(&node_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -33,6 +33,38 @@ impl<P: Platform> Engine<P> {
         audio_share::rx_stats(&self.ctx, node_id)
     }
 
+    /// Which way audio with `node_id` goes: "auto" (a network link first,
+    /// else Bluetooth), "wifi" (never Bluetooth) or "bluetooth" (even with a
+    /// network link). Chosen per device, kept across restarts.
+    pub fn audio_route(&self, node_id: &str) -> String {
+        audio_share::route_of(&self.ctx, node_id)
+            .as_str()
+            .to_string()
+    }
+
+    pub fn set_audio_route(&self, node_id: &str, route: &str) {
+        audio_share::set_route(&self.ctx, node_id, audio_share::AudioRoute::parse(route));
+    }
+
+    /// Which way audio with `node_id` went in the last moments:
+    /// "bluetooth", "network", or "" (none).
+    pub fn audio_via(&self, node_id: &str) -> String {
+        audio_share::via(&self.ctx, node_id).to_string()
+    }
+
+    /// A stream with `node_id` wants its Bluetooth link kept even with a
+    /// network link (Bluetooth only was chosen): the desktop's Bluetooth
+    /// code doesn't drop it then.
+    pub fn audio_wants_ble(&self, node_id: &str) -> bool {
+        audio_share::wants_ble(&self.ctx, node_id)
+    }
+
+    /// `node_id` reads Opus audio (`audio_codec: 2`), so audio can go to
+    /// it over Bluetooth.
+    pub fn audio_opus(&self, node_id: &str) -> bool {
+        audio_share::opus_of(&self.ctx, node_id)
+    }
+
     /// Close the QUIC link to `node_id` as if the local network went
     /// (tests of the fall back to the relay). False without a QUIC link.
     #[doc(hidden)]

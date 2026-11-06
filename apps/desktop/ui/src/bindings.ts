@@ -521,6 +521,20 @@ export const commands = {
 	computerAudioOffer: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("computer_audio_offer", { nodeId })),
 	/**  Stop playing this computer's sound on `node_id` (`None`: everywhere). */
 	computerAudioStop: (nodeId: string | null) => __TAURI_INVOKE<void>("computer_audio_stop", { nodeId }),
+	muteHere: (nodeId: string) => __TAURI_INVOKE<MuteHere_Serialize>("mute_here", { nodeId }),
+	setMuteHere: (nodeId: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("set_mute_here", { nodeId, on })),
+	/**
+	 *  Which way audio with `node_id` goes: "auto" (Wi-Fi or the internet
+	 *  first, Bluetooth when there's no network link), "wifi" or "bluetooth".
+	 *  Kept per device by the core.
+	 */
+	audioRoute: (nodeId: string) => __TAURI_INVOKE<string>("audio_route", { nodeId }),
+	setAudioRoute: (nodeId: string, route: string) => __TAURI_INVOKE<void>("set_audio_route", { nodeId, route }),
+	/**
+	 *  Which way audio with `node_id` went just now: "bluetooth", "network"
+	 *  or "" (the "via Bluetooth" badge).
+	 */
+	audioVia: (nodeId: string) => __TAURI_INVOKE<string>("audio_via", { nodeId }),
 	/**  The Settings tile: the switch, the apps seen, the phones showing them. */
 	computerNotifsState: () => __TAURI_INVOKE<ComputerNotifsState_Serialize>("computer_notifs_state"),
 	/**  Turn "Show this computer's notifications on my phone" on or off. */
@@ -1305,6 +1319,8 @@ export type ComputerAudioStatus_Deserialize = {
 	playing_to: string[],
 	/**  Phones asked to play it, waiting for the tap there. */
 	asked: string[],
+	/**  Of `playing_to`, those it goes to over Bluetooth now (the badge). */
+	via_bluetooth: string[],
 	/**  Why it stopped or couldn't start, if it did. */
 	error?: string | null,
 };
@@ -1323,6 +1339,8 @@ export type ComputerAudioStatus_Serialize = {
 	playing_to: string[],
 	/**  Phones asked to play it, waiting for the tap there. */
 	asked: string[],
+	/**  Of `playing_to`, those it goes to over Bluetooth now (the badge). */
+	via_bluetooth: string[],
 	/**  Why it stopped or couldn't start, if it did. */
 	error: string | null,
 };
@@ -2007,6 +2025,47 @@ export type MapView_Serialize = {
 /**  "Use the phone’s hotspot for big files". */
 export type Mode = "ask" | "always" | "never";
 
+/**  Mute here for one phone, for its tile. */
+export type MuteHere = MuteHere_Serialize | MuteHere_Deserialize;
+
+/**  Mute here for one phone, for its tile. */
+export type MuteHere_Deserialize = {
+	/**
+	 *  This computer can mute its output for this (not on Windows; not an
+	 *  output without a mute control; not after muting silenced the
+	 *  capture).
+	 */
+	supported: boolean,
+	/**  The switch for this phone. */
+	on: boolean,
+	/**  This app has the output muted now. */
+	active: boolean,
+	/**
+	 *  Why it can't, if it can't: "windows", "silences" (muting silenced
+	 *  the phone too, so it was undone), or the output's own words.
+	 */
+	why?: string | null,
+};
+
+/**  Mute here for one phone, for its tile. */
+export type MuteHere_Serialize = {
+	/**
+	 *  This computer can mute its output for this (not on Windows; not an
+	 *  output without a mute control; not after muting silenced the
+	 *  capture).
+	 */
+	supported: boolean,
+	/**  The switch for this phone. */
+	on: boolean,
+	/**  This app has the output muted now. */
+	active: boolean,
+	/**
+	 *  Why it can't, if it can't: "windows", "silences" (muting silenced
+	 *  the phone too, so it was undone), or the output's own words.
+	 */
+	why: string | null,
+};
+
 /**  How our NAT maps a socket's outgoing traffic, as far as hole punching cares. */
 export type NatKind = 
 /**  Not measured (no STUN configured, offline, or only one server answered). */
@@ -2345,6 +2404,10 @@ export type PhoneAudioStatus_Deserialize = {
 	drift_ppm: number,
 	/**  On a nearby low-latency link now (the badge). */
 	low_latency: boolean,
+	/**  Coming over Bluetooth now (the badge; the buffer keeps more). */
+	via_bluetooth: boolean,
+	/**  Lost frames Opus made up (its packet-loss concealment). */
+	plc: number,
 	/**  End-to-end latency now and before the last move, ms. */
 	latency_ms?: number | null,
 	before_ms?: number | null,
@@ -2380,6 +2443,10 @@ export type PhoneAudioStatus_Serialize = {
 	drift_ppm: number,
 	/**  On a nearby low-latency link now (the badge). */
 	low_latency: boolean,
+	/**  Coming over Bluetooth now (the badge; the buffer keeps more). */
+	via_bluetooth: boolean,
+	/**  Lost frames Opus made up (its packet-loss concealment). */
+	plc: number,
 	/**  End-to-end latency now and before the last move, ms. */
 	latency_ms: number | null,
 	before_ms: number | null,

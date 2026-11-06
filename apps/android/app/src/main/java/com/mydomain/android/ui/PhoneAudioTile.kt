@@ -21,8 +21,11 @@ fun PhoneAudioTile(node: String, name: String) {
         } else {
             Muted(stringResource(R.string.audio_tile_now, name), Modifier.announce())
             NearbyMediaBadge(node)
+            ViaBluetoothBadge(node)
             Muted(stringResource(R.string.audio_tile_hint))
             GhostButton(stringResource(R.string.audio_stop), { PhoneAudio.stopWith(node) })
         }
+        MuteHereSwitch(node, name)
+        AudioRoutePicker(node)
     }
 }

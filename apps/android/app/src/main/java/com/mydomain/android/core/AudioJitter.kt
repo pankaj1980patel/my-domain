@@ -78,6 +78,15 @@ class AudioJitter {
         targetMs = maxOf(targetMs, floorMs)
     }
 
+    @Synchronized fun bluetooth(): Boolean = floorMs == FLOOR_BLE_MS
+
+    /** Over a Bluetooth link (Opus records come 60 ms at a time) the target
+     *  stays higher. */
+    @Synchronized fun setBluetooth(on: Boolean) {
+        floorMs = if (on) FLOOR_BLE_MS else FLOOR_MS
+        targetMs = maxOf(targetMs, floorMs)
+    }
+
     private fun frames(): Int = len / 2
 
     private fun framesFor(ms: Int): Int = (rate.toLong() * ms / 1000).toInt()
@@ -324,6 +333,7 @@ class AudioJitter {
         const val START_MS = 80
         const val FLOOR_MS = 60
         const val FLOOR_NEARBY_MS = 30
+        const val FLOOR_BLE_MS = 150
         const val CEIL_MS = 200
         const val GROW_UNDERRUN_MS = 20
         const val GROW_LATE_MS = 10

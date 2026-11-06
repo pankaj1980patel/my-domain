@@ -62,6 +62,17 @@ class AudioJitterTest {
         assertEquals(FLOOR_NEARBY_MS, j.targetMs)
     }
 
+    @Test fun bluetoothKeepsTheTargetHigher() {
+        val j = AudioJitter()
+        j.setBluetooth(true)
+        assertTrue(j.bluetooth())
+        assertFalse(j.lowLatency())
+        assertEquals(AudioJitter.FLOOR_BLE_MS, j.targetMs)
+        j.setBluetooth(false)
+        assertFalse(j.bluetooth())
+        assertEquals("shrinks slowly, not at once", AudioJitter.FLOOR_BLE_MS, j.targetMs)
+    }
+
     @Test fun runningDryConcealsThenGrowsTheTarget() {
         val j = AudioJitter()
         for (seq in 0L until 10) j.push(seq, rate, 2, frame(10, 8000))

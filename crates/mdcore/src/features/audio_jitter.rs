@@ -10,6 +10,7 @@
 //!   neither shrinks it by `SHRINK_MS` (slowly), down to the floor:
 //!   `FLOOR_MS`, or `FLOOR_NEARBY_MS` on a nearby low-latency link
 //!   (`features::nearby`), which is all nearby mode changes here.
+//!   Over Bluetooth (`features::opus_audio`) the floor is `FLOOR_BLE_MS`.
 //! - **Concealment.** Running dry doesn't go silent at once: the last
 //!   `HISTORY_MS` played repeats, fading out over `CONCEAL_MS`; when audio
 //!   comes back it crossfades in over `XFADE_MS` (no click). Only after
@@ -31,6 +32,9 @@ pub const START_MS: u32 = 80;
 pub const FLOOR_MS: u32 = 60;
 /// The lowest target on a nearby low-latency link.
 pub const FLOOR_NEARBY_MS: u32 = 30;
+/// The lowest target over a Bluetooth link (Opus records come three
+/// frames, 60 ms, at a time).
+pub const FLOOR_BLE_MS: u32 = 150;
 /// The highest target.
 pub const CEIL_MS: u32 = 200;
 /// Running dry grows the target this much.
@@ -169,6 +173,16 @@ impl Jitter {
 
     pub fn low_latency(&self) -> bool {
         self.floor_ms == FLOOR_NEARBY_MS
+    }
+
+    /// Over a Bluetooth link the target stays higher.
+    pub fn set_bluetooth(&mut self, on: bool) {
+        self.floor_ms = if on { FLOOR_BLE_MS } else { FLOOR_MS };
+        self.target_ms = self.target_ms.max(self.floor_ms);
+    }
+
+    pub fn bluetooth(&self) -> bool {
+        self.floor_ms == FLOOR_BLE_MS
     }
 
     pub fn rate(&self) -> u32 {
@@ -416,6 +430,21 @@ mod tests {
         // Nearby mode only lowers the floor.
         assert_eq!(adapt(35, FLOOR_NEARBY_MS, Event::Stable), FLOOR_NEARBY_MS);
         assert_eq!(adapt(30, FLOOR_NEARBY_MS, Event::Underrun), 50);
+    }
+
+    #[test]
+    fn bluetooth_keeps_the_target_higher() {
+        let mut j = Jitter::new();
+        j.set_bluetooth(true);
+        assert!(j.bluetooth() && !j.low_latency());
+        assert_eq!(j.target_ms(), FLOOR_BLE_MS);
+        assert_eq!(
+            adapt(FLOOR_BLE_MS, FLOOR_BLE_MS, Event::Stable),
+            FLOOR_BLE_MS
+        );
+        j.set_bluetooth(false);
+        assert!(!j.bluetooth());
+        assert_eq!(j.target_ms(), FLOOR_BLE_MS, "shrinks slowly, not at once");
     }
 
     #[test]

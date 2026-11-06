@@ -56,6 +56,12 @@ rustls-native-certs = "0.8"
 # only (no aws-lc/openssl) so it cross-compiles cleanly (incl. android NDK).
 str0m = { version = "0.21", default-features = false, features = ["rust-crypto"], optional = true }
 
+# Opus audio (`features::opus_audio`): libopus itself (BSD-3-Clause),
+# bundled and built with cmake by opusic-sys, statically linked on every
+# platform (Android's NDK toolchain included). The one C dependency the core
+# takes, approved for audio quality: 48 kHz at a tenth of ADPCM's bytes.
+opus = "0.4"
+
 [dev-dependencies]
 md-testkit = { workspace = true }
 

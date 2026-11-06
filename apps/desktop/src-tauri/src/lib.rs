@@ -35,6 +35,7 @@ mod hotspot;
 mod key_changes;
 mod links_map;
 mod location;
+mod mute_here;
 mod nearby;
 mod note_reminders;
 mod notes;
@@ -1711,6 +1712,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         computer_audio::computer_audio_status,
         computer_audio::computer_audio_offer,
         computer_audio::computer_audio_stop,
+        mute_here::mute_here,
+        mute_here::set_mute_here,
+        nearby::audio_route,
+        nearby::set_audio_route,
+        nearby::audio_via,
         computer_notifs::computer_notifs_state,
         computer_notifs::computer_notifs_set_enabled,
         computer_notifs::computer_notifs_set_muted,
@@ -1869,6 +1875,9 @@ pub fn run() {
                     device_labels::seed(&handle, &engine);
                     // "Use nearby mode for media", as saved.
                     nearby::init(&handle, &engine);
+                    // A mute left by a crash while the sound played on a
+                    // phone (`mute_here.rs`).
+                    mute_here::init(&handle);
                     app.manage(engine);
                 }
                 Err(e) => {
@@ -1936,6 +1945,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
+            // Quitting while this computer's sound plays on a phone: put
+            // the speakers back as they were (`mute_here.rs`).
+            if let tauri::RunEvent::Exit = _event {
+                mute_here::restore(_app);
+            }
             // Clicking the dock icon brings the hidden window back (macOS).
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = _event {

@@ -247,8 +247,9 @@ impl<P: Platform> Engine<P> {
     /// Source: tell sink `node` this device plays its audio to it (`on`;
     /// `CoreEvent::AudioOffer` there, and it listens once its owner agrees),
     /// or stopped (also the answer when its owner said no). Returns the
-    /// rate to capture at for the link (48 kHz direct, 24 kHz relayed; 0
-    /// when stopping); fails over a Bluetooth-only link. Only to a device
+    /// rate to capture at for the link (48 kHz direct or to a device that
+    /// reads Opus, 24 kHz relayed otherwise; 0 when stopping); over a
+    /// Bluetooth-only link only to a device that reads Opus. Only to a device
     /// whose status says `audio_sink`.
     pub fn audio_offer(&self, node_id: &str, on: bool) -> crate::Result<u32> {
         crate::features::audio_share::offer(&self.ctx, node_id, on)

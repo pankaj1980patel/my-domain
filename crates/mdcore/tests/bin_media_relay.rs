@@ -38,11 +38,13 @@ fn net(relay: FakeRelay) -> Net {
 }
 
 /// A node that only connects through `net`'s relay, with the smaller
-/// audio (`features::audio_codec`) on or off: off, the PCM arrives byte
-/// for byte, which most tests below compare.
-fn node_with(net: &Net, id: &str, bin_media: bool, audio_codec: bool) -> TestNode {
+/// audio off (0: the PCM arrives byte for byte, which most tests below
+/// compare), ADPCM (1, `features::audio_codec`) or Opus too (2,
+/// `features::opus_audio`).
+fn node_with(net: &Net, id: &str, bin_media: bool, codec: u8) -> TestNode {
     let config = CoreConfig {
-        audio_codec,
+        audio_codec: codec >= 1,
+        audio_opus: codec >= 2,
         relay_url: Some(net.relay.url()),
         rungs: ConnectRungs {
             relay: true,
@@ -75,7 +77,7 @@ fn learn_status(asker: &TestNode, of: &TestNode) {
 /// `src` sends audio and its screen, `dst` listens and watches, over a live
 /// relayed link; each with binary media on or off.
 fn linked(net: &Net, test: &str, src_bin: bool, dst_bin: bool) -> (TestNode, TestNode) {
-    linked_with(net, test, src_bin, dst_bin, false)
+    linked_with(net, test, src_bin, dst_bin, 0)
 }
 
 fn linked_with(
@@ -83,10 +85,20 @@ fn linked_with(
     test: &str,
     src_bin: bool,
     dst_bin: bool,
-    codec: bool,
+    codec: u8,
 ) -> (TestNode, TestNode) {
-    let src = node_with(net, &format!("{test}-src"), src_bin, codec);
-    let dst = node_with(net, &format!("{test}-dst"), dst_bin, codec);
+    linked_codecs(net, test, (src_bin, codec), (dst_bin, codec))
+}
+
+/// As `linked_with`, each end with its own (binary media, codec).
+fn linked_codecs(
+    net: &Net,
+    test: &str,
+    (src_bin, src_codec): (bool, u8),
+    (dst_bin, dst_codec): (bool, u8),
+) -> (TestNode, TestNode) {
+    let src = node_with(net, &format!("{test}-src"), src_bin, src_codec);
+    let dst = node_with(net, &format!("{test}-dst"), dst_bin, dst_codec);
     TestNode::pair(&src, &dst);
     src.engine.connect(&dst.node_id()).unwrap();
     assert_eq!(src.wait_connected(&dst, WAIT).as_deref(), Some("relay"));
@@ -312,7 +324,7 @@ fn audio_through_the_relay_goes_as_adpcm_when_both_read_it() {
     // Both say `audio_codec`: each 20 ms frame goes as two 10 ms ADPCM
     // records, a quarter of the bytes, and plays as the same PCM length.
     let n = net(FakeRelay::start());
-    let (src, dst) = linked_with(&n, "relaybin-adpcm", true, true, true);
+    let (src, dst) = linked_with(&n, "relaybin-adpcm", true, true, 1);
     std::thread::sleep(Duration::from_millis(300));
     let to = [dst.node_id()];
     let before = n.relay.bytes_from(&src.node_id());
@@ -344,4 +356,87 @@ fn audio_through_the_relay_goes_as_adpcm_when_both_read_it() {
         (AUDIO_FRAMES * 2) as u32
     );
     no_chat(&dst);
+}
+
+/// `frames` 20 ms frames of a 48 kHz stereo tone.
+fn tone(frames: usize) -> Vec<Vec<u8>> {
+    let n = 960;
+    (0..frames)
+        .map(|f| {
+            (f * n..(f + 1) * n)
+                .flat_map(|i| {
+                    let t = i as f64 / 48_000.0;
+                    let v = ((t * 440.0 * std::f64::consts::TAU).sin() * 10_000.0) as i16;
+                    [v, v]
+                })
+                .flat_map(i16::to_le_bytes)
+                .collect()
+        })
+        .collect()
+}
+
+#[test]
+fn audio_through_the_relay_goes_as_opus_when_both_read_it() {
+    // Both say `audio_codec: 2`: each 20 ms frame goes as one Opus record,
+    // about a tenth of ADPCM's bytes, and plays as the same PCM length.
+    let n = net(FakeRelay::start());
+    let (src, dst) = linked_with(&n, "relaybin-opus", true, true, 2);
+    std::thread::sleep(Duration::from_millis(300));
+    // Opus captures at 48 kHz on the relay too.
+    assert_eq!(
+        src.engine.audio_offer(&dst.node_id(), true).unwrap(),
+        RATE_DIRECT
+    );
+    let to = [dst.node_id()];
+    let before = n.relay.bytes_from(&src.node_id());
+    for pcm in tone(AUDIO_FRAMES) {
+        assert_eq!(
+            src.engine
+                .audio_frame_to(&pcm, RATE_DIRECT, 2, &to)
+                .unwrap(),
+            1
+        );
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let deadline = Instant::now() + WAIT;
+    while audio_from(&dst, &src).len() < AUDIO_FRAMES && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let got = audio_from(&dst, &src);
+    assert_eq!(got.len(), AUDIO_FRAMES, "frames lost");
+    assert!(got.iter().all(|(_, p)| p.len() == AUDIO_BYTES));
+    assert!(got.windows(2).all(|w| w[1].0 > w[0].0), "in order");
+    let bytes = n.relay.bytes_from(&src.node_id()) - before;
+    let pcm = (AUDIO_FRAMES * AUDIO_BYTES) as u64;
+    assert!(bytes * 100 <= pcm * 12, "{bytes} B for {pcm} B of PCM");
+    let stats = dst.engine.audio_rx_stats(&src.node_id());
+    assert_eq!(stats.frames, AUDIO_FRAMES as u32);
+    assert_eq!(stats.concealed, 0);
+    assert_eq!(dst.engine.audio_via(&src.node_id()), "network");
+    no_chat(&dst);
+}
+
+#[test]
+fn an_adpcm_only_app_still_gets_adpcm_from_an_opus_one() {
+    // The sink says `audio_codec: 1` (the app before Opus): the source
+    // sends it ADPCM halves as before, never an Opus record.
+    let n = net(FakeRelay::start());
+    let (src, dst) = linked_codecs(&n, "relaybin-mixed", (true, 2), (true, 1));
+    std::thread::sleep(Duration::from_millis(300));
+    assert!(!src.engine.audio_opus(&dst.node_id()));
+    assert!(!dst.engine.audio_opus(&src.node_id()));
+    let to = [dst.node_id()];
+    for pcm in tone(10) {
+        src.engine
+            .audio_frame_to(&pcm, RATE_DIRECT, 2, &to)
+            .unwrap();
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let deadline = Instant::now() + WAIT;
+    while audio_from(&dst, &src).len() < 20 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let got = audio_from(&dst, &src);
+    assert_eq!(got.len(), 20, "two ADPCM halves a frame");
+    assert!(got.iter().all(|(_, p)| p.len() == AUDIO_BYTES / 2));
 }

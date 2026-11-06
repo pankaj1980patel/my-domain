@@ -76,6 +76,8 @@ object PhoneAudio {
 
     internal fun published(targets: Set<String>) {
         main.post { playingTo = targets }
+        // Mute here follows where it plays (MuteHere.kt).
+        runCatching { MuteHere.sync(Core.app, targets) }
     }
 
     /** A computer started ([on]) or stopped listening to this phone. */
