@@ -424,6 +424,13 @@ export const commands = {
 	 *  "Open settings"). False: this OS has no such page.
 	 */
 	openPermissionPage: (id: string) => typedError<boolean, string>(__TAURI_INVOKE("open_permission_page", { id })),
+	/**
+	 *  Show the OS's own prompt for permission `id` (the "Allow" / "Ask now"
+	 *  fix), wait until it's answered (up to a minute) and say how it stands
+	 *  now ("granted", "denied", "not_determined", "unknown"). Nothing is
+	 *  granted from here: only macOS's prompt, answered by the user.
+	 */
+	requestPermission: (id: string) => typedError<string, string>(__TAURI_INVOKE("request_permission", { id })),
 	/**  Open the folder received files go to (the disk check's fix). */
 	openDownloads: () => typedError<null, string>(__TAURI_INVOKE("open_downloads")),
 	/**  Where first-run setup stands on this computer. */

@@ -7,6 +7,15 @@
 	     calls.rs: this Mac as your phone's hands-free for calls. -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>my-domain uses Bluetooth to reach your phone when there is no network between them, and to take your phone's calls on this Mac when you turn that on.</string>
+	<!-- discovery.rs / mdns.rs: find and reach your devices on this network
+	     (Privacy & Security › Local Network). The health check's "Ask now"
+	     browses for the Bonjour type below, which brings up the prompt. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>my-domain finds your own devices on this network and connects to them directly, so clipboard, files and notifications go straight between them.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_mydomain._udp</string>
+	</array>
 	<!-- calls.rs: your voice to the phone during a call taken on this Mac. -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>my-domain sends your voice to your phone during a call you take on this Mac.</string>

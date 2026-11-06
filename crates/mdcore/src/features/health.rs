@@ -113,12 +113,17 @@ pub struct PermissionFact {
     /// The feature groups that need it; empty: everything does.
     #[serde(default)]
     pub features: Vec<String>,
-    /// "granted", "denied", "unknown" (it can't be read: shown grey with
-    /// its page) or "not_needed" (left out).
+    /// "granted", "denied", "not_determined" (never asked: the OS can
+    /// still show its prompt), "unknown" (it can't be read: shown grey
+    /// with its page) or "not_needed" (left out).
     pub state: String,
     /// Off breaks what it's for (red); else amber.
     #[serde(default)]
     pub critical: bool,
+    /// The app can show the OS's own prompt for it now: the fix is
+    /// "allow_permission" rather than "open_permission".
+    #[serde(default)]
+    pub can_ask: bool,
 }
 
 /// What only the app can read.
@@ -231,14 +236,18 @@ pub fn evaluate(core: &CoreFacts, platform: &PlatformFacts) -> HealthReport {
         let level = match p.state.as_str() {
             "granted" => Ok,
             "denied" if p.critical => Bad,
-            "denied" => Warn,
+            "denied" | "not_determined" => Warn,
             "unknown" => Info,
             _ => continue,
         };
         let mut c = HealthCheck::new("permission", level, &p.state).detail(p.id.clone());
         c.features = p.features.clone();
         if level != Ok {
-            c = c.fix("open_permission");
+            c = c.fix(if p.can_ask {
+                "allow_permission"
+            } else {
+                "open_permission"
+            });
         }
         out.push(c);
     }
@@ -528,6 +537,7 @@ mod tests {
             features: f.iter().map(|s| s.to_string()).collect(),
             state: state.into(),
             critical,
+            can_ask: false,
         };
         let p = PlatformFacts {
             permissions: vec![
@@ -565,6 +575,46 @@ mod tests {
             .checks
             .iter()
             .any(|x| x.detail.as_deref() == Some("accessibility") && x.level == Warn));
+    }
+
+    #[test]
+    fn a_permission_the_os_can_still_ask_for_offers_its_prompt() {
+        let perm = |id: &str, state: &str, critical: bool, can_ask: bool| PermissionFact {
+            id: id.into(),
+            features: vec![],
+            state: state.into(),
+            critical,
+            can_ask,
+        };
+        let p = PlatformFacts {
+            permissions: vec![
+                perm("bluetooth", "not_determined", true, true),
+                perm("notifications", "denied", false, false),
+                perm("local_network", "unknown", false, true),
+                perm("accessibility", "granted", false, true),
+            ],
+            ..Default::default()
+        };
+        let r = evaluate(&core(), &p);
+        let perms: Vec<(&str, HealthLevel, Option<&str>)> = r
+            .checks
+            .iter()
+            .filter(|x| x.id == "permission")
+            .map(|x| (x.detail.as_deref().unwrap(), x.level, x.fix.as_deref()))
+            .collect();
+        assert_eq!(
+            perms,
+            vec![
+                ("bluetooth", Warn, Some("allow_permission")),
+                ("notifications", Warn, Some("open_permission")),
+                ("local_network", Info, Some("allow_permission")),
+                ("accessibility", Ok, None),
+            ],
+            "never asked is amber even when critical; granted needs no fix"
+        );
+        // An app from before can_ask: the field is optional.
+        let old: PermissionFact = serde_json::from_str(r#"{"id":"x","state":"denied"}"#).unwrap();
+        assert!(!old.can_ask);
     }
 
     #[test]

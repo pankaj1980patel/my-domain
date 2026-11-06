@@ -65,6 +65,31 @@ pub fn start<P: Platform>(ctx: NetCtx<P>, loopback: bool) {
     });
 }
 
+/// Browse for our service for `dur` and count the devices that answered.
+/// An explicit local-network action: macOS shows its Local Network prompt
+/// on the first one (the health check's "Ask now"). Best effort: 0 when
+/// mDNS can't start.
+pub fn browse_briefly(dur: Duration) -> usize {
+    let Ok(daemon) = ServiceDaemon::new() else {
+        return 0;
+    };
+    let Ok(events) = daemon.browse(SERVICE_TYPE) else {
+        let _ = daemon.shutdown();
+        return 0;
+    };
+    let end = std::time::Instant::now() + dur;
+    let mut found = 0;
+    while let Some(left) = end.checked_duration_since(std::time::Instant::now()) {
+        match events.recv_timeout(left) {
+            Ok(ServiceEvent::ServiceFound(..)) => found += 1,
+            Ok(_) => {}
+            Err(_) => break,
+        }
+    }
+    let _ = daemon.shutdown();
+    found
+}
+
 fn service_info(id: &Identity, tag: &str) -> Option<ServiceInfo> {
     let props: HashMap<String, String> = [
         ("id", id.node_id.clone()),

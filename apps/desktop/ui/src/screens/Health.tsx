@@ -3,7 +3,7 @@
 // Opened from Settings, the sidebar's badge, Home's card and a device's
 // page when something is wrong there.
 
-import { For, Show } from "solid-js";
+import { createSignal, For, Show } from "solid-js";
 import { commands } from "../bindings";
 import { connect, unwrap } from "../lib/core";
 import {
@@ -42,8 +42,22 @@ export async function fixCheck(c: HealthCheck, nav: HealthNav) {
         setTimeout(() => runHealth(false), 8000);
         return;
       case "open_permission":
-        if (!(await unwrap(commands.openPermissionPage(c.detail ?? "")))) toast(t("health.noPage"));
+        await openPermissionPage(c);
         return;
+      case "allow_permission": {
+        // macOS's own prompt; the command returns once it's answered.
+        const id = c.detail ?? "";
+        const state = await unwrap(commands.requestPermission(id));
+        await runHealth(false);
+        if (id === "local_network") {
+          // Its prompt can't be waited for: look again once it's had time.
+          setTimeout(() => runHealth(false), 5000);
+          setTimeout(() => runHealth(false), 20000);
+        } else if (state === "denied") {
+          toast(t("health.permDeniedHint"));
+        }
+        return;
+      }
       case "free_space":
         await unwrap(commands.openDownloads());
         return;
@@ -72,9 +86,28 @@ export async function fixCheck(c: HealthCheck, nav: HealthNav) {
   }
 }
 
-/** One line: a dot for the level, what it is, why, and its fix. */
+async function openPermissionPage(c: HealthCheck) {
+  try {
+    if (!(await unwrap(commands.openPermissionPage(c.detail ?? "")))) toast(t("health.noPage"));
+  } catch (e) {
+    toast(friendlyError(e), "error");
+  }
+}
+
+/** One line: a dot for the level, what it is, why, and its fix. A
+ *  permission the OS can still ask for gets "Allow" (its prompt) and its
+ *  settings page beside it. */
 export function HealthRow(props: { check: HealthCheck; nav: HealthNav }) {
   const c = () => props.check;
+  const [busy, setBusy] = createSignal(false);
+  const fix = async () => {
+    setBusy(true);
+    try {
+      await fixCheck(c(), props.nav);
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <li class={`health-row health-${c().level}`}>
       <span class="health-dot" aria-hidden="true" />
@@ -85,9 +118,14 @@ export function HealthRow(props: { check: HealthCheck; nav: HealthNav }) {
           <span class="muted small">{checkDetail(c())}</span>
         </Show>
       </div>
+      <Show when={c().fix === "allow_permission" && c().level !== "ok"}>
+        <button class="btn btn-ghost btn-sm" onClick={() => openPermissionPage(c())}>
+          {t("health.fix.open_permission")}
+        </button>
+      </Show>
       <Show when={c().fix && c().level !== "ok"}>
-        <button class="btn btn-soft btn-sm" onClick={() => fixCheck(c(), props.nav)}>
-          {fixLabel(c())}
+        <button class="btn btn-soft btn-sm" disabled={busy()} aria-busy={busy()} onClick={fix}>
+          {busy() && c().fix === "allow_permission" ? t("health.asking") : fixLabel(c())}
         </button>
       </Show>
     </li>

@@ -122,6 +122,10 @@ core-foundation = "0.10"
 # (`notif_popup.rs`): the library the notification plugin already uses on
 # macOS (same version), for the answers the plugin doesn't pass on.
 mac-notification-sys = "0.6"
+# The health check's Notifications line (`health.rs`): read whether this
+# app may notify and show macOS's own prompt. The version Tauri's stack
+# already pulls in; its block2 feature for the completion handlers.
+objc2-user-notifications = { version = "0.3.2", default-features = false, features = ["std", "block2", "bitflags", "UNUserNotificationCenter", "UNNotificationSettings"] }
 
 # Share mouse and keyboard on Linux (`kvm_os.rs`): X11 pointer and keyboard
 # grabs. The x11rb enigo already uses (core protocol only).

@@ -1865,6 +1865,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         device_kind::own_device_kind,
         health::health_check,
         health::open_permission_page,
+        health::request_permission,
         health::open_downloads,
         health::onboarding_state,
         health::onboarding_act,

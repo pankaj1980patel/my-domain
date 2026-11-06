@@ -79,7 +79,10 @@ export function watchHealth(): () => void {
   const offs = ["peer-connected", "peer-disconnected", "peers-updated", "key-changed", "links-map-changed"].map((n) =>
     listen(n, quick),
   );
+  // Back from System Settings or a prompt: permissions may have changed.
+  window.addEventListener("focus", quick);
   return () => {
+    window.removeEventListener("focus", quick);
     clearInterval(timer);
     if (soon) clearTimeout(soon);
     for (const off of offs) off.then((f) => f(), () => {});
@@ -174,7 +177,8 @@ export function checkDetail(c: HealthCheck): string {
       return c.reason === "ok" ? "" : t("health.disk.hint");
     case "permission": {
       const why = c.features.length ? t("health.perm.for", { features: c.features.map(featureLabel).join(", ") }) : "";
-      const state = t(`health.perm.${c.reason}` as Key);
+      const own = `health.perm.${c.detail}.${c.reason}`;
+      const state = has(own) ? t(own) : t(`health.perm.${c.reason}` as Key);
       return why ? `${state} · ${why}` : state;
     }
     case "key":
@@ -204,6 +208,8 @@ export function checkDetail(c: HealthCheck): string {
 
 /** The fix button's words (empty: no button). */
 export function fixLabel(c: HealthCheck): string {
+  // Local Network has no prompt to ask for, only an action that brings it up.
+  if (c.fix === "allow_permission" && c.detail === "local_network") return t("health.fix.ask_now");
   return c.fix ? t(`health.fix.${c.fix}` as Key) : "";
 }
 

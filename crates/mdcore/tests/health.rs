@@ -117,6 +117,7 @@ fn permissions_follow_the_features_picked() {
             features: vec!["media".into()],
             state: "denied".into(),
             critical: true,
+            can_ask: false,
         }],
         disk_free_mb: Some(400),
         disk_total_mb: Some(100_000),
