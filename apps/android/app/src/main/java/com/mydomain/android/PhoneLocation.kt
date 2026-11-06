@@ -145,8 +145,6 @@ object PhoneLocation {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     /** One thread for the fixes' answers, not a new one each time. */
     private val fixer by lazy { Executors.newSingleThreadExecutor() }
-    /** The longest a fresh fix is looked for. */
-    private const val FIX_TIMEOUT_MS = 60_000L
 
     private fun share(app: Context, loc: Location, fromName: String) {
         if (!allowed(app)) return
