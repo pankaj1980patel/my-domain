@@ -1133,7 +1133,7 @@
     <string name="backup_status_battery">Waiting while saving battery. %1$d waiting.</string>
     <!-- Settings backup and restore (SettingsBackupTile.kt) -->
     <string name="settings_backup_title">Back up and restore settings</string>
-    <string name="settings_backup_hint">Save this app’s settings to a file, and restore them after a reinstall or on a new phone: preferences, theme, automations, device names, page layouts, photo backup, synced folders, sharing and battery alerts.</string>
+    <string name="settings_restore_hint">Save this app’s settings to a file, and restore them after a reinstall or on a new phone: preferences, theme, automations, device names, page layouts, photo backup, synced folders, sharing and battery alerts.</string>
     <string name="settings_backup_never">Never in the file: your password, device key, sign-in, the automation-apps key or any message, notification, clipboard or note.</string>
     <string name="settings_backup_save">Back up settings</string>
     <string name="settings_backup_restore">Restore settings…</string>

@@ -268,7 +268,7 @@ fun SettingsBackupTile(modifier: Modifier = Modifier) {
     }
 
     Tile(modifier, title = stringResource(R.string.settings_backup_title)) {
-        Muted(stringResource(R.string.settings_backup_hint))
+        Muted(stringResource(R.string.settings_restore_hint))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PrimaryButton(stringResource(R.string.settings_backup_save), {
                 val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ROOT).format(Date())

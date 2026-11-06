@@ -1131,7 +1131,7 @@
     <string name="backup_status_battery">बैटरी बचाने तक रुका है। %1$d बाकी हैं।</string>
     <!-- Settings backup and restore (SettingsBackupTile.kt) -->
     <string name="settings_backup_title">सेटिंग्स का बैकअप और वापसी</string>
-    <string name="settings_backup_hint">इस ऐप की सेटिंग्स एक फ़ाइल में सहेजें, और दोबारा इंस्टॉल करने के बाद या नए फ़ोन पर वापस लाएँ: पसंद, थीम, ऑटोमेशन, डिवाइस के नाम, पेज लेआउट, फ़ोटो बैकअप, सिंक फ़ोल्डर, शेयरिंग और बैटरी अलर्ट।</string>
+    <string name="settings_restore_hint">इस ऐप की सेटिंग्स एक फ़ाइल में सहेजें, और दोबारा इंस्टॉल करने के बाद या नए फ़ोन पर वापस लाएँ: पसंद, थीम, ऑटोमेशन, डिवाइस के नाम, पेज लेआउट, फ़ोटो बैकअप, सिंक फ़ोल्डर, शेयरिंग और बैटरी अलर्ट।</string>
     <string name="settings_backup_never">फ़ाइल में कभी नहीं: आपका पासवर्ड, डिवाइस की, साइन-इन, ऑटोमेशन-ऐप्स की या कोई भी संदेश, सूचना, क्लिपबोर्ड या नोट।</string>
     <string name="settings_backup_save">सेटिंग्स का बैकअप लें</string>
     <string name="settings_backup_restore">सेटिंग्स वापस लाएँ…</string>
