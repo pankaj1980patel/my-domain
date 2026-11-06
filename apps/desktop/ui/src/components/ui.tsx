@@ -145,7 +145,7 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
           {unread()}
         </span>
       </Show>
-      <Show when={s() === "offline" || s() === "failed"}>
+      <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
         <button
           class="btn btn-soft btn-sm"
           onClick={(e) => {

@@ -137,7 +137,34 @@ impl<P: Platform> Engine<P> {
     /// re-registers, re-measures the NAT and re-dials previously connected
     /// peers, in the background (see `netchange`).
     pub fn network_changed(&self, new_ip: Option<&str>) {
-        netchange::on_network_change(&self.handles(), new_ip);
+        netchange::on_network_change(&self.handles(), new_ip, crate::config::NetKind::Unknown);
+    }
+
+    /// `network_changed`, saying what kind of network this device is on
+    /// now (`"wifi"`, `"ethernet"`, `"mobile"`, `"offline"`; see
+    /// `NetKind::parse`): links made on mobile data keep alive sooner, and
+    /// nothing is redialled while offline (the next change does it).
+    /// Devices that had a link, or lost one lately by accident, are dialled
+    /// again at once, then with backoff (`features::reconnect`).
+    pub fn network_changed_on(&self, new_ip: Option<&str>, net: &str) {
+        netchange::on_network_change(&self.handles(), new_ip, crate::config::NetKind::parse(net));
+    }
+
+    /// A push from `from` reached this device `waited_ms` ago (the app may
+    /// have had to start first): the link it brings is timed from then
+    /// (the connection report's reconnect time).
+    pub fn push_received(&self, from: &str, waited_ms: u64) {
+        // An answer to our own push, with the link already up: nothing to
+        // time.
+        if transport::is_live(&self.ctx, from) {
+            return;
+        }
+        crate::features::reconnect::trigger(
+            &self.ctx,
+            from,
+            crate::features::reconnect::ReconnectTrigger::Push,
+            Duration::from_millis(waited_ms),
+        );
     }
 
     pub fn add_manual_peer(&self, name: &str, ip: &str, quic_port: u16) -> crate::Result<()> {

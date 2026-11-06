@@ -301,6 +301,8 @@ fn run(
                 } else {
                     emit_fcm(&handle, "message", &from, &preview(&sig));
                     if let Some(engine) = handle.try_state::<Eng>() {
+                        // Timed to the link it brings (Check connection).
+                        engine.push_received(&from, 0);
                         engine.on_signal(&from, &sig);
                     }
                 }

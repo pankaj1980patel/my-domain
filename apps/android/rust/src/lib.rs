@@ -931,6 +931,27 @@ impl MdEngine {
         self.inner.network_changed(Some(&wifi_ip));
     }
 
+    /// The device's network changed, and to what (`net`: "wifi",
+    /// "ethernet", "mobile" or "offline"): links lost are dialled again at
+    /// once (then with backoff), nothing is dialled while offline, and
+    /// links made on mobile data keep alive sooner. `wifi_ip`: the Wi-Fi
+    /// IPv4, or "" without one (the address is then worked out again
+    /// instead of keeping the old Wi-Fi one).
+    pub fn network_changed_on(&self, wifi_ip: String, net: String) {
+        *self.wifi_ip.lock().unwrap() = if wifi_ip.parse::<Ipv4Addr>().is_ok() {
+            wifi_ip.clone()
+        } else {
+            Ipv4Addr::UNSPECIFIED.to_string()
+        };
+        self.inner.network_changed_on(Some(&wifi_ip), &net);
+    }
+
+    /// A push from `from` arrived `waited_ms` ago (before the engine was
+    /// ready): the link it brings is timed from then.
+    pub fn push_received(&self, from: String, waited_ms: u64) {
+        self.inner.push_received(&from, waited_ms);
+    }
+
     /// The app's UI went to the background (`true`) or came back. In the
     /// background, idle links are closed to save battery (they re-open on
     /// demand, and pushes still arrive).

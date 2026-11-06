@@ -81,7 +81,9 @@ pub struct Attempt {
     /// `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
     /// adds: `push_failed` (the server couldn't send the push),
     /// `no_answer` (the push went, the device didn't answer),
-    /// `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+    /// `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the
+    /// transport), `link_down` (detail: why, see `features::reconnect`),
+    /// `reconnected` (detail: `trigger:ms`), `waking`, `asleep`, `lan_try`,
     /// `key_changed` (it came with another device key: refused until the
     /// user trusts it), `key_trusted`.
     pub stage: String,
@@ -230,6 +232,9 @@ pub struct Diagnosis {
     pub relay: RelayInfo,
     /// What connecting did, oldest first.
     pub attempts: Vec<Attempt>,
+    /// How fast links to it come back, how long they last, why they go,
+    /// and where it stands (`features::reconnect`).
+    pub reconnect: super::reconnect::ReconnectInfo,
 }
 
 impl Diagnosis {

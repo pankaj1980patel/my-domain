@@ -153,6 +153,9 @@ pub struct QuicLink {
     conns: PeerConns,
     /// Side lanes (Wi-Fi Direct), apart from the links.
     lanes: Lanes,
+    /// The client config dials use when the network changed the
+    /// keep-alive (`set_keepalive`); `None`: the endpoint's default.
+    dial_config: Arc<parking_lot::Mutex<Option<quinn::ClientConfig>>>,
     /// New for every start; sent in our `Hello` (see `WsFrame::Hello`).
     pub(crate) boot: String,
     /// New for every start: `media::Header::session`.
@@ -263,6 +266,7 @@ impl QuicNode {
                 port,
                 conns: Arc::default(),
                 lanes: Arc::default(),
+                dial_config: Arc::default(),
                 boot: uuid::Uuid::new_v4().to_string(),
                 media_session: uuid::Uuid::new_v4().as_u128() as u32,
             },
@@ -447,6 +451,30 @@ impl QuicLink {
         kept
     }
 
+    /// Links made from now on (dialled or accepted) keep alive with
+    /// `keepalive` (the network changed: `KeepAlive::for_network`). Links
+    /// already up keep theirs; the side that pings more often keeps a NAT
+    /// mapping open for both.
+    pub fn set_keepalive(&self, keepalive: KeepAlive, key: &DeviceKey) {
+        let _guard = self.rt.enter();
+        if let Ok(c) = client_config(keepalive, key) {
+            *self.dial_config.lock() = Some(c);
+        }
+        if let Ok(c) = server_config(keepalive, key) {
+            self.endpoint.set_server_config(Some(c));
+        }
+    }
+
+    /// Start a dial to `addr` with the current keep-alive.
+    fn dial(&self, addr: SocketAddr) -> Result<quinn::Connecting, quinn::ConnectError> {
+        // Starting a connection spawns its driver on the runtime.
+        let _guard = self.rt.enter();
+        match self.dial_config.lock().clone() {
+            Some(cfg) => self.endpoint.connect_with(cfg, addr, "mydomain"),
+            None => self.endpoint.connect(addr, "mydomain"),
+        }
+    }
+
     /// Close `peer`'s QUIC connection (its task then removes the link).
     /// False when the peer has no QUIC connection.
     pub fn close_peer(&self, peer: &str, reason: &[u8]) -> bool {
@@ -494,16 +522,14 @@ impl QuicLink {
         if addrs.is_empty() {
             return Err("no address to dial".into());
         }
-        let addrs = addrs.to_vec();
-        let endpoint = self.endpoint.clone();
+        // Started here (outside the runtime's tasks), awaited below.
+        let dials: Vec<_> = addrs.iter().map(|a| (*a, self.dial(*a))).collect();
         let conn = self.rt.block_on(async move {
             let mut attempts = tokio::task::JoinSet::new();
-            for addr in addrs {
-                let ep = endpoint.clone();
+            for (addr, dialed) in dials {
                 attempts.spawn(async move {
-                    let connecting = ep
-                        .connect(addr, "mydomain")
-                        .map_err(|e| format!("QUIC connect to {addr} failed: {e}"))?;
+                    let connecting =
+                        dialed.map_err(|e| format!("QUIC connect to {addr} failed: {e}"))?;
                     tokio::time::timeout(CONNECT_TIMEOUT, connecting)
                         .await
                         .map_err(|_| format!("QUIC connect to {addr} timed out"))?
@@ -889,9 +915,31 @@ async fn run_connection<P: Platform>(
             crate::features::nearby::link_lost(&ctx, &peer_id, remote)
         });
         if !fell_back {
+            // Why it went (closed here: the closer already said why).
+            if let Some(why) = conn.close_reason().as_ref().and_then(drop_reason) {
+                crate::features::reconnect::closing(&ctx, &peer_id, why);
+            }
             drop_live(&ctx, &peer_id);
         }
     }
+}
+
+/// Why a QUIC link went, for `features::reconnect`: `None` when this end
+/// closed it (whoever did said why).
+fn drop_reason(e: &quinn::ConnectionError) -> Option<&'static str> {
+    use quinn::ConnectionError as E;
+    Some(match e {
+        E::LocallyClosed => return None,
+        E::TimedOut => "timeout",
+        E::ApplicationClosed(c) => match c.reason.as_ref() {
+            // It closed an unused link to save battery: asleep.
+            b"idle" => "peer_idle",
+            b"bye" => "peer_quit",
+            b"network changed" => "network_change",
+            _ => "closed",
+        },
+        _ => "lost",
+    })
 }
 
 /// Read `peer`'s binary media frames on `conn` until it closes.

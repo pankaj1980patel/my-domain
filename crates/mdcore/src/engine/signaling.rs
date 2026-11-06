@@ -251,17 +251,26 @@ pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &
             let server_url = ctx.server_url.clone();
             let token = ctx.token.clone();
             std::thread::spawn(move || {
+                let got = std::time::Instant::now();
                 let answer = Signal::QuicAnswer {
                     sid,
                     addrs: transport::quic::my_addrs(&ctx),
                 };
-                let _ = send_signal_via(&server_url, &token, &ctx, &from, &answer);
+                // Answered on its own thread: over the server and a push,
+                // sending can take a while, and the wait below runs from
+                // when the offer came, not from when the answer went.
+                {
+                    let (ctx, from) = (ctx.clone(), from.clone());
+                    std::thread::spawn(move || {
+                        let _ = send_signal_via(&server_url, &token, &ctx, &from, &answer);
+                    });
+                }
                 // The initiator dials our answered addresses right away.
                 // We dial back only if that hasn't worked within a second
                 // (it can't reach us). Dialing at once from both sides
                 // would make two connections, and a message sent on the
                 // one that loses the tie-break would be lost.
-                std::thread::sleep(Duration::from_secs(1));
+                std::thread::sleep(Duration::from_secs(1).saturating_sub(got.elapsed()));
                 if !transport::is_direct(&ctx, &from) {
                     let targets = transport::quic::parse_addrs(&addrs);
                     let _ = ctx.quic.connect_any(ctx.clone(), &targets);

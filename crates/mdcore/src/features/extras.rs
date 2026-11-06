@@ -16,6 +16,7 @@ pub struct Extras {
     pub labels: super::labels::Labels,
     pub notes: super::notes::Notes,
     pub diag: super::diag::Diag,
+    pub reconnect: super::reconnect::ReconnectState,
     pub camera: super::camera::Camera,
     pub timers: super::timers::Timers,
     pub read_later: super::read_later::ReadLater,

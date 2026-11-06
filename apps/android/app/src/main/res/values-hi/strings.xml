@@ -308,6 +308,8 @@
     <string name="progress_signaled">इसे वापस कनेक्ट करने को कहा जा रहा है…</string>
     <string name="progress_relay">इंटरनेट के ज़रिए कनेक्ट हो रहा है…</string>
     <string name="progress_punching">कोई तेज़ सीधा रास्ता ढूँढा जा रहा है…</string>
+    <string name="progress_waking">पुश से जगा रहे हैं…</string>
+    <string name="progress_asleep">सो रहा है: ज़रूरत पड़ने पर पुश से जागता है।</string>
     <string name="progress_failed">पक्का करें कि उस पर my-domain खुला है और वह ऑनलाइन है।</string>
 
     <!-- Errors (core/Words.kt) -->
@@ -898,7 +900,10 @@
     <string name="setup_helper_title">सुलभता: अपने कंप्यूटर से कंट्रोल करें</string>
     <string name="setup_helper_for">आपके कंप्यूटर को रेडियो बदलने, वापस, होम और लॉक दबाने, और शेयर करते समय यह स्क्रीन कंट्रोल करने देता है।</string>
     <string name="setup_battery_title">बिना पाबंदी बैटरी इस्तेमाल</string>
-    <string name="setup_battery_for">my-domain को बैकग्राउंड में पहुँच में रखता है, ताकि आपके कंप्यूटर इस फ़ोन को ढूँढ सकें, इसकी घंटी बजा सकें और इसे फ़ाइलें भेज सकें। सूची में my-domain चुनें और “ऑप्टिमाइज़ न करें” चुनें।</string>
+    <string name="setup_battery_for">my-domain को बैकग्राउंड में पहुँच में रखता है, ताकि आपके कंप्यूटर इस फ़ोन को ढूँढ सकें, इसकी घंटी बजा सकें और इसे फ़ाइलें भेज सकें। सूची में my-domain चुनें और “ऑप्टिमाइज़ न करें” चुनें (नए फ़ोन पर: ऐप बैटरी इस्तेमाल, “बिना पाबंदी”)।</string>
+    <string name="setup_autostart_title">अपने आप शुरू हो (फ़ोन बनाने वाले की सेटिंग)</string>
+    <string name="setup_autostart_for">vivo और iQOO, Xiaomi, OPPO, realme, OnePlus, Samsung जैसे फ़ोन का अपना बैटरी मैनेजर होता है, जो Android की अनुमति के बावजूद बैकग्राउंड में ऐप रोक देता है। उसके पेज पर my-domain को अपने आप शुरू होने दें (ऑटोस्टार्ट, बैकग्राउंड स्टार्ट-अप) और बैकग्राउंड में चलने दें (बैकग्राउंड में ज़्यादा बिजली, कभी न सोने वाले ऐप)। इसके बिना फ़ोन कुछ देर बाद आपके कंप्यूटरों को जवाब देना बंद कर सकता है।</string>
+    <string name="setup_autostart_open">फ़ोन का पेज खोलें</string>
     <string name="setup_nearby_title">आस-पास के डिवाइस (Bluetooth)</string>
     <string name="setup_nearby_for">जब आप एक ही नेटवर्क पर न हों, तब Bluetooth से आपके कंप्यूटर तक पहुँचता है।</string>
     <string name="setup_location_sharing_title">इस फ़ोन की जगह शेयर करें</string>
@@ -1221,6 +1226,34 @@
     <string name="conn_stage_link_down">डिस्कनेक्ट हुआ</string>
     <string name="conn_stage_key_changed">मना किया: इसकी सुरक्षा कुंजी बदल गई</string>
     <string name="conn_stage_key_trusted">आपने इसकी नई सुरक्षा कुंजी पर भरोसा किया</string>
+    <string name="conn_stage_waking">पुश से जगाया</string>
+    <string name="conn_stage_asleep">जवाब नहीं दिया: सो रहा है</string>
+    <string name="conn_stage_reconnected">फिर से जुड़ा</string>
+    <string name="conn_stage_lan_try">इस नेटवर्क पर कोशिश की</string>
+    <string name="conn_reconnect">फिर से जुड़ने का समय</string>
+    <string name="conn_reconnect_value">पिछली बार %1$s · औसत %2$s (%3$d)</string>
+    <string name="conn_reconnect_none">अभी मापा नहीं गया</string>
+    <string name="conn_lifetime">कनेक्शन चलते हैं</string>
+    <string name="conn_lifetime_value">पिछला %1$s · औसत %2$s</string>
+    <string name="conn_up_for">जुड़ा हुआ</string>
+    <string name="conn_last_drop">पिछली बार टूटा</string>
+    <string name="conn_last_drop_value">%1$s, %2$s</string>
+    <string name="conn_drop_idle">यहाँ बंद किया, इस्तेमाल नहीं हुआ (बैटरी बचाने के लिए)</string>
+    <string name="conn_drop_peer_idle">वहाँ बंद किया, इस्तेमाल नहीं हुआ: वह सो रहा है</string>
+    <string name="conn_drop_network_change">नेटवर्क बदल गया</string>
+    <string name="conn_drop_timeout">वह चुप हो गया</string>
+    <string name="conn_drop_dead">कुछ नहीं पहुँच रहा था, इसलिए फिर से खोला</string>
+    <string name="conn_drop_manual">डिस्कनेक्ट दबाया गया</string>
+    <string name="conn_drop_peer_quit">उसका ऐप बंद हुआ</string>
+    <string name="conn_drop_closed">दूसरी ओर से बंद किया</string>
+    <string name="conn_drop_lost">टूट गया</string>
+    <string name="conn_reach_waking">%1$s को पुश से जगा रहे हैं…</string>
+    <string name="conn_reach_asleep">%1$s सो रहा है: ज़रूरत पड़ने पर पुश से जागता है।</string>
+    <string name="conn_reach_unreachable">%1$s को जगाने वाला पुश भेजा नहीं जा सका।</string>
+    <string name="dur_ms">%1$d ms</string>
+    <string name="dur_s">%1$s सेकंड</string>
+    <string name="dur_min">%1$d मिनट</string>
+    <string name="dur_h">%1$d घंटे</string>
     <string name="conn_speed">स्पीड जाँचें</string>
     <string name="conn_speed_hint">मौजूदा कनेक्शन पर दोनों तरफ़ %1$s भेजता है।</string>
     <string name="conn_speed_needs_link">स्पीड जाँचने के लिए पहले %1$s से जुड़ें।</string>

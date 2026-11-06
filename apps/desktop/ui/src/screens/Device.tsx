@@ -233,13 +233,13 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 <VerifyDevice node={props.node} />
               </div>
               <StatusPill node={props.node} />
-              <Show when={s() === "connecting" || s() === "failed"}>
+              <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
                 <p class="muted small">{progressLabel(state.progress[props.node])}</p>
               </Show>
               {/* Asleep? Wake it, if it said it may be woken. */}
               <WakeButton node={props.node} />
             </div>
-            <Show when={s() === "offline" || s() === "failed"}>
+            <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
               <button
                 class="btn btn-primary"
                 onClick={() => connect(props.node).catch((e) => toast(friendlyError(e), "error"))}

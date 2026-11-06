@@ -306,6 +306,8 @@
     <string name="progress_signaled">Asking it to connect back…</string>
     <string name="progress_relay">Connecting through the internet…</string>
     <string name="progress_punching">Finding a faster direct route…</string>
+    <string name="progress_waking">Waking it with a push…</string>
+    <string name="progress_asleep">Asleep: it wakes by push when something needs it.</string>
     <string name="progress_failed">Make sure my-domain is open on it and it\'s online.</string>
 
     <!-- Errors (core/Words.kt) -->
@@ -896,7 +898,10 @@
     <string name="setup_helper_title">Accessibility: control from your computers</string>
     <string name="setup_helper_for">Lets your computers switch radios, press Back, Home and Lock, and control this screen while you share it.</string>
     <string name="setup_battery_title">Unrestricted battery use</string>
-    <string name="setup_battery_for">Keeps my-domain reachable in the background, so your computers can find, ring and send files to this phone. In the list, pick my-domain and choose “Don’t optimise”.</string>
+    <string name="setup_battery_for">Keeps my-domain reachable in the background, so your computers can find, ring and send files to this phone. In the list, pick my-domain and choose “Don’t optimise” (on newer phones: App battery usage, “Unrestricted”).</string>
+    <string name="setup_autostart_title">Start by itself (phone maker’s setting)</string>
+    <string name="setup_autostart_for">Phones from vivo and iQOO, Xiaomi, OPPO, realme, OnePlus, Samsung and others have their own battery manager, which stops apps in the background whatever Android allows. On its page, let my-domain start by itself (Autostart, Background start-up) and run in the background (High background power use, Never sleeping apps). Without it the phone may stop answering your computers after a while.</string>
+    <string name="setup_autostart_open">Open the phone’s page</string>
     <string name="setup_nearby_title">Nearby devices (Bluetooth)</string>
     <string name="setup_nearby_for">Reaches your computers over Bluetooth when you’re not on the same network.</string>
     <string name="setup_location_sharing_title">Share this phone’s location</string>
@@ -1223,6 +1228,34 @@
     <string name="conn_stage_link_down">Disconnected</string>
     <string name="conn_stage_key_changed">Refused: its security key changed</string>
     <string name="conn_stage_key_trusted">You trusted its new security key</string>
+    <string name="conn_stage_waking">Woken with a push</string>
+    <string name="conn_stage_asleep">Didn’t answer: asleep</string>
+    <string name="conn_stage_reconnected">Back on</string>
+    <string name="conn_stage_lan_try">Tried this network</string>
+    <string name="conn_reconnect">Reconnect time</string>
+    <string name="conn_reconnect_value">%1$s last · %2$s average (%3$d)</string>
+    <string name="conn_reconnect_none">Not measured yet</string>
+    <string name="conn_lifetime">Links last</string>
+    <string name="conn_lifetime_value">%1$s last · %2$s average</string>
+    <string name="conn_up_for">Up for</string>
+    <string name="conn_last_drop">Last dropped</string>
+    <string name="conn_last_drop_value">%1$s, %2$s</string>
+    <string name="conn_drop_idle">closed here, unused (saving battery)</string>
+    <string name="conn_drop_peer_idle">closed there, unused: it’s asleep</string>
+    <string name="conn_drop_network_change">the network changed</string>
+    <string name="conn_drop_timeout">it went silent</string>
+    <string name="conn_drop_dead">it carried nothing, so it was reopened</string>
+    <string name="conn_drop_manual">Disconnect was pressed</string>
+    <string name="conn_drop_peer_quit">its app was closed</string>
+    <string name="conn_drop_closed">closed by the other side</string>
+    <string name="conn_drop_lost">lost</string>
+    <string name="conn_reach_waking">Waking %1$s with a push…</string>
+    <string name="conn_reach_asleep">%1$s is asleep: it wakes by push when something needs it.</string>
+    <string name="conn_reach_unreachable">The push that wakes %1$s couldn’t be sent.</string>
+    <string name="dur_ms">%1$d ms</string>
+    <string name="dur_s">%1$s s</string>
+    <string name="dur_min">%1$d min</string>
+    <string name="dur_h">%1$d h</string>
     <string name="conn_speed">Test speed</string>
     <string name="conn_speed_hint">Sends %1$s each way over the current connection.</string>
     <string name="conn_speed_needs_link">Connect to %1$s first to test the speed.</string>

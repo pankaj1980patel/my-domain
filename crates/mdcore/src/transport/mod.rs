@@ -140,6 +140,7 @@ pub fn mark_live<P: Platform>(
         let how = serde_json::to_value(kind).ok();
         let how = how.as_ref().and_then(|v| v.as_str());
         crate::features::diag::note(ctx, node_id, "link_up", how);
+        crate::features::reconnect::link_up(ctx, node_id);
         ctx.sink.emit(CoreEvent::PeerConnected {
             node_id: node_id.to_string(),
             transport: kind,
@@ -239,10 +240,13 @@ pub fn used_within<P: Platform>(ctx: &NetCtx<P>, node_id: &str, secs: u64) -> bo
         .is_some_and(|c| now.saturating_sub(c.last_used) < secs)
 }
 
-/// Close a peer's link on purpose (idle in the background). A QUIC link is
-/// closed and its task cleans up; any other link is just forgotten.
-pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
-    if ctx.quic.close_peer(node_id, b"idle") {
+/// Close a peer's link on purpose, for `why` (`idle`: unused in the
+/// background; `manual`: the Disconnect button; `dead`: it carried
+/// nothing). A QUIC link is closed (the other end is told why) and its task
+/// cleans up; any other link is just forgotten.
+pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str, why: &str) {
+    crate::features::reconnect::closing(ctx, node_id, why);
+    if ctx.quic.close_peer(node_id, why.as_bytes()) {
         return;
     }
     relay::forget_peer(ctx, node_id);
@@ -254,7 +258,8 @@ pub fn close_link<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
 pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let removed = ctx.p2p_conns.lock().remove(node_id).is_some();
     if removed {
-        crate::features::diag::note(ctx, node_id, "link_down", None);
+        let why = crate::features::reconnect::link_down(ctx, node_id);
+        crate::features::diag::note(ctx, node_id, "link_down", Some(&why));
         crate::features::links_map::link_down(ctx, node_id);
         crate::features::kvm::link_down(ctx, node_id);
         ctx.sink.emit(CoreEvent::PeerDisconnected {

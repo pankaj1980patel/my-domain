@@ -21,6 +21,9 @@ enum class SetupItem(
     NOTIFICATION_ACCESS,
     ACCESSIBILITY_HELPER,
     BATTERY,
+    /** The phone maker's autostart / background page ([OemAutostart]):
+     *  only on makers that have one; its state can't be read. */
+    AUTOSTART(infoOnly = true),
     NEARBY_DEVICES(minSdk = 31, needsTarget = true),
     LOCATION_SHARING,
     LOCATION_PERMISSION,
@@ -37,11 +40,18 @@ enum class SetupStatus { ON, OFF, NOT_NEEDED, INFO }
 
 data class SetupRow(val item: SetupItem, val status: SetupStatus)
 
-class SetupChecklist(private val sdkInt: Int, private val targetSdk: Int) {
+class SetupChecklist(
+    private val sdkInt: Int,
+    private val targetSdk: Int,
+    /** `Build.MANUFACTURER` and `Build.BRAND` (the autostart page). */
+    private val manufacturer: String = "",
+    private val brand: String = "",
+) {
 
-    /** [item] matters on this phone (Android version and app target). */
+    /** [item] matters on this phone (Android version, app target, maker). */
     fun applies(item: SetupItem): Boolean =
-        sdkInt >= item.minSdk && (!item.needsTarget || targetSdk >= item.minSdk)
+        sdkInt >= item.minSdk && (!item.needsTarget || targetSdk >= item.minSdk) &&
+            (item != SetupItem.AUTOSTART || OemAutostart.known(manufacturer, brand))
 
     /** Every item, in display order: the ones that apply first (in the
      *  enum's order, which never changes as you turn things on), then the

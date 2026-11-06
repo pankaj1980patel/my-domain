@@ -2,6 +2,7 @@ package com.mydomain.android
 
 import android.content.Intent
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
@@ -17,29 +18,45 @@ class MdMessagingService : FirebaseMessagingService() {
     override fun onNewToken(token: String) = Fcm.publish(token)
 
     override fun onMessageReceived(message: RemoteMessage) {
+        val got = SystemClock.elapsedRealtime()
         val data = message.data
         // `from` is reserved by FCM, so the server sends the sender as `sender`.
         val sender = data["sender"] ?: data["from"] ?: return
         val payload = data["payload"] ?: return
-        Log.i(TAG, "signal from ${sender.take(8)}: ${data["type"]}")
-        Core.labLog("push from ${sender.take(8)}: ${data["type"]}")
+        // A normal-priority push (or a high one Android demoted for this
+        // app) can't start a service from the background on Android 12+
+        // for apps targeting it; this app targets 28, so it can, but say
+        // which it was: it explains a slow wake.
+        val prio = if (message.priority == RemoteMessage.PRIORITY_HIGH) "high" else "normal"
+        val sent = if (message.originalPriority == message.priority) prio else "$prio (sent high)"
+        Log.i(TAG, "signal from ${sender.take(8)}: ${data["type"]}, $sent")
+        Core.labLog("push from ${sender.take(8)}: ${data["type"]}, $sent")
         stayAwake()
         if (!waitForEngine()) {
             Log.w(TAG, "signal from $sender dropped: engine not ready")
             return
         }
-        Core.engine()?.onSignal(sender, payload)
+        Core.engine()?.let { engine ->
+            // The link this brings is timed from when the push came, the
+            // engine's start included (the connection report).
+            runCatching { engine.pushReceived(sender, (SystemClock.elapsedRealtime() - got).toULong()) }
+            engine.onSignal(sender, payload)
+        }
     }
 
     /** Start the engine if needed; true once it's logged in and ready. */
     private fun waitForEngine(): Boolean {
         if (ready()) return true
+        // A high-priority push may start a foreground service from the
+        // background (and this app targets 28, so Android 12's limits on
+        // that don't apply to it either).
         runCatching { startForegroundService(Intent(this, NetService::class.java)) }
             .onFailure { Log.w(TAG, "can't start NetService: $it") }
-        // onMessageReceived runs on a worker thread and may block briefly.
-        repeat(50) {
+        // onMessageReceived runs on a worker thread and may block briefly;
+        // look often at first (a warm start takes a few hundred ms).
+        repeat(100) {
             if (ready()) return true
-            Thread.sleep(200)
+            Thread.sleep(100)
         }
         return false
     }

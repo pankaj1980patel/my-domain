@@ -513,6 +513,16 @@ input[type="checkbox"][role="switch"]:checked::after {
   background: var(--accent);
   animation: pulse 1s var(--ease) infinite;
 }
+/* Being woken with a push: a slower pulse than connecting. */
+.pill-waking .dot {
+  background: var(--accent);
+  animation: pulse 2s var(--ease) infinite;
+}
+/* Asleep: reachable by push, nothing wrong. */
+.pill-asleep .dot {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--text-3);
+}
 .pill-failed {
   color: var(--danger);
 }

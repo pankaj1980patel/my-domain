@@ -81,7 +81,63 @@ private fun stageRes(s: String): Int? = when (s) {
     "link_down" -> R.string.conn_stage_link_down
     "key_changed" -> R.string.conn_stage_key_changed
     "key_trusted" -> R.string.conn_stage_key_trusted
+    "waking" -> R.string.conn_stage_waking
+    "asleep" -> R.string.conn_stage_asleep
+    "reconnected" -> R.string.conn_stage_reconnected
+    "lan_try" -> R.string.conn_stage_lan_try
     else -> null
+}
+
+/** Why a link went (`features::reconnect`). */
+private fun dropRes(r: String?): Int? = when (r) {
+    "idle" -> R.string.conn_drop_idle
+    "peer_idle" -> R.string.conn_drop_peer_idle
+    "network_change" -> R.string.conn_drop_network_change
+    "timeout" -> R.string.conn_drop_timeout
+    "dead" -> R.string.conn_drop_dead
+    "manual" -> R.string.conn_drop_manual
+    "peer_quit" -> R.string.conn_drop_peer_quit
+    "closed" -> R.string.conn_drop_closed
+    "lost" -> R.string.conn_drop_lost
+    else -> null
+}
+
+/** A reconnect time: "850 ms", "2.4 s". */
+@Composable
+private fun msText(ms: Long): String =
+    if (ms < 1000) stringResource(R.string.dur_ms, ms.toInt())
+    else stringResource(R.string.dur_s, String.format(java.util.Locale.getDefault(), "%.1f", ms / 1000.0))
+
+/** A link's lifetime: "40 s", "12 min", "3 h". */
+@Composable
+private fun secsText(s: Long): String = when {
+    s < 60 -> stringResource(R.string.dur_s, s.toString())
+    s < 3600 -> stringResource(R.string.dur_min, (s / 60).toInt())
+    else -> stringResource(R.string.dur_h, (s / 3600).toInt())
+}
+
+/** How fast links come back, how long they last, why the last one went. */
+@Composable
+private fun ReconnectDetails(r: JSONObject) {
+    val samples = r.optInt("samples")
+    Detail(
+        stringResource(R.string.conn_reconnect),
+        if (samples > 0 && !r.isNull("last_ms") && !r.isNull("avg_ms")) {
+            stringResource(R.string.conn_reconnect_value, msText(r.optLong("last_ms")), msText(r.optLong("avg_ms")), samples)
+        } else stringResource(R.string.conn_reconnect_none),
+    )
+    if (!r.isNull("up_for_s")) Detail(stringResource(R.string.conn_up_for), secsText(r.optLong("up_for_s")))
+    if (!r.isNull("lifetime_last_s") && !r.isNull("lifetime_avg_s")) {
+        Detail(
+            stringResource(R.string.conn_lifetime),
+            stringResource(R.string.conn_lifetime_value, secsText(r.optLong("lifetime_last_s")), secsText(r.optLong("lifetime_avg_s"))),
+        )
+    }
+    val drop = r.str("last_drop")
+    if (drop != null && !r.isNull("last_drop_ago_s")) {
+        val why = dropRes(drop)?.let { stringResource(it) } ?: drop
+        Detail(stringResource(R.string.conn_last_drop), stringResource(R.string.conn_last_drop_value, why, agoText(r.optLong("last_drop_ago_s"))))
+    }
 }
 
 private fun transportRes(t: String?): Int? = when (t) {
@@ -220,6 +276,13 @@ private fun Report(d: JSONObject, name: String) {
 
     // What would help.
     val relay = d.optJSONObject("relay")
+    // Where it stands without a link: being woken, asleep, or no push.
+    when (d.optJSONObject("reconnect")?.str("reach")) {
+        "waking" -> Muted(stringResource(R.string.conn_reach_waking, name))
+        "asleep" -> Muted(stringResource(R.string.conn_reach_asleep, name))
+        "unreachable" -> Muted(stringResource(R.string.conn_reach_unreachable, name))
+        else -> {}
+    }
     if (link == null && verdict == "unreachable") Muted(stringResource(R.string.conn_tip_unreachable, name))
     if (d.optBoolean("both_symmetric")) Muted(stringResource(R.string.conn_tip_symmetric))
     if (relay != null && !relay.optBoolean("signed_in")) Muted(stringResource(R.string.conn_tip_signed_out))
@@ -261,6 +324,7 @@ private fun Report(d: JSONObject, name: String) {
             }
             Detail(stringResource(R.string.conn_relay), stringResource(r))
         }
+        d.optJSONObject("reconnect")?.let { ReconnectDetails(it) }
     }
 
     val attempts = d.optJSONArray("attempts")

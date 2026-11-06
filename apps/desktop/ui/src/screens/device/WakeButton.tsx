@@ -19,7 +19,7 @@ export default function WakeButton(props: { node: string }) {
   const [can, setCan] = createSignal(false);
   const [waking, setWaking] = createSignal(false);
   const s = () => linkStateOf(props.node);
-  const asleep = () => s() === "offline" || s() === "failed";
+  const asleep = () => s() === "offline" || s() === "asleep" || s() === "failed";
   // Known across restarts; learnt from its status, so asked again when one comes.
   createEffect(
     on(
@@ -67,7 +67,8 @@ export default function WakeButton(props: { node: string }) {
     stop();
     setWaking(true);
     retry = setInterval(() => {
-      if (linkStateOf(node) !== "connecting") connect(node).catch(() => {});
+      const now = linkStateOf(node);
+      if (now !== "connecting" && now !== "waking") connect(node).catch(() => {});
     }, RETRY_MS);
     giveUp = setTimeout(() => {
       stop();

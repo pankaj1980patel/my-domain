@@ -45,7 +45,42 @@ const STAGE: Record<string, Key> = {
   link_down: "conn.stage.link_down",
   key_changed: "conn.stage.key_changed",
   key_trusted: "conn.stage.key_trusted",
+  waking: "conn.stage.waking",
+  asleep: "conn.stage.asleep",
+  reconnected: "conn.stage.reconnected",
+  lan_try: "conn.stage.lan_try",
 };
+
+/** Why a link went (`features::reconnect`). */
+const DROP: Record<string, Key> = {
+  idle: "conn.drop.idle",
+  peer_idle: "conn.drop.peer_idle",
+  network_change: "conn.drop.network_change",
+  timeout: "conn.drop.timeout",
+  dead: "conn.drop.dead",
+  manual: "conn.drop.manual",
+  peer_quit: "conn.drop.peer_quit",
+  closed: "conn.drop.closed",
+  lost: "conn.drop.lost",
+};
+
+const REACH: Record<string, Key> = {
+  waking: "conn.reach.waking",
+  asleep: "conn.reach.asleep",
+  unreachable: "conn.reach.unreachable",
+};
+
+/** A reconnect time: "850 ms", "2.4 s". */
+export function msText(x: number): string {
+  return x < 1000 ? t("conn.dur.ms", { n: Math.round(x) }) : t("conn.dur.s", { n: (x / 1000).toFixed(1) });
+}
+
+/** A link's lifetime: "40 s", "12 min", "3 h". */
+export function secsText(s: number): string {
+  if (s < 60) return t("conn.dur.s", { n: s });
+  if (s < 3600) return t("conn.dur.min", { n: Math.floor(s / 60) });
+  return t("conn.dur.h", { n: Math.floor(s / 3600) });
+}
 
 const TRANSPORT: Record<string, Key> = {
   quic: "conn.transport.quic",
@@ -80,6 +115,8 @@ export function verdictLine(d: Diagnosis, name: string): string {
 /** What would help, if anything. */
 function tips(d: Diagnosis, name: string): string[] {
   const out: string[] = [];
+  const reach = d.reconnect.reach ? REACH[d.reconnect.reach] : undefined;
+  if (!d.link && reach) out.push(t(reach, { name }));
   if (!d.link && d.verdict === "unreachable") out.push(t("conn.tip.unreachable", { name }));
   if (d.both_symmetric) out.push(t("conn.tip.symmetric"));
   if (!d.relay.signed_in) out.push(t("conn.tip.signedOut"));
@@ -210,6 +247,38 @@ export default function ConnectionTile(props: { node: string }) {
               </dd>
               <dt>{t("conn.relay")}</dt>
               <dd>{relayLine(d())}</dd>
+              <dt>{t("conn.reconnect")}</dt>
+              <dd>
+                {d().reconnect.samples > 0 && d().reconnect.last_ms != null && d().reconnect.avg_ms != null
+                  ? t("conn.reconnectValue", {
+                      last: msText(d().reconnect.last_ms!),
+                      avg: msText(d().reconnect.avg_ms!),
+                      count: d().reconnect.samples,
+                    })
+                  : t("conn.reconnectNone")}
+              </dd>
+              <Show when={d().reconnect.up_for_s != null}>
+                <dt>{t("conn.upFor")}</dt>
+                <dd>{secsText(d().reconnect.up_for_s!)}</dd>
+              </Show>
+              <Show when={d().reconnect.lifetime_last_s != null && d().reconnect.lifetime_avg_s != null}>
+                <dt>{t("conn.lifetime")}</dt>
+                <dd>
+                  {t("conn.lifetimeValue", {
+                    last: secsText(d().reconnect.lifetime_last_s!),
+                    avg: secsText(d().reconnect.lifetime_avg_s!),
+                  })}
+                </dd>
+              </Show>
+              <Show when={d().reconnect.last_drop && d().reconnect.last_drop_ago_s != null}>
+                <dt>{t("conn.lastDrop")}</dt>
+                <dd>
+                  {t("conn.lastDropValue", {
+                    why: DROP[d().reconnect.last_drop!] ? t(DROP[d().reconnect.last_drop!]) : d().reconnect.last_drop!,
+                    ago: ago(d().reconnect.last_drop_ago_s!),
+                  })}
+                </dd>
+              </Show>
             </dl>
             <Show when={d().attempts.length > 0}>
               <h3 class="conn-sub">{t("conn.attempts")}</h3>

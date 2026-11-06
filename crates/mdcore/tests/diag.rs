@@ -213,12 +213,17 @@ fn a_device_that_never_answers_its_push_is_reported() {
     hub.sleep(&b.node_id());
     a.engine.connect(&b.node_id()).unwrap();
     let ended = a.sink.wait_until(Duration::from_secs(30), |e| match e {
-        CoreEvent::ConnectProgress { stage, .. } if stage == "failed" => Some(()),
+        // Not a broken path: it's asleep (the push went, no answer).
+        CoreEvent::ConnectProgress { stage, .. } if stage == "asleep" => Some(()),
         _ => None,
     });
     assert!(ended.is_some(), "the ladder gave up");
     let d = a.engine.diagnose(&b.node_id()).unwrap();
     assert_eq!(d.verdict, "unreachable");
+    assert_eq!(
+        d.reconnect.reach,
+        Some(mdcore::features::reconnect::DeviceReach::Asleep)
+    );
     // The last thing that explains it: the push went, nothing came back.
     assert!(
         d.attempts.iter().any(|x| x.stage == "no_answer"),

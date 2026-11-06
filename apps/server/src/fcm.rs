@@ -135,7 +135,9 @@ impl FcmClient {
             "message": {
                 "token": token,
                 "data": data,
-                "android": { "priority": "high" },
+                // A signal is only worth delivering while the sender still
+                // waits for the answer: don't wake a phone hours later.
+                "android": { "priority": "high", "ttl": "120s" },
                 "apns": { "headers": { "apns-priority": "10" } }
             }
         });

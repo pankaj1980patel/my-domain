@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-keywords: problem, help, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key, security key, key changed, reinstall, reinstalled, cleared data, trust new key
+keywords: problem, help, reconnect, reconnect time, asleep, waking, push, autostart, doze, drops, dropped, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key, security key, key changed, reinstall, reinstalled, cleared data, trust new key
 platforms: desktop, android
 ---
 ## A device doesn't appear
@@ -28,6 +28,12 @@ Open the device and find the **Connection** tile (on the phone, on a computer's 
 - **Not reachable**, with when it last tried and why: for example, the phone didn't answer the push (it may be switched off, offline, or have my-domain put to sleep by battery saving), or the relay server couldn't be reached (check your internet connection).
 
 Below that are the details: the round trip in milliseconds (measured just now, while the devices are connected), the addresses each device has, whether each network is "open" or "strict" (two strict networks can only meet through the relay server), whether the relay server answers, and the last few connection attempts.
+
+The details also say how the connection holds up over time:
+
+- **Reconnect time**: how long the last reconnect took, and the average of the recent ones. It's timed from what started it: this device's network changing (say, Wi-Fi to mobile data), a push waking this device, or this device pushing the other one awake. A few seconds is normal; much longer usually means the phone's battery saving held it back (see below).
+- **Up for** / **Links last**: how long the current connection has been up, and how long the recent ones lasted.
+- **Last dropped**, and why: closed here or there because it wasn't used (a phone in the background does that to save battery, and is woken by a push when needed), the network changed, it went silent, or it was closed by hand.
 
 **Test speed** sends a few megabytes each way over the current connection and shows how fast it went, both ways, in Mbit/s, the same way files travel. It only works while connected, and you can cancel it at any time. Measuring needs my-domain to be up to date on both devices; if the other one is older, the check says so.
 
@@ -62,9 +68,22 @@ You'll get a notification once, and the device's page (and its details on the co
 
 Trusting is never automatic, and a key that changes again later is refused again.
 
+## "Asleep" or "Waking it…"
+
+A phone in the background closes connections it isn't using, so it doesn't wake its radio all day. It's still reachable: when a computer needs it, the computer sends it a push, which wakes it, and it connects back within a few seconds. While that happens the computer shows **Waking it…**.
+
+**Asleep** means the phone didn't answer its last push, or closed its unused connection itself. It isn't an error: the computer doesn't keep pushing a sleeping phone by itself (it waits longer each time it gets no answer), but anything you do with the phone (sending a file, a message, pressing **Connect**) wakes it right away. If a phone is asleep every time, check its battery settings below.
+
+When the phone's network changes (a new Wi-Fi network, Wi-Fi to mobile data and back), it reconnects to your computers at once, and keeps trying for a couple of minutes if the network isn't ready yet. When it comes home to the same Wi-Fi as a computer, a connection that went through the internet moves to the home network by itself.
+
 ## The phone is slow to answer, or misses things when the screen is off
 
-Android puts apps to sleep to save battery. In Set up this phone, turn on **Unrestricted battery use** and choose "Don't optimise" for my-domain. Some phone makers have an extra battery manager of their own; allow my-domain to run in the background there too.
+Android puts apps to sleep to save battery. In Set up this phone:
+
+1. Turn on **Unrestricted battery use** and choose "Don't optimise" (or **Unrestricted**) for my-domain.
+2. On vivo, iQOO, Xiaomi, OPPO, realme, OnePlus, Samsung and some other phones, also open **Start by itself (phone maker's setting)**: allow my-domain to start by itself and to run in the background there. These phones have a battery manager of their own that otherwise stops my-domain after a while, whatever Android allows.
+
+my-domain starts again by itself after the phone restarts or the app is updated, and checks every quarter of an hour that it's still running. If the phone stopped it anyway, it starts it again.
 
 ## A button is greyed out
 

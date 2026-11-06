@@ -92,6 +92,7 @@ impl<P: Platform> Engine<P> {
             both_symmetric: my_nat.hopeless_with(peer.nat),
             relay,
             attempts,
+            reconnect: crate::features::reconnect::report(&self.ctx, node_id),
         })
     }
 

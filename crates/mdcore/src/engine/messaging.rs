@@ -15,7 +15,7 @@ pub(crate) fn send_reliably<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &
     if ctx.ws_conns.lock().contains_key(node_id) {
         transport::outbox::pump(ctx, node_id, false, Some(&id));
     } else {
-        start_ladder(ctx, node_id);
+        start_auto_ladder(ctx, node_id);
     }
 }
 
@@ -26,11 +26,19 @@ pub(crate) fn start_ladder<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     std::thread::spawn(move || super::ladder::run_connect_ladder(ctx, url, token, node));
 }
 
+/// `start_ladder` for a connect nobody asked for just now (see
+/// `ladder::run_auto_ladder`: a device asleep isn't pushed again).
+pub(crate) fn start_auto_ladder<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
+    let (ctx, node) = (ctx.clone(), node_id.to_string());
+    let (url, token) = (ctx.server_url.clone(), ctx.token.clone());
+    std::thread::spawn(move || super::ladder::run_auto_ladder(ctx, url, token, node));
+}
+
 /// The link to `node_id` carries nothing any more (see
 /// `transport::outbox::retry_due`): close it, and once it's gone run the
 /// connect ladder for a fresh one.
 pub(crate) fn reconnect<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
-    transport::close_link(ctx, node_id);
+    transport::close_link(ctx, node_id, "dead");
     let (ctx, node) = (ctx.clone(), node_id.to_string());
     std::thread::spawn(move || {
         // A QUIC link is closed by its own task: give it a moment.

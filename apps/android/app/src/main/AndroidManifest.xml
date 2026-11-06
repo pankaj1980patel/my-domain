@@ -102,6 +102,16 @@
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- Brings NetService back after a restart, an update, or the phone
+             killing it (ServiceKeeper.kt: a health check by inexact alarm). -->
+        <receiver
+            android:name=".ServiceKeeperReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- The ring notification's Stop action / dismissal (find my phone). -->
         <receiver

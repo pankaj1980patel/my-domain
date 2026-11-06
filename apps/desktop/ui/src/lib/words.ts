@@ -5,12 +5,16 @@
 import type { Quality, TransportKind } from "../bindings";
 import { t } from "../i18n";
 
-export type LinkState = "direct" | "relay" | "connecting" | "offline" | "failed";
+/** `waking`: a push went to wake it; `asleep`: it didn't answer one, or
+ *  closed its link to save battery (it wakes when something needs it). */
+export type LinkState = "direct" | "relay" | "connecting" | "waking" | "asleep" | "offline" | "failed";
 
 export function linkState(link: TransportKind | undefined, progress: string | undefined): LinkState {
   if (link === "relay") return "relay";
   if (link) return "direct";
   if (progress === "failed") return "failed";
+  if (progress === "waking") return "waking";
+  if (progress === "asleep") return "asleep";
   if (progress && progress !== "connected") return "connecting";
   return "offline";
 }
@@ -23,6 +27,10 @@ export function linkLabel(s: LinkState): string {
       return t("link.relay");
     case "connecting":
       return t("link.connecting");
+    case "waking":
+      return t("link.waking");
+    case "asleep":
+      return t("link.asleep");
     case "failed":
       return t("link.failed");
     default:
@@ -58,6 +66,10 @@ export function progressLabel(stage: string | undefined): string | null {
       return t("progress.punching");
     case "failed":
       return t("progress.failed");
+    case "waking":
+      return t("progress.waking");
+    case "asleep":
+      return t("progress.asleep");
     default:
       return null;
   }

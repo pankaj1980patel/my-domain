@@ -1016,7 +1016,9 @@ export type Attempt_Deserialize = {
 	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
 	 *  adds: `push_failed` (the server couldn't send the push),
 	 *  `no_answer` (the push went, the device didn't answer),
-	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the
+	 *  transport), `link_down` (detail: why, see `features::reconnect`),
+	 *  `reconnected` (detail: `trigger:ms`), `waking`, `asleep`, `lan_try`,
 	 *  `key_changed` (it came with another device key: refused until the
 	 *  user trusts it), `key_trusted`.
 	 */
@@ -1033,7 +1035,9 @@ export type Attempt_Serialize = {
 	 *  `webrtc`, `nat_skip`, `connected`, `failed`) or what this module
 	 *  adds: `push_failed` (the server couldn't send the push),
 	 *  `no_answer` (the push went, the device didn't answer),
-	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the transport), `link_down`,
+	 *  `relay_no_answer`, `relay_unreachable`, `link_up` (detail: the
+	 *  transport), `link_down` (detail: why, see `features::reconnect`),
+	 *  `reconnected` (detail: `trigger:ms`), `waking`, `asleep`, `lan_try`,
 	 *  `key_changed` (it came with another device key: refused until the
 	 *  user trusts it), `key_trusted`.
 	 */
@@ -1659,6 +1663,20 @@ export type DeviceLabel_Serialize = {
 	color?: string,
 };
 
+/**  Where a device stands, for the apps. */
+export type DeviceReach = "connected" | 
+/**  A push went to wake it; waiting for it. */
+"waking" | 
+/**
+ *  It didn't answer a push, or closed its link to save battery: it
+ *  wakes when something needs it.
+ */
+"asleep" | 
+/**  The push couldn't be sent (no server, or it has no push token). */
+"unreachable" | 
+/**  Nothing known. */
+"offline";
+
 /**  "Check connection" for one device (`Engine::diagnose`). */
 export type Diagnosis = Diagnosis_Serialize | Diagnosis_Deserialize;
 
@@ -1697,6 +1715,11 @@ export type Diagnosis_Deserialize = {
 	relay: RelayInfo_Deserialize,
 	/**  What connecting did, oldest first. */
 	attempts: Attempt_Deserialize[],
+	/**
+	 *  How fast links to it come back, how long they last, why they go,
+	 *  and where it stands (`features::reconnect`).
+	 */
+	reconnect: ReconnectInfo_Deserialize,
 };
 
 /**  "Check connection" for one device (`Engine::diagnose`). */
@@ -1734,6 +1757,11 @@ export type Diagnosis_Serialize = {
 	relay: RelayInfo_Serialize,
 	/**  What connecting did, oldest first. */
 	attempts: Attempt_Serialize[],
+	/**
+	 *  How fast links to it come back, how long they last, why they go,
+	 *  and where it stands (`features::reconnect`).
+	 */
+	reconnect: ReconnectInfo_Serialize,
 };
 
 /**  Settings → "Downloads from my devices". */
@@ -1746,6 +1774,11 @@ export type DownloadSettingsView = {
 	max_mb: number,
 	/**  Devices allowed without asking. */
 	allowed: string[],
+};
+
+export type DropCount = {
+	reason: string,
+	count: number,
 };
 
 /**  A line on the map. */
@@ -3154,6 +3187,78 @@ export type ReadLaterView = {
 	/**  Unix ms. */
 	updated_at: number | null,
 };
+
+/**  A device's link over time (part of `diag::Diagnosis`). */
+export type ReconnectInfo = ReconnectInfo_Serialize | ReconnectInfo_Deserialize;
+
+/**  A device's link over time (part of `diag::Diagnosis`). */
+export type ReconnectInfo_Deserialize = {
+	/**
+	 *  The last reconnect, trigger to link up, and the average of those
+	 *  kept.
+	 */
+	last_ms?: number | null,
+	avg_ms?: number | null,
+	samples: number,
+	/**  What the last one was after. */
+	last_trigger?: ReconnectTrigger | null,
+	/**  Averages by trigger. */
+	network_avg_ms?: number | null,
+	push_avg_ms?: number | null,
+	wake_avg_ms?: number | null,
+	/**  How long links lasted: the last one that ended, and the average. */
+	lifetime_last_s?: number | null,
+	lifetime_avg_s?: number | null,
+	/**  The link up now, for how long. */
+	up_for_s?: number | null,
+	/**  Why the last link went, and how long ago. */
+	last_drop?: string | null,
+	last_drop_ago_s?: number | null,
+	/**  Drops by reason, most first. */
+	drops: DropCount[],
+	reach?: DeviceReach | null,
+	/**  Automatic connects leave it alone for this much longer. */
+	quiet_for_s?: number | null,
+};
+
+/**  A device's link over time (part of `diag::Diagnosis`). */
+export type ReconnectInfo_Serialize = {
+	/**
+	 *  The last reconnect, trigger to link up, and the average of those
+	 *  kept.
+	 */
+	last_ms: number | null,
+	avg_ms: number | null,
+	samples: number,
+	/**  What the last one was after. */
+	last_trigger: ReconnectTrigger | null,
+	/**  Averages by trigger. */
+	network_avg_ms: number | null,
+	push_avg_ms: number | null,
+	wake_avg_ms: number | null,
+	/**  How long links lasted: the last one that ended, and the average. */
+	lifetime_last_s: number | null,
+	lifetime_avg_s: number | null,
+	/**  The link up now, for how long. */
+	up_for_s: number | null,
+	/**  Why the last link went, and how long ago. */
+	last_drop: string | null,
+	last_drop_ago_s: number | null,
+	/**  Drops by reason, most first. */
+	drops: DropCount[],
+	reach: DeviceReach | null,
+	/**  Automatic connects leave it alone for this much longer. */
+	quiet_for_s: number | null,
+};
+
+/**  What should bring a link up. */
+export type ReconnectTrigger = 
+/**  This device's network changed. */
+"network" | 
+/**  A push woke this device. */
+"push" | 
+/**  This device pushed the other one to wake it. */
+"wake";
 
 /**  The relay server, the fallback when no direct path works. */
 export type RelayInfo = RelayInfo_Serialize | RelayInfo_Deserialize;

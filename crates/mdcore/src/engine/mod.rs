@@ -48,7 +48,7 @@ mod remote_download;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
-pub(crate) use messaging::{reconnect, send_reliably, start_ladder};
+pub(crate) use messaging::{reconnect, send_reliably, start_auto_ladder, start_ladder};
 mod netchange;
 mod peer_keys;
 pub use peer_keys::KeyVerification;

@@ -632,7 +632,7 @@ fn check_direct<P: Platform>(ctx: &NetCtx<P>, from: &str) {
         if ctx.quic.rx_datagrams(&from) != Some(before) {
             return; // alive (or already gone)
         }
-        super::close_link(&ctx, &from);
+        super::close_link(&ctx, &from, "dead");
         for _ in 0..30 {
             if !ctx.ws_conns.lock().contains_key(&from) {
                 break;

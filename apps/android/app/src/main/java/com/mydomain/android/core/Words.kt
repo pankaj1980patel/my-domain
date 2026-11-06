@@ -15,6 +15,9 @@ fun linkState(link: String?, progress: String?): LinkState = when {
     link == "relay" -> LinkState.Relay
     link != null -> LinkState.Direct
     progress == "failed" -> LinkState.Failed
+    // Didn't answer its push, or closed its link to save battery: not
+    // connecting, and not broken either (it wakes when it's needed).
+    progress == "asleep" -> LinkState.Offline
     progress != null && progress != "connected" -> LinkState.Connecting
     else -> LinkState.Offline
 }
@@ -44,6 +47,8 @@ fun progressLabel(stage: String?): String? = when (stage) {
     "relay" -> str(R.string.progress_relay)
     "punching", "webrtc" -> str(R.string.progress_punching)
     "failed" -> str(R.string.progress_failed)
+    "waking" -> str(R.string.progress_waking)
+    "asleep" -> str(R.string.progress_asleep)
     else -> null
 }
 

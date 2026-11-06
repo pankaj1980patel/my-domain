@@ -45,6 +45,7 @@ pub mod opus_audio;
 pub mod p2p_ping;
 pub mod print;
 pub mod read_later;
+pub mod reconnect;
 pub mod remote_download;
 pub mod screen;
 pub mod share;

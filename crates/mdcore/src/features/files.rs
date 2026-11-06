@@ -452,7 +452,8 @@ fn nudge_cancels<P: Platform>(ctx: &NetCtx<P>) {
         true
     });
     for node in due {
-        crate::engine::start_ladder(ctx, &node);
+        // A re-offer nobody asked for: an asleep device isn't pushed again.
+        crate::engine::start_auto_ladder(ctx, &node);
     }
 }
 

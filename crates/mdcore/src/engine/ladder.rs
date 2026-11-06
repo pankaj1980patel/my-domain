@@ -4,7 +4,7 @@
 
 use super::signaling::{relay_target, send_signal_via};
 use super::*;
-use crate::features::{diag, links_map};
+use crate::features::{diag, links_map, reconnect};
 
 impl<P: Platform> Engine<P> {
     /// Kick off the connection ladder on a background thread (returns at once).
@@ -29,7 +29,7 @@ impl<P: Platform> Engine<P> {
         if !self.ctx.peers.lock().contains_key(node_id) {
             return Err(CoreError::PeerNotFound);
         }
-        transport::close_link(&self.ctx, node_id);
+        transport::close_link(&self.ctx, node_id, "manual");
         Ok(())
     }
 
@@ -88,7 +88,20 @@ pub(super) fn run_connect_ladder<P: Platform>(
     token: Arc<Mutex<Option<String>>>,
     node_id: String,
 ) {
-    run_ladder(ctx, server_url, token, node_id, true);
+    run_ladder(ctx, server_url, token, node_id, true, false);
+}
+
+/// The ladder for a connect nobody asked for just now (a resend, a
+/// message a feature sends by itself, a redial after a network change):
+/// while the device didn't answer its last push (`reconnect::cooldown`),
+/// only its direct address is tried, without pushing it again.
+pub(crate) fn run_auto_ladder<P: Platform>(
+    ctx: NetCtx<P>,
+    server_url: Arc<Mutex<Option<String>>>,
+    token: Arc<Mutex<Option<String>>>,
+    node_id: String,
+) {
+    run_ladder(ctx, server_url, token, node_id, true, true);
 }
 
 /// How long direct QUIC gets before signaled QUIC joins the race.
@@ -124,12 +137,16 @@ fn signaled_quic<P: Platform>(
     };
     match send_signal_via(server_url, token, ctx, node_id, &offer) {
         Ok(()) => {
+            // It's woken by this push (when it has no link): say so, and
+            // time it.
+            reconnect::waking(ctx, node_id);
             if let Ok(addrs) = rx.recv_timeout(Duration::from_secs(8)) {
                 let targets = transport::quic::parse_addrs(&addrs);
                 let _ = ctx.quic.connect_any(ctx.clone(), &targets);
             } else if !is_live(ctx, node_id) {
                 // The push went (or a neighbour forwarded it); no answer.
                 diag::note(ctx, node_id, "no_answer", None);
+                reconnect::no_answer(ctx, node_id);
                 asked = Asked::NoAnswer;
             }
             // The peer dials us too, so a link may exist even if ours failed.
@@ -137,6 +154,7 @@ fn signaled_quic<P: Platform>(
         }
         Err(e) => {
             diag::note(ctx, node_id, "push_failed", Some(&e.to_string()));
+            reconnect::push_failed(ctx, node_id);
             asked = Asked::PushFailed;
         }
     }
@@ -191,12 +209,14 @@ const UPGRADE_TRIES: u32 = 10;
 
 /// The ladder. `retry_later`: if we end up on the relay, keep retrying the
 /// direct rungs in the background (false for those retries themselves).
+/// `auto`: nobody asked for it just now (see `run_auto_ladder`).
 fn run_ladder<P: Platform>(
     ctx: NetCtx<P>,
     server_url: Arc<Mutex<Option<String>>>,
     token: Arc<Mutex<Option<String>>>,
     node_id: String,
     retry_later: bool,
+    auto: bool,
 ) {
     // One ladder per peer at a time: each one signals (pushes) the peer,
     // and two at once only duplicate each other. Asked again meanwhile (the
@@ -212,6 +232,7 @@ fn run_ladder<P: Platform>(
             token.clone(),
             node_id.clone(),
             retry_later,
+            auto,
         );
         if !running.again() || is_live(&ctx, &node_id) {
             return;
@@ -225,6 +246,7 @@ fn ladder_once<P: Platform>(
     token: Arc<Mutex<Option<String>>>,
     node_id: String,
     retry_later: bool,
+    auto: bool,
 ) {
     let emit = |stage: &str, detail: Option<String>| {
         diag::note(&ctx, &node_id, stage, detail.as_deref());
@@ -246,6 +268,26 @@ fn ladder_once<P: Platform>(
     };
 
     let rungs = ctx.config.rungs.clone();
+
+    // It didn't answer its last push: an automatic connect tries its
+    // direct address only, and doesn't push it again (it wakes when the
+    // user does something with it, or comes back by itself).
+    if auto && reconnect::cooldown(&ctx, &node_id).is_some() {
+        if rungs.quic
+            && peer.quic_port != 0
+            && ctx
+                .quic
+                .connect_any(ctx.clone(), &peer.quic_targets())
+                .is_ok()
+            && wait_direct(&ctx, &node_id, 1000)
+        {
+            return;
+        }
+        if !is_live(&ctx, &node_id) {
+            emit("asleep", None);
+        }
+        return;
+    }
 
     // The two QUIC rungs race (they share one QUIC endpoint, and a second
     // link to the same peer is merged), and the relay comes up as soon as
@@ -360,6 +402,13 @@ fn ladder_once<P: Platform>(
     }
     let mut punch_answered = false;
     let mut punch_timed_out = false;
+    // The push went and nothing answered it: the device sleeps (or is
+    // off). Punching and WebRTC need an answer to a push just the same, so
+    // don't push it twice more for nothing.
+    let unanswered = {
+        let a = asked.lock();
+        a.contains(&Asked::NoAnswer) && !a.contains(&Asked::Answered)
+    };
 
     // Both behind symmetric NATs: STUN addresses are useless to the other
     // side, so punching and WebRTC's direct path can only time out (~40 s).
@@ -374,7 +423,7 @@ fn ladder_once<P: Platform>(
 
     // Rung 4 — UDP hole punch. Gather our candidates up front, offer them in one
     // signal, and punch toward the peer's answered candidates (1 FCM round trip).
-    if rungs.punch && !hopeless {
+    if rungs.punch && !hopeless && !unanswered {
         emit("punching", None);
         if let Some((socket, my_cands)) = transport::punch::gather_candidates(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();
@@ -412,7 +461,7 @@ fn ladder_once<P: Platform>(
     // Rung 5 — WebRTC data channel. Gather candidates into one SDP offer, send
     // it, and on the single answer drive ICE/DTLS/SCTP peer-to-peer (1 FCM RTT).
     #[cfg(feature = "webrtc")]
-    if rungs.webrtc && !hopeless {
+    if rungs.webrtc && !hopeless && !unanswered {
         emit("webrtc", None);
         if let Some((rtc, socket, pending, offer_sdp)) = transport::rtc::create_offer(&ctx) {
             let sid = uuid::Uuid::new_v4().to_string();
@@ -480,6 +529,7 @@ fn ladder_once<P: Platform>(
                         tok.clone(),
                         node_id.clone(),
                         false,
+                        true,
                     );
                 }
             });
@@ -487,5 +537,10 @@ fn ladder_once<P: Platform>(
         return;
     }
 
+    if unanswered {
+        // Not a broken path: it's asleep, and wakes when it's needed.
+        emit("asleep", None);
+        return;
+    }
     emit("failed", Some("no reachable path".into()));
 }

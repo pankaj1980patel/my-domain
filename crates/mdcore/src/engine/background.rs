@@ -90,6 +90,9 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
                 crate::features::backup::on_timer(&ctx);
                 crate::features::folder_sync::on_timer(&ctx);
                 crate::features::insert_capture::on_timer(&ctx);
+                // A device on a long-way link that's on this network now:
+                // dial it locally.
+                crate::features::reconnect::prefer_lan(&ctx);
             }
         });
     }
@@ -109,7 +112,7 @@ fn idle_closer<P: Platform>(ctx: NetCtx<P>, idle: Duration) {
             continue;
         }
         for node in transport::idle_links(&ctx, idle.as_secs()) {
-            transport::close_link(&ctx, &node);
+            transport::close_link(&ctx, &node, "idle");
         }
         // The relay socket too, once nothing goes through it (unless it's
         // kept open on purpose as the signal channel).
@@ -256,7 +259,7 @@ pub(super) fn spawn_ip_watcher<P: Platform>(h: netchange::NetHandles<P>) {
             let current = h.ctx.platform.local_ip();
             if current != last && current != "0.0.0.0" {
                 last = current.clone();
-                netchange::on_network_change(&h, Some(&current));
+                netchange::on_network_change(&h, Some(&current), crate::config::NetKind::Unknown);
             }
         }
     });

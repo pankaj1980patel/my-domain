@@ -76,6 +76,58 @@ impl Default for KeepAlive {
     }
 }
 
+/// Mobile networks (carrier NATs) forget an idle UDP mapping sooner than a
+/// home router: ping at least this often there ...
+pub const MOBILE_KEEPALIVE: std::time::Duration = std::time::Duration::from_secs(15);
+/// ... and call a link dead after this much silence.
+pub const MOBILE_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(45);
+
+impl KeepAlive {
+    /// The keep-alive for links made on `net`: on mobile data, at most
+    /// `MOBILE_KEEPALIVE` / `MOBILE_IDLE_TIMEOUT` (never longer than
+    /// configured, and never pinging when configured not to); elsewhere as
+    /// configured (a home router keeps a UDP mapping 30 s or more).
+    pub fn for_network(self, net: NetKind) -> KeepAlive {
+        match net {
+            NetKind::Mobile => KeepAlive {
+                interval: self.interval.map(|i| i.min(MOBILE_KEEPALIVE)),
+                idle_timeout: self.idle_timeout.min(MOBILE_IDLE_TIMEOUT),
+            },
+            _ => self,
+        }
+    }
+}
+
+/// The kind of network this device is on, as the platform says
+/// (`Engine::network_changed_on`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(rename_all = "snake_case")]
+pub enum NetKind {
+    /// Not said (the desktop's IP watcher).
+    #[default]
+    Unknown,
+    Wifi,
+    Ethernet,
+    Mobile,
+    /// No network at all.
+    Offline,
+}
+
+impl NetKind {
+    /// `"wifi"`, `"ethernet"`, `"mobile"` (or `"cellular"`), `"offline"`
+    /// (or `"none"`); anything else is `Unknown`.
+    pub fn parse(s: &str) -> NetKind {
+        match s.trim().to_ascii_lowercase().as_str() {
+            "wifi" => NetKind::Wifi,
+            "ethernet" => NetKind::Ethernet,
+            "mobile" | "cellular" => NetKind::Mobile,
+            "offline" | "none" => NetKind::Offline,
+            _ => NetKind::Unknown,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct CoreConfig {
     /// STUN servers (`host:port`) used to learn our public address for hole
@@ -327,5 +379,49 @@ impl CoreConfig {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn mobile_data_pings_sooner_and_nothing_else_changes() {
+        let base = KeepAlive::default();
+        let m = base.for_network(NetKind::Mobile);
+        assert_eq!(m.interval, Some(MOBILE_KEEPALIVE));
+        assert_eq!(m.idle_timeout, MOBILE_IDLE_TIMEOUT);
+        for net in [
+            NetKind::Wifi,
+            NetKind::Ethernet,
+            NetKind::Unknown,
+            NetKind::Offline,
+        ] {
+            assert_eq!(base.for_network(net), base);
+        }
+        // Never longer than configured (tests use short ones), never
+        // pinging when told not to.
+        let short = KeepAlive {
+            interval: Some(Duration::from_secs(1)),
+            idle_timeout: Duration::from_secs(3),
+        };
+        assert_eq!(short.for_network(NetKind::Mobile), short);
+        let silent = KeepAlive {
+            interval: None,
+            idle_timeout: Duration::from_secs(60),
+        };
+        assert_eq!(silent.for_network(NetKind::Mobile).interval, None);
+    }
+
+    #[test]
+    fn network_kinds_parse() {
+        assert_eq!(NetKind::parse("wifi"), NetKind::Wifi);
+        assert_eq!(NetKind::parse(" Cellular "), NetKind::Mobile);
+        assert_eq!(NetKind::parse("mobile"), NetKind::Mobile);
+        assert_eq!(NetKind::parse("ethernet"), NetKind::Ethernet);
+        assert_eq!(NetKind::parse("none"), NetKind::Offline);
+        assert_eq!(NetKind::parse("vpn"), NetKind::Unknown);
     }
 }

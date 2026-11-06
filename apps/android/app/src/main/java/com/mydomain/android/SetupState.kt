@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.mydomain.android.core.OemAutostart
 import com.mydomain.android.core.SetupChecklist
 import com.mydomain.android.core.SetupItem
 import com.mydomain.android.core.SetupRow
@@ -27,7 +28,9 @@ object SetupState {
     /** The home screen's card was dismissed (or opened): never shown again. */
     const val PREF_CARD_DISMISSED = "setup_card_dismissed"
 
-    fun checklist() = SetupChecklist(Build.VERSION.SDK_INT, BuildConfig.TARGET_SDK)
+    fun checklist() = SetupChecklist(
+        Build.VERSION.SDK_INT, BuildConfig.TARGET_SDK, Build.MANUFACTURER.orEmpty(), Build.BRAND.orEmpty(),
+    )
 
     fun rows(ctx: Context): List<SetupRow> = checklist().rows { isOn(ctx, it) }
 
@@ -52,7 +55,7 @@ object SetupState {
             SetupItem.SHIZUKU -> Privileged.state() == Privileged.State.READY
             SetupItem.WIDGET -> AppWidgetManager.getInstance(ctx)
                 .getAppWidgetIds(ComponentName(ctx, HomeWidget::class.java)).isNotEmpty()
-            SetupItem.QUICK_TILES -> false
+            SetupItem.QUICK_TILES, SetupItem.AUTOSTART -> false
         }
     }.getOrDefault(false)
 
@@ -119,8 +122,15 @@ object SetupState {
             )
             SetupItem.ACCESSIBILITY_HELPER -> listOf(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             // The list of apps, not the one-tap "Allow?" dialog: that needs
-            // REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, which isn't declared.
+            // REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, which Google Play allows
+            // only for a few kinds of app (reviewed by hand), so it isn't
+            // declared. The user picks my-domain and "Don't optimise" /
+            // "Unrestricted"; this app's page (Battery) is the fallback.
             SetupItem.BATTERY -> listOf(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), appDetails(ctx))
+            // The maker's own page, each known one in turn, else this
+            // app's page (where most makers put "Battery" / "Autostart").
+            SetupItem.AUTOSTART -> OemAutostart.pages(Build.MANUFACTURER.orEmpty(), Build.BRAND.orEmpty())
+                .map { Intent().setComponent(ComponentName(it.pkg, it.cls)) } + appDetails(ctx)
             SetupItem.WRITE_SETTINGS -> listOf(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, pkg), appDetails(ctx))
             SetupItem.FULL_SCREEN -> listOfNotNull(
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

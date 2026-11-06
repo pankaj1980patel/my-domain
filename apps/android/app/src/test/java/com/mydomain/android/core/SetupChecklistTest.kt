@@ -42,7 +42,8 @@ class SetupChecklistTest {
         // Not-needed and explain-only items are never read.
         assertFalse(SetupItem.NEARBY_DEVICES in asked)
         assertFalse(SetupItem.QUICK_TILES in asked)
-        // 14 items: 2 not needed, 1 explain-only -> 11 counted, 2 on.
+        // 15 items: 3 not needed (one: no maker's autostart page), 1
+        // explain-only -> 11 counted, 2 on.
         assertEquals(2 to 11, SetupChecklist.count(rows))
     }
 
@@ -77,5 +78,23 @@ class SetupChecklistTest {
         assertFalse(SetupChecklist.showCard(signedIn = false, dismissed = false, on = 3, total = 10))
         assertFalse(SetupChecklist.showCard(signedIn = true, dismissed = true, on = 3, total = 10))
         assertFalse(SetupChecklist.showCard(signedIn = true, dismissed = false, on = 10, total = 10))
+    }
+
+    @Test
+    fun autostartOnlyOnMakersWithAPageAndNeverCounted() {
+        assertFalse(SetupChecklist(34, 28).applies(SetupItem.AUTOSTART))
+        assertFalse(SetupChecklist(34, 28, "Google", "google").applies(SetupItem.AUTOSTART))
+        val vivo = SetupChecklist(34, 28, "vivo", "iQOO")
+        assertTrue(vivo.applies(SetupItem.AUTOSTART))
+        val asked = mutableListOf<SetupItem>()
+        val rows = vivo.rows { asked += it; true }
+        // Explain-only (with a button that opens the maker's page): its
+        // state can't be read, so it's never asked and never counted.
+        assertEquals(SetupStatus.INFO, statusOf(rows, SetupItem.AUTOSTART))
+        assertFalse(SetupItem.AUTOSTART in asked)
+        assertEquals(
+            SetupChecklist(34, 28).rows { true }.let { SetupChecklist.count(it) },
+            SetupChecklist.count(rows),
+        )
     }
 }

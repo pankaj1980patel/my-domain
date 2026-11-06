@@ -4,7 +4,9 @@ import android.app.*
 import android.content.*
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
+import android.net.LinkProperties
 import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.*
 import android.provider.Settings
@@ -17,6 +19,7 @@ import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.KeyChanges
 import com.mydomain.android.core.KeystoreSecrets
+import com.mydomain.android.core.NetWatch
 import com.mydomain.android.core.Tone
 import com.mydomain.android.ffi.EventListener
 import com.mydomain.android.ffi.MdEngine
@@ -61,9 +64,15 @@ class NetService : Service() {
         }
 
         connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
+        // Every change of the default network (a new Wi-Fi network, Wi-Fi
+        // to mobile data and back, internet validated, a new address): one
+        // look per burst of callbacks, and the core hears only real changes
+        // (NetWatch). It redials at once, then backs off.
         netCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { networkChanged() }
-            override fun onLost(network: Network) { networkChanged() }
+            override fun onAvailable(network: Network) = networkSoon()
+            override fun onLost(network: Network) = networkSoon()
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = networkSoon()
+            override fun onLinkPropertiesChanged(network: Network, props: LinkProperties) = networkSoon()
         }
         runCatching { connectivityManager?.registerDefaultNetworkCallback(netCallback!!) }
 
@@ -132,6 +141,9 @@ class NetService : Service() {
         DndWatch.start(this)
         startNetworking()
         BleLink.start(this)
+        // Brought back if the phone kills it (ServiceKeeper.kt).
+        running = true
+        ServiceKeeper.serviceUp(this)
     }
 
     /**
@@ -432,10 +444,51 @@ class NetService : Service() {
         }
     }
 
-    private fun networkChanged() {
-        Core.engine()?.networkChanged(wifiIpv4())
-        // Wi-Fi joined or left: the status shows it.
-        pushStatus()
+    private val netHandler = Handler(Looper.getMainLooper())
+    private val netCheck = Runnable { checkNetwork() }
+    /** The default network the core last heard about. */
+    private var lastNet: NetWatch.Snapshot? = null
+    private var netTold = false
+
+    /** A network callback: look once the burst is over. */
+    private fun networkSoon() {
+        netHandler.removeCallbacks(netCheck)
+        netHandler.postDelayed(netCheck, NetWatch.DEBOUNCE_MS)
+    }
+
+    private fun snapshot(): NetWatch.Snapshot? = runCatching {
+        val cm = connectivityManager ?: return@runCatching null
+        val net = cm.activeNetwork ?: return@runCatching NetWatch.Snapshot(network = null)
+        val caps = cm.getNetworkCapabilities(net)
+        val has = { t: Int -> caps?.hasTransport(t) == true }
+        NetWatch.Snapshot(
+            network = net.networkHandle,
+            wifi = has(NetworkCapabilities.TRANSPORT_WIFI),
+            cellular = has(NetworkCapabilities.TRANSPORT_CELLULAR),
+            ethernet = has(NetworkCapabilities.TRANSPORT_ETHERNET),
+            validated = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true,
+            wifiIp = wifiIpv4(),
+        )
+    }.getOrNull()
+
+    private fun checkNetwork() {
+        val now = snapshot()
+        val engine = Core.engine()
+        // Before the engine is up there's no one to tell: look again soon.
+        if (engine == null) {
+            netHandler.postDelayed(netCheck, 1_000)
+            return
+        }
+        if (netTold && !NetWatch.significant(lastNet, now)) return
+        lastNet = now
+        netTold = true
+        val kind = NetWatch.kind(now)
+        Core.labLog("network: $kind ${now?.wifiIp.orEmpty()}")
+        serviceScope.launch {
+            runCatching { engine.networkChangedOn(now?.wifiIp.orEmpty(), kind) }
+            // Wi-Fi joined or left: the status shows it.
+            pushStatus()
+        }
     }
 
     private fun startNetworking() {
@@ -569,6 +622,8 @@ class NetService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        running = false
+        netHandler.removeCallbacks(netCheck)
         serviceJob.cancel()
         multicastLock?.let { if (it.isHeld) it.release() }
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
@@ -581,7 +636,23 @@ class NetService : Service() {
         LostMode.unwatchScreen(this)
     }
 
+    /** Android brings a sticky service back after killing it (with a null
+     *  intent); the health check (ServiceKeeper) covers phones that don't. */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         return START_STICKY
+    }
+
+    /** Swiped away from Recents: some phones stop the service with the
+     *  task. Ask for a check soon, which starts it again if it's gone. */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        ServiceKeeper.checkSoon(this)
+    }
+
+    companion object {
+        /** The service is running in this process. */
+        @Volatile
+        var running = false
+            private set
     }
 }

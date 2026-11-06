@@ -87,6 +87,7 @@ private fun titleOf(item: SetupItem): Int = when (item) {
     SetupItem.NOTIFICATION_ACCESS -> R.string.setup_notif_access_title
     SetupItem.ACCESSIBILITY_HELPER -> R.string.setup_helper_title
     SetupItem.BATTERY -> R.string.setup_battery_title
+    SetupItem.AUTOSTART -> R.string.setup_autostart_title
     SetupItem.NEARBY_DEVICES -> R.string.setup_nearby_title
     SetupItem.LOCATION_SHARING -> R.string.setup_location_sharing_title
     SetupItem.LOCATION_PERMISSION -> R.string.setup_location_title
@@ -105,6 +106,7 @@ private fun purposeOf(item: SetupItem): Int = when (item) {
     SetupItem.NOTIFICATION_ACCESS -> R.string.setup_notif_access_for
     SetupItem.ACCESSIBILITY_HELPER -> R.string.setup_helper_for
     SetupItem.BATTERY -> R.string.setup_battery_for
+    SetupItem.AUTOSTART -> R.string.setup_autostart_for
     SetupItem.NEARBY_DEVICES -> R.string.setup_nearby_for
     SetupItem.LOCATION_SHARING -> R.string.setup_location_sharing_for
     SetupItem.LOCATION_PERMISSION -> R.string.setup_location_for
@@ -209,6 +211,10 @@ private fun SetupItemTile(row: SetupRow, onTurnOn: () -> Unit, onSwitch: (Boolea
             row.item == SetupItem.LOCATION_SHARING ->
                 SwitchRow(stringResource(R.string.location_switch), row.status == SetupStatus.ON, onSwitch)
             else -> Text(label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = color)
+        }
+        // The maker's page can't be read, only opened.
+        if (row.item == SetupItem.AUTOSTART && row.status == SetupStatus.INFO) {
+            SoftButton(stringResource(R.string.setup_autostart_open), onTurnOn)
         }
         if (row.status == SetupStatus.OFF) {
             when (row.item) {

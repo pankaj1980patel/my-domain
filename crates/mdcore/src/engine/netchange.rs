@@ -37,8 +37,19 @@ impl<P: Platform> Clone for NetHandles<P> {
 /// before re-dialing, so the peer doesn't reject us as a duplicate.
 const REDIAL_AFTER: Duration = Duration::from_millis(500);
 
-pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&str>) {
+pub(crate) fn on_network_change<P: Platform>(
+    h: &NetHandles<P>,
+    new_ip: Option<&str>,
+    net: crate::config::NetKind,
+) {
+    use crate::config::NetKind;
+    use crate::features::reconnect::{self, ReconnectTrigger};
     let ctx = &h.ctx;
+    let (gen, net) = reconnect::network_changed(ctx, net);
+    // Links made on this network keep alive as it needs (sooner on
+    // mobile data, whose NATs forget sooner).
+    ctx.quic
+        .set_keepalive(ctx.config.keepalive.for_network(net), &ctx.device_key);
     let ip = match new_ip {
         Some(s) if s.parse::<Ipv4Addr>().is_ok() => s.to_string(),
         _ => ctx.platform.local_ip(),
@@ -52,19 +63,49 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
         moved
     };
     let was_live: Vec<String> = ctx.p2p_conns.lock().keys().cloned().collect();
-    if moved {
+    if moved || net == NetKind::Offline {
         // QUIC links we dialed migrate to the new network by themselves;
         // everything else is on the old network and must be re-dialed.
+        for node in &was_live {
+            reconnect::closing(ctx, node, "network_change");
+        }
         let survives = ctx.quic.close_accepted();
+        for node in &survives {
+            reconnect::closing(ctx, node, "");
+        }
         for node in was_live.iter().filter(|n| !survives.contains(n)) {
             ctx.ws_conns.lock().remove(node);
             transport::drop_live(ctx, node);
         }
     }
+    // Who to dial again: the links that went just now, and those lost
+    // lately by accident (an earlier change dropped them while there was
+    // no network, say: Wi-Fi gone, then mobile data up).
+    let mut targets = was_live;
+    for node in reconnect::wanted(ctx) {
+        if !targets.contains(&node) {
+            targets.push(node);
+        }
+    }
+    targets.retain(|n| !transport::is_live(ctx, n) && ctx.peers.lock().contains_key(n));
+    if net == NetKind::Offline {
+        // Nothing to dial over: the next change (a network up) does it.
+        return;
+    }
+    for node in &targets {
+        reconnect::trigger(ctx, node, ReconnectTrigger::Network, Duration::ZERO);
+    }
 
     let h = h.clone();
     std::thread::spawn(move || {
         announce(&h.ctx, &h.disco_send);
+        // Redial first: refreshing the list and measuring the NAT take
+        // seconds, and the peers' addresses we know are usually right.
+        std::thread::sleep(REDIAL_AFTER);
+        for node in targets {
+            let h = h.clone();
+            std::thread::spawn(move || redial(&h, &node, gen));
+        }
         let session = h.server_url.lock().clone().zip(h.token.lock().clone());
         if let Some((url, token)) = &session {
             let _ = peers::refresh(&h.ctx, url, token);
@@ -73,17 +114,41 @@ pub(crate) fn on_network_change<P: Platform>(h: &NetHandles<P>, new_ip: Option<&
         // Peers on links that survived the move learn our new addresses
         // directly (no server needed to find us again).
         crate::features::addr_update::announce(&h.ctx, None);
-
-        std::thread::sleep(REDIAL_AFTER);
-        for node in was_live {
-            if h.ctx.p2p_conns.lock().contains_key(&node) || !h.ctx.peers.lock().contains_key(&node)
-            {
-                continue;
-            }
-            let (ctx, url, token) = (h.ctx.clone(), h.server_url.clone(), h.token.clone());
-            std::thread::spawn(move || ladder::run_connect_ladder(ctx, url, token, node));
-        }
+        // A device on a long-way link that's on this network now.
+        reconnect::prefer_lan(&h.ctx);
     });
+}
+
+/// Dial `node` again after network change `gen`: at once, then with
+/// jittered backoff (`reconnect::backoff`), until it's up, a newer change
+/// takes over, or `REDIAL_WINDOW` is over. Automatic: a device that
+/// didn't answer a push isn't pushed again (`reconnect::cooldown`).
+fn redial<P: Platform>(h: &NetHandles<P>, node: &str, gen: u64) {
+    use crate::features::reconnect::{self, REDIAL_BASE, REDIAL_CAP, REDIAL_WINDOW};
+    let ctx = &h.ctx;
+    let current = || reconnect::generation(ctx) == gen && !ctx.shutdown.load(Ordering::Relaxed);
+    let start = std::time::Instant::now();
+    let mut attempt = 0u32;
+    while current() && !transport::is_live(ctx, node) {
+        ladder::run_auto_ladder(
+            ctx.clone(),
+            h.server_url.clone(),
+            h.token.clone(),
+            node.to_string(),
+        );
+        if transport::is_live(ctx, node) || start.elapsed() >= REDIAL_WINDOW {
+            break;
+        }
+        let wait = reconnect::backoff(attempt, REDIAL_BASE, REDIAL_CAP, reconnect::jitter());
+        attempt += 1;
+        let until = std::time::Instant::now() + wait;
+        while std::time::Instant::now() < until {
+            if !current() || transport::is_live(ctx, node) {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
 }
 
 /// Beacon ourselves on the LAN a few times (multicast and broadcasts). The
