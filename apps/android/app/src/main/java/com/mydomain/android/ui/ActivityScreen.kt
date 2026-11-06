@@ -57,6 +57,7 @@ import com.mydomain.android.core.ActivityRow
 import com.mydomain.android.core.ChatHistory
 import com.mydomain.android.core.ClipLog
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.Notes
 import com.mydomain.android.core.ReadLater
 import com.mydomain.android.core.Timers
@@ -273,7 +274,13 @@ private fun ActivityRowView(ctx: Context, a: ActivityRow, onOpen: (ActivityRow) 
                     activityText(ctx, a, device), style = MaterialTheme.typography.bodyMedium,
                     color = if (failed) T.danger else T.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 )
-                Muted(meta.joinToString(" · "))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    a.node?.let {
+                        DeviceIcon(DeviceKinds.iconOf(it), 14.dp, T.text2)
+                        Spacer(Modifier.width(4.dp))
+                    }
+                    Muted(meta.joinToString(" · "))
+                }
             }
         }
     }

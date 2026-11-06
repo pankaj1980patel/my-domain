@@ -7,7 +7,7 @@
 import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type NotifGroup_Serialize, type NotifPrefs, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
+import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceKind_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type NotifGroup_Serialize, type NotifPrefs, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
 import { t, tn } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { onSpeedEvent, type SpeedRun } from "./diag";
@@ -316,6 +316,10 @@ type State = {
   wifiDirect: Record<string, string>;
   /** node_id -> the nickname, icon and colour you gave it here. */
   labels: Record<string, DeviceLabel>;
+  /** What kind each device is (its automatic icon), by node id. */
+  kinds: Record<string, DeviceKind_Serialize>;
+  /** This computer's own icon. */
+  ownIcon: string;
   /** node_id -> when a phone offered to share its screen with this
    *  computer (`screen-offer`); its screen tile starts watching and clears it. */
   screenOffers: Record<string, number>;
@@ -355,6 +359,8 @@ export const [state, setState] = createStore<State>({
   batches: {},
   wifiDirect: {},
   labels: {},
+  kinds: {},
+  ownIcon: "unknown",
   screenOffers: {},
   cameraPhotos: {},
   inserts: {},
@@ -384,6 +390,37 @@ export function peerName(node: string | undefined): string {
   if (nick) return nick;
   const own = state.peers.find((p) => p.node_id === node)?.name;
   return own ? niceName(own) : t("activity.someDevice");
+}
+
+/** The icon drawn for a device on its own: what it said it is (a Mac
+ *  laptop, an Android phone...; `features::device_kind`), else "unknown". */
+export function autoIcon(node: string): string {
+  return state.kinds[node]?.icon || "unknown";
+}
+
+/** The icon drawn for a device: the one you chose, else `autoIcon`. */
+export function peerIcon(node: string): string {
+  return state.labels[node]?.icon || autoIcon(node);
+}
+
+/** What a device is, for a line under its name: "Apple MacBook Pro",
+ *  "Pixel 8"; "" when it never said. */
+export function peerModel(node: string): string {
+  const k = state.kinds[node];
+  if (!k) return "";
+  const model = k.model.trim();
+  const maker = k.maker.trim();
+  if (!model) return maker;
+  if (!maker || model.toLowerCase().startsWith(maker.toLowerCase())) return model;
+  return `${maker} ${model}`;
+}
+
+/** Keep what kind each device is (from the core). */
+async function loadKinds() {
+  const kinds = await commands.deviceKinds();
+  setState("kinds", reconcile(kinds as Record<string, DeviceKind_Serialize>));
+  const own = await commands.ownDeviceKind();
+  if (own?.icon) setState("ownIcon", own.icon);
 }
 
 /** The icon and colour you gave a device here, if any. */
@@ -534,6 +571,10 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
     on<ComputerAudioStatus_Serialize>("computer-audio", (s) => setState("computerAudio", reconcile(s))),
     // Device labels set on your other devices (shared): every label here.
     on<Record<string, DeviceLabel>>("device-labels", (labels) => setState("labels", reconcile(labels ?? {}))),
+    // A device said what kind it is (its automatic icon).
+    on<{ node: string; device: DeviceKind_Serialize }>("device-kind", ({ node, device }) =>
+      setState("kinds", node, reconcile(device)),
+    ),
     // Notes changed on your other devices (and ones deleted there).
     on<{ notes: Note[]; removed: string[] }>("notes-changed", applyNotesChanged),
     // Links saved to read later changed on your other devices (and ones
@@ -786,6 +827,7 @@ export async function loadAll() {
     commands.getDeviceLabels(),
   ]);
   setState("labels", reconcile(labels));
+  loadKinds().catch(() => {});
   commands.computerAudioStatus().then((s) => setState("computerAudio", reconcile(s)), () => {});
   commands.syncPairs().then((p) => setState("syncPairs", reconcile(p)), () => {});
   loadNotes().catch(() => {});
@@ -810,6 +852,7 @@ export async function loadPanel() {
     commands.phoneQuiet().catch(() => [] as string[]),
   ]);
   setState("labels", reconcile(labels));
+  loadKinds().catch(() => {});
   setState("links", reconcile(Object.fromEntries(links.map((l) => [l.node_id, l.transport]))));
   setState("quality", reconcile(Object.fromEntries(links.map((l) => [l.node_id, l.quality]))));
   setState({ peers, quietPhones: quiet });

@@ -26,7 +26,8 @@
 //! `ping: 1` when it answers pings and speed tests (`features::diag`), and
 //! `wol` when it sends Wake-on-LAN packets for the others
 //! (`features::wake`), and `print: 1` when it prints for your phones
-//! (`features::print`).
+//! (`features::print`), and `device`, what kind of device it is
+//! (`features::device_kind`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -113,6 +114,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::media::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
+                // What kind of device it is (its icon).
+                super::device_kind::extend_status(ctx, &mut status);
                 // It's looking at this device: tell it when the song changes.
                 super::media::watch(ctx, &from);
                 let playing = super::media::current_for(ctx, &from);
@@ -129,6 +132,14 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 let status = msg.json("status");
                 // How to wake it later, while it's asleep and says nothing.
                 super::wake::remember(ctx, &from, &status);
+                // What kind of device it is (its icon).
+                super::device_kind::remember(
+                    ctx,
+                    &from,
+                    &status[super::device_kind::FLAG],
+                    &status["platform"],
+                    &status[super::kvm::OS_FLAG],
+                );
                 // Whether it plays or sends a phone's audio.
                 super::audio_share::remember(ctx, &from, &status);
                 super::folder_sync::remember(ctx, &from, &status);

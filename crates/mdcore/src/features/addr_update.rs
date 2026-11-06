@@ -14,7 +14,8 @@
 //! `nearby: 1` for nearby media mode (`features::nearby`) and
 //! `audio_codec: 1` when it reads the smaller audio
 //! (`features::audio_codec`), and `print: 1` while a computer prints for
-//! your phones (`features::print`).
+//! your phones (`features::print`), and `device`, what kind of device it
+//! is (`features::device_kind`).
 //!
 //! Only peers we already know are updated: this message can't create one.
 //! It arrives end-to-end encrypted with the shared key, like every message.
@@ -61,6 +62,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::notif_rich::extend_status(ctx, &mut msg);
         super::batches::extend_status(ctx, &mut msg);
         super::media::extend_status(ctx, &mut msg);
+        super::device_kind::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -118,6 +120,13 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
         super::insert_capture::remember(ctx, &from, &msg.json(super::insert_capture::FLAG));
         super::notif_rich::remember(ctx, &from, &msg.json(super::notif_rich::FLAG));
+        super::device_kind::remember(
+            ctx,
+            &from,
+            &msg.json(super::device_kind::FLAG),
+            &serde_json::Value::Null,
+            &msg.json(super::kvm::OS_FLAG),
+        );
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));
         super::wifi_direct::remember(ctx, &from, &msg.json(super::wifi_direct::FLAG));
         super::kvm::remember(

@@ -30,7 +30,9 @@ data class DeviceLabel(val nickname: String? = null, val icon: String? = null, v
 object DeviceLabels {
     const val PREF = "device_labels"
     const val MAX_NICKNAME = 40
-    val ICONS = listOf("phone", "tablet", "laptop", "desktop", "tv", "watch")
+    /** The core's set (OS and form together: `mac_laptop`, `win_desktop`,
+     *  `android_phone`..., and the older plain `phone`, `laptop`...). */
+    val ICONS = DeviceIconShapes.ICONS
     val COLORS = listOf("cyan", "blue", "sky", "green", "gold", "rose", "grey")
 
     /** node id -> its label (changed on the main thread). */

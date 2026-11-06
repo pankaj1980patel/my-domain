@@ -23,6 +23,7 @@ pub mod camera;
 pub mod clipboard;
 pub mod code;
 pub mod device;
+pub mod device_kind;
 pub mod diag;
 pub mod dnd;
 pub mod extras;

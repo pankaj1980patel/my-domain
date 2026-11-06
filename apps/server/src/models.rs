@@ -66,4 +66,44 @@ pub struct Device {
     /// "android" | "desktop" | "ios" | "mac"
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<String>,
+    /// What kind of device it is (for its icon); absent from older apps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<DeviceKind>,
+}
+
+/// A device's OS, form (phone, laptop, ...), model and maker, as the app
+/// said them: short display texts, kept only for the account's own
+/// devices to draw the right icon.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct DeviceKind {
+    #[serde(default)]
+    pub os: String,
+    #[serde(default)]
+    pub form: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub maker: String,
+}
+
+impl DeviceKind {
+    /// Each field cut to 60 characters with control characters dropped;
+    /// `None` when nothing is left.
+    pub fn cleaned(&self) -> Option<DeviceKind> {
+        let c = |s: &str| -> String {
+            s.chars()
+                .filter(|c| !c.is_control())
+                .take(60)
+                .collect::<String>()
+                .trim()
+                .to_string()
+        };
+        let k = DeviceKind {
+            os: c(&self.os),
+            form: c(&self.form),
+            model: c(&self.model),
+            maker: c(&self.maker),
+        };
+        (k != DeviceKind::default()).then_some(k)
+    }
 }

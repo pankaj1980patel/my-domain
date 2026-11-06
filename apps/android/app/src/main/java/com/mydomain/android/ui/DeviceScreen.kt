@@ -9,6 +9,8 @@ import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.lazy.LazyListScope
+import com.mydomain.android.core.DeviceIconShapes
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.DeviceLabels
 import com.mydomain.android.core.LayoutScope
 import com.mydomain.android.core.PageArrangement
@@ -137,6 +139,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
                                 small = true,
                             )
                         }
+                        // What it is: "Apple MacBook Pro", "Samsung Galaxy S23".
+                        DeviceKinds.describe(node).takeIf { it.isNotEmpty() }?.let { Muted(it) }
                         StatusPill(node)
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
                             progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
@@ -181,11 +185,15 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null) {
 }
 
 /** "phone" or "computer": which layout [node]'s screen uses. Its own report
- *  first, then the icon you gave it here; a computer when nothing says. */
+ *  first (its status, what kind of device it said it is), then its icon; a
+ *  computer when nothing says. */
 private fun pageKind(node: String): String {
     Core.deviceStatus[node]?.platform?.let { return if (it == "android") "phone" else "computer" }
-    val icon = DeviceLabels.labels[node]?.icon
-    return if (icon == "phone" || icon == "tablet" || icon == "watch") "phone" else "computer"
+    DeviceKinds.kinds[node]?.os?.takeIf { it.isNotEmpty() }?.let {
+        return if (it == "android" || it == "ios") "phone" else "computer"
+    }
+    val icon = DeviceLabels.labels[node]?.icon ?: DeviceKinds.kinds[node]?.icon
+    return if (DeviceIconShapes.isHandheld(icon)) "phone" else "computer"
 }
 
 private val BOTH = setOf("phone", "computer")

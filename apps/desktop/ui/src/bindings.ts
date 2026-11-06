@@ -408,6 +408,13 @@ export const commands = {
 	/**  Every label you gave your devices here (node id -> label). */
 	getDeviceLabels: () => __TAURI_INVOKE<{ [key in string]: DeviceLabel_Serialize }>("get_device_labels"),
 	/**
+	 *  Every one of your devices' kind that's known (its OS, form, model,
+	 *  maker and automatic icon), by node id.
+	 */
+	deviceKinds: () => __TAURI_INVOKE<{ [key in string]: DeviceKind_Serialize }>("device_kinds"),
+	/**  This computer's own kind (with its icon). */
+	ownDeviceKind: () => __TAURI_INVOKE<DeviceKind_Serialize | null>("own_device_kind"),
+	/**
 	 *  Give a device a nickname, an icon and a colour (each optional; all
 	 *  blank clears its label). Answers with every label.
 	 */
@@ -1673,6 +1680,64 @@ export type DevCredentials = {
 	user: string,
 	pass: string,
 	key: string,
+};
+
+/**
+ *  What kind of device one is (`features::device_kind`): its OS, its form
+ *  (phone, laptop, ...), its model and maker, and the icon the apps draw
+ *  for it. Every field may be empty (an older app says nothing): the icon
+ *  is then `"unknown"` or a guess from what it did say.
+ */
+export type DeviceKind = DeviceKind_Serialize | DeviceKind_Deserialize;
+
+/**
+ *  What kind of device one is (`features::device_kind`): its OS, its form
+ *  (phone, laptop, ...), its model and maker, and the icon the apps draw
+ *  for it. Every field may be empty (an older app says nothing): the icon
+ *  is then `"unknown"` or a guess from what it did say.
+ */
+export type DeviceKind_Deserialize = {
+	/**  `macos`, `windows`, `linux`, `android`, `ios`, or empty. */
+	os?: string,
+	/**
+	 *  `phone`, `tablet`, `foldable`, `laptop`, `desktop`, `all_in_one`,
+	 *  `tv`, `other`, or empty.
+	 */
+	form?: string,
+	/**  For display: "MacBook Pro", "Pixel 8", "ThinkPad X1 Carbon". */
+	model?: string,
+	/**  For display: "Apple", "Google", "Lenovo". */
+	maker?: string,
+	/**
+	 *  The automatic icon (`features::device_kind::icon_for`); worked out
+	 *  on arrival, never taken from the wire.
+	 */
+	icon?: string,
+};
+
+/**
+ *  What kind of device one is (`features::device_kind`): its OS, its form
+ *  (phone, laptop, ...), its model and maker, and the icon the apps draw
+ *  for it. Every field may be empty (an older app says nothing): the icon
+ *  is then `"unknown"` or a guess from what it did say.
+ */
+export type DeviceKind_Serialize = {
+	/**  `macos`, `windows`, `linux`, `android`, `ios`, or empty. */
+	os: string,
+	/**
+	 *  `phone`, `tablet`, `foldable`, `laptop`, `desktop`, `all_in_one`,
+	 *  `tv`, `other`, or empty.
+	 */
+	form: string,
+	/**  For display: "MacBook Pro", "Pixel 8", "ThinkPad X1 Carbon". */
+	model: string,
+	/**  For display: "Apple", "Google", "Lenovo". */
+	maker: string,
+	/**
+	 *  The automatic icon (`features::device_kind::icon_for`); worked out
+	 *  on arrival, never taken from the wire.
+	 */
+	icon: string,
 };
 
 /**  What you call one of your devices here. */

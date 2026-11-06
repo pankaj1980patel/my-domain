@@ -1,6 +1,6 @@
 ---
 title: Getting started and pairing
-keywords: sign in, account, create account, pair, add device, add a device, join, join with a code, qr, qr code, scan, device key, password, username, first time, setup, connect
+keywords: sign in, account, create account, pair, add device, add a device, join, join with a code, qr, qr code, scan, device key, password, username, first time, setup, connect, icon, device icon, change icon, model, laptop, desktop, tablet, foldable
 platforms: desktop, android
 ---
 my-domain links your own phone and computers so they can send things to each other and do small jobs for each other: share the clipboard, send files, ring a lost phone, show notifications on the computer, and more.
@@ -32,6 +32,12 @@ The device key is what encrypts everything your devices send each other. The ser
 - Every device must use the same key. A device with a different key can't read the others.
 - If you change it in Settings, change it on every device too.
 - If you lose it, sign in again everywhere with a new one.
+
+## Device icons
+
+Each device gets an icon for what it is, worked out on its own: a Mac laptop, an iMac or Mac desktop, a Windows or Linux laptop or desktop, an Android phone, tablet or foldable, or a TV. Its page also says the model, like “Apple MacBook Pro” or “Samsung Galaxy S23”. A device with an older app shows a plain icon until it's updated.
+
+To pick another icon, open the device's page, choose **Edit** and pick one under **Icon** (**Auto** goes back to the automatic one). While **Share names and icons with my other devices** is on in Settings, your other devices show it too.
 
 ## Connected or not
 

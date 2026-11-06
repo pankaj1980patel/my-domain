@@ -42,6 +42,10 @@ pub struct RegistryDevice {
     pub ipv6: Option<String>,
     #[serde(default)]
     pub mapped_quic: Option<String>,
+    /// What kind of device it is (`features::device_kind`); absent from
+    /// older servers and devices.
+    #[serde(default)]
+    pub kind: Option<serde_json::Value>,
 }
 
 /// Normalize a user-entered server URL to just `scheme://host[:port]`, dropping
@@ -100,6 +104,7 @@ pub fn verify_password_call(url: &str, username: &str, password: &str) -> Result
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn registry_register(
     url: &str,
     token: &str,
@@ -108,6 +113,7 @@ pub fn registry_register(
     platform: &str,
     supports_ipv6: bool,
     nat: crate::nat::NatKind,
+    kind: Option<serde_json::Value>,
 ) -> Result<(), String> {
     crate::tls::http()
         .post(&format!("{}/devices/register", base(url)))
@@ -127,6 +133,7 @@ pub fn registry_register(
             "ipv6": id.ipv6,
             "mapped_quic": id.mapped_quic,
             "nat": nat.as_str(),
+            "kind": kind,
         }))
         .map_err(http_err)?;
     Ok(())

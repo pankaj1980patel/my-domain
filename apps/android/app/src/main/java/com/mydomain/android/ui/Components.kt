@@ -194,6 +194,8 @@ fun SoftButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     selected: Boolean? = null,
+    /** A device icon before the text (a device to pick). */
+    deviceIcon: String? = null,
 ) {
     // Material keeps a 48 dp touch target around the 44 dp button.
     Button(
@@ -201,7 +203,13 @@ fun SoftButton(
         colors = ButtonDefaults.buttonColors(containerColor = T.secondaryButton, contentColor = T.text),
         border = BorderStroke(1.dp, T.secondaryButtonBorder),
         elevation = null, contentPadding = PaddingValues(horizontal = 16.dp),
-    ) { Text(text, style = MaterialTheme.typography.labelLarge) }
+    ) {
+        if (deviceIcon != null) {
+            DeviceIcon(deviceIcon, 20.dp)
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(text, style = MaterialTheme.typography.labelLarge)
+    }
 }
 
 @Composable

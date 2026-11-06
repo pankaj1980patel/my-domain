@@ -25,13 +25,21 @@ export type TileDef = {
   render: (node: string) => JSX.Element;
 };
 
-/** Which layout `node`'s page uses: its own report first, then the icon
- *  you gave it here; a computer when nothing says. */
+/** Which layout `node`'s page uses: its own report first (its status,
+ *  what kind of device it said it is), then its icon; a computer when
+ *  nothing says. */
 export function pageKind(node: string): PageKind {
   const platform = state.status[node]?.platform;
   if (platform) return platform === "android" ? "phone" : "computer";
-  const icon = state.labels[node]?.icon;
-  return icon === "phone" || icon === "tablet" || icon === "watch" ? "phone" : "computer";
+  const os = state.kinds[node]?.os;
+  if (os) return os === "android" || os === "ios" ? "phone" : "computer";
+  const icon = state.labels[node]?.icon || state.kinds[node]?.icon || "";
+  return isHandheldIcon(icon) ? "phone" : "computer";
+}
+
+/** A phone, tablet, foldable or watch icon. */
+export function isHandheldIcon(icon: string): boolean {
+  return ["phone", "tablet", "watch", "android_phone", "android_tablet", "android_foldable"].includes(icon);
 }
 
 /** `order` with `id` moved onto `over`'s place (dropped there). */

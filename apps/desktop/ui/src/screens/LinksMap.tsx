@@ -7,7 +7,8 @@
 // image to a screen reader; the list's buttons open the same details).
 
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
-import { peerName, state } from "../lib/core";
+import { peerIcon, peerName, state } from "../lib/core";
+import { DeviceIcon } from "../components/DeviceIcon";
 import { mapView, myEdge, watchMap, type MapDevice, type MapEdge, type MapView } from "../lib/linksMap";
 import { niceName, timeAgo } from "../lib/words";
 import { HelpLink } from "../help/HelpLink";
@@ -76,10 +77,6 @@ function encryption(how: string): string {
   if (how === "relay") return t("map.enc.relay");
   if (how === "ble") return t("map.enc.ble");
   return t("map.enc.direct");
-}
-
-function initial(name: string): string {
-  return (name.trim()[0] ?? "?").toUpperCase();
 }
 
 export default function LinksMap(props: { onDevice: (node: string) => void }) {
@@ -157,9 +154,9 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                         onClick={() => setPick({ kind: "device", node: s.node_id })}
                       >
                         <circle r={24} />
-                        <text class="map-initial" text-anchor="middle" dominant-baseline="central">
-                          {initial(peerName(s.node_id))}
-                        </text>
+                        <g class="map-icon" transform="translate(-13 -13)">
+                          <DeviceIcon icon={peerIcon(s.node_id)} size={26} />
+                        </g>
                         <text class="map-name" y={40} text-anchor="middle">
                           {peerName(s.node_id)}
                         </text>
@@ -175,9 +172,9 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                   </For>
                   <g class="map-node map-me" transform={`translate(${v().me.x} ${v().me.y})`}>
                     <circle r={32} />
-                    <text class="map-initial" text-anchor="middle" dominant-baseline="central">
-                      {initial(meName())}
-                    </text>
+                    <g class="map-icon" transform="translate(-16 -16)">
+                      <DeviceIcon icon={state.ownIcon} size={32} />
+                    </g>
                     <text class="map-name" y={50} text-anchor="middle">
                       {t("map.you")}
                     </text>

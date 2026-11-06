@@ -1,99 +1,37 @@
-// A device's look here: its avatar (the icon you chose, else the initial of
-// its name, ringed in the colour you chose) and the small form that sets the
+// A device's look here: its avatar (the icon you chose, else the one for
+// what it is: a Mac laptop, an Android phone..., ringed in the colour you
+// chose) and the small form that sets the
 // nickname, icon and colour. Kept here and shared with your other devices
 // while the Settings switch is on (`device_labels.rs`);
 // names everywhere come from `peerName`, which prefers the nickname.
 
 import { createSignal, For, onMount, Show } from "solid-js";
 import { rememberFocus } from "../lib/a11y";
-import { peerLabel, setDeviceLabel, state } from "../lib/core";
-import { friendlyError, initial, niceName } from "../lib/words";
+import { autoIcon, peerIcon, peerLabel, setDeviceLabel, state } from "../lib/core";
+import { friendlyError, niceName } from "../lib/words";
+import { DEVICE_ICONS, DeviceIcon } from "./DeviceIcon";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
 
 /** Icons a device can have (same set as `device_labels::ICONS`). */
-export const LABEL_ICONS = ["phone", "tablet", "laptop", "desktop", "tv", "watch"] as const;
+export const LABEL_ICONS = DEVICE_ICONS;
+export { DeviceIcon };
 /** Accent colours (same set as `device_labels::COLORS`; app.css maps each
  *  to a theme colour). */
 export const LABEL_COLORS = ["cyan", "blue", "sky", "green", "gold", "rose", "grey"] as const;
 
-/** One device icon, drawn in the current text colour. */
-export function DeviceIcon(props: { icon: string; size?: number }) {
-  const size = () => props.size ?? 24;
+/** A device's avatar: the icon you chose, else the one for what it is
+ *  (`peerIcon`), in its colour. */
+export function DeviceAvatar(props: { node: string; large?: boolean; small?: boolean }) {
+  const label = () => peerLabel(props.node);
   return (
-    <svg
-      class="device-icon"
-      width={size()}
-      height={size()}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.8"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+    <div
+      class="device-avatar"
+      classList={{ lg: !!props.large, sm: !!props.small }}
+      data-color={label()?.color ?? undefined}
       aria-hidden="true"
     >
-      {(() => {
-        switch (props.icon) {
-          case "phone":
-            return (
-              <>
-                <rect x="7" y="2" width="10" height="20" rx="2" />
-                <path d="M11 18h2" />
-              </>
-            );
-          case "tablet":
-            return (
-              <>
-                <rect x="4" y="2" width="16" height="20" rx="2" />
-                <path d="M11 18h2" />
-              </>
-            );
-          case "laptop":
-            return (
-              <>
-                <rect x="4" y="5" width="16" height="11" rx="1.5" />
-                <path d="M2 19h20" />
-              </>
-            );
-          case "desktop":
-            return (
-              <>
-                <rect x="3" y="4" width="18" height="12" rx="1.5" />
-                <path d="M8 20h8M12 16v4" />
-              </>
-            );
-          case "tv":
-            return (
-              <>
-                <rect x="2" y="7" width="20" height="13" rx="2" />
-                <path d="M8 3l4 4 4-4" />
-              </>
-            );
-          case "watch":
-            return (
-              <>
-                <rect x="6" y="6" width="12" height="12" rx="3" />
-                <path d="M9 6l1-4h4l1 4M9 18l1 4h4l1-4" />
-              </>
-            );
-          default:
-            return null;
-        }
-      })()}
-    </svg>
-  );
-}
-
-/** A device's avatar: its icon (else its initial), in its colour. */
-export function DeviceAvatar(props: { node: string; large?: boolean }) {
-  const label = () => peerLabel(props.node);
-  const own = () => state.peers.find((p) => p.node_id === props.node)?.name ?? "";
-  return (
-    <div class="device-avatar" classList={{ lg: !!props.large }} data-color={label()?.color ?? undefined} aria-hidden="true">
-      <Show when={label()?.icon} fallback={<span>{initial(label()?.nickname || own())}</span>}>
-        {(icon) => <DeviceIcon icon={icon()} size={props.large ? 28 : 24} />}
-      </Show>
+      <DeviceIcon icon={peerIcon(props.node)} size={props.large ? 28 : props.small ? 16 : 24} />
     </div>
   );
 }
@@ -164,11 +102,12 @@ export function DeviceLabelForm(props: { node: string; onClose: () => void }) {
           class="label-choice"
           classList={{ on: icon() === null }}
           aria-pressed={icon() === null}
-          aria-label={t("label.none")}
-          title={t("label.none")}
+          aria-label={t("label.auto")}
+          title={t("label.auto")}
           onClick={() => setIcon(null)}
         >
-          <span class="label-initial">{initial(nickname() || own())}</span>
+          <DeviceIcon icon={autoIcon(props.node)} />
+          <span class="label-auto">{t("label.autoShort")}</span>
         </button>
         <For each={LABEL_ICONS}>
           {(i) => (

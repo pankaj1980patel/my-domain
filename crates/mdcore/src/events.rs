@@ -360,6 +360,13 @@ pub enum CoreEvent {
     LabelsChanged {
         labels: Vec<crate::model::SharedLabel>,
     },
+    /// A device said what kind it is, or that changed
+    /// (`features::device_kind`): the apps draw its icon from `device.icon`
+    /// (unless you chose one as its label).
+    DeviceKind {
+        node: String,
+        device: crate::model::DeviceKind,
+    },
     /// Notes changed by your other devices (`features::notes`): the
     /// changed or new ones (conflict copies included) and the ids of ones
     /// deleted. Saving a note here makes no event.
@@ -614,6 +621,7 @@ impl CoreEvent {
             CoreEvent::PrintStatus { .. } => "print-status",
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
+            CoreEvent::DeviceKind { .. } => "device-kind",
             CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",

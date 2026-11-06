@@ -29,6 +29,7 @@ mod commands_run;
 mod computer_audio;
 mod computer_notifs;
 mod device;
+mod device_kind;
 mod device_labels;
 mod diagnostics;
 mod fcm;
@@ -1858,6 +1859,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         webhooks::set_webhook_port,
         webhooks::new_webhook_token,
         device_labels::get_device_labels,
+        device_kind::device_kinds,
+        device_kind::own_device_kind,
         device_labels::set_device_label,
         device_labels::labels_share,
         device_labels::set_labels_share,
@@ -2094,6 +2097,8 @@ pub fn run() {
                     engine.set_audio_roles(true, computer_audio::supported());
                     // Labels given here before they were shared.
                     device_labels::seed(&handle, &engine);
+                    // What kind of computer this is (its icon elsewhere).
+                    device_kind::init(&handle, &engine);
                     // "Use nearby mode for media", as saved.
                     nearby::init(&handle, &engine);
                     // A mute left by a crash while the sound played on a

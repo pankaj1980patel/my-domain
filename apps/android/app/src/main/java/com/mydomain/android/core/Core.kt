@@ -297,9 +297,9 @@ object Core {
 
     /** Events that change the share sheet's device targets (which devices,
      *  and which have a live link: those rank first). */
-    private val SHARE_TARGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected")
+    private val SHARE_TARGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "device_kind")
     /** Events after which "How your devices are connected" reads its map again. */
-    private val MAP_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "links_map_changed", "labels_changed", "nearby_media")
+    private val MAP_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "links_map_changed", "labels_changed", "nearby_media", "device_kind")
 
     /** The app context, for strings built outside the screens (set by
      *  MainActivity and NetService, whichever starts first). */
@@ -373,7 +373,7 @@ object Core {
         Thread { runCatching { engine()?.setLabelsShare(on) } }.start()
     }
 
-    private fun onMain(block: () -> Unit) {
+    internal fun onMain(block: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block)
     }
 
@@ -520,6 +520,8 @@ object Core {
                 HomeWidget.refresh(app)
                 ShareTargets.refresh(app)
             }
+            // A device said what kind it is (its icon).
+            "device_kind" -> DeviceKinds.apply(o)
             // Notes changed on your other devices (and ones deleted there).
             "notes_changed" -> Notes.applyChanged(o)
             // Timers started or changed on your other devices (every timer shown).

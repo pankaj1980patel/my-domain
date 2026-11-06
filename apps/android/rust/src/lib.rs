@@ -2051,6 +2051,28 @@ impl MdEngine {
         )
     }
 
+    // --- what kind of device each is (mdcore features::device_kind) ---
+
+    /// This phone's own kind: `os` "android", `form` phone / tablet /
+    /// foldable / tv, its model and maker for display. Said to your other
+    /// devices (status, `addr_update`, registry) so they draw its icon.
+    pub fn set_device_kind(&self, os: String, form: String, model: String, maker: String) {
+        self.inner.set_device_kind(mdcore::model::DeviceKind {
+            os,
+            form,
+            model,
+            maker,
+            icon: String::new(),
+        });
+    }
+
+    /// Every device's kind that's known, as JSON: node id -> `{os, form,
+    /// model, maker, icon}`. Changes arrive as `device_kind` events
+    /// (`{node, device}`).
+    pub fn device_kinds_json(&self) -> String {
+        serde_json::to_string(&self.inner.device_kinds()).unwrap_or_else(|_| "{}".into())
+    }
+
     // --- notes shared with your other devices (mdcore features::notes) ---
 
     /// Every note, pinned first, then the most recently changed. Notes

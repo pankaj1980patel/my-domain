@@ -20,6 +20,7 @@ pub(crate) fn register_self<P: Platform>(
         ctx.platform.platform_kind(),
         id.ipv6.is_some(),
         nat,
+        crate::features::device_kind::own(ctx).map(|k| crate::features::device_kind::to_wire(&k)),
     )
 }
 
@@ -71,6 +72,12 @@ pub(crate) fn emit_peers<P: Platform>(ctx: &NetCtx<P>) {
 }
 
 fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, devices: Vec<RegistryDevice>) {
+    // What kind of device each is, before the list is taken apart.
+    for d in &devices {
+        if let Some(kind) = &d.kind {
+            crate::features::device_kind::from_registry(ctx, &d.node_id, kind);
+        }
+    }
     {
         let mut map = ctx.peers.lock();
         map.retain(|_, p| p.source != Source::Registry);

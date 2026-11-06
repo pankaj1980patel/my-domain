@@ -7,7 +7,8 @@
 import { createEffect, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import { commands, type ActivityItem_Serialize as ActivityItem } from "../bindings";
-import { peerName, state } from "../lib/core";
+import { peerIcon, peerName, state } from "../lib/core";
+import { DeviceIcon } from "../components/DeviceIcon";
 import {
   ACTIVITY_KINDS,
   ACTIVITY_KIND_LABEL,
@@ -266,6 +267,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
                         <button class="activity-main" disabled={!target} onClick={() => open(a)}>
                           <span class="activity-text">{activityText(a, deviceOf(a))}</span>
                           <span class="activity-meta small muted">
+                            <Show when={a.node}>{(n) => <DeviceIcon icon={peerIcon(n())} size={14} />}</Show>
                             {[a.node ? peerName(a.node) : "", ...meta].filter(Boolean).join(" · ")}
                           </span>
                         </button>

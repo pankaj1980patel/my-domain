@@ -5,9 +5,8 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.DashPathEffect
 import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Handler
@@ -16,8 +15,11 @@ import android.os.SystemClock
 import android.util.Log
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.PathParser
 import androidx.core.graphics.drawable.IconCompat
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceIconShapes
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.DeviceLabels
 import com.mydomain.android.core.initial
 import java.util.concurrent.Executors
@@ -90,7 +92,7 @@ object ShareTargets {
         val targets = Core.peers
             .map { p ->
                 val label = DeviceLabels.labels[p.nodeId]
-                Target(p.nodeId, Core.peerName(p.nodeId), label?.icon, label?.color, Core.links.containsKey(p.nodeId))
+                Target(p.nodeId, Core.peerName(p.nodeId), DeviceKinds.iconOf(p.nodeId), label?.color, Core.links.containsKey(p.nodeId))
             }
             .distinctBy { it.node }
             .sortedWith(compareByDescending<Target> { it.linked }.thenBy { it.name.lowercase() })
@@ -141,8 +143,8 @@ object ShareTargets {
 
     /**
      * An adaptive icon (108dp, its middle 66dp always shown): the device's
-     * label icon (the same line drawings as DeviceIcon), else the initial of
-     * its name, in its colour on the app's deep blue.
+     * icon (the one you chose, else the one for what it is; the same line
+     * drawings as DeviceIcon), in its colour on the app's deep blue.
      */
     private fun iconBitmap(app: Context, t: Target): Bitmap {
         val density = app.resources.displayMetrics.density
@@ -160,7 +162,7 @@ object ShareTargets {
         }
         c.drawCircle(px / 2f, px / 2f, 30f * dp, ring)
         val glyph = t.icon
-        if (glyph != null && glyph in DeviceLabels.ICONS) {
+        if (glyph != null && glyph != "unknown" && glyph in DeviceLabels.ICONS) {
             drawDeviceIcon(c, glyph, px / 2f, px / 2f, 36f * dp, Color.WHITE)
         } else {
             val text = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -176,48 +178,46 @@ object ShareTargets {
         return bmp
     }
 
-    /** ui/DeviceLabelUi.kt's DeviceIcon on an android.graphics.Canvas: a
-     *  24-unit line drawing, [size] px wide, centred on ([cx], [cy]). */
+    /** ui/DeviceLabelUi.kt's DeviceIcon on an android.graphics.Canvas: the
+     *  same 24-unit drawing ([DeviceIconShapes]), [size] px wide, centred
+     *  on ([cx], [cy]). */
     private fun drawDeviceIcon(c: Canvas, icon: String, cx: Float, cy: Float, size: Float, color: Int) {
-        val u = size / 24f
-        val ox = cx - size / 2f
-        val oy = cy - size / 2f
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
-            strokeWidth = 1.8f * u
             strokeCap = Paint.Cap.ROUND
             strokeJoin = Paint.Join.ROUND
             this.color = color
         }
-        val rect = { x: Float, y: Float, w: Float, h: Float, r: Float ->
-            c.drawRoundRect(RectF(ox + x * u, oy + y * u, ox + (x + w) * u, oy + (y + h) * u), r * u, r * u, paint)
+        val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            this.color = color
         }
-        val line = { x1: Float, y1: Float, x2: Float, y2: Float ->
-            c.drawLine(ox + x1 * u, oy + y1 * u, ox + x2 * u, oy + y2 * u, paint)
-        }
-        val poly = { pts: List<Float> ->
-            val p = Path()
-            p.moveTo(ox + pts[0] * u, oy + pts[1] * u)
-            var i = 2
-            while (i + 1 < pts.size) {
-                p.lineTo(ox + pts[i] * u, oy + pts[i + 1] * u)
-                i += 2
+        val dash = DashPathEffect(floatArrayOf(1.6f, 1.6f), 0f)
+        fun draw(parts: List<DeviceIconShapes.Part>) {
+            for (part in parts) {
+                val path = runCatching { PathParser.createPathFromPathData(part.d) }.getOrNull() ?: continue
+                if (part.fill) {
+                    c.drawPath(path, fill)
+                } else {
+                    stroke.strokeWidth = if (part.thin) 0.9f else 1.8f
+                    stroke.pathEffect = if (part.dashed) dash else null
+                    c.drawPath(path, stroke)
+                }
             }
-            c.drawPath(p, paint)
         }
-        when (icon) {
-            "phone" -> { rect(7f, 2f, 10f, 20f, 2f); line(11f, 18f, 13f, 18f) }
-            "tablet" -> { rect(4f, 2f, 16f, 20f, 2f); line(11f, 18f, 13f, 18f) }
-            "laptop" -> { rect(4f, 5f, 16f, 11f, 1.5f); line(2f, 19f, 22f, 19f) }
-            "desktop" -> { rect(3f, 4f, 18f, 12f, 1.5f); line(8f, 20f, 16f, 20f); line(12f, 16f, 12f, 20f) }
-            "tv" -> { rect(2f, 7f, 20f, 13f, 2f); poly(listOf(8f, 3f, 12f, 7f, 16f, 3f)) }
-            "watch" -> {
-                rect(6f, 6f, 12f, 12f, 3f)
-                poly(listOf(9f, 6f, 10f, 2f, 14f, 2f, 15f, 6f))
-                poly(listOf(9f, 18f, 10f, 22f, 14f, 22f, 15f, 18f))
-            }
-            else -> {}
+        val shape = DeviceIconShapes.shape(icon)
+        c.save()
+        c.translate(cx - size / 2f, cy - size / 2f)
+        c.scale(size / 24f, size / 24f)
+        draw(shape.parts)
+        shape.mark?.let { m ->
+            c.save()
+            c.translate(m.x, m.y)
+            c.scale(m.scale, m.scale)
+            draw(DeviceIconShapes.markParts(m.kind))
+            c.restore()
         }
+        c.restore()
     }
 
     /** A share through one of these shortcuts: helps Android rank it. */

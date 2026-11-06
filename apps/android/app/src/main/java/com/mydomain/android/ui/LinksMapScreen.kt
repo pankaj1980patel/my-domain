@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.LinksMap
 import com.mydomain.android.core.LinksMapInfo
 import com.mydomain.android.core.LinksMapPlan
@@ -357,21 +358,21 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
             }
             // The devices, then this phone.
             val nameStyle = TextStyle(fontSize = 12.sp, color = text2)
-            val initialStyle = TextStyle(fontSize = 15.sp, color = text, fontWeight = FontWeight.Bold)
-            fun node(x: Float, y: Float, rad: Float, name: String, ring: Color, dashed: Boolean, bold: Boolean) {
+            fun node(x: Float, y: Float, rad: Float, name: String, icon: String, ring: Color, dashed: Boolean, bold: Boolean) {
                 drawCircle(nodeBg, rad, Offset(x, y))
                 drawCircle(
                     ring, rad, Offset(x, y),
                     style = Stroke(if (bold) 3.dp.toPx() else 2.dp.toPx(), pathEffect = if (dashed) PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 4.dp.toPx())) else null),
                 )
-                val i = measurer.measure(name.trim().take(1).uppercase().ifEmpty { "?" }, initialStyle)
-                drawText(i, topLeft = Offset(x - i.size.width / 2f, y - i.size.height / 2f))
+                // Its icon (what it is, or the one you chose).
+                val px = rad * 1.15f
+                drawDeviceIcon(icon, Offset(x - px / 2f, y - px / 2f), px, text)
                 val n = measurer.measure(name, nameStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = androidx.compose.ui.unit.Constraints(maxWidth = (rad * 6).toInt()))
                 drawText(n, topLeft = Offset(x - n.size.width / 2f, y + rad + 4.dp.toPx()))
             }
             for (d in map.devices) {
                 val s = at[d.nodeId] ?: continue
-                node(s.x, s.y, r, names[d.nodeId].orEmpty(), if (d.link != null) accent else off, d.link == null, pick == PickedDevice(d.nodeId))
+                node(s.x, s.y, r, names[d.nodeId].orEmpty(), DeviceKinds.iconOf(d.nodeId), if (d.link != null) accent else off, d.link == null, pick == PickedDevice(d.nodeId))
                 // Verified: a small check at its top right.
                 if (d.verified) {
                     val v = Offset(s.x + r * 0.75f, s.y - r * 0.75f)
@@ -385,7 +386,7 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
                     drawPath(tick, Color.White, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
                 }
             }
-            node(c.x, c.y, r * 1.3f, me, accent, dashed = false, bold = true)
+            node(c.x, c.y, r * 1.3f, me, DeviceKinds.own?.icon ?: "android_phone", accent, dashed = false, bold = true)
         }
     }
 }
@@ -436,6 +437,7 @@ private fun DeviceRow(d: MapDeviceInfo, onDetails: () -> Unit) {
     }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Box(Modifier.size(10.dp).background(toneColor(LinksMapPlan.tone(d.link?.how)), CircleShape))
+        DeviceIcon(DeviceKinds.iconOf(d.nodeId), 20.dp)
         Column(Modifier.weight(1f)) {
             Text("$name: $line", style = MaterialTheme.typography.bodyMedium, color = T.text)
             if (NearbyBadge.onMapLink(d.link?.nearbyMedia == true, d.link != null)) NearbyPill()

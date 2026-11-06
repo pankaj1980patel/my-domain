@@ -114,6 +114,9 @@ class NetService : Service() {
         WifiDirect.init(this)
         // Labels given on this phone before they were shared.
         Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
+        // What kind of device this is (phone, tablet, foldable, TV; its
+        // model): your other devices draw its icon from it.
+        Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
         PhotoBackup.start(this)
         // Save battery: heavy background work waits while the battery is low,
         // Battery Saver is on or the phone dozes (and big transfers on mobile data).

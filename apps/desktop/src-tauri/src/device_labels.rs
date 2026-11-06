@@ -30,8 +30,10 @@ const KEY: &str = "labels";
 pub const MAX_NICKNAME: usize = 40;
 /// The most labels kept.
 const MAX_LABELS: usize = 200;
-/// Icons the UI can draw.
-pub const ICONS: [&str; 6] = ["phone", "tablet", "laptop", "desktop", "tv", "watch"];
+/// Icons the UI can draw: the core's set (OS and form together, e.g.
+/// `mac_laptop`, `win_desktop`, `android_phone`, and the older plain
+/// `phone`, `laptop`... ones).
+pub const ICONS: [&str; 17] = mdcore::features::device_kind::ICONS;
 /// Accent colours the UI can draw (each maps to a theme colour).
 pub const COLORS: [&str; 7] = ["cyan", "blue", "sky", "green", "gold", "rose", "grey"];
 
@@ -320,6 +322,9 @@ mod tests {
             (Some("laptop"), Some("rose"))
         );
         assert!(checked(None, s("toaster"), None).is_err());
+        // The automatic icons can be chosen too.
+        assert!(checked(None, s("mac_laptop"), None).is_ok());
+        assert!(checked(None, s("android_foldable"), None).is_ok());
         assert!(checked(None, None, s("#ff0000")).is_err());
         // Blank means none.
         assert_eq!(checked(None, s(""), s("")).unwrap(), DeviceLabel::default());

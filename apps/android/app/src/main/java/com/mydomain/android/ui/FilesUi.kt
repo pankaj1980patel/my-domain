@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.FileActions
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.ReadLater
 import com.mydomain.android.core.ReadLaterLinks
 import com.mydomain.android.core.RemoteDownloads
@@ -194,7 +195,7 @@ fun ShareChooser() {
                         toast(String.format(sendingTo, name))
                         if (text != null) Core.sendSharedTextAsync(p.nodeId, text, onError = { toast(friendlyError(it)) })
                         else Core.sendFiles(p.nodeId, uris, onError = { toast(friendlyError(it)) })
-                    }, Modifier.fillMaxWidth())
+                    }, Modifier.fillMaxWidth(), deviceIcon = DeviceKinds.iconOf(p.nodeId))
                 }
             }
         },

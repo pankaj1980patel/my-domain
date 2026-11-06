@@ -24,31 +24,34 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.vector.PathParser
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceIconShapes
+import com.mydomain.android.core.DeviceKindPlan
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.DeviceLabels
-import com.mydomain.android.core.initial
 import com.mydomain.android.core.niceName
 
 // A device's look on this phone: its avatar (the icon you chose, else the
-// initial of its name, ringed in the colour you chose) and the editor that
+// one for what it is, ringed in the colour you chose) and the editor that
 // sets the nickname, icon and colour ([DeviceLabels]; names come from
 // Core.peerName, which prefers the nickname). Same sets as the desktop.
 
@@ -73,6 +76,17 @@ private fun iconName(id: String): String = when (id) {
     "desktop" -> stringResource(R.string.label_icon_desktop)
     "tv" -> stringResource(R.string.label_icon_tv)
     "watch" -> stringResource(R.string.label_icon_watch)
+    "android_phone" -> stringResource(R.string.label_icon_android_phone)
+    "android_tablet" -> stringResource(R.string.label_icon_android_tablet)
+    "android_foldable" -> stringResource(R.string.label_icon_android_foldable)
+    "mac_laptop" -> stringResource(R.string.label_icon_mac_laptop)
+    "imac" -> stringResource(R.string.label_icon_imac)
+    "mac_desktop" -> stringResource(R.string.label_icon_mac_desktop)
+    "win_laptop" -> stringResource(R.string.label_icon_win_laptop)
+    "win_desktop" -> stringResource(R.string.label_icon_win_desktop)
+    "linux_laptop" -> stringResource(R.string.label_icon_linux_laptop)
+    "linux_desktop" -> stringResource(R.string.label_icon_linux_desktop)
+    "unknown" -> stringResource(R.string.label_icon_unknown)
     else -> id
 }
 
@@ -88,64 +102,72 @@ internal fun colorName(id: String): String = when (id) {
     else -> id
 }
 
-/** One device icon, line-drawn on a 24-unit grid (the desktop's SVGs). */
-@Composable
-fun DeviceIcon(icon: String, size: Dp = 24.dp, color: Color = T.text) {
-    Canvas(Modifier.size(size)) {
-        val u = this.size.minDimension / 24f
-        val width = 1.8f * u
-        val stroke = Stroke(width = width, cap = StrokeCap.Round, join = StrokeJoin.Round)
-        val rect = { x: Float, y: Float, w: Float, h: Float, r: Float ->
-            drawRoundRect(color, Offset(x * u, y * u), Size(w * u, h * u), CornerRadius(r * u), style = stroke)
-        }
-        val line = { x1: Float, y1: Float, x2: Float, y2: Float ->
-            drawLine(color, Offset(x1 * u, y1 * u), Offset(x2 * u, y2 * u), width, StrokeCap.Round)
-        }
-        val poly = { pts: List<Float> ->
-            val p = Path()
-            p.moveTo(pts[0] * u, pts[1] * u)
-            var i = 2
-            while (i + 1 < pts.size) {
-                p.lineTo(pts[i] * u, pts[i + 1] * u)
-                i += 2
-            }
-            drawPath(p, color, style = stroke)
-        }
-        when (icon) {
-            "phone" -> { rect(7f, 2f, 10f, 20f, 2f); line(11f, 18f, 13f, 18f) }
-            "tablet" -> { rect(4f, 2f, 16f, 20f, 2f); line(11f, 18f, 13f, 18f) }
-            "laptop" -> { rect(4f, 5f, 16f, 11f, 1.5f); line(2f, 19f, 22f, 19f) }
-            "desktop" -> { rect(3f, 4f, 18f, 12f, 1.5f); line(8f, 20f, 16f, 20f); line(12f, 16f, 12f, 20f) }
-            "tv" -> { rect(2f, 7f, 20f, 13f, 2f); poly(listOf(8f, 3f, 12f, 7f, 16f, 3f)) }
-            "watch" -> {
-                rect(6f, 6f, 12f, 12f, 3f)
-                poly(listOf(9f, 6f, 10f, 2f, 14f, 2f, 15f, 6f))
-                poly(listOf(9f, 18f, 10f, 22f, 14f, 22f, 15f, 18f))
-            }
-            else -> {}
+/** The parsed paths of one icon, kept per icon name. */
+private val parsedIcons = HashMap<String, List<Pair<DeviceIconShapes.Part, Path>>>()
+private val parsedMarks = HashMap<String, List<Pair<DeviceIconShapes.Part, Path>>>()
+
+private fun parsed(parts: List<DeviceIconShapes.Part>): List<Pair<DeviceIconShapes.Part, Path>> =
+    parts.map { it to PathParser().parsePathString(it.d).toPath() }
+
+private fun partsOf(icon: String): List<Pair<DeviceIconShapes.Part, Path>> =
+    synchronized(parsedIcons) { parsedIcons.getOrPut(icon) { parsed(DeviceIconShapes.shape(icon).parts) } }
+
+private fun markOf(kind: String): List<Pair<DeviceIconShapes.Part, Path>> =
+    synchronized(parsedMarks) { parsedMarks.getOrPut(kind) { parsed(DeviceIconShapes.markParts(kind)) } }
+
+private val iconDash = PathEffect.dashPathEffect(floatArrayOf(1.6f, 1.6f))
+
+private fun DrawScope.drawParts(list: List<Pair<DeviceIconShapes.Part, Path>>, color: Color) {
+    for ((part, path) in list) {
+        if (part.fill) {
+            drawPath(path, color)
+        } else {
+            val stroke = Stroke(
+                width = if (part.thin) 0.9f else 1.8f,
+                cap = StrokeCap.Round,
+                join = StrokeJoin.Round,
+                pathEffect = if (part.dashed) iconDash else null,
+            )
+            drawPath(path, color, style = stroke)
         }
     }
 }
 
-/** A device's avatar: its icon (else its initial), ringed and tinted in
- *  its colour. The icon or letter stays in the text colour, so it keeps
- *  full contrast whatever the colour. */
+/** Draw device icon [icon] ([DeviceIconShapes]: the desktop's SVGs) in a
+ *  [px]-wide square at [topLeft]: the device's shape with its OS mark. */
+fun DrawScope.drawDeviceIcon(icon: String, topLeft: Offset, px: Float, color: Color) {
+    val shape = DeviceIconShapes.shape(icon)
+    translate(topLeft.x, topLeft.y) {
+        scale(px / 24f, pivot = Offset.Zero) {
+            drawParts(partsOf(icon), color)
+            shape.mark?.let { m ->
+                translate(m.x, m.y) {
+                    scale(m.scale, pivot = Offset.Zero) { drawParts(markOf(m.kind), color) }
+                }
+            }
+        }
+    }
+}
+
+/** One device icon, drawn on a 24-unit grid in [color]. */
+@Composable
+fun DeviceIcon(icon: String, size: Dp = 24.dp, color: Color = T.text) {
+    Canvas(Modifier.size(size)) { drawDeviceIcon(icon, Offset.Zero, this.size.minDimension, color) }
+}
+
+/** A device's avatar: the icon you chose, else the one for what it is
+ *  ([DeviceKinds]), ringed and tinted in its colour. The icon stays in the
+ *  text colour, so it keeps full contrast whatever the colour. */
 @Composable
 fun DeviceAvatar(node: String, size: Dp = 44.dp) {
     val label = DeviceLabels.labels[node]
-    val own = Core.peers.firstOrNull { it.nodeId == node }?.name.orEmpty()
     val accent = labelColor(label?.color)
     val shape = MaterialTheme.shapes.small
     // Decorative: the device's name is always next to it.
     var m = Modifier.size(size).clearAndSetSemantics {}.clip(shape).background(T.surface2, shape)
     if (accent != null) m = m.background(accent.copy(alpha = 0.18f), shape).border(BorderStroke(2.dp, accent), shape)
     Box(m, contentAlignment = Alignment.Center) {
-        val icon = label?.icon
-        if (icon != null) {
-            DeviceIcon(icon, size * 0.55f)
-        } else {
-            Text(initial(label?.nickname ?: own), color = T.text, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
-        }
+        DeviceIcon(DeviceKindPlan.iconOf(label?.icon, DeviceKinds.kinds[node]), size * 0.6f)
     }
 }
 
@@ -167,8 +189,9 @@ fun DeviceLabelEditor(node: String, onDone: () -> Unit) {
 
         Text(stringResource(R.string.label_icon), style = MaterialTheme.typography.labelLarge, color = T.text2)
         Row(Modifier.selectableGroup().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Choice(icon == null, stringResource(R.string.label_none), { icon = null }) {
-                Text(initial(nickname.ifEmpty { own }), color = T.text, fontWeight = FontWeight.SemiBold)
+            // Automatic: the icon for what it is (a Mac laptop, an Android phone...).
+            Choice(icon == null, stringResource(R.string.label_icon_auto), { icon = null }) {
+                DeviceIcon(DeviceKindPlan.iconOf(null, DeviceKinds.kinds[node]))
             }
             DeviceLabels.ICONS.forEach { id ->
                 Choice(icon == id, iconName(id), { icon = id }) { DeviceIcon(id) }

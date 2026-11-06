@@ -14,7 +14,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use crate::auth::AuthUser;
 use crate::error::AppError;
-use crate::models::Device;
+use crate::models::{Device, DeviceKind};
 use crate::state::AppState;
 
 fn now() -> i64 {
@@ -50,6 +50,9 @@ pub struct DeviceReq {
     /// Public `ip:port` the device's router forwards to its QUIC port (UPnP).
     #[serde(default)]
     pub mapped_quic: Option<String>,
+    /// What kind of device it is (for its icon); absent from older apps.
+    #[serde(default)]
+    pub kind: Option<DeviceKind>,
 }
 
 /// A public IPv4 `ip:port` (what a UPnP mapping must look like), else `None`.
@@ -101,6 +104,10 @@ pub struct DeviceOut {
     pub reflexive_udp_port: Option<i32>,
     pub nat: String,
     pub mapped_quic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<DeviceKind>,
 }
 
 /// The caller's real IP. Behind the local reverse proxy (Caddy on :443) every
@@ -168,6 +175,12 @@ pub async fn register(
     if let Some(p) = req.platform.as_ref().filter(|v| !v.trim().is_empty()) {
         set.insert("platform", p);
     }
+    if let Some(k) = req.kind.as_ref().and_then(DeviceKind::cleaned) {
+        set.insert(
+            "kind",
+            doc! { "os": k.os, "form": k.form, "model": k.model, "maker": k.maker },
+        );
+    }
 
     let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
     coll.update_one(
@@ -227,6 +240,8 @@ pub async fn list(
             reflexive_udp_port: d.reflexive_udp_port,
             nat: d.nat.unwrap_or_else(|| "unknown".into()),
             mapped_quic: d.mapped_quic,
+            platform: d.platform,
+            kind: d.kind,
         })
         .collect();
     Ok(Json(out))

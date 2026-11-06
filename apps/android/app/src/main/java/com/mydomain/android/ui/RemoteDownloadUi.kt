@@ -23,6 +23,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DeviceKinds
 import com.mydomain.android.core.DlItem
 import com.mydomain.android.core.RemoteDownloadPlan
 import com.mydomain.android.core.RemoteDownloadPlan.Line
@@ -106,7 +107,7 @@ fun DownloadOnChooser() {
                                     { toast(friendlyError(it)) },
                                 )
                             }
-                        }, Modifier.fillMaxWidth())
+                        }, Modifier.fillMaxWidth(), deviceIcon = DeviceKinds.iconOf(node))
                     }
                 }
                 Muted(stringResource(R.string.dl_choose_hint))

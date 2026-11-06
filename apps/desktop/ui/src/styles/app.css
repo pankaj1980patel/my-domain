@@ -425,6 +425,10 @@ input[type="checkbox"][role="switch"]:checked::after {
   height: 56px;
   font-size: var(--text-xl);
 }
+.device-avatar.sm {
+  width: 28px;
+  height: 28px;
+}
 .device-main {
   display: grid;
   gap: var(--s-1);
@@ -2006,6 +2010,15 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .label-initial {
   font-weight: 650;
+}
+.label-choice:has(.label-auto) {
+  width: auto;
+  padding: 0 var(--s-2);
+  grid-auto-flow: column;
+  gap: var(--s-1);
+}
+.label-auto {
+  font-size: var(--text-sm);
 }
 .label-swatch {
   width: 32px;
@@ -4147,7 +4160,7 @@ html.qp-window body {
 .map-node.picked circle { stroke-width: 4; }
 .map-me { cursor: default; }
 .map-me circle { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 3; }
-.map-initial { fill: var(--text); font-size: 16px; font-weight: var(--weight-strong); }
+.map-icon { color: var(--text); pointer-events: none; }
 .map-name { fill: var(--text-2); font-size: 12px; }
 .map-legend { display: flex; flex-wrap: wrap; gap: var(--s-3); list-style: none; margin: var(--s-2) 0 0; padding: 0; color: var(--text-2); }
 .map-legend li { display: flex; align-items: center; gap: var(--s-1); }
@@ -4414,4 +4427,12 @@ html.kvm-window body {
 .np-sessions select {
   min-width: 0;
   flex: 1 1 auto;
+}
+/* A device's icon inline in a line of text (activity rows). */
+.activity-meta .device-icon {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+.device-model {
+  margin: 0;
 }

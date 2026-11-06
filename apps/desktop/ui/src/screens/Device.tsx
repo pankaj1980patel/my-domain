@@ -23,6 +23,7 @@ import {
   setPhoneNotifPrefs,
   openFile,
   openUrlOn,
+  peerModel,
   peerName,
   pickAndSendFile,
   pickAndSendFolder,
@@ -241,6 +242,9 @@ export default function Device(props: { node: string; onBack: () => void }) {
                 </button>
                 <VerifyDevice node={props.node} />
               </div>
+              <Show when={peerModel(p().node_id)}>
+                {(model) => <p class="muted small device-model">{model()}</p>}
+              </Show>
               <StatusPill node={props.node} />
               <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
                 <p class="muted small">{progressLabel(state.progress[props.node])}</p>

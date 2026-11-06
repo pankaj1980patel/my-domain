@@ -391,6 +391,32 @@ impl SharedLabel {
     }
 }
 
+/// What kind of device one is (`features::device_kind`): its OS, its form
+/// (phone, laptop, ...), its model and maker, and the icon the apps draw
+/// for it. Every field may be empty (an older app says nothing): the icon
+/// is then `"unknown"` or a guess from what it did say.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct DeviceKind {
+    /// `macos`, `windows`, `linux`, `android`, `ios`, or empty.
+    #[serde(default)]
+    pub os: String,
+    /// `phone`, `tablet`, `foldable`, `laptop`, `desktop`, `all_in_one`,
+    /// `tv`, `other`, or empty.
+    #[serde(default)]
+    pub form: String,
+    /// For display: "MacBook Pro", "Pixel 8", "ThinkPad X1 Carbon".
+    #[serde(default)]
+    pub model: String,
+    /// For display: "Apple", "Google", "Lenovo".
+    #[serde(default)]
+    pub maker: String,
+    /// The automatic icon (`features::device_kind::icon_for`); worked out
+    /// on arrival, never taken from the wire.
+    #[serde(default)]
+    pub icon: String,
+}
+
 /// A note in the notepad shared between your devices (`features::notes`):
 /// `Engine::notes`, and the `NotesChanged` event.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
