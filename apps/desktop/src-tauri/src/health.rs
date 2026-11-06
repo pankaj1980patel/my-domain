@@ -231,8 +231,10 @@ pub fn settings_url(os: Os, id: &str) -> Option<&'static str> {
         (Os::Mac, "bluetooth") => {
             "x-apple.systempreferences:com.apple.preference.security?Privacy_Bluetooth"
         }
+        // The System Settings extension id (macOS 13+); the old
+        // `com.apple.preference.notifications` pane id opens nothing there.
         (Os::Mac, "notifications") => {
-            "x-apple.systempreferences:com.apple.preference.notifications"
+            "x-apple.systempreferences:com.apple.Notifications-Settings.extension"
         }
         (Os::Windows, "notifications") => "ms-settings:notifications",
         (Os::Windows, "location") => "ms-settings:privacy-location",
