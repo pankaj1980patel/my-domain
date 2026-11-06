@@ -1283,6 +1283,12 @@
     <string name="conn_up_for">Up for</string>
     <string name="conn_last_drop">Last dropped</string>
     <string name="conn_last_drop_value">%1$s, %2$s</string>
+    <string name="conn_envelope">Message protection</string>
+    <string name="conn_envelope_v2">Replay-protected (version 2)</string>
+    <string name="conn_envelope_v1">Older app: version 1, no replay protection</string>
+    <string name="conn_clock_skew">Clock difference</string>
+    <string name="conn_refused">Messages refused</string>
+    <string name="conn_refused_value">%1$d copies · %2$d stale · %3$d downgraded · %4$d misaddressed · %5$d wrong sender</string>
     <string name="conn_drop_idle">closed here, unused (saving battery)</string>
     <string name="conn_drop_peer_idle">closed there, unused: it’s asleep</string>
     <string name="conn_drop_network_change">the network changed</string>

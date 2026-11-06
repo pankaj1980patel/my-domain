@@ -48,6 +48,9 @@ The details also say how the connection holds up over time:
 - **Reconnect time**: how long the last reconnect took, and the average of the recent ones. It's timed from what started it: this device's network changing (say, Wi-Fi to mobile data), a push waking this device, or this device pushing the other one awake. A few seconds is normal; much longer usually means the phone's battery saving held it back (see below).
 - **Up for** / **Links last**: how long the current connection has been up, and how long the recent ones lasted.
 - **Last dropped**, and why: closed here or there because it wasn't used (a phone in the background does that to save battery, and is woken by a push when needed), the network changed, it went silent, or it was closed by hand.
+- **Message protection**: "Replay-protected" when both devices are up to date. Each message then names its sender, its recipient, a one-time id and when it was sent, all sealed by the encryption, so a copy sent again later (by the server, or by someone who recorded Bluetooth traffic) is refused. A device with an older app still gets messages the old way until it's updated.
+- **Clock difference**: how far the other device's clock is from this one's. Messages sent more than 5 minutes off are refused, so set both clocks automatically.
+- **Messages refused**, when there were any: copies, stale ones, ones in the old format from a device that already uses the new one, ones meant for another device, and ones that claimed the wrong sender. A few after a clock change are harmless; many may mean someone is tampering with the connection.
 
 **Test speed** sends a few megabytes each way over the current connection and shows how fast it went, both ways, in Mbit/s, the same way files travel. It only works while connected, and you can cancel it at any time. Measuring needs my-domain to be up to date on both devices; if the other one is older, the check says so.
 

@@ -37,7 +37,7 @@ use serde_json::{json, Value};
 use tungstenite::Message as WsMessage;
 
 use crate::engine::NetCtx;
-use crate::model::{Envelope, WsFrame};
+use crate::model::WsFrame;
 use crate::platform::Platform;
 
 use super::{drop_live, handle_incoming, mark_live, TransportKind};
@@ -585,7 +585,7 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
             on_hello(ctx, from)
         }
         Ok(WsFrame::Bye) => on_bye(ctx, from),
-        Ok(WsFrame::Msg { nonce, ciphertext }) => {
+        Ok(WsFrame::Msg(env)) => {
             // A message from a device we have no way back to (its hello, or
             // the push that set this up, got lost): route it now, or our
             // receipts and replies would have nowhere to go.
@@ -594,7 +594,6 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
             } else {
                 check_direct(ctx, from);
             }
-            let env = Envelope { nonce, ciphertext };
             handle_incoming(ctx, &env, Some(from), String::new(), "RELAY");
         }
         Err(_) => {}

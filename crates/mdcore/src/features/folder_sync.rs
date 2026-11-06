@@ -1366,15 +1366,7 @@ fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &Value, reliably: bool) -
         return true;
     }
     let name = ctx.identity.lock().name.clone();
-    crate::transport::send_payload(
-        &ctx.ws_conns,
-        &ctx.p2p_conns,
-        &ctx.key,
-        &name,
-        node,
-        &msg.to_string(),
-    )
-    .is_ok()
+    crate::transport::send_payload(ctx, &name, node, &msg.to_string()).is_ok()
 }
 
 // --- status ------------------------------------------------------------------------

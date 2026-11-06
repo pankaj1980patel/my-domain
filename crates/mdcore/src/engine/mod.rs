@@ -206,6 +206,8 @@ pub struct NetCtx<P: Platform> {
     pub peer_keys: crate::device_key::Pins,
     /// Open Bluetooth connections (see `ble`).
     pub(crate) ble_links: ble::BleLinks,
+    /// Envelope versions, ids seen and refusals (see `transport::envelope`).
+    pub env: Arc<transport::envelope::Guard>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -245,6 +247,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             device_key: self.device_key.clone(),
             peer_keys: self.peer_keys.clone(),
             ble_links: self.ble_links.clone(),
+            env: self.env.clone(),
             seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
@@ -412,6 +415,7 @@ impl<P: Platform> Engine<P> {
             device_key,
             peer_keys: Arc::default(),
             ble_links: Arc::default(),
+            env: Arc::new(transport::envelope::Guard::load(&*platform)),
             subs: subs.clone(),
             removal_subs: Arc::default(),
             quic_failed: Arc::default(),
@@ -551,14 +555,7 @@ impl<P: Platform> Engine<P> {
     /// Send an already-built control-message JSON to one peer over its link.
     fn send_control(&self, node_id: &str, json: &str) -> crate::Result<()> {
         let from = self.ctx.identity.lock().name.clone();
-        transport::send_payload(
-            &self.ctx.ws_conns,
-            &self.ctx.p2p_conns,
-            &self.ctx.key,
-            &from,
-            node_id,
-            json,
-        )
+        transport::send_payload(&self.ctx, &from, node_id, json)
     }
 
     fn emit_peers(&self) {

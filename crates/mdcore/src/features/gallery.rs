@@ -133,14 +133,7 @@ pub fn reply<P: Platform>(
             "type": "gallery_thumb", "from": me(ctx), "req": req, "id": id,
             "data": base64::engine::general_purpose::STANDARD.encode(&data),
         });
-        let sent = crate::transport::send_payload(
-            &ctx.ws_conns,
-            &ctx.p2p_conns,
-            &ctx.key,
-            &name,
-            to,
-            &m.to_string(),
-        );
+        let sent = crate::transport::send_payload(ctx, &name, to, &m.to_string());
         if sent.is_err() {
             break;
         }

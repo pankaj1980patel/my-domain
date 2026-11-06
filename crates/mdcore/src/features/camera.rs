@@ -120,14 +120,7 @@ fn ready<P: Platform>(ctx: &NetCtx<P>, node: &str, connect: bool) -> crate::Resu
 
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &Value) -> crate::Result<()> {
     let name = ctx.identity.lock().name.clone();
-    crate::transport::send_payload(
-        &ctx.ws_conns,
-        &ctx.p2p_conns,
-        &ctx.key,
-        &name,
-        node,
-        &msg.to_string(),
-    )
+    crate::transport::send_payload(ctx, &name, node, &msg.to_string())
 }
 
 // --- the computer's side ------------------------------------------------------

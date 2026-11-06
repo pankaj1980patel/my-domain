@@ -279,6 +279,33 @@ export default function ConnectionTile(props: { node: string }) {
                   })}
                 </dd>
               </Show>
+              <dt>{t("conn.envelope")}</dt>
+              <dd>{t(d().envelope.version >= 2 ? "conn.envelope.v2" : "conn.envelope.v1")}</dd>
+              <Show when={d().envelope.skew_ms != null}>
+                <dt>{t("conn.clockSkew")}</dt>
+                <dd>{msText(Math.abs(d().envelope.skew_ms!))}</dd>
+              </Show>
+              <Show
+                when={
+                  d().envelope.replays +
+                    d().envelope.stale +
+                    d().envelope.downgrades +
+                    d().envelope.wrong_recipient +
+                    d().envelope.spoofed >
+                  0
+                }
+              >
+                <dt>{t("conn.refused")}</dt>
+                <dd>
+                  {t("conn.refusedValue", {
+                    replays: d().envelope.replays,
+                    stale: d().envelope.stale,
+                    downgrades: d().envelope.downgrades,
+                    wrong: d().envelope.wrong_recipient,
+                    spoofed: d().envelope.spoofed,
+                  })}
+                </dd>
+              </Show>
             </dl>
             <Show when={d().attempts.length > 0}>
               <h3 class="conn-sub">{t("conn.attempts")}</h3>

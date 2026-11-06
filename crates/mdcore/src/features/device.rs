@@ -114,6 +114,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::media::extend_status(ctx, &mut status);
                 // Whether it shows verification codes from your phone.
                 super::otp_relay::extend_status(ctx, &mut status);
+                // Which envelope version it reads.
+                crate::transport::envelope::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 // What kind of device it is (its icon).
@@ -174,6 +176,11 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::batches::remember(ctx, &from, &status[super::batches::FLAG]);
                 super::media::remember(ctx, &from, &status[super::media::FLAG]);
                 super::otp_relay::remember(ctx, &from, &status[super::otp_relay::FLAG]);
+                crate::transport::envelope::remember(
+                    ctx,
+                    &from,
+                    &status[crate::transport::envelope::FLAG],
+                );
                 super::media::saw(ctx, &from, &status["now_playing"]);
                 super::app_info::remember(ctx, &from, &status);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });

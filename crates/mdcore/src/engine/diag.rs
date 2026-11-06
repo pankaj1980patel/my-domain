@@ -93,7 +93,15 @@ impl<P: Platform> Engine<P> {
             relay,
             attempts,
             reconnect: crate::features::reconnect::report(&self.ctx, node_id),
+            envelope: self.ctx.env.info(node_id),
         })
+    }
+
+    /// What this device knows about `node_id`'s envelopes: the version it
+    /// reads, its clock skew, and what was refused (`transport::envelope`).
+    /// Quick: measures nothing.
+    pub fn envelope_info(&self, node_id: &str) -> crate::transport::envelope::EnvelopeInfo {
+        self.ctx.env.info(node_id)
     }
 
     /// Measure the speed of the link to `node_id`, both ways: a few pings,

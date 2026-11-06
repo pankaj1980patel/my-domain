@@ -99,6 +99,21 @@ impl FakeRelay {
         self.seen.forwarded.lock().unwrap().clone()
     }
 
+    /// Play a hostile server: hand `to` a frame (`data`) as if `from` sent
+    /// it, e.g. a copy of one it forwarded before. False if `to` isn't
+    /// connected.
+    pub fn inject(&self, to: &str, from: &str, data: &str) -> bool {
+        let q = self
+            .conns
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|((_, n), _)| n == to)
+            .map(|(_, (_, q))| q.clone());
+        let out = json!({"from": from, "data": data}).to_string();
+        q.is_some_and(|q| q.send(Message::Text(out)).is_ok())
+    }
+
     /// How many binary frames the relay forwarded.
     pub fn binary_frames(&self) -> u64 {
         self.seen.binary.load(Ordering::Relaxed)

@@ -116,6 +116,30 @@ private fun secsText(s: Long): String = when {
     else -> stringResource(R.string.dur_h, (s / 3600).toInt())
 }
 
+/** Envelope version 2 (`transport::envelope`): replay protection, the clock
+ *  difference, and what was refused. */
+@Composable
+private fun EnvelopeDetails(e: JSONObject) {
+    Detail(
+        stringResource(R.string.conn_envelope),
+        stringResource(if (e.optInt("version") >= 2) R.string.conn_envelope_v2 else R.string.conn_envelope_v1),
+    )
+    if (!e.isNull("skew_ms")) {
+        Detail(stringResource(R.string.conn_clock_skew), msText(kotlin.math.abs(e.optLong("skew_ms"))))
+    }
+    val replays = e.optInt("replays")
+    val stale = e.optInt("stale")
+    val downgrades = e.optInt("downgrades")
+    val wrong = e.optInt("wrong_recipient")
+    val spoofed = e.optInt("spoofed")
+    if (replays + stale + downgrades + wrong + spoofed > 0) {
+        Detail(
+            stringResource(R.string.conn_refused),
+            stringResource(R.string.conn_refused_value, replays, stale, downgrades, wrong, spoofed),
+        )
+    }
+}
+
 /** How fast links come back, how long they last, why the last one went. */
 @Composable
 private fun ReconnectDetails(r: JSONObject) {
@@ -325,6 +349,7 @@ private fun Report(d: JSONObject, name: String) {
             Detail(stringResource(R.string.conn_relay), stringResource(r))
         }
         d.optJSONObject("reconnect")?.let { ReconnectDetails(it) }
+        d.optJSONObject("envelope")?.let { EnvelopeDetails(it) }
     }
 
     val attempts = d.optJSONArray("attempts")

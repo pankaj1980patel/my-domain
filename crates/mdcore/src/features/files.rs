@@ -339,14 +339,7 @@ fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &serde_json::Value) -> cr
         return Ok(());
     }
     let name = ctx.identity.lock().name.clone();
-    crate::transport::send_payload(
-        &ctx.ws_conns,
-        &ctx.p2p_conns,
-        &ctx.key,
-        &name,
-        node,
-        &msg.to_string(),
-    )
+    crate::transport::send_payload(ctx, &name, node, &msg.to_string())
 }
 
 /// Only a plain file name: no folders, no hidden or empty names.

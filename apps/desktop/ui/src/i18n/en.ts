@@ -1216,6 +1216,13 @@ export const en = {
   "conn.lifetimeValue": "{last} last · {avg} average",
   "conn.lastDrop": "Last dropped",
   "conn.lastDropValue": "{why}, {ago}",
+  // Envelope version 2 (sender, recipient, id and time sealed in).
+  "conn.envelope": "Message protection",
+  "conn.envelope.v2": "Replay-protected (version 2)",
+  "conn.envelope.v1": "Older app: version 1, no replay protection",
+  "conn.clockSkew": "Clock difference",
+  "conn.refused": "Messages refused",
+  "conn.refusedValue": "{replays} copies · {stale} stale · {downgrades} downgraded · {wrong} misaddressed · {spoofed} wrong sender",
   "conn.drop.idle": "closed here, unused (saving battery)",
   "conn.drop.peer_idle": "closed there, unused: it’s asleep",
   "conn.drop.network_change": "the network changed",

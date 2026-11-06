@@ -136,11 +136,32 @@ pub struct Plaintext {
     pub ack: Option<String>,
 }
 
-/// Encrypted on-the-wire envelope (TCP/UDP body, and WS `msg` frames).
-#[derive(Clone, Serialize, Deserialize)]
+/// Encrypted on-the-wire envelope (the body of every `msg` frame).
+///
+/// Version 1 (an older app's) is just `nonce` and `ciphertext`. Version 2
+/// (`transport::envelope`) adds a header in the clear that the AEAD
+/// authenticates as associated data: who sent it (`src`), to whom (`dst`),
+/// a random message id (`mid`, 128 bits in hex) and the send time (`ts`,
+/// unix ms). An older app ignores the extra fields (and can't open it, so
+/// it's only sent to devices that said `env: 2`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Envelope {
     pub nonce: String,
     pub ciphertext: String,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub v: u8,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub src: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dst: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub mid: String,
+    #[serde(default, skip_serializing_if = "is_zero_u64")]
+    pub ts: u64,
+}
+
+fn is_zero_u64(v: &u64) -> bool {
+    *v == 0
 }
 
 /// A message surfaced to the UI.
@@ -191,7 +212,7 @@ pub enum WsFrame {
         lane: String,
     },
     #[serde(rename = "msg")]
-    Msg { nonce: String, ciphertext: String },
+    Msg(Envelope),
     /// Relay only: the sender closed its relayed link to us on purpose (idle
     /// in the background, or Disconnect). Nothing tells us otherwise: the
     /// relay socket stays up on our side, so without this we'd stay "live"

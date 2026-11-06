@@ -63,6 +63,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::batches::extend_status(ctx, &mut msg);
         super::media::extend_status(ctx, &mut msg);
         super::otp_relay::extend_status(ctx, &mut msg);
+        crate::transport::envelope::extend_status(ctx, &mut msg);
         super::device_kind::extend_status(ctx, &mut msg);
         super::app_info::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
@@ -145,6 +146,11 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::app_info::remember(ctx, &from, msg.json_root());
         super::media::remember(ctx, &from, &msg.json(super::media::FLAG));
         super::otp_relay::remember(ctx, &from, &msg.json(super::otp_relay::FLAG));
+        crate::transport::envelope::remember(
+            ctx,
+            &from,
+            &msg.json(crate::transport::envelope::FLAG),
+        );
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();

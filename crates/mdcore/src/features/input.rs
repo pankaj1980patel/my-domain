@@ -205,7 +205,7 @@ fn send_now<P: Platform>(ctx: &NetCtx<P>, node: &str, events: &[InputEvent]) -> 
         (id.node_id.clone(), id.name.clone())
     };
     let msg = json!({ "type": "input", "from": me, "events": events }).to_string();
-    crate::transport::send_payload(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, &name, node, &msg)
+    crate::transport::send_payload(ctx, &name, node, &msg)
 }
 
 /// Send `events` now, after any moves and scrolls still pending for `node`.

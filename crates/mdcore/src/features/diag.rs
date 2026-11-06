@@ -235,6 +235,10 @@ pub struct Diagnosis {
     /// How fast links to it come back, how long they last, why they go,
     /// and where it stands (`features::reconnect`).
     pub reconnect: super::reconnect::ReconnectInfo,
+    /// Its envelopes: the version it reads, clock skew, and the copies,
+    /// stale, misaddressed, misattributed and downgraded ones refused
+    /// (`transport::envelope`).
+    pub envelope: crate::transport::envelope::EnvelopeInfo,
 }
 
 impl Diagnosis {
@@ -323,15 +327,7 @@ fn me<P: Platform>(ctx: &NetCtx<P>) -> String {
 /// Send over the live link only (never connects, never wakes a device).
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &Value) -> bool {
     let from = ctx.identity.lock().name.clone();
-    transport::send_payload(
-        &ctx.ws_conns,
-        &ctx.p2p_conns,
-        &ctx.key,
-        &from,
-        node,
-        &msg.to_string(),
-    )
-    .is_ok()
+    transport::send_payload(ctx, &from, node, &msg.to_string()).is_ok()
 }
 
 fn linked<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {

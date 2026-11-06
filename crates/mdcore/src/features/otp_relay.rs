@@ -266,9 +266,7 @@ fn wire(me: &str, code: &str, app: &str, issuer: &str, expires_at: u64) -> Strin
 fn send_now<P: Platform>(ctx: &NetCtx<P>, node: &str, p: &Pending) -> bool {
     let mut msg = wire(&me(ctx), &p.code, &p.app, &p.issuer, p.expires_at);
     let name = ctx.identity.lock().name.clone();
-    let ok =
-        crate::transport::send_payload(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, &name, node, &msg)
-            .is_ok();
+    let ok = crate::transport::send_payload(ctx, &name, node, &msg).is_ok();
     wipe(&mut msg);
     ok
 }

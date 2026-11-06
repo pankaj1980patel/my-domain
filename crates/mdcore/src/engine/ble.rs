@@ -28,7 +28,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::AtomicU64;
 
 use super::*;
-use crate::model::{Envelope, WsFrame};
+use crate::model::WsFrame;
 use crate::transport::{drop_live, handle_incoming, mark_live, TransportKind};
 
 /// Media records waiting for the radio at most, per link (a quarter
@@ -147,12 +147,11 @@ impl<P: Platform> Engine<P> {
                 }
                 node_id
             }
-            WsFrame::Msg { nonce, ciphertext } => {
+            WsFrame::Msg(env) => {
                 let Some(peer) = ctx.ble_links.lock().get(&id).and_then(|l| l.peer.clone()) else {
                     return; // no Hello yet
                 };
                 self.route_ble(id, &peer);
-                let env = Envelope { nonce, ciphertext };
                 handle_incoming(ctx, &env, Some(&peer), String::new(), "BLE");
                 return;
             }

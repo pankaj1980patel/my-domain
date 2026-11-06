@@ -370,14 +370,7 @@ fn send_to<P: Platform>(ctx: &NetCtx<P>, node: &str) {
         return;
     }
     let from = ctx.identity.lock().name.clone();
-    let _ = transport::send_payload(
-        &ctx.ws_conns,
-        &ctx.p2p_conns,
-        &ctx.key,
-        &from,
-        node,
-        &message(ctx),
-    );
+    let _ = transport::send_payload(ctx, &from, node, &message(ctx));
 }
 
 /// This device's links changed: send the list to every linked device that

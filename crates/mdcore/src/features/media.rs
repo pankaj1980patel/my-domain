@@ -497,7 +497,7 @@ fn media_for<P: Platform>(ctx: &NetCtx<P>, node: &str, dedupe: bool) -> Value {
 
 fn send_to<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &str) -> crate::Result<()> {
     let name = ctx.identity.lock().name.clone();
-    crate::transport::send_payload(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, &name, node, msg)
+    crate::transport::send_payload(ctx, &name, node, msg)
 }
 
 fn me<P: Platform>(ctx: &NetCtx<P>) -> String {

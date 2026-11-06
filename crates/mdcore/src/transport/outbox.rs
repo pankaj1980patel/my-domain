@@ -89,7 +89,7 @@ pub fn pump<P: Platform>(ctx: &NetCtx<P>, node_id: &str, all: bool, id: Option<&
             id: Some(m.id.clone()),
             ack: None,
         };
-        if send_plaintext(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, node_id, &pt).is_err() {
+        if send_plaintext(ctx, node_id, &pt).is_err() {
             break;
         }
         m.sent_at = now;

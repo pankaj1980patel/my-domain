@@ -1059,7 +1059,7 @@ pub(crate) fn deliver<P: Platform>(
 
 fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, msg: &str) -> crate::Result<()> {
     let name = ctx.identity.lock().name.clone();
-    crate::transport::send_payload(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, &name, node, msg)
+    crate::transport::send_payload(ctx, &name, node, msg)
 }
 
 pub struct AudioShareHandler;

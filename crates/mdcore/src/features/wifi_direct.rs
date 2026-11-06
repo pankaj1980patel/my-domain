@@ -450,7 +450,7 @@ pub fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, text: &str) -> bool {
         text: text.to_string(),
         ..Default::default()
     };
-    let Ok(frame) = transport::seal(&ctx.key, &pt) else {
+    let Ok(frame) = transport::seal(ctx, node, &pt) else {
         return false;
     };
     if !ctx.quic.lane_send(node, frame) {

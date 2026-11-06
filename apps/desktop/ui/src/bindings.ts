@@ -1942,6 +1942,12 @@ export type Diagnosis_Deserialize = {
 	 *  and where it stands (`features::reconnect`).
 	 */
 	reconnect: ReconnectInfo_Deserialize,
+	/**
+	 *  Its envelopes: the version it reads, clock skew, and the copies,
+	 *  stale, misaddressed, misattributed and downgraded ones refused
+	 *  (`transport::envelope`).
+	 */
+	envelope: EnvelopeInfo_Deserialize,
 };
 
 /**  "Check connection" for one device (`Engine::diagnose`). */
@@ -1984,6 +1990,12 @@ export type Diagnosis_Serialize = {
 	 *  and where it stands (`features::reconnect`).
 	 */
 	reconnect: ReconnectInfo_Serialize,
+	/**
+	 *  Its envelopes: the version it reads, clock skew, and the copies,
+	 *  stale, misaddressed, misattributed and downgraded ones refused
+	 *  (`transport::envelope`).
+	 */
+	envelope: EnvelopeInfo_Serialize,
 };
 
 /**  Settings → "Downloads from my devices". */
@@ -2080,6 +2092,65 @@ export type Edge_Serialize = {
 	 *  computer's lines only; empty for a direct link).
 	 */
 	why: Why_Serialize[],
+};
+
+/**  What the connection report shows about one device's envelopes. */
+export type EnvelopeInfo = EnvelopeInfo_Serialize | EnvelopeInfo_Deserialize;
+
+/**  What the connection report shows about one device's envelopes. */
+export type EnvelopeInfo_Deserialize = {
+	/**
+	 *  The version it reads, as far as this device knows: 2 (it said so,
+	 *  or sent one) or 1.
+	 */
+	version: number,
+	/**  It was seen sending version 2: its version 1 envelopes are refused. */
+	v2_only: boolean,
+	/**  Version 2 envelopes taken from it. */
+	accepted: number,
+	/**  Refused: an id seen before (a copy sent again). */
+	replays: number,
+	/**  Refused: sent more than 5 minutes from this device's clock. */
+	stale: number,
+	/**  Refused: version 1 after it was seen sending version 2. */
+	downgrades: number,
+	/**  Refused: sealed for another device. */
+	wrong_recipient: number,
+	/**  Refused: sealed by another device than the link's. */
+	spoofed: number,
+	/**
+	 *  Its clock minus this one's, in ms (with the time on the way), from
+	 *  its last version 2 envelope.
+	 */
+	skew_ms?: number | null,
+};
+
+/**  What the connection report shows about one device's envelopes. */
+export type EnvelopeInfo_Serialize = {
+	/**
+	 *  The version it reads, as far as this device knows: 2 (it said so,
+	 *  or sent one) or 1.
+	 */
+	version: number,
+	/**  It was seen sending version 2: its version 1 envelopes are refused. */
+	v2_only: boolean,
+	/**  Version 2 envelopes taken from it. */
+	accepted: number,
+	/**  Refused: an id seen before (a copy sent again). */
+	replays: number,
+	/**  Refused: sent more than 5 minutes from this device's clock. */
+	stale: number,
+	/**  Refused: version 1 after it was seen sending version 2. */
+	downgrades: number,
+	/**  Refused: sealed for another device. */
+	wrong_recipient: number,
+	/**  Refused: sealed by another device than the link's. */
+	spoofed: number,
+	/**
+	 *  Its clock minus this one's, in ms (with the time on the way), from
+	 *  its last version 2 envelope.
+	 */
+	skew_ms: number | null,
 };
 
 /**  The "Send from the file manager" setting. */

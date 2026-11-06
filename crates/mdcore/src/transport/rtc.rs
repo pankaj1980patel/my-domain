@@ -17,7 +17,7 @@ use str0m::net::{Protocol, Receive};
 use str0m::{Candidate, Event, Input, Output, Rtc};
 
 use crate::engine::NetCtx;
-use crate::model::{Envelope, WsFrame};
+use crate::model::WsFrame;
 use crate::nat::stun::stun_binding;
 use crate::platform::Platform;
 
@@ -166,10 +166,8 @@ fn drive<P: Platform>(ctx: NetCtx<P>, mut rtc: Rtc, socket: UdpSocket, node_id: 
                         }
                     }
                     Event::ChannelData(data) => {
-                        if let Ok(WsFrame::Msg { nonce, ciphertext }) =
-                            serde_json::from_slice::<WsFrame>(&data.data)
+                        if let Ok(WsFrame::Msg(env)) = serde_json::from_slice::<WsFrame>(&data.data)
                         {
-                            let env = Envelope { nonce, ciphertext };
                             handle_incoming(&ctx, &env, Some(&node_id), String::new(), "WebRTC");
                         }
                     }

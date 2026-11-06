@@ -43,7 +43,7 @@ use quinn::{Connection, Endpoint, RecvStream, SendStream};
 use crate::config::KeepAlive;
 use crate::device_key::DeviceKey;
 use crate::engine::NetCtx;
-use crate::model::{Envelope, WsFrame};
+use crate::model::WsFrame;
 use crate::platform::Platform;
 
 use super::media::{self, MediaKind, Sent};
@@ -868,8 +868,7 @@ async fn run_connection<P: Platform>(
     // Reader: every `Msg` frame goes through the normal incoming path.
     let ip = remote.ip().to_string();
     while let Ok(bytes) = read_frame(&mut recv).await {
-        if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&bytes) {
-            let env = Envelope { nonce, ciphertext };
+        if let Ok(WsFrame::Msg(env)) = serde_json::from_slice::<WsFrame>(&bytes) {
             let (ctx, ip, from) = (ctx.clone(), ip.clone(), peer_id.clone());
             // handle_incoming is synchronous (locks, sink, feature handlers).
             tokio::task::block_in_place(move || {
@@ -984,8 +983,7 @@ async fn run_lane<P: Platform>(
     });
     let ip = canonical(conn.remote_address()).ip().to_string();
     while let Ok(bytes) = read_frame(&mut recv).await {
-        if let Ok(WsFrame::Msg { nonce, ciphertext }) = serde_json::from_slice::<WsFrame>(&bytes) {
-            let env = Envelope { nonce, ciphertext };
+        if let Ok(WsFrame::Msg(env)) = serde_json::from_slice::<WsFrame>(&bytes) {
             let (ctx, ip, from) = (ctx.clone(), ip.clone(), peer_id.clone());
             tokio::task::block_in_place(move || {
                 handle_incoming(&ctx, &env, Some(&from), ip, "Wi-Fi Direct")

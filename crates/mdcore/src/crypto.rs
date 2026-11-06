@@ -30,6 +30,7 @@ pub fn encrypt(key: &[u8; 32], plaintext: &[u8]) -> Option<Envelope> {
     Some(Envelope {
         nonce: STANDARD.encode(nonce),
         ciphertext: STANDARD.encode(ct),
+        ..Default::default()
     })
 }
 
@@ -175,14 +176,17 @@ mod tests {
             Envelope {
                 nonce: "not base64!".into(),
                 ciphertext: "AAAA".into(),
+                ..Default::default()
             },
             Envelope {
                 nonce: STANDARD.encode([0u8; 12]),
                 ciphertext: "AAAA".into(),
+                ..Default::default()
             },
             Envelope {
                 nonce: STANDARD.encode([0u8; 24]),
                 ciphertext: String::new(),
+                ..Default::default()
             },
         ];
         for env in &bad {

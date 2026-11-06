@@ -5,6 +5,7 @@
 //! or a single UDP datagram per message, and direct WebSocket links) are
 //! gone: QUIC covers each of those cases, encrypted and reliable.
 
+pub mod envelope;
 pub mod media;
 pub mod outbox;
 pub mod punch;
@@ -22,7 +23,7 @@ use std::sync::Arc;
 use serde::Serialize;
 
 use crate::crypto::{decrypt, encrypt};
-use crate::engine::{KeyHolder, NetCtx, WsConns};
+use crate::engine::NetCtx;
 use crate::error::CoreError;
 use crate::events::CoreEvent;
 use crate::model::{Envelope, IncomingMessage, Plaintext, WsFrame};
@@ -343,27 +344,13 @@ fn note_undecryptable<P: Platform>(
 pub(crate) fn send_control_to<P: Platform>(ctx: &NetCtx<P>, node_id: &str, text: &str) {
     let from = ctx.identity.lock().name.clone();
     if ctx.ws_conns.lock().contains_key(node_id) {
-        let _ = send_payload(
-            &ctx.ws_conns,
-            &ctx.p2p_conns,
-            &ctx.key,
-            &from,
-            node_id,
-            text,
-        );
+        let _ = send_payload(ctx, &from, node_id, text);
         return;
     }
     let (ctx, node_id, text) = (ctx.clone(), node_id.to_string(), text.to_string());
     std::thread::spawn(move || {
         if quic::ensure_link(&ctx, &node_id) {
-            let _ = send_payload(
-                &ctx.ws_conns,
-                &ctx.p2p_conns,
-                &ctx.key,
-                &from,
-                &node_id,
-                &text,
-            );
+            let _ = send_payload(&ctx, &from, &node_id, &text);
         }
     });
 }
@@ -373,6 +360,65 @@ pub fn broadcast_control<P: Platform>(ctx: &NetCtx<P>, text: &str) {
     let ids: Vec<String> = ctx.peers.lock().keys().cloned().collect();
     for id in ids {
         send_control_to(ctx, &id, text);
+    }
+}
+
+/// Open an envelope that came over `protocol` from `from_node` (the link's
+/// sender): its plaintext, or `None` when it doesn't decrypt (surfaced as
+/// before) or is refused (`envelope::Guard`: counted and logged, never
+/// shown). See `transport::envelope`.
+fn open_envelope<P: Platform>(
+    ctx: &NetCtx<P>,
+    env: &Envelope,
+    from_node: Option<&str>,
+    ip: &str,
+    protocol: &str,
+) -> Option<Vec<u8>> {
+    let Some(key) = *ctx.key.lock() else {
+        note_undecryptable(ctx, from_node, ip.to_string(), protocol);
+        return None;
+    };
+    // An older app: version 1 only, nothing checked.
+    if !ctx.config.envelope_v2 {
+        let pt = decrypt(&key, env);
+        if pt.is_none() {
+            note_undecryptable(ctx, from_node, ip.to_string(), protocol);
+        }
+        return pt;
+    }
+    let from = from_node.unwrap_or_default();
+    let (pt, verdict) = if env.v == 0 {
+        let Some(pt) = decrypt(&key, env) else {
+            note_undecryptable(ctx, from_node, ip.to_string(), protocol);
+            return None;
+        };
+        (pt, ctx.env.check_v1(from))
+    } else {
+        let Some((hdr, pt)) = envelope::open(&key, env) else {
+            note_undecryptable(ctx, from_node, ip.to_string(), protocol);
+            return None;
+        };
+        let me = ctx.identity.lock().node_id.clone();
+        // Copies can only be recorded where the link isn't encrypted end
+        // to end: those ids go to disk too.
+        let recordable = matches!(protocol, "RELAY" | "BLE");
+        let verdict = ctx.env.check(&*ctx.platform, &me, from, &hdr, recordable);
+        (pt, verdict)
+    };
+    match verdict {
+        Ok(()) => Some(pt),
+        Err(why) => {
+            let n = ctx.env.count(from, why);
+            // The first of each kind, then every hundredth: a flood of
+            // copies mustn't flood the log. Never the content.
+            if n == 1 || n.is_multiple_of(100) {
+                eprintln!(
+                    "[envelope] refused ({}) from {from} over {protocol}: {n} so far",
+                    why.as_str()
+                );
+            }
+            None
+        }
     }
 }
 
@@ -386,12 +432,7 @@ pub fn handle_incoming<P: Platform>(
     ip: String,
     protocol: &str,
 ) {
-    let pt = {
-        let guard = ctx.key.lock();
-        guard.as_ref().and_then(|k| decrypt(k, env))
-    };
-    let Some(pt) = pt else {
-        note_undecryptable(ctx, from_node, ip, protocol);
+    let Some(pt) = open_envelope(ctx, env, from_node, &ip, protocol) else {
         return;
     };
     let Ok(msg) = serde_json::from_slice::<Plaintext>(&pt) else {
@@ -421,7 +462,7 @@ pub fn handle_incoming<P: Platform>(
             ack: Some(id.clone()),
             ..Default::default()
         };
-        let _ = send_plaintext(&ctx.ws_conns, &ctx.p2p_conns, &ctx.key, node, &ack);
+        let _ = send_plaintext(ctx, node, &ack);
         if !outbox::first_arrival(&ctx.seen, node, id) {
             return;
         }
@@ -447,10 +488,8 @@ pub fn handle_incoming<P: Platform>(
 
 /// Encrypt `text` and send it to `node_id` over its live link. Shared by the
 /// chat send command and every feature.
-pub fn send_payload(
-    ws_conns: &WsConns,
-    p2p: &P2pConns,
-    key: &KeyHolder,
+pub fn send_payload<P: Platform>(
+    ctx: &NetCtx<P>,
     from: &str,
     node_id: &str,
     text: &str,
@@ -460,31 +499,37 @@ pub fn send_payload(
         text: text.to_string(),
         ..Default::default()
     };
-    send_plaintext(ws_conns, p2p, key, node_id, &pt)
+    send_plaintext(ctx, node_id, &pt)
 }
 
-/// Encrypt a message body into the frame a link carries.
-pub(crate) fn seal(key: &KeyHolder, pt: &Plaintext) -> crate::Result<String> {
-    let k = key.lock().ok_or(CoreError::NoKey)?;
+/// Encrypt a message body for `node_id` into the frame a link carries:
+/// envelope version 2 when it reads it, else version 1 (`envelope`).
+pub(crate) fn seal<P: Platform>(
+    ctx: &NetCtx<P>,
+    node_id: &str,
+    pt: &Plaintext,
+) -> crate::Result<String> {
+    let k = ctx.key.lock().ok_or(CoreError::NoKey)?;
     let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
-    let env = encrypt(&k, &plaintext).ok_or("encryption failed")?;
-    Ok(serde_json::to_string(&WsFrame::Msg {
-        nonce: env.nonce,
-        ciphertext: env.ciphertext,
-    })
-    .map_err(|e| e.to_string())?)
+    let env = if ctx.config.envelope_v2 && ctx.env.sends_v2(node_id) {
+        let me = ctx.identity.lock().node_id.clone();
+        envelope::seal(&k, &me, node_id, &plaintext)
+    } else {
+        encrypt(&k, &plaintext)
+    };
+    let env = env.ok_or("encryption failed")?;
+    Ok(serde_json::to_string(&WsFrame::Msg(env)).map_err(|e| e.to_string())?)
 }
 
 /// Encrypt a message body and send it to `node_id` over its live link.
-pub fn send_plaintext(
-    ws_conns: &WsConns,
-    p2p: &P2pConns,
-    key: &KeyHolder,
+pub fn send_plaintext<P: Platform>(
+    ctx: &NetCtx<P>,
     node_id: &str,
     pt: &Plaintext,
 ) -> crate::Result<()> {
-    let frame = seal(key, pt)?;
-    let sender = ws_conns
+    let frame = seal(ctx, node_id, pt)?;
+    let sender = ctx
+        .ws_conns
         .lock()
         .get(node_id)
         .map(|(_, s)| s.clone())
@@ -492,6 +537,6 @@ pub fn send_plaintext(
     if !sender.send(frame) {
         return Err(CoreError::NoLink("connection closed".into()));
     }
-    note_use(p2p, node_id);
+    note_use(&ctx.p2p_conns, node_id);
     Ok(())
 }
