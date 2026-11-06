@@ -55,6 +55,107 @@ pub struct DeviceReq {
     pub kind: Option<DeviceKind>,
 }
 
+// Field caps (security review M20). A registration with a field over its
+// cap is refused (400, naming the field); a body over `MAX_BODY` gets 413.
+// They're far above what the apps send, which is a few dozen bytes each.
+/// Largest request body on the device routes (`/devices/*`).
+pub const MAX_BODY: usize = 16 * 1024;
+/// Node ids (the relay takes the same).
+pub const MAX_NODE_ID: usize = 128;
+/// Device names (host names, "Pankaj's Pixel 8").
+pub const MAX_NAME: usize = 128;
+/// Any address text: an IPv4/IPv6 address, `ip:port`.
+pub const MAX_ADDR: usize = 64;
+/// FCM registration tokens are about 160-200 characters.
+pub const MAX_FCM_TOKEN: usize = 4096;
+/// `platform` and `nat`.
+pub const MAX_SHORT: usize = 32;
+/// Each `kind` field as sent (it's cut to 60 characters when stored).
+pub const MAX_KIND_FIELD: usize = 256;
+/// Entries in a probe's `check` list, and the length of each.
+pub const MAX_CHECKS: usize = 8;
+/// Devices one account may register (`MAX_DEVICES_PER_ACCOUNT`).
+pub const MAX_DEVICES: u64 = 32;
+
+fn field_ok(v: &str, max: usize) -> bool {
+    v.chars().count() <= max && !v.chars().any(char::is_control)
+}
+
+fn check_field(name: &str, v: &str, max: usize) -> Result<(), AppError> {
+    if field_ok(v, max) {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(format!(
+            "{name} must be at most {max} characters, without control characters"
+        )))
+    }
+}
+
+fn check_opt(name: &str, v: Option<&String>, max: usize) -> Result<(), AppError> {
+    v.map_or(Ok(()), |v| check_field(name, v, max))
+}
+
+fn check_node_id(v: &str) -> Result<(), AppError> {
+    if v.trim().is_empty() {
+        return Err(AppError::BadRequest("node_id is required".into()));
+    }
+    check_field("node_id", v, MAX_NODE_ID)
+}
+
+fn check_port(name: &str, p: i32) -> Result<(), AppError> {
+    if (0..=i32::from(u16::MAX)).contains(&p) {
+        Ok(())
+    } else {
+        Err(AppError::BadRequest(format!("{name} must be 0-65535")))
+    }
+}
+
+/// Every field of a registration within its cap.
+fn validate(req: &DeviceReq) -> Result<(), AppError> {
+    check_node_id(&req.node_id)?;
+    check_field("name", &req.name, MAX_NAME)?;
+    check_opt("ip", req.ip.as_ref(), MAX_ADDR)?;
+    check_opt("ipv6", req.ipv6.as_ref(), MAX_ADDR)?;
+    check_opt("mapped_quic", req.mapped_quic.as_ref(), MAX_ADDR)?;
+    check_opt("fcm_token", req.fcm_token.as_ref(), MAX_FCM_TOKEN)?;
+    check_opt("platform", req.platform.as_ref(), MAX_SHORT)?;
+    check_opt("nat", req.nat.as_ref(), MAX_SHORT)?;
+    for (n, p) in [
+        ("tcp_port", req.tcp_port),
+        ("udp_port", req.udp_port),
+        ("ws_port", req.ws_port),
+        ("quic_port", req.quic_port),
+    ] {
+        check_port(n, p)?;
+    }
+    if let Some(k) = &req.kind {
+        for (n, v) in [
+            ("kind.os", &k.os),
+            ("kind.form", &k.form),
+            ("kind.model", &k.model),
+            ("kind.maker", &k.maker),
+        ] {
+            check_field(n, v, MAX_KIND_FIELD)?;
+        }
+    }
+    Ok(())
+}
+
+/// The address to store: the one the device gave if it parses as an IP,
+/// else the one it was seen from.
+fn clean_ip(given: Option<&str>, observed: IpAddr) -> String {
+    given
+        .and_then(|v| v.trim().parse::<IpAddr>().ok())
+        .unwrap_or(observed)
+        .to_string()
+}
+
+/// Whether a new device fits: `others` is how many the account has that
+/// it won't replace.
+fn device_fits(others: u64, max: u64) -> bool {
+    others < max
+}
+
 /// A public IPv4 `ip:port` (what a UPnP mapping must look like), else `None`.
 fn clean_mapped(v: Option<&str>) -> Option<String> {
     let sa: std::net::SocketAddrV4 = v?.trim().parse().ok()?;
@@ -140,10 +241,26 @@ pub async fn register(
     headers: HeaderMap,
     Json(req): Json<DeviceReq>,
 ) -> Result<Json<serde_json::Value>, AppError> {
-    let ip = req
-        .ip
-        .filter(|v| !v.trim().is_empty())
-        .unwrap_or_else(|| client_ip(addr, &headers).to_string());
+    validate(&req)?;
+    let ip = clean_ip(req.ip.as_deref(), client_ip(addr, &headers));
+    let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
+    // A new device must fit under the account's cap; the same device again
+    // (or one replacing an old record of the same name) always does.
+    let known = coll
+        .count_documents(doc! { "user_id": &user.user_id, "node_id": &req.node_id })
+        .await?
+        > 0;
+    if !known {
+        let others = coll
+            .count_documents(doc! { "user_id": &user.user_id, "name": { "$ne": &req.name } })
+            .await?;
+        if !device_fits(others, s.max_devices) {
+            return Err(AppError::Conflict(format!(
+                "this account has the most devices allowed ({}); remove one first",
+                s.max_devices
+            )));
+        }
+    }
 
     let mut set = doc! {
         "user_id": &user.user_id,
@@ -182,7 +299,6 @@ pub async fn register(
         );
     }
 
-    let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
     coll.update_one(
         doc! { "user_id": &user.user_id, "node_id": &req.node_id },
         doc! { "$set": set },
@@ -212,7 +328,10 @@ pub async fn list(
     Query(q): Query<PeersQuery>,
 ) -> Result<Json<Vec<DeviceOut>>, AppError> {
     let mut filter = doc! { "user_id": &user.user_id };
-    if let Some(ex) = q.exclude.filter(|v| !v.is_empty()) {
+    if let Some(ex) = q
+        .exclude
+        .filter(|v| !v.is_empty() && v.len() <= MAX_NODE_ID)
+    {
         filter.insert("node_id", doc! { "$ne": ex });
     }
     let devices: Vec<Device> =
@@ -257,6 +376,7 @@ pub async fn unregister(
     user: AuthUser,
     Json(req): Json<UnregReq>,
 ) -> Result<StatusCode, AppError> {
+    check_node_id(&req.node_id)?;
     s.db.collection::<Device>(crate::models::DEVICES_COLL)
         .delete_one(doc! { "user_id": &user.user_id, "node_id": &req.node_id })
         .await?;
@@ -279,6 +399,11 @@ pub async fn state(
     user: AuthUser,
     Json(req): Json<StateReq>,
 ) -> Result<Json<serde_json::Value>, AppError> {
+    check_node_id(&req.node_id)?;
+    check_opt("reflexive_ip", req.reflexive_ip.as_ref(), MAX_ADDR)?;
+    if let Some(p) = req.reflexive_udp_port {
+        check_port("reflexive_udp_port", p)?;
+    }
     let mut set = doc! { "last_seen": now() };
     if let Some(v) = req.ws_open {
         set.insert("ws_open", v);
@@ -286,8 +411,13 @@ pub async fn state(
     if let Some(v) = req.inbound_blocked {
         set.insert("inbound_blocked", v);
     }
-    if let Some(v) = req.reflexive_ip.as_ref().filter(|v| !v.trim().is_empty()) {
-        set.insert("reflexive_ip", v);
+    // Only a real address is stored.
+    if let Some(v) = req
+        .reflexive_ip
+        .as_deref()
+        .and_then(|v| v.trim().parse::<IpAddr>().ok())
+    {
+        set.insert("reflexive_ip", v.to_string());
     }
     if let Some(v) = req.reflexive_udp_port {
         set.insert("reflexive_udp_port", v);
@@ -340,6 +470,12 @@ pub async fn probe(
     headers: HeaderMap,
     Json(req): Json<ProbeReq>,
 ) -> Result<Json<ProbeOut>, AppError> {
+    check_node_id(&req.node_id)?;
+    if req.check.len() > MAX_CHECKS || req.check.iter().any(|c| c.len() > MAX_CHECKS) {
+        return Err(AppError::BadRequest(format!(
+            "check takes at most {MAX_CHECKS} short entries"
+        )));
+    }
     let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
     let dev = coll
         .find_one(doc! { "user_id": &user.user_id, "node_id": &req.node_id })
@@ -425,6 +561,88 @@ mod tests {
         assert_eq!(clean_mapped(Some("152.67.7.50:0")), None, "no port");
         assert_eq!(clean_mapped(Some("garbage")), None);
         assert_eq!(clean_mapped(None), None);
+    }
+
+    fn req() -> DeviceReq {
+        serde_json::from_value(serde_json::json!({
+            "node_id": "n1", "name": "Pixel 8", "ip": "192.168.0.5",
+            "tcp_port": 51011, "udp_port": 60539, "quic_port": 41000,
+            "fcm_token": "t".repeat(180), "platform": "android", "nat": "easy",
+            "mapped_quic": "152.67.7.50:41000", "ipv6": "2409:4040::1",
+            "kind": {"os": "Android 15", "form": "phone", "model": "Pixel 8", "maker": "Google"},
+        }))
+        .unwrap()
+    }
+
+    fn refused(r: DeviceReq) -> String {
+        match validate(&r) {
+            Err(AppError::BadRequest(m)) => m,
+            _ => panic!("accepted"),
+        }
+    }
+
+    #[test]
+    fn a_normal_registration_passes_and_every_field_is_capped() {
+        assert!(validate(&req()).is_ok());
+        let long = |n: usize| "x".repeat(n);
+        type Mutate = Box<dyn Fn(&mut DeviceReq)>;
+        let cases: Vec<(&str, Mutate)> = vec![
+            (
+                "node_id",
+                Box::new(move |r| r.node_id = long(MAX_NODE_ID + 1)),
+            ),
+            ("node_id", Box::new(|r| r.node_id = " ".into())),
+            ("name", Box::new(move |r| r.name = long(MAX_NAME + 1))),
+            ("name", Box::new(|r| r.name = "a\u{0}b".into())),
+            ("ip", Box::new(move |r| r.ip = Some(long(MAX_ADDR + 1)))),
+            ("ipv6", Box::new(move |r| r.ipv6 = Some(long(MAX_ADDR + 1)))),
+            (
+                "mapped_quic",
+                Box::new(move |r| r.mapped_quic = Some(long(MAX_ADDR + 1))),
+            ),
+            (
+                "fcm_token",
+                Box::new(move |r| r.fcm_token = Some(long(MAX_FCM_TOKEN + 1))),
+            ),
+            (
+                "platform",
+                Box::new(move |r| r.platform = Some(long(MAX_SHORT + 1))),
+            ),
+            ("nat", Box::new(move |r| r.nat = Some(long(MAX_SHORT + 1)))),
+            ("tcp_port", Box::new(|r| r.tcp_port = 70_000)),
+            ("udp_port", Box::new(|r| r.udp_port = -1)),
+            ("quic_port", Box::new(|r| r.quic_port = 65_536)),
+            (
+                "kind.model",
+                Box::new(move |r| r.kind.as_mut().unwrap().model = long(MAX_KIND_FIELD + 1)),
+            ),
+        ];
+        for (field, f) in cases {
+            let mut r = req();
+            f(&mut r);
+            let m = refused(r);
+            assert!(m.starts_with(field), "{field}: {m}");
+        }
+        // At the cap is fine; names may be any script.
+        let mut r = req();
+        r.name = "é".repeat(MAX_NAME);
+        assert!(validate(&r).is_ok());
+    }
+
+    #[test]
+    fn a_bad_ip_falls_back_to_the_observed_one() {
+        let seen: IpAddr = "203.0.113.4".parse().unwrap();
+        assert_eq!(clean_ip(Some(" 10.0.0.2 "), seen), "10.0.0.2");
+        assert_eq!(clean_ip(Some("<b>"), seen), "203.0.113.4");
+        assert_eq!(clean_ip(Some(""), seen), "203.0.113.4");
+        assert_eq!(clean_ip(None, seen), "203.0.113.4");
+    }
+
+    #[test]
+    fn an_account_holds_at_most_max_devices() {
+        assert!(device_fits(0, MAX_DEVICES));
+        assert!(device_fits(MAX_DEVICES - 1, MAX_DEVICES));
+        assert!(!device_fits(MAX_DEVICES, MAX_DEVICES));
     }
 
     #[test]

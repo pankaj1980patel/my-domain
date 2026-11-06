@@ -137,6 +137,9 @@ impl Queue {
     }
 }
 
+/// How often idle (refilled) account buckets are dropped.
+const BUCKET_SWEEP: Duration = Duration::from_secs(60);
+
 /// Clients ping every 20 s. A socket silent for longer than this belongs to
 /// a device that went to sleep (a phone with the screen off) or vanished:
 /// a signal sent over it would be lost, so it goes by push instead.
@@ -154,6 +157,12 @@ impl Bucket {
             tokens: burst,
             last: now,
         }
+    }
+
+    /// Whether the bucket has refilled to `burst` by `now` (then it's the
+    /// same as a new one and can be dropped).
+    fn full(&self, rate: f64, burst: f64, now: Instant) -> bool {
+        self.tokens + now.saturating_duration_since(self.last).as_secs_f64() * rate >= burst
     }
 
     /// Take `n` bytes; returns how long the sender must wait first (zero if
@@ -188,6 +197,8 @@ pub struct RelayState {
     /// Bytes per second per account.
     rate: f64,
     buckets: Arc<Mutex<HashMap<String, Bucket>>>,
+    /// When `buckets` next drops its full ones (ms since `epoch`).
+    next_sweep: Arc<AtomicU64>,
     stats: Arc<Stats>,
     epoch: Instant,
     /// See `SIGNAL_FRESH` (shorter in tests).
@@ -211,6 +222,7 @@ impl RelayState {
             next_id: Arc::default(),
             rate,
             buckets: Arc::default(),
+            next_sweep: Arc::default(),
             stats: Arc::default(),
             epoch: Instant::now(),
             signal_fresh: SIGNAL_FRESH,
@@ -245,6 +257,15 @@ impl RelayState {
     fn charge(&self, user: &str, n: usize) -> Duration {
         let now = Instant::now();
         let mut buckets = self.buckets.lock().unwrap();
+        // Accounts that went quiet would otherwise keep their bucket for
+        // ever (security review L24): a full bucket is dropped.
+        let ms = self.now_ms();
+        if ms >= self.next_sweep.load(Ordering::Relaxed) {
+            self.next_sweep
+                .store(ms + BUCKET_SWEEP.as_millis() as u64, Ordering::Relaxed);
+            let (rate, burst) = (self.rate, self.burst());
+            buckets.retain(|_, b| !b.full(rate, burst, now));
+        }
         let b = buckets
             .entry(user.to_string())
             .or_insert_with(|| Bucket::new(self.burst(), now));
@@ -749,6 +770,40 @@ mod tests {
         let port = start();
         let mut ws = client(port, &tok("alice"), &"n".repeat(MAX_NODE_ID + 1));
         assert_eq!(next_json(&mut ws)["error"], "unauthorized");
+    }
+
+    #[test]
+    fn idle_account_buckets_are_dropped() {
+        let s = RelayState::with_rate(SECRET.into(), 1000.0);
+        s.charge("first", 1); // the first sweep
+        let t0 = Instant::now();
+        {
+            let mut b = s.buckets.lock().unwrap();
+            b.insert(
+                "gone".into(),
+                Bucket {
+                    tokens: 0.0,
+                    last: t0 - Duration::from_secs(10),
+                },
+            );
+            b.insert(
+                "busy".into(),
+                Bucket {
+                    tokens: -1.0e9,
+                    last: t0,
+                },
+            );
+        }
+        // Not due yet: nothing is dropped.
+        s.charge("new", 1);
+        assert_eq!(s.buckets.lock().unwrap().len(), 4);
+        // Due: the refilled ones go, the one in debt stays.
+        std::thread::sleep(Duration::from_millis(20));
+        s.next_sweep.store(0, Ordering::Relaxed);
+        s.charge("new", 1);
+        let mut keys: Vec<String> = s.buckets.lock().unwrap().keys().cloned().collect();
+        keys.sort();
+        assert_eq!(keys, vec!["busy".to_string(), "new".to_string()]);
     }
 
     #[test]

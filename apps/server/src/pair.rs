@@ -22,12 +22,28 @@
 //! Each account has at most one pairing; making another replaces it. A
 //! pairing lives `PAIR_TTL` (5 minutes) and is used once: a claim removes the
 //! claim and the code at once, leaving only "joined" (with the new device's
-//! name) for the creator's next status check. Failed claims are limited per
-//! client address and server-wide, so a million codes can't be walked.
-//! Pairings live in memory: a restart just cancels them.
+//! name) for the creator's next status check. Pairings live in memory: a
+//! restart just cancels them.
+//!
+//! Guessing limits (security review M18), none of which can stop a right
+//! claim from an address that hasn't been failing:
+//! - Per client address (an IPv6 /64 counts as one): `fails_per_client`
+//!   wrong claims in a minute lock that address out, for a minute the first
+//!   time and twice as long each time after (up to an hour; forgotten after
+//!   an hour of quiet). Answers are 429 with `Retry-After`.
+//! - Per pairing: every wrong code is a guess at each live code, so a
+//!   pairing's code stops working after `code_lock_after` wrong codes were
+//!   tried while it was live (at most a 0.1% chance of a hit by default,
+//!   however many addresses guess). Its QR claim keeps working and the
+//!   creator can make a new code; `/pair/status` says `code_locked`.
+//! - Server-wide, soft: past `fails_global` wrong codes a minute, each
+//!   address's allowance halves for every multiple of it (down to 1), so a
+//!   spread-out walk is slowed further. Nobody is blocked by it.
+//! - A QR claim (64 hex) can't be guessed: a wrong one counts only against
+//!   its own address, never server-wide or against a pairing.
 
 use std::collections::HashMap;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -45,13 +61,24 @@ use crate::error::AppError;
 
 /// How long a pairing can be claimed.
 pub const PAIR_TTL: Duration = Duration::from_secs(5 * 60);
-/// Failed claims allowed per client address in `FAIL_WINDOW`.
+/// Failed claims allowed per client address in `FAIL_WINDOW`
+/// (`PAIR_FAILS_PER_CLIENT`).
 const FAILS_PER_CLIENT: u32 = 10;
-/// Failed claims allowed server-wide in `FAIL_WINDOW`: with one pairing
-/// waiting, guessing its code by walking codes from many addresses has at
-/// most a 1-in-3,000 chance over its 5 minutes.
-const FAILS_GLOBAL: u32 = 60;
+/// Wrong codes a minute server-wide before each address's allowance starts
+/// halving (`PAIR_FAILS_GLOBAL`).
+const FAILS_GLOBAL: u32 = 120;
+/// Wrong codes tried while a pairing is live before its code stops working
+/// (`PAIR_CODE_LOCK_AFTER`): at most a 1-in-1,000 chance of a hit.
+const CODE_LOCK_AFTER: u64 = 1000;
 const FAIL_WINDOW: Duration = Duration::from_secs(60);
+/// Longest lockout of one address (it doubles per lockout up to this).
+const MAX_LOCKOUT: Duration = Duration::from_secs(60 * 60);
+/// An address quiet this long starts again from a one-minute lockout.
+const STRIKE_MEMORY: Duration = Duration::from_secs(60 * 60);
+/// Most client addresses tracked (the ones heard from longest ago go first).
+const MAX_CLIENTS: usize = 100_000;
+/// Largest request body on the pairing routes.
+const MAX_BODY: usize = 8 * 1024;
 /// Pairings with a code the device chose, per account in `FAIL_WINDOW`.
 /// "Code in use" answers say a code is live somewhere, so making pairings
 /// with chosen codes is itself a way to walk the codes: an honest device
@@ -74,6 +101,48 @@ struct Pairing {
     expires: Instant,
     /// The name of the device that joined, for the creator's next status.
     joined: Option<String>,
+    /// `Inner::code_fails_total` when it was made (see `code_locked`).
+    fails_base: u64,
+}
+
+/// Guessing limits (see the module doc), from the environment by default.
+#[derive(Clone, Copy, Debug)]
+pub struct PairLimits {
+    pub fails_per_client: u32,
+    pub fails_global: u32,
+    pub code_lock_after: u64,
+}
+
+impl Default for PairLimits {
+    fn default() -> Self {
+        PairLimits {
+            fails_per_client: FAILS_PER_CLIENT,
+            fails_global: FAILS_GLOBAL,
+            code_lock_after: CODE_LOCK_AFTER,
+        }
+    }
+}
+
+impl PairLimits {
+    pub fn from_env() -> Self {
+        use crate::limits::env_or;
+        PairLimits {
+            fails_per_client: env_or("PAIR_FAILS_PER_CLIENT", FAILS_PER_CLIENT),
+            fails_global: env_or("PAIR_FAILS_GLOBAL", FAILS_GLOBAL),
+            code_lock_after: env_or("PAIR_CODE_LOCK_AFTER", CODE_LOCK_AFTER),
+        }
+    }
+}
+
+/// One client address's failed claims and lockouts.
+struct Client {
+    /// Failures in the window that started at `since`.
+    since: Instant,
+    n: u32,
+    /// Lockouts so far (each doubles the next).
+    strikes: u32,
+    locked_until: Option<Instant>,
+    last: Instant,
 }
 
 /// A count of failures since `since`.
@@ -96,8 +165,14 @@ impl Fails {
 struct Inner {
     /// user id -> that account's pairing.
     pairings: HashMap<String, Pairing>,
-    fails: HashMap<String, Fails>,
-    global: Option<Fails>,
+    /// Client address (IPv6 by /64) -> its failures.
+    clients: HashMap<String, Client>,
+    clients_swept: Option<Instant>,
+    /// Wrong codes server-wide in the current minute.
+    code_fails: Option<Fails>,
+    /// Wrong codes ever (a pairing's code locks `code_lock_after` past
+    /// the value when it was made).
+    code_fails_total: u64,
     /// user id -> pairings made with a chosen code lately.
     chosen: HashMap<String, Fails>,
     chosen_global: Option<Fails>,
@@ -107,18 +182,25 @@ struct Inner {
 pub struct PairState {
     jwt_secret: String,
     ttl: Duration,
+    limits: PairLimits,
     inner: Arc<Mutex<Inner>>,
 }
 
 impl PairState {
     pub fn new(jwt_secret: String) -> Self {
-        Self::with_ttl(jwt_secret, PAIR_TTL)
+        Self::with(jwt_secret, PAIR_TTL, PairLimits::from_env())
     }
 
+    #[cfg(test)]
     pub fn with_ttl(jwt_secret: String, ttl: Duration) -> Self {
+        Self::with(jwt_secret, ttl, PairLimits::default())
+    }
+
+    pub fn with(jwt_secret: String, ttl: Duration, limits: PairLimits) -> Self {
         PairState {
             jwt_secret,
             ttl,
+            limits,
             inner: Arc::default(),
         }
     }
@@ -130,7 +212,23 @@ pub fn router(state: PairState) -> Router {
         .route("/pair/claim", post(claim))
         .route("/pair/status", get(status))
         .route("/pair/cancel", post(cancel))
+        .layer(axum::extract::DefaultBodyLimit::max(MAX_BODY))
         .with_state(state)
+}
+
+/// The key a client's failures are counted under: its address, or for IPv6
+/// its /64 (one subscriber usually holds a whole /64).
+fn client_key(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => v4.to_string(),
+            None => {
+                let s = v6.segments();
+                format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
+            }
+        },
+    }
 }
 
 fn signed_in(s: &PairState, headers: &HeaderMap) -> Result<AuthUser, AppError> {
@@ -155,6 +253,100 @@ impl Inner {
         self.pairings
             .values()
             .any(|p| p.code.as_deref() == Some(code))
+    }
+
+    fn code_locked(&self, p: &Pairing, lim: &PairLimits) -> bool {
+        self.code_fails_total.saturating_sub(p.fails_base) >= lim.code_lock_after
+    }
+
+    /// How many times over the soft server-wide ceiling wrong codes are this
+    /// minute (0 = under it); each level halves every address's allowance.
+    fn pressure(&mut self, now: Instant, lim: &PairLimits) -> u32 {
+        let n = self
+            .code_fails
+            .as_mut()
+            .map(|f| *f.current(now))
+            .unwrap_or(0);
+        (n / lim.fails_global.max(1)).min(8)
+    }
+
+    /// Failures one address may have this minute.
+    fn allowance(&mut self, now: Instant, lim: &PairLimits) -> u32 {
+        (lim.fails_per_client >> self.pressure(now, lim)).max(1)
+    }
+
+    /// How long `key` must wait before claiming (zero = it may).
+    fn client_wait(&mut self, key: &str, now: Instant, lim: &PairLimits) -> Duration {
+        let allowance = self.allowance(now, lim);
+        let Some(c) = self.clients.get(key) else {
+            return Duration::ZERO;
+        };
+        if let Some(until) = c.locked_until.filter(|u| *u > now) {
+            return until - now;
+        }
+        let in_window = now.saturating_duration_since(c.since) < FAIL_WINDOW;
+        if in_window && c.n >= allowance {
+            // The allowance shrank under pressure after these failures.
+            return (c.since + FAIL_WINDOW).saturating_duration_since(now);
+        }
+        Duration::ZERO
+    }
+
+    /// Count a failed claim from `key`; `code` = it was a typed code (a
+    /// guess at every live code) rather than a QR claim.
+    fn failed(&mut self, key: String, code: bool, now: Instant, lim: &PairLimits) {
+        if code {
+            *self
+                .code_fails
+                .get_or_insert(Fails { since: now, n: 0 })
+                .current(now) += 1;
+            self.code_fails_total += 1;
+        }
+        let allowance = self.allowance(now, lim);
+        self.sweep_clients(now);
+        let c = self.clients.entry(key).or_insert(Client {
+            since: now,
+            n: 0,
+            strikes: 0,
+            locked_until: None,
+            last: now,
+        });
+        if now.saturating_duration_since(c.last) >= STRIKE_MEMORY {
+            c.strikes = 0;
+        }
+        if now.saturating_duration_since(c.since) >= FAIL_WINDOW {
+            c.since = now;
+            c.n = 0;
+        }
+        c.last = now;
+        c.n += 1;
+        if c.n >= allowance {
+            // Locked out: one window, doubled per lockout before it.
+            let lockout = FAIL_WINDOW
+                .saturating_mul(1u32 << c.strikes.min(10))
+                .min(MAX_LOCKOUT);
+            c.strikes += 1;
+            c.locked_until = Some(now + lockout);
+            c.since = now;
+            c.n = 0;
+        }
+    }
+
+    fn sweep_clients(&mut self, now: Instant) {
+        let due = self
+            .clients_swept
+            .is_none_or(|t| now.saturating_duration_since(t) >= Duration::from_secs(30));
+        if !due && self.clients.len() < MAX_CLIENTS {
+            return;
+        }
+        self.clients_swept = Some(now);
+        self.clients.retain(|_, c| {
+            c.locked_until.is_some_and(|u| u > now)
+                || now.saturating_duration_since(c.last) < STRIKE_MEMORY
+        });
+        if self.clients.len() >= MAX_CLIENTS {
+            crate::limits::evict_oldest(&mut self.clients, |c| c.last);
+        }
     }
 }
 
@@ -246,6 +438,7 @@ async fn create(
             }
         },
     };
+    let fails_base = inner.code_fails_total;
     inner.pairings.insert(
         user.user_id,
         Pairing {
@@ -255,6 +448,7 @@ async fn create(
             code_box: req.code_box,
             expires: now + s.ttl,
             joined: None,
+            fails_base,
         },
     );
     Ok(Json(json!({ "code": code, "expires_in": s.ttl.as_secs() })))
@@ -277,42 +471,38 @@ async fn claim(
     Json(req): Json<ClaimReq>,
 ) -> Result<Json<Value>, AppError> {
     // Per address (the one Caddy saw, see `client_ip`).
-    let client = client_ip(peer, &headers).to_string();
+    let client = client_key(client_ip(peer, &headers));
+    let lim = s.limits;
     let now = Instant::now();
     let mut inner = s.inner.lock().unwrap();
     inner.purge(now);
-    let client_fails = inner
-        .fails
-        .get_mut(&client)
-        .map(|f| *f.current(now))
-        .unwrap_or(0);
-    let global_fails = inner.global.as_mut().map(|f| *f.current(now)).unwrap_or(0);
-    if client_fails >= FAILS_PER_CLIENT || global_fails >= FAILS_GLOBAL {
-        return Err(AppError::TooMany);
+    let wait = inner.client_wait(&client, now, &lim);
+    if !wait.is_zero() {
+        return Err(AppError::RateLimited(
+            wait,
+            "too many wrong tries from here, wait a while".into(),
+        ));
     }
 
-    let claim = req.claim.map(|c| c.trim().to_ascii_lowercase());
+    let claim = req
+        .claim
+        .map(|c| c.trim().to_ascii_lowercase())
+        .filter(|c| is_claim(c));
     let code: Option<String> = req
         .code
         .map(|c| c.chars().filter(|c| c.is_ascii_digit()).collect());
     let found = inner.pairings.iter().find_map(|(uid, p)| {
         let by_claim = claim.is_some() && p.claim.is_some() && p.claim == claim;
-        let by_code = code.as_ref().is_some_and(|c| c.len() == 6) && p.code == code;
+        let by_code = code.as_ref().is_some_and(|c| c.len() == 6)
+            && p.code == code
+            && !inner.code_locked(p, &lim);
         (by_claim || by_code).then(|| (uid.clone(), by_code))
     });
     let Some((uid, by_code)) = found else {
-        inner
-            .fails
-            .retain(|_, f| now.saturating_duration_since(f.since) < FAIL_WINDOW);
-        *inner
-            .fails
-            .entry(client)
-            .or_insert(Fails { since: now, n: 0 })
-            .current(now) += 1;
-        *inner
-            .global
-            .get_or_insert(Fails { since: now, n: 0 })
-            .current(now) += 1;
+        // A wrong QR claim guesses nothing (2^256), so it counts only
+        // against its own address; anything else is a guess at the codes.
+        let guessed_code = code.as_ref().is_some_and(|c| c.len() == 6) || claim.is_none();
+        inner.failed(client, guessed_code, now, &lim);
         return Err(AppError::Gone(
             "this join code has expired or was already used".into(),
         ));
@@ -341,6 +531,10 @@ async fn status(State(s): State<PairState>, headers: HeaderMap) -> Result<Json<V
     let user = signed_in(&s, &headers)?;
     let mut inner = s.inner.lock().unwrap();
     inner.purge(Instant::now());
+    let locked = inner
+        .pairings
+        .get(&user.user_id)
+        .is_some_and(|p| inner.code_locked(p, &s.limits));
     let out = match inner.pairings.get(&user.user_id) {
         None => json!({ "state": "none" }),
         Some(Pairing {
@@ -351,7 +545,7 @@ async fn status(State(s): State<PairState>, headers: HeaderMap) -> Result<Json<V
             inner.pairings.remove(&user.user_id);
             json!({ "state": "joined", "name": name })
         }
-        Some(_) => json!({ "state": "waiting" }),
+        Some(_) => json!({ "state": "waiting", "code_locked": locked }),
     };
     Ok(Json(out))
 }
@@ -693,29 +887,190 @@ mod tests {
         assert_eq!(resp.status().as_u16(), 200);
     }
 
+    /// A claim from `ip` (the test client talks from loopback, so the
+    /// forwarded address is trusted as the proxy's).
+    async fn claim_from(base: &str, ip: &str, body: Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(format!("{base}/pair/claim"))
+            .header("x-forwarded-for", ip)
+            .json(&body)
+            .send()
+            .await
+            .unwrap()
+    }
+
+    /// A 6-digit code that is none of `taken`.
+    fn wrong_code(i: u32, taken: &[&str]) -> String {
+        (i..)
+            .map(|n| format!("{:06}", n % 1_000_000))
+            .find(|c| !taken.contains(&c.as_str()))
+            .unwrap()
+    }
+
     #[tokio::test]
-    async fn too_many_failures_server_wide_stop_all_claims() {
+    async fn a_lockout_says_when_to_retry() {
         let base = start(PairState::new(SECRET.into())).await;
-        post(
+        for _ in 0..FAILS_PER_CLIENT {
+            let r = claim_from(&base, "198.51.100.1", json!({"code": "000000"})).await;
+            assert_eq!(r.status().as_u16(), 410);
+        }
+        let r = claim_from(&base, "198.51.100.1", json!({"code": "000000"})).await;
+        assert_eq!(r.status().as_u16(), 429);
+        let secs: u64 = r.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=60).contains(&secs), "{secs}");
+    }
+
+    #[tokio::test]
+    async fn a_flood_of_wrong_claims_does_not_stop_right_claims_for_other_codes() {
+        // The old hard server-wide limit (M18): 60 bad claims a minute put
+        // every claim on the server at 429. Now nothing blocks a right claim
+        // from an address that hasn't been failing.
+        let lim = PairLimits {
+            fails_per_client: 10,
+            fails_global: 20,
+            code_lock_after: 1000,
+        };
+        let base = start(PairState::with(SECRET.into(), PAIR_TTL, lim)).await;
+        let (_, v) = post(
             &base,
             "/pair/create",
             Some(&tok("ann")),
             json!({"claim": claim_hex(8)}),
         )
         .await;
-        let client = reqwest::Client::new();
-        for i in 0..FAILS_GLOBAL {
-            let resp = client
-                .post(format!("{base}/pair/claim"))
-                .header("x-forwarded-for", format!("198.51.100.{}", i % 250))
-                .json(&json!({"claim": claim_hex(9)}))
-                .send()
-                .await
-                .unwrap();
-            assert_eq!(resp.status().as_u16(), 410);
+        let ann_code = v["code"].as_str().unwrap().to_string();
+        let (_, v) = post(
+            &base,
+            "/pair/create",
+            Some(&tok("bob")),
+            json!({"claim": claim_hex(9)}),
+        )
+        .await;
+        let bob_code = v["code"].as_str().unwrap().to_string();
+        let taken = [ann_code.as_str(), bob_code.as_str()];
+        // 300 wrong codes and 100 wrong QR claims from 150 addresses: 15x
+        // the soft ceiling.
+        for i in 0..300u32 {
+            let ip = format!("198.51.{}.{}", 100 + i % 3, i % 50);
+            let r = claim_from(&base, &ip, json!({"code": wrong_code(i * 7, &taken)})).await;
+            assert!(matches!(r.status().as_u16(), 410 | 429));
         }
-        let (c, _) = post(&base, "/pair/claim", None, json!({"claim": claim_hex(8)})).await;
-        assert_eq!(c, 429);
+        for i in 0..100u32 {
+            let ip = format!("203.0.113.{}", i % 100);
+            let r = claim_from(&base, &ip, json!({"claim": claim_hex(200)})).await;
+            assert_eq!(r.status().as_u16(), 410);
+        }
+        // Under pressure an address that already failed is out after one.
+        let r = claim_from(&base, "198.51.100.1", json!({"code": ann_code})).await;
+        assert_eq!(r.status().as_u16(), 429);
+        // A fresh address with the right code, and a QR claim, both work.
+        let r = claim_from(
+            &base,
+            "192.0.2.10",
+            json!({"code": ann_code, "name": "Pixel"}),
+        )
+        .await;
+        assert_eq!(r.status().as_u16(), 200);
+        let r = claim_from(&base, "192.0.2.11", json!({"claim": claim_hex(9)})).await;
+        assert_eq!(r.status().as_u16(), 200);
+    }
+
+    #[tokio::test]
+    async fn a_code_locks_after_enough_wrong_codes_but_its_qr_claim_still_works() {
+        let lim = PairLimits {
+            fails_per_client: 1000,
+            fails_global: 1000,
+            code_lock_after: 30,
+        };
+        let base = start(PairState::with(SECRET.into(), PAIR_TTL, lim)).await;
+        let ann = tok("ann");
+        let (_, v) = post(
+            &base,
+            "/pair/create",
+            Some(&ann),
+            json!({"claim": claim_hex(30), "code_box": "BOX"}),
+        )
+        .await;
+        let code = v["code"].as_str().unwrap().to_string();
+        // Wrong QR claims don't count against a code.
+        for _ in 0..40 {
+            let r = claim_from(&base, "198.51.100.7", json!({"claim": claim_hex(31)})).await;
+            assert_eq!(r.status().as_u16(), 410);
+        }
+        assert_eq!(status_of(&base, &ann).await["code_locked"], false);
+        for i in 0..30u32 {
+            let r = claim_from(
+                &base,
+                "198.51.100.8",
+                json!({"code": wrong_code(i, &[&code])}),
+            )
+            .await;
+            assert_eq!(r.status().as_u16(), 410);
+        }
+        let s = status_of(&base, &ann).await;
+        assert_eq!(s["state"], "waiting");
+        assert_eq!(s["code_locked"], true);
+        // The right code no longer works (answered like any wrong one)...
+        let r = claim_from(&base, "192.0.2.1", json!({"code": code})).await;
+        assert_eq!(r.status().as_u16(), 410);
+        // ...the QR does, and a pairing made after the flood takes codes.
+        let r = claim_from(&base, "192.0.2.2", json!({"claim": claim_hex(30)})).await;
+        assert_eq!(r.status().as_u16(), 200);
+        let (_, v) = post(
+            &base,
+            "/pair/create",
+            Some(&tok("bob")),
+            json!({"claim": claim_hex(32)}),
+        )
+        .await;
+        let r = claim_from(&base, "192.0.2.3", json!({"code": v["code"]})).await;
+        assert_eq!(r.status().as_u16(), 200);
+    }
+
+    #[test]
+    fn lockouts_double_per_strike_and_are_forgotten_after_quiet() {
+        let lim = PairLimits {
+            fails_per_client: 3,
+            fails_global: 1_000_000,
+            code_lock_after: 1_000_000,
+        };
+        let mut inner = Inner::default();
+        let mut t = Instant::now();
+        let mut lockouts = Vec::new();
+        for _ in 0..4 {
+            for _ in 0..3 {
+                assert!(inner.client_wait("a", t, &lim).is_zero());
+                inner.failed("a".into(), true, t, &lim);
+            }
+            let w = inner.client_wait("a", t, &lim);
+            lockouts.push(w.as_secs());
+            t += w;
+        }
+        assert_eq!(lockouts, vec![60, 120, 240, 480]);
+        assert!(inner.client_wait("b", t, &lim).is_zero(), "per address");
+        // An hour of quiet: back to a one-minute lockout, and the entry is
+        // dropped from memory at the next sweep.
+        t += STRIKE_MEMORY + Duration::from_secs(1);
+        for _ in 0..3 {
+            inner.failed("a".into(), true, t, &lim);
+        }
+        assert_eq!(inner.client_wait("a", t, &lim).as_secs(), 60);
+        t += STRIKE_MEMORY + Duration::from_secs(61);
+        inner.failed("c".into(), false, t, &lim);
+        assert_eq!(inner.clients.len(), 1);
+    }
+
+    #[test]
+    fn ipv6_clients_count_by_their_64() {
+        let k = |s: &str| client_key(s.parse().unwrap());
+        assert_eq!(k("2001:db8:1:2::1"), k("2001:db8:1:2:ffff::9"));
+        assert_ne!(k("2001:db8:1:2::1"), k("2001:db8:1:3::1"));
+        assert_eq!(k("::ffff:198.51.100.4"), "198.51.100.4");
+        assert_eq!(k("198.51.100.4"), "198.51.100.4");
     }
 
     #[test]

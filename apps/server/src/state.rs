@@ -13,4 +13,8 @@ pub struct AppState {
     pub fcm: Option<Arc<FcmClient>>,
     /// Live device WebSockets: signals go there first, FCM is the fallback.
     pub relay: crate::relay::RelayState,
+    /// Signal and push limits (see `signal.rs`).
+    pub push: Arc<crate::signal::PushLimiter>,
+    /// Most devices one account may register.
+    pub max_devices: u64,
 }

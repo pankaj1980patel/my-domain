@@ -8,6 +8,7 @@ mod auth;
 mod devices;
 mod error;
 mod fcm;
+mod limits;
 mod models;
 mod pair;
 mod relay;
@@ -15,7 +16,7 @@ mod signal;
 mod state;
 
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
     routing::{get, post},
     Json, Router,
@@ -46,6 +47,39 @@ async fn health(State(s): State<AppState>) -> (StatusCode, Json<serde_json::Valu
             "db": db,
         })),
     )
+}
+
+/// Largest body on the auth routes (a username and a password).
+const MAX_AUTH_BODY: usize = 4 * 1024;
+/// Largest body on the signal routes (`data` is checked against
+/// `signal::MAX_SIGNAL_BYTES` itself).
+const MAX_SIGNAL_BODY: usize = 2 * signal::MAX_SIGNAL_BYTES;
+
+/// The HTTP API on `state`, each group of routes with its own body cap
+/// (over it: 413 before the handler runs).
+fn api(state: AppState) -> Router {
+    let auth = Router::new()
+        .route("/auth/register", post(auth::register))
+        .route("/auth/login", post(auth::login))
+        .route("/auth/verify", post(auth::verify))
+        .layer(DefaultBodyLimit::max(MAX_AUTH_BODY));
+    let devices = Router::new()
+        .route("/devices/register", post(devices::register))
+        .route("/devices", get(devices::list))
+        .route("/devices/unregister", post(devices::unregister))
+        .route("/devices/state", post(devices::state))
+        .route("/devices/probe", post(devices::probe))
+        .layer(DefaultBodyLimit::max(devices::MAX_BODY));
+    let signals = Router::new()
+        .route("/signal", post(signal::relay))
+        .route("/signal/selfping", post(signal::selfping))
+        .layer(DefaultBodyLimit::max(MAX_SIGNAL_BODY));
+    Router::new()
+        .route("/health", get(health))
+        .merge(auth)
+        .merge(devices)
+        .merge(signals)
+        .with_state(state)
 }
 
 #[tokio::main]
@@ -88,6 +122,15 @@ async fn main() -> anyhow::Result<()> {
         )
         .await;
 
+    if jwt_secret.len() < 32 {
+        // Security review L23: a short secret can be brute-forced offline
+        // from any one token. Not refused, so a deploy can't brick the
+        // server; replace it with `openssl rand -base64 48`.
+        tracing::warn!(
+            "JWT_SECRET is only {} bytes; use at least 32 (openssl rand -base64 48)",
+            jwt_secret.len()
+        );
+    }
     let fcm = fcm::FcmClient::from_env();
     if fcm.is_none() {
         tracing::warn!("FCM not configured (set FCM_SA_JSON or GOOGLE_APPLICATION_CREDENTIALS); /signal disabled");
@@ -100,21 +143,11 @@ async fn main() -> anyhow::Result<()> {
         jwt_secret,
         fcm,
         relay: relay_state,
+        push: std::sync::Arc::new(signal::PushLimiter::new(signal::PushConfig::from_env())),
+        max_devices: limits::env_or("MAX_DEVICES_PER_ACCOUNT", devices::MAX_DEVICES),
     };
 
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/auth/register", post(auth::register))
-        .route("/auth/login", post(auth::login))
-        .route("/auth/verify", post(auth::verify))
-        .route("/devices/register", post(devices::register))
-        .route("/devices", get(devices::list))
-        .route("/devices/unregister", post(devices::unregister))
-        .route("/devices/state", post(devices::state))
-        .route("/devices/probe", post(devices::probe))
-        .route("/signal", post(signal::relay))
-        .route("/signal/selfping", post(signal::selfping))
-        .with_state(state)
+    let app = api(state)
         // WebSocket relay (own state: needs only the JWT secret).
         .merge(relay)
         // Add a device by QR code / 6-digit code (own state, in memory).
@@ -130,4 +163,143 @@ async fn main() -> anyhow::Result<()> {
     )
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod api_tests {
+    //! The API's caps over HTTP. The database is one that isn't there
+    //! (the driver connects lazily), so these check what is refused before
+    //! any query: a request that gets past the caps fails with 500.
+    use super::*;
+    use crate::auth::issue_token;
+    use serde_json::Value;
+
+    const SECRET: &str = "api-test-secret";
+
+    async fn start(push: signal::PushConfig) -> String {
+        let client = mongodb::Client::with_uri_str(
+            "mongodb://127.0.0.1:9/?serverSelectionTimeoutMS=100&connectTimeoutMS=100",
+        )
+        .await
+        .unwrap();
+        let state = AppState {
+            db: client.database("none"),
+            jwt_secret: SECRET.into(),
+            fcm: None,
+            relay: relay::RelayState::new(SECRET.into()),
+            push: std::sync::Arc::new(signal::PushLimiter::new(push)),
+            max_devices: devices::MAX_DEVICES,
+        };
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(
+                listener,
+                api(state).into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        });
+        format!("http://{addr}")
+    }
+
+    async fn post(base: &str, path: &str, body: &Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(format!("{base}{path}"))
+            .bearer_auth(issue_token(SECRET, "id-ann", "ann").unwrap())
+            .json(body)
+            .send()
+            .await
+            .unwrap()
+    }
+
+    fn device() -> Value {
+        json!({"node_id": "n1", "name": "Pixel", "tcp_port": 1, "udp_port": 2})
+    }
+
+    #[tokio::test]
+    async fn oversized_registrations_are_refused_before_the_database() {
+        let base = start(signal::PushConfig::default()).await;
+        // A body over the cap: 413.
+        let mut big = device();
+        big["padding"] = json!("x".repeat(devices::MAX_BODY));
+        assert_eq!(post(&base, "/devices/register", &big).await.status(), 413);
+        // A field over its cap: 400, naming it.
+        for (field, v) in [
+            ("name", json!("n".repeat(devices::MAX_NAME + 1))),
+            ("node_id", json!("i".repeat(devices::MAX_NODE_ID + 1))),
+            ("fcm_token", json!("t".repeat(devices::MAX_FCM_TOKEN + 1))),
+            ("platform", json!("p".repeat(64))),
+            ("tcp_port", json!(1_000_000)),
+        ] {
+            let mut d = device();
+            d[field] = v;
+            let r = post(&base, "/devices/register", &d).await;
+            assert_eq!(r.status(), 400, "{field}");
+            let body: Value = r.json().await.unwrap();
+            assert!(body["error"].as_str().unwrap().starts_with(field), "{body}");
+        }
+        let r = post(
+            &base,
+            "/devices/state",
+            &json!({"node_id": "n1", "reflexive_ip": "9".repeat(100)}),
+        )
+        .await;
+        assert_eq!(r.status(), 400);
+        let r = post(
+            &base,
+            "/devices/probe",
+            &json!({"node_id": "n1", "check": vec!["tcp"; 50]}),
+        )
+        .await;
+        assert_eq!(r.status(), 400);
+        // Within the caps it goes on to the (absent) database.
+        assert_eq!(
+            post(&base, "/devices/register", &device()).await.status(),
+            500
+        );
+    }
+
+    #[tokio::test]
+    async fn oversized_signals_are_refused_and_a_flood_gets_429_with_retry_after() {
+        let base = start(signal::PushConfig {
+            signals_per_min: 30.0,
+            ..Default::default()
+        })
+        .await;
+        let sig = |data: Value| json!({"from": "a", "to": "b", "type": "signal", "data": data});
+        let r = post(
+            &base,
+            "/signal",
+            &sig(json!("x".repeat(signal::MAX_SIGNAL_BYTES + 10))),
+        )
+        .await;
+        assert_eq!(r.status(), 413);
+        let r = post(
+            &base,
+            "/signal",
+            &sig(json!("x".repeat(3 * signal::MAX_SIGNAL_BYTES))),
+        )
+        .await;
+        assert_eq!(r.status(), 413, "over the body cap");
+        let mut long_kind = sig(json!({}));
+        long_kind["type"] = json!("k".repeat(100));
+        assert_eq!(post(&base, "/signal", &long_kind).await.status(), 400);
+        // Bursts of 6 (30 a minute / 5); two were charged above (the one
+        // over the body cap never reached the handler).
+        for _ in 0..4 {
+            assert_eq!(post(&base, "/signal", &sig(json!({}))).await.status(), 500);
+        }
+        let r = post(&base, "/signal", &sig(json!({}))).await;
+        assert_eq!(r.status(), 429);
+        let secs: u64 = r.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=2).contains(&secs), "{secs}");
+        // Self-pings share the account's signal budget.
+        let r = post(&base, "/signal/selfping", &json!({"node_id": "a"})).await;
+        assert_eq!(r.status(), 429);
+    }
 }

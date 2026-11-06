@@ -49,6 +49,32 @@ curl localhost:8080/devices -H "authorization: Bearer $TOKEN"
 | `JWT_SECRET`| HS256 signing secret (`openssl rand -base64 48`) |
 | `PORT`      | HTTP port (default 8080) |
 
+## Limits
+
+Abuse limits live in memory (a restart resets them; every map drops idle entries and holds at most
+100k keys). Over a rate limit the answer is `429` with `Retry-After` (seconds); an oversized body is
+`413`, an oversized field `400` naming it. Defaults suit a handful of devices per account; raise them in
+`.env` (positive numbers only, anything else keeps the default) and restart.
+
+| Var | Default | What |
+|-----|---------|------|
+| `MAX_DEVICES_PER_ACCOUNT` | 32 | Devices one account may register (a new one past it gets `409`) |
+| `SIGNALS_PER_MIN` | 600 | `/signal` + `/signal/selfping` requests per account a minute (bursts of a fifth) |
+| `PUSH_PER_MIN` | 60 | FCM pushes per account a minute (bursts of half) |
+| `PUSH_PER_TARGET_PER_MIN` | 30 | FCM pushes to one device a minute (bursts of a third) |
+| `PUSH_PER_DAY` | 5000 | FCM pushes per account a day |
+| `PUSH_MAX_BYTES` | 3584 | Largest push payload (FCM's own cap is 4 KB) |
+| `PUSH_DEDUPE_SECS` | 10 | The same push again within this is answered ok but not sent |
+| `PAIR_FAILS_PER_CLIENT` | 10 | Wrong pairing claims per address (IPv6 /64) a minute before a lockout of 1 min, doubling per lockout up to 1 h |
+| `PAIR_FAILS_GLOBAL` | 120 | Wrong codes a minute server-wide past which each address's allowance halves (soft; nobody is blocked by it) |
+| `PAIR_CODE_LOCK_AFTER` | 1000 | Wrong codes tried while a pairing is live before its 6-digit code stops working (the QR still works) |
+| `RELAY_BYTES_PER_SEC` | 4 MiB | Relay bandwidth per account (senders over it are slowed, not dropped) |
+
+Fixed caps: request bodies 4 KiB on `/auth/*`, 8 KiB on `/pair/*`, 16 KiB on `/devices/*`, 32 KiB on
+`/signal` (its `data` at most 16 KiB); device fields as in `devices.rs` (`MAX_*`). `JWT_SECRET` should be
+at least 32 bytes (a shorter one is warned about at startup). See `docs/SECURITY-REVIEW-2026-11.md`
+(M18, M20, M21, L24).
+
 ## Notes
 
 - Collections are namespaced **`md_users`** / **`md_devices`** so this server never collides with other
