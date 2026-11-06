@@ -222,7 +222,7 @@ pub async fn send_clipboard(node_id: String, app: AppHandle) -> Result<String, C
 
 /// The phone to send to; when none is known yet, asks your devices for
 /// their status and waits a moment for a phone to answer.
-fn find_phone(app: &AppHandle, engine: &Eng) -> Option<String> {
+pub(crate) fn find_phone(app: &AppHandle, engine: &Eng) -> Option<String> {
     let pref = app.try_state::<ShortcutPref>()?;
     let pick = || {
         let peers: Vec<String> = engine.get_peers().into_iter().map(|p| p.node_id).collect();

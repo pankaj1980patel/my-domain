@@ -194,6 +194,19 @@ pub struct DeviceIdentity {
 }
 
 /// What waking a sleeping computer did (`wake_device`).
+/// A computer's request for a photo or a scan (insert from phone,
+/// `mdcore::features::insert_capture`).
+#[derive(uniffi::Record)]
+pub struct InsertRequestInfo {
+    /// The request's id: pass it to `insert_opened`, `insert_send`,
+    /// `insert_cancel`.
+    pub id: String,
+    /// The computer asking (node id).
+    pub from: String,
+    /// "photo" or "scan".
+    pub mode: String,
+}
+
 #[derive(uniffi::Record)]
 pub struct WakeResult {
     /// Where this phone sent the magic packet (`ip:port`).
@@ -1583,6 +1596,39 @@ impl MdEngine {
             reason,
         };
         Ok(self.inner.camera_offer(&node_id, &state)?)
+    }
+
+    /// Insert from phone: the computers' requests for a photo or a scan
+    /// that are waiting now (each ends by itself after 3 minutes).
+    pub fn insert_requests(&self) -> Vec<InsertRequestInfo> {
+        self.inner
+            .insert_requests()
+            .into_iter()
+            .map(|r| InsertRequestInfo {
+                id: r.id,
+                from: r.from,
+                mode: r.mode,
+            })
+            .collect()
+    }
+
+    /// The capture screen for request `id` is up (the computer says so).
+    pub fn insert_opened(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.insert_opened(&id)?)
+    }
+
+    /// Send the photo (a JPEG) or the scan (a PDF) at `path` to the
+    /// computer that asked, as the answer to request `id`.
+    pub fn insert_send(&self, id: String, path: String) -> MdResult<()> {
+        Ok(self.inner.insert_send(&id, &path)?)
+    }
+
+    /// Cancel request `id` and tell the computer why (`reason`:
+    /// "cancelled", "no_permission", "error"). Nothing to do for a request
+    /// that already ended.
+    pub fn insert_cancel(&self, id: String, reason: String) -> MdResult<()> {
+        self.inner.insert_cancel(&id, &reason);
+        Ok(())
     }
 
     /// This phone sends its audio (`source`: Android 10 or later) or

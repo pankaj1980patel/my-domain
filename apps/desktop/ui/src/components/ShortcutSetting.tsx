@@ -32,6 +32,8 @@ const ACTIONS: { id: string; needs: Needs; label: Key }[] = [
   { id: "mute", needs: "device", label: "shortcuts.action.mute" },
   { id: "media", needs: "device", label: "shortcuts.action.media" },
   { id: "wake", needs: "device", label: "shortcuts.action.wake" },
+  { id: "insert_photo", needs: "deviceOrPhone", label: "shortcuts.action.insertPhoto" },
+  { id: "insert_scan", needs: "deviceOrPhone", label: "shortcuts.action.insertScan" },
   { id: "automation", needs: "automation", label: "shortcuts.action.automation" },
 ];
 
@@ -48,6 +50,8 @@ const DOES: Record<string, Key> = {
   mute: "shortcuts.does.mute",
   media: "shortcuts.does.media",
   wake: "shortcuts.does.wake",
+  insert_photo: "shortcuts.does.insertPhoto",
+  insert_scan: "shortcuts.does.insertScan",
   automation: "shortcuts.does.automation",
 };
 
@@ -117,6 +121,8 @@ export function ShortcutSetting(props: { me?: string }) {
   /** What a binding does, for people. */
   const does = (b: Binding) => {
     if (b.action === "send_clipboard" && !b.node) return t("shortcuts.does.sendClipboardPhone");
+    if (b.action === "insert_photo" && !b.node) return t("shortcuts.does.insertPhotoPhone");
+    if (b.action === "insert_scan" && !b.node) return t("shortcuts.does.insertScanPhone");
     const key = DOES[b.action];
     if (!key) return b.action;
     return t(key, { name: b.node ? peerName(b.node) : "", what: automationName(b.automation) });

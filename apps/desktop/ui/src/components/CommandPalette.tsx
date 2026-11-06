@@ -20,6 +20,7 @@ import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Sh
 import { listen } from "@tauri-apps/api/event";
 import { commands, type LocalActions } from "../bindings";
 import {
+  askInsert,
   peerName,
   pickAndSendFile,
   pickAndSendFolder,
@@ -231,6 +232,10 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
   if (has("lost")) page("lost", t("palette.lost"));
   if (has("screen")) page("screen", t("palette.screen"));
   if (st?.cameraView && st.platform === "android") page("camera", t("palette.camera"));
+  if (st?.insertCapture && st.platform === "android") {
+    add("insert-photo", t("palette.insertPhoto", { name }), () => askInsert(node, "photo"));
+    add("insert-scan", t("palette.insertScan", { name }), () => askInsert(node, "scan"));
+  }
   if (has("screen_settings")) page("screen_settings", t("palette.screenSettings"));
   if (has("gallery")) page("gallery", t("palette.photos"));
   if (has("wifi")) page("wifi", t("palette.wifi"));

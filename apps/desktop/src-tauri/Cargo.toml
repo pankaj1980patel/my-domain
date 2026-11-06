@@ -58,6 +58,11 @@ tungstenite = "0.24"
 arboard = { version = "3", features = ["wayland-data-control"] }
 # Copied pictures to and from PNG (the clipboard gives raw pixels).
 png = "0.17"
+# A photo from the phone (insert from phone, `insert_capture.rs`) is a
+# JPEG; the clipboard takes raw pixels. Both already in Cargo.lock (arboard's
+# image pulls them in): no new crates.
+zune-jpeg = "0.5"
+zune-core = "0.5"
 # Native FCM receiver: simulates an Android/web client to obtain an FCM token
 # and receive data messages over a persistent MTalk connection (no browser /
 # service worker needed). Blocking (reqwest blocking), so it runs in its own

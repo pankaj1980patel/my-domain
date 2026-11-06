@@ -392,6 +392,11 @@ class NetService : Service() {
                         // asks first), or stopped; and turns it about.
                         "camera_watch" -> CameraShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
                         "camera_control" -> CameraShare.onControl(o.optString("from"), o.optString("op"), o.optBoolean("on"))
+                        // A computer asks for a photo or a document scan (the
+                        // phone asks first, never opening the camera itself),
+                        // or the request ended (cancelled there, timed out).
+                        "insert_request" -> InsertCapture.onRequest(this@NetService, o.optString("from"), o.optString("id"), o.optString("mode"))
+                        "insert_ended" -> InsertCapture.onEnded(this@NetService, o.optString("node_id"), o.optString("id"), o.optString("reason"))
                         // Taps and swipes on a computer's picture of this screen.
                         "input" -> ScreenShare.onInput(this@NetService, o.optString("from"), o.optJSONArray("events"))
                         // A computer asks to play this phone's audio, or stopped listening.

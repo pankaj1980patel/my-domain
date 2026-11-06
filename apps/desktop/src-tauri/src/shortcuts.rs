@@ -73,6 +73,8 @@ pub const ACTIONS: &[(&str, Needs)] = &[
     ("mute", Needs::Device),
     ("media", Needs::Device),
     ("wake", Needs::Device),
+    ("insert_photo", Needs::DeviceOrPhone),
+    ("insert_scan", Needs::DeviceOrPhone),
     ("automation", Needs::Automation),
 ];
 
@@ -976,6 +978,8 @@ fn run(app: &AppHandle, b: &Binding) {
                 }
             }
         }
+        "insert_photo" => crate::insert_capture::ask(app, node, "photo"),
+        "insert_scan" => crate::insert_capture::ask(app, node, "scan"),
         "palette" => {
             crate::tray::show_window(app);
             let _ = app.emit("open-palette", ());
@@ -1020,6 +1024,10 @@ fn describe(app: &AppHandle, b: &Binding) -> String {
         "mute" => format!("Mute or unmute {}", name()),
         "media" => format!("Play / pause on {}", name()),
         "wake" => format!("Wake {}", name()),
+        "insert_photo" if b.node.is_empty() => "Take a photo with my phone".into(),
+        "insert_scan" if b.node.is_empty() => "Scan documents with my phone".into(),
+        "insert_photo" => crate::insert_capture::describe("photo", &name()),
+        "insert_scan" => crate::insert_capture::describe("scan", &name()),
         "automation" => {
             let label = app
                 .try_state::<crate::automations::Automations>()
@@ -1381,5 +1389,17 @@ mod tests {
         assert!(checked(b.clone()).is_ok());
         b.action = "nope".into();
         assert!(checked(b).is_err());
+    }
+
+    #[test]
+    fn shortcuts_insert_from_phone_takes_a_phone_or_mine() {
+        for action in ["insert_photo", "insert_scan"] {
+            let mut b = bind("", "CmdOrCtrl+Shift+P");
+            b.action = action.into();
+            assert_eq!(checked(b.clone()).unwrap().node, "n1");
+            // No device: "my phone", picked when pressed.
+            b.node.clear();
+            assert!(checked(b).is_ok());
+        }
     }
 }

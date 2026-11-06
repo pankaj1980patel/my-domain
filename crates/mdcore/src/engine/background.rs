@@ -89,6 +89,7 @@ pub(super) fn spawn_all<P: Platform>(ctx: &NetCtx<P>) {
                 crate::features::files::resume_paused(&ctx);
                 crate::features::backup::on_timer(&ctx);
                 crate::features::folder_sync::on_timer(&ctx);
+                crate::features::insert_capture::on_timer(&ctx);
             }
         });
     }

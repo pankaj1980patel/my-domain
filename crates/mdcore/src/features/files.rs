@@ -770,6 +770,9 @@ fn failed<P: Platform>(
         super::folders::outgoing_ended(ctx, id, Some(why));
     }
     super::folder_sync::transfer_ended(ctx, id, Some(why), incoming);
+    if incoming {
+        super::insert_capture::transfer_failed(ctx, id);
+    }
 }
 
 /// Drop an outgoing transfer without a word to anyone: its sender stops,
@@ -1034,6 +1037,9 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
     let name = safe_name(&msg.str("name"));
     let sha = msg.str("sha256");
     let reject = |why: &str| {
+        // A photo or scan asked for here (`features::insert_capture`): that
+        // request ends.
+        super::insert_capture::transfer_failed(ctx, &id);
         reply(json!({ "type": "file_done", "from": me(ctx), "id": id, "ok": false, "error": why }))
     };
     // Already received (our `file_done` was lost): say so again.
@@ -1306,6 +1312,16 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
         if let Some(pair) = &t.sync {
             // Into its place in the synced folder (which then says so).
             super::folder_sync::received(ctx, pair, id, path, &t.from, &t.name, t.size, &t.sha);
+        } else if let Some(mode) = super::insert_capture::take_answer(ctx, id, &t.from) {
+            // The photo or scan a request of this computer asked for.
+            ctx.sink.emit(CoreEvent::InsertReceived {
+                id: id.to_string(),
+                from: t.from.clone(),
+                mode,
+                name: t.name.clone(),
+                path: path.to_string_lossy().into_owned(),
+                size: t.size,
+            });
         } else {
             ctx.sink.emit(CoreEvent::FileReceived {
                 id: id.to_string(),

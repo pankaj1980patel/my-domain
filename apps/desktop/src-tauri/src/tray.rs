@@ -450,6 +450,21 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 if status.is_some_and(|s| s.place.is_some()) {
                     sub = sub.text(format!("map:{node}"), format!("Show {name} on a map"));
                 }
+                // Insert from phone (`insert_capture`), where it can.
+                let can_insert = app
+                    .try_state::<Eng>()
+                    .is_some_and(|e| e.insert_supported(node));
+                if can_insert {
+                    sub = sub
+                        .text(
+                            format!("iphoto:{node}"),
+                            format!("Take a photo with {name}"),
+                        )
+                        .text(
+                            format!("iscan:{node}"),
+                            format!("Scan documents with {name}"),
+                        );
+                }
                 sub = sub.separator();
             }
             None => sub = sub.text(format!("ring:{node}"), LABEL_RING),
@@ -520,6 +535,8 @@ fn on_menu(app: &AppHandle, id: &str) {
             Some(("csound", what)) => crate::computer_audio::tray_action(app, what),
             Some(("locate", node)) => locate(app, node),
             Some(("map", node)) => show_on_map(app, node),
+            Some(("iphoto", node)) => crate::insert_capture::ask(app, node, "photo"),
+            Some(("iscan", node)) => crate::insert_capture::ask(app, node, "scan"),
             Some(("open", node)) => {
                 show_window(app);
                 let _ = app.emit("open-device", serde_json::json!({ "node_id": node }));

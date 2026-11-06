@@ -507,6 +507,18 @@ export const commands = {
 	 *  as a file to Downloads).
 	 */
 	phoneCameraControl: (nodeId: string, op: string, on: boolean) => typedError<null, string>(__TAURI_INVOKE("phone_camera_control", { nodeId, op, on })),
+	/**
+	 *  Ask a phone for a photo (`mode` "photo") or a scan ("scan"). Returns the
+	 *  request's id; `insert-state`, `insert-received` and `insert-ended`
+	 *  events follow.
+	 */
+	insertRequest: (nodeId: string, mode: string) => typedError<string, string>(__TAURI_INVOKE("insert_request", { nodeId, mode })),
+	/**  Cancel a request this computer made (the phone closes its camera). */
+	insertCancel: (id: string) => __TAURI_INVOKE<void>("insert_cancel", { id }),
+	/**  Whether a device can be asked for a photo or a scan. */
+	insertSupported: (nodeId: string) => __TAURI_INVOKE<boolean>("insert_supported", { nodeId }),
+	insertSettings: () => __TAURI_INVOKE<InsertSettings_Serialize>("insert_settings"),
+	setInsertPaste: (on: boolean) => __TAURI_INVOKE<void>("set_insert_paste", { on }),
 	/**  Where a phone's audio stands here. */
 	phoneAudioStatus: () => __TAURI_INVOKE<PhoneAudioStatus_Serialize>("phone_audio_status"),
 	/**  This computer's speakers and headphones. */
@@ -1889,6 +1901,28 @@ export type Identity_Serialize = {
 	ipv6?: string,
 	/**  Public `ip:port` the home router forwards to our QUIC port (UPnP). */
 	mapped_quic?: string,
+};
+
+export type InsertSettings = InsertSettings_Serialize | InsertSettings_Deserialize;
+
+export type InsertSettings_Deserialize = {
+	/**  "Insert where I am": paste what arrives into the app in front. */
+	paste: boolean,
+	/**
+	 *  Why pasting can't work yet ("accessibility" on a Mac until allowed,
+	 *  "display" on Linux without X), if so.
+	 */
+	blocked?: string | null,
+};
+
+export type InsertSettings_Serialize = {
+	/**  "Insert where I am": paste what arrives into the app in front. */
+	paste: boolean,
+	/**
+	 *  Why pasting can't work yet ("accessibility" on a Mac until allowed,
+	 *  "display" on Linux without X), if so.
+	 */
+	blocked: string | null,
 };
 
 /**  What "Add a device" shows. */

@@ -30,6 +30,7 @@ pub mod folder_sync;
 pub mod folders;
 pub mod gallery;
 pub mod input;
+pub mod insert_capture;
 pub mod kvm;
 pub mod labels;
 pub mod links_map;
@@ -141,7 +142,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::links_map`), the `nearby_*` clock pings
     /// (`CoreConfig::nearby`), and the `wifi_direct_*` messages
     /// (`CoreConfig::wifi_direct`), and the `kvm_*` messages
-    /// (`CoreConfig::kvm`).
+    /// (`CoreConfig::kvm`), and the `insert_*` messages
+    /// (`CoreConfig::insert_capture`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -157,6 +159,7 @@ impl<P: Platform> ControlRegistry<P> {
         nearby: bool,
         wifi_direct: bool,
         kvm: bool,
+        insert_capture: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -218,6 +221,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if kvm {
             r.register(Arc::new(kvm::KvmHandler));
+        }
+        if insert_capture {
+            r.register(Arc::new(insert_capture::InsertHandler));
         }
         r
     }

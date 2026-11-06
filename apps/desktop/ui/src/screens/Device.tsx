@@ -63,6 +63,7 @@ import ClipHistoryTile from "./device/ClipHistoryTile";
 import PhoneAudioTile from "./device/PhoneAudioTile";
 import ComputerAudioTile from "./device/ComputerAudioTile";
 import CameraTile from "./device/CameraTile";
+import InsertTile from "./device/InsertTile";
 import WakeButton from "./device/WakeButton";
 import ConnectionTile from "./device/ConnectionTile";
 import { NearbyBadge } from "../components/NearbyBadge";
@@ -105,6 +106,15 @@ const TILES: TileDef[] = [
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.cameraView && state.status[n]?.platform === "android",
     render: (n) => <CameraTile node={n} />,
+  },
+  {
+    // Insert from phone: a photo or a scan taken on the phone, into
+    // Downloads and the clipboard here (it says insert_capture).
+    id: "insert",
+    title: () => t("insert.title"),
+    kinds: ["phone"],
+    available: (n) => !!state.status[n]?.insertCapture && state.status[n]?.platform === "android",
+    render: (n) => <InsertTile node={n} />,
   },
   {
     id: "phone-audio",

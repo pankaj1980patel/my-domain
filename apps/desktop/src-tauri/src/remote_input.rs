@@ -154,6 +154,26 @@ impl Player {
     }
 }
 
+/// Paste into the app in front: Cmd+V on a Mac, Ctrl+V elsewhere ("Insert
+/// where I am", `insert_capture`). Only with the permission input already
+/// needs (`ready`); says why not otherwise.
+pub fn paste() -> Result<(), &'static str> {
+    ready().map_err(|why| match why {
+        "accessibility" => {
+            "Allow my-domain under Privacy & Security \u{203a} Accessibility to paste for you."
+        }
+        _ => "There\u{2019}s no screen here to paste into.",
+    })?;
+    let mut enigo =
+        Enigo::new(&Settings::default()).map_err(|_| "Couldn\u{2019}t reach the keyboard.")?;
+    let held: &[Key] = if cfg!(target_os = "macos") {
+        &[Key::Meta]
+    } else {
+        &[Key::Control]
+    };
+    press_combo(&mut enigo, held, Key::Unicode('v')).map_err(|_| "Couldn\u{2019}t press the keys.")
+}
+
 /// Hold `mods`, press `key`, let go of `mods` (in reverse), even if a
 /// press fails half way.
 fn press_combo(enigo: &mut Enigo, mods: &[Key], key: Key) -> Result<(), enigo::InputError> {

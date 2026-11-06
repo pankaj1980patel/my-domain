@@ -1,6 +1,6 @@
 ---
 title: Phone screen on the computer, computer screen on the phone
-keywords: screen, share, mirror, view, control, remote, touchpad, mouse, keyboard, tap, swipe, screen recording, accessibility, slides, presentation, camera, webcam, document camera, photo, torch, flashlight
+keywords: screen, share, mirror, view, control, remote, touchpad, mouse, keyboard, tap, swipe, screen recording, accessibility, slides, presentation, camera, webcam, document camera, photo, torch, flashlight, insert, scan, scanner, pdf, continuity camera
 platforms: desktop, android
 ---
 ## The phone's screen on the computer
@@ -22,6 +22,17 @@ On the phone's page on the computer, the **Phone camera** tile shows what the ph
 - From the computer you can switch between the back and front cameras, turn the torch on and off, go full screen, and **Take photo**: a full-size picture that arrives in Downloads (the notice has **Show in folder**).
 - It stops when you press Stop on either side, when the computer's link goes, and when the phone locks or its screen goes off. To keep it going on a locked phone, turn on **Keep streaming while locked** in the phone's Settings (off by default).
 - The pictures are never kept, on the phone or the computer, unless you take a photo. Both apps must be up to date: an older phone doesn't show the tile.
+
+## Insert from phone: a photo or a scan
+
+On the computer, **Take a photo with …** or **Scan documents with …** asks your phone for a picture, like a document scanner in your pocket. Start it from the phone's page (the **Insert from phone** tile), the tray menu, the command palette, or a keyboard shortcut you set in Settings.
+
+- The phone opens its camera **only when you act on it**: if my-domain is open on the phone, a screen asks you to open the camera; otherwise a notification "Your computer wants a photo" opens it when you tap it.
+- **Photo:** take it, and it's sent.
+- **Scan:** take one or more pages. Each page's edges are found for you; drag the corners to fix them. Pick Original, Grayscale or Black & white, move pages up or down or delete them, then send: the pages become one PDF (A4, or Letter in the US and Canada).
+- On the computer it goes to **Downloads** and onto the **clipboard**: a photo as a picture, a scan as a file (or its path where the clipboard can't hold files). A notice says "Scan from … saved", with **Show in folder**.
+- **Insert where I am** (Settings, off by default) pastes it straight into the app you're using. It needs the same permission as the phone's touchpad (Accessibility on a Mac).
+- Cancel on either side. If nothing comes back in 3 minutes, the request ends by itself. Both apps must be up to date.
 
 ## The computer's screen on the phone
 

@@ -33,6 +33,7 @@ mod device_labels;
 mod diagnostics;
 mod fcm;
 mod hotspot;
+mod insert_capture;
 mod key_changes;
 mod kvm;
 mod kvm_keys;
@@ -621,6 +622,25 @@ impl EventSink for TauriSink {
                     let device = notify::device_name(&app, &from);
                     notify::post_if_away(&app, "my-domain", &format!("Saved {name} from {device}"));
                 });
+            }
+            // Insert from phone: the photo or scan this computer asked for
+            // (Downloads, the clipboard, maybe pasted where the user is).
+            CoreEvent::InsertReceived {
+                id,
+                from,
+                mode,
+                name,
+                path,
+                size,
+            } => insert_capture::on_received(&self.app, id, from, mode, name, path, *size),
+            CoreEvent::InsertEnded {
+                node_id, reason, ..
+            } => insert_capture::on_ended(&self.app, node_id, reason),
+            // A computer has no camera to take one with: say so at once.
+            CoreEvent::InsertRequest { id, .. } => {
+                if let Some(engine) = self.app.try_state::<Eng>() {
+                    engine.insert_cancel(id, "unsupported");
+                }
             }
             CoreEvent::KeyChanged { node_id, .. } => {
                 let (app, node) = (self.app.clone(), node_id.clone());
@@ -1772,6 +1792,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         phone_screen::phone_touch,
         phone_screen::phone_camera_watch,
         phone_screen::phone_camera_control,
+        insert_capture::insert_request,
+        insert_capture::insert_cancel,
+        insert_capture::insert_supported,
+        insert_capture::insert_settings,
+        insert_capture::set_insert_paste,
         phone_audio::phone_audio_status,
         phone_audio::phone_audio_outputs,
         phone_audio::phone_audio_start,
@@ -1896,6 +1921,7 @@ pub fn run() {
             // Before the Engine: its clipboard watcher asks.
             clip_privacy::load(&handle);
             app.manage(chat_history::ChatHistory::load(&handle));
+            app.manage(insert_capture::InsertPrefs::load(&handle));
             app.manage(transfers::TransferHistory::load(&handle));
             app.manage(location::LocationPref::load(&handle));
             app.manage(wol::WakePref::load(&handle));

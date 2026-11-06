@@ -197,6 +197,15 @@ pub struct CoreConfig {
     /// understands the `kvm_*` messages. On by default; off behaves like
     /// an app from before (tests use it to play an older peer).
     pub kvm: bool,
+    /// Insert from phone (`features::insert_capture`): this end says
+    /// `insert_capture` in its status and `addr_update` and understands
+    /// the `insert_*` messages (a computer asks a phone for a photo or a
+    /// scan). On by default; off behaves like an app from before (tests
+    /// use it to play an older peer).
+    pub insert_capture: bool,
+    /// How long such a request waits for the phone
+    /// (`features::insert_capture::TIMEOUT`, 3 minutes; tests shorten it).
+    pub insert_timeout: std::time::Duration,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -260,6 +269,8 @@ impl Default for CoreConfig {
             audio_codec: true,
             wifi_direct: true,
             kvm: true,
+            insert_capture: true,
+            insert_timeout: crate::features::insert_capture::TIMEOUT,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

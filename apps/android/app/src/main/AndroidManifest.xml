@@ -288,6 +288,17 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
         <!-- The touchpad full screen (the touchpad tile's Enlarge). -->
+        <!-- Insert from phone: a photo or a document scan a computer asked
+             for (InsertCapture.kt), and its notification's Cancel. -->
+        <activity
+            android:name=".InsertCaptureActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.App" />
+        <receiver
+            android:name=".InsertCancelReceiver"
+            android:exported="false" />
         <activity
             android:name=".TouchpadActivity"
             android:exported="false"

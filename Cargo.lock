@@ -4368,6 +4368,8 @@ dependencies = [
  "uuid",
  "windows 0.61.3",
  "x11rb",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]

@@ -27,6 +27,7 @@ import { TrayBatterySetting } from "../components/TrayBatterySetting";
 import { NearbySetting } from "../components/NearbySetting";
 import { WifiDirectSetting } from "../components/WifiDirectSetting";
 import { KvmSetting } from "../components/KvmSetting";
+import { InsertSetting } from "../components/InsertSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
@@ -299,6 +300,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <ShellCommandsSetting />
 
       <KvmSetting />
+
+      <InsertSetting />
 
       <article class="tile" id="settings-schedules">
         <h2>{t("schedule.local.title")}</h2>

@@ -51,6 +51,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::nearby::extend_status(ctx, &mut msg);
         super::audio_share::extend_codec(ctx, &mut msg);
         super::camera::extend_status(ctx, &mut msg);
+        super::insert_capture::extend_status(ctx, &mut msg);
         super::timers::extend_status(ctx, &mut msg);
         super::wifi_direct::extend_status(ctx, &mut msg);
         super::kvm::extend_status(ctx, &mut msg);
@@ -109,6 +110,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::nearby::remember(ctx, &from, &msg.json(super::nearby::FLAG));
         super::audio_share::remember_codec(ctx, &from, &msg.json(super::audio_share::CODEC_FLAG));
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
+        super::insert_capture::remember(ctx, &from, &msg.json(super::insert_capture::FLAG));
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));
         super::wifi_direct::remember(ctx, &from, &msg.json(super::wifi_direct::FLAG));
         super::kvm::remember(

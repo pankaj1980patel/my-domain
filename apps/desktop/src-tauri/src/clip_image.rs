@@ -131,6 +131,64 @@ pub fn put_on_clipboard(path: &Path) -> Result<(), String> {
     })
 }
 
+/// Put the picture at `path` (a JPEG or a PNG) on the clipboard.
+pub fn put_picture_on_clipboard(path: &Path) -> Result<(), String> {
+    let (w, h, rgba) = if is_jpeg(path) {
+        read_jpeg(path)?
+    } else {
+        read_png(path)?
+    };
+    with_clipboard(|cb| {
+        cb.set_image(arboard::ImageData {
+            width: w,
+            height: h,
+            bytes: rgba.into(),
+        })
+        .map_err(|e| format!("can't copy the picture: {e}"))
+    })
+}
+
+/// Put the file at `path` itself on the clipboard (pasted as an
+/// attachment), where the clipboard holds files.
+pub fn put_file_on_clipboard(path: &Path) -> Result<(), String> {
+    with_clipboard(|cb| {
+        cb.set()
+            .file_list(&[path])
+            .map_err(|e| format!("can't copy the file: {e}"))
+    })
+}
+
+/// Put `text` on the clipboard.
+pub fn put_text_on_clipboard(text: &str) -> Result<(), String> {
+    with_clipboard(|cb| cb.set_text(text).map_err(|e| e.to_string()))
+}
+
+fn is_jpeg(path: &Path) -> bool {
+    path.extension()
+        .map(|e| e.to_string_lossy().to_ascii_lowercase())
+        .is_some_and(|e| e == "jpg" || e == "jpeg")
+}
+
+/// A JPEG's size and pixels as 8-bit RGBA.
+pub fn read_jpeg(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
+    use zune_core::bytestream::ZCursor;
+    use zune_core::colorspace::ColorSpace;
+    use zune_core::options::DecoderOptions;
+    let data = std::fs::read(path).map_err(|e| e.to_string())?;
+    let options = DecoderOptions::default()
+        .jpeg_set_out_colorspace(ColorSpace::RGBA)
+        .set_max_width(16_384)
+        .set_max_height(16_384);
+    let mut dec = zune_jpeg::JpegDecoder::new_with_options(ZCursor::new(&data), options);
+    let rgba = dec.decode().map_err(|e| format!("not a picture: {e:?}"))?;
+    let info = dec.info().ok_or("not a picture")?;
+    let (w, h) = (info.width as usize, info.height as usize);
+    if rgba.len() != w * h * 4 {
+        return Err("not a picture".into());
+    }
+    Ok((w, h, rgba))
+}
+
 /// A PNG's size and pixels as 8-bit RGBA.
 pub fn read_png(path: &Path) -> Result<(usize, usize, Vec<u8>), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;

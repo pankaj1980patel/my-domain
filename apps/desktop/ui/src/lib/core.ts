@@ -11,7 +11,7 @@ import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type Comp
 import { t } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { onSpeedEvent, type SpeedRun } from "./diag";
-import { niceName } from "./words";
+import { friendlyError, niceName } from "./words";
 import { applyNotesChanged, loadNotes, onReminder, type Note } from "./notes";
 import { applyTimersChanged, loadTimers, onTimerRing, type Timer } from "./timers";
 import { applyReadLaterChanged, applySaved as applyReadLaterSaved, loadReadLater, type ReadLaterItem } from "./readLater";
@@ -118,6 +118,9 @@ export type DeviceStatus = {
   /** It knows the camera messages (`camera_view`): a phone that can show
    *  its camera here. */
   cameraView?: boolean;
+  /** It knows insert from phone (`insert_capture`): a phone that can take
+   *  a photo or scan documents for this computer. */
+  insertCapture?: boolean;
   /** Screen settings (ScreenSettings on Android): brightness 0-100, auto
    *  brightness, screen timeout in seconds, auto-rotate. */
   brightness?: number;
@@ -297,6 +300,9 @@ type State = {
   /** node_id -> when this computer asked that phone's camera for a photo;
    *  the photo that arrives then gets a toast with "Show in folder". */
   cameraPhotos: Record<string, number>;
+  /** node_id -> the photo or scan this computer asked that phone for
+   *  (insert from phone), and how far it got. */
+  inserts: Record<string, InsertAsk>;
   /** This computer's sound on your phones (`computer-audio`): where it
    *  plays and who was asked; null until known. */
   computerAudio: ComputerAudioStatus_Serialize | null;
@@ -326,6 +332,7 @@ export const [state, setState] = createStore<State>({
   labels: {},
   screenOffers: {},
   cameraPhotos: {},
+  inserts: {},
   computerAudio: null,
   syncPairs: [],
   devLog: [],
@@ -576,6 +583,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         audioSource: status?.audio_source === true,
         audioSink: status?.audio_sink === true,
         cameraView: typeof status?.camera_view === "number" && status.camera_view >= 1,
+        insertCapture: typeof status?.insert_capture === "number" && status.insert_capture >= 1,
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
@@ -673,6 +681,43 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
           });
         }
       } else if (!secondary) toast(t("files.savedToast", { name, device }), "ok");
+    }),
+    // Insert from phone: the phone opened its camera, or is sending.
+    on<{ from: string; id: string; state: string }>("insert-state", ({ from, id, state: phase }) => {
+      const cur = state.inserts[from];
+      if (cur?.id === id && (phase === "open" || phase === "sending")) setState("inserts", from, "phase", phase);
+    }),
+    // The photo or scan arrived: in Downloads and on the clipboard (the
+    // backend did both); a transfer row like any received file.
+    on<{ from: string; id: string; mode: string; name: string; path: string; size: number }>(
+      "insert-received",
+      ({ from, id, mode, name, path, size }) => {
+        if (state.inserts[from]?.id === id) setState("inserts", from, undefined!);
+        setState("transfers", id, {
+          id,
+          node: from,
+          name,
+          done: size,
+          total: size,
+          incoming: true,
+          state: "saved",
+          path,
+          ts: state.transfers[id]?.ts ?? now(),
+        });
+        const device = peerName(from);
+        addActivity({ icon: "", tone: "ok", node: from, text: t("activity.fileSaved", { name, device }) });
+        if (!secondary) {
+          toast(t(mode === "scan" ? "insert.scanSaved" : "insert.photoSaved", { device }), "ok", {
+            label: t("files.show"),
+            run: () => void revealFile(path).catch(() => {}),
+          });
+        }
+      },
+    ),
+    on<{ node_id: string; id: string; reason: string }>("insert-ended", ({ node_id, id, reason }) => {
+      if (state.inserts[node_id]?.id !== id) return;
+      setState("inserts", node_id, undefined!);
+      if (!secondary) toast(insertEndedText(reason, peerName(node_id)), reason === "cancelled" ? "info" : "error");
     }),
     on<{ id: string; node_id: string; name: string }>("file-sent", ({ id, node_id, name }) => {
       const cur = state.transfers[id];
@@ -1167,4 +1212,48 @@ export function dismissRing() {
 export async function signOut() {
   await commands.logout();
   location.reload();
+}
+
+// --- insert from phone ---
+
+/** A photo or scan this computer asked a phone for. */
+export type InsertAsk = { id: string; mode: "photo" | "scan"; phase: "asked" | "open" | "sending" };
+
+/** Why a request ended, for a toast. */
+export function insertEndedText(reason: string, device: string): string {
+  switch (reason) {
+    case "timeout":
+      return t("insert.timeout", { device });
+    case "no_permission":
+      return t("insert.noPermission", { device });
+    case "failed":
+      return t("insert.failed", { device });
+    case "unsupported":
+      return t("insert.unsupported", { device });
+    case "error":
+      return t("insert.error", { device });
+    default:
+      return t("insert.cancelled", { device });
+  }
+}
+
+/** Ask phone `node` for a photo or a scan; toasts what happened. */
+export async function askInsert(node: string, mode: "photo" | "scan"): Promise<boolean> {
+  const device = peerName(node);
+  const r = await commands.insertRequest(node, mode);
+  if (r.status === "error") {
+    toast(friendlyError(r.error), "error");
+    return false;
+  }
+  setState("inserts", node, { id: r.data, mode, phase: "asked" });
+  toast(t(mode === "scan" ? "insert.askedScan" : "insert.askedPhoto", { device }), "info");
+  return true;
+}
+
+/** Cancel what this computer asked `node` for (the phone closes its camera). */
+export function cancelInsert(node: string) {
+  const cur = state.inserts[node];
+  if (!cur) return;
+  setState("inserts", node, undefined!);
+  void commands.insertCancel(cur.id).catch(() => {});
 }

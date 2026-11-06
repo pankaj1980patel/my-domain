@@ -411,6 +411,44 @@ pub enum CoreEvent {
     /// The computer watching this camera asks it to `op`: "switch" the
     /// camera, "torch" (`on`), or take a "photo" (sent as a file).
     CameraControl { from: String, op: String, on: bool },
+    /// Insert from phone (`features::insert_capture`), on the phone: the
+    /// computer `from` asks for a photo or a scan (`mode`: "photo" or
+    /// "scan"). Open the capture screen if the app is in front, else post
+    /// a notice that opens it: never the camera without the owner acting
+    /// on the phone. Answer with `Engine::insert_send` or
+    /// `Engine::insert_cancel`.
+    InsertRequest {
+        from: String,
+        id: String,
+        mode: String,
+    },
+    /// On the computer: the phone asked for request `id` says what it's
+    /// doing (`state`: "open", the capture screen is up; "sending", the
+    /// file follows).
+    InsertState {
+        from: String,
+        id: String,
+        state: String,
+    },
+    /// Request `id` with `node_id` ended without an answer, on either end:
+    /// the other end cancelled (`reason`: "cancelled", "no_permission",
+    /// "error", ...), its time was up ("timeout"), or the transfer failed
+    /// ("failed").
+    InsertEnded {
+        node_id: String,
+        id: String,
+        reason: String,
+    },
+    /// On the computer: the photo or scan asked for in request `id` arrived
+    /// and is saved at `path` (instead of an ordinary `FileReceived`).
+    InsertReceived {
+        from: String,
+        id: String,
+        mode: String,
+        name: String,
+        path: String,
+        size: u64,
+    },
     /// A device started (`on`) or stopped listening to this device's
     /// audio (`features::audio_share`; a computer to a phone's, or a phone
     /// to a computer's): while any does (`Engine::audio_listeners`),
@@ -501,6 +539,10 @@ impl CoreEvent {
             CoreEvent::CameraFrame { .. } => "camera-frame",
             CoreEvent::CameraOffer { .. } => "camera-offer",
             CoreEvent::CameraControl { .. } => "camera-control",
+            CoreEvent::InsertRequest { .. } => "insert-request",
+            CoreEvent::InsertState { .. } => "insert-state",
+            CoreEvent::InsertEnded { .. } => "insert-ended",
+            CoreEvent::InsertReceived { .. } => "insert-received",
             CoreEvent::AudioListen { .. } => "audio-listen",
             CoreEvent::AudioOffer { .. } => "audio-offer",
             CoreEvent::AudioFrame { .. } => "audio-frame",
@@ -875,6 +917,55 @@ mod tests {
         assert_eq!(
             (layout.name(), layout.ui_payload()),
             ("kvm-layout", json!({"layout": []}))
+        );
+    }
+
+    #[test]
+    fn insert_events_keep_their_shape() {
+        let ev = CoreEvent::InsertRequest {
+            from: "pc".into(),
+            id: "ab12".into(),
+            mode: "scan".into(),
+        };
+        assert_eq!(ev.name(), "insert-request");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "insert_request", "from": "pc", "id": "ab12", "mode": "scan"})
+        );
+        let ev = CoreEvent::InsertEnded {
+            node_id: "phone".into(),
+            id: "ab12".into(),
+            reason: "timeout".into(),
+        };
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "insert_ended", "node_id": "phone", "id": "ab12", "reason": "timeout"})
+        );
+        let ev = CoreEvent::InsertState {
+            from: "phone".into(),
+            id: "ab12".into(),
+            state: "open".into(),
+        };
+        assert_eq!(
+            (ev.name(), ev.ui_payload()),
+            (
+                "insert-state",
+                json!({"from": "phone", "id": "ab12", "state": "open"})
+            )
+        );
+        let ev = CoreEvent::InsertReceived {
+            from: "phone".into(),
+            id: "ab12".into(),
+            mode: "photo".into(),
+            name: "Photo.jpg".into(),
+            path: "/d/Photo.jpg".into(),
+            size: 9,
+        };
+        assert_eq!(ev.name(), "insert-received");
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"from": "phone", "id": "ab12", "mode": "photo", "name": "Photo.jpg",
+                "path": "/d/Photo.jpg", "size": 9})
         );
     }
 }

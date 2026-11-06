@@ -351,6 +351,7 @@ impl<P: Platform> Engine<P> {
             config.nearby,
             config.wifi_direct,
             config.kvm && platform.shares_input(),
+            config.insert_capture,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

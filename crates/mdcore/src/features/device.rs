@@ -91,6 +91,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::audio_share::extend_codec(ctx, &mut status);
                 // Whether it knows the camera messages.
                 super::camera::extend_status(ctx, &mut status);
+                // Whether it knows insert from phone.
+                super::insert_capture::extend_status(ctx, &mut status);
                 // Whether it shares timers.
                 super::timers::extend_status(ctx, &mut status);
                 // What it can do with Wi-Fi Direct.
@@ -130,6 +132,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                     &status[super::audio_share::CODEC_FLAG],
                 );
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
+                super::insert_capture::remember(ctx, &from, &status[super::insert_capture::FLAG]);
                 super::timers::remember(ctx, &from, &status[super::timers::FLAG]);
                 super::wifi_direct::remember(ctx, &from, &status[super::wifi_direct::FLAG]);
                 super::kvm::remember(

@@ -199,6 +199,50 @@ impl<P: Platform> Engine<P> {
         crate::features::camera::offer(&self.ctx, node_id, state)
     }
 
+    // --- insert from phone (features::insert_capture) ---
+
+    /// Whether `node` said it knows the insert messages (`insert_capture`):
+    /// only then is it asked for a photo or a scan.
+    pub fn insert_supported(&self, node_id: &str) -> bool {
+        crate::features::insert_capture::supports(&self.ctx, node_id)
+    }
+
+    /// Computer: ask phone `node` for a photo or a scan (`mode`: "photo" or
+    /// "scan"). Returns the request's id; the answer arrives as
+    /// `InsertReceived` (or the request ends with `InsertEnded`). Fails
+    /// with `Unsupported` for a phone that didn't say `insert_capture`,
+    /// `NoLink` (and starts connecting) while nothing is known of it yet.
+    pub fn insert_request(&self, node_id: &str, mode: &str) -> crate::Result<String> {
+        crate::features::insert_capture::request(&self.ctx, node_id, mode)
+    }
+
+    /// Computer: the requests waiting on a phone: (id, phone, mode, sending).
+    pub fn insert_pending(&self) -> Vec<(String, String, String, bool)> {
+        crate::features::insert_capture::asked(&self.ctx)
+    }
+
+    /// Either end: cancel request `id` and tell the other end (`reason`, a
+    /// short word: "cancelled", "no_permission", "error"...).
+    pub fn insert_cancel(&self, id: &str, reason: &str) {
+        crate::features::insert_capture::cancel(&self.ctx, id, reason)
+    }
+
+    /// Phone: the requests made of it now.
+    pub fn insert_requests(&self) -> Vec<crate::features::insert_capture::InsertRequestInfo> {
+        crate::features::insert_capture::requests(&self.ctx)
+    }
+
+    /// Phone: the capture screen for request `id` is up (the computer says
+    /// "Take the photo on <phone>").
+    pub fn insert_opened(&self, id: &str) -> crate::Result<()> {
+        crate::features::insert_capture::opened(&self.ctx, id)
+    }
+
+    /// Phone: send the photo or scan at `path` as the answer to request `id`.
+    pub fn insert_send(&self, id: &str, path: &str) -> crate::Result<()> {
+        crate::features::insert_capture::send_file(&self.ctx, id, std::path::Path::new(path))
+    }
+
     // --- Do Not Disturb ---
 
     /// This device's Do Not Disturb state, as the host reads it from the
