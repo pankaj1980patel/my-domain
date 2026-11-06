@@ -132,6 +132,15 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         phone.share_code("hello".into(), None),
         Err(MdError::Failed(_))
     ));
+    // Verification codes for your computers: none yet, so nowhere to go.
+    assert_eq!(phone.verification_code_computers_json(), "[]");
+    assert!(phone
+        .send_verification_code("482913".into(), "Bank".into(), "".into(), vec!["x".into()])
+        .unwrap()
+        .is_empty());
+    assert!(phone
+        .send_verification_code("hi".into(), "Bank".into(), "".into(), vec![])
+        .is_err());
 
     // A desktop messages the phone: the listener hears it, kind-tagged.
     // (The phone knows the desktop only by address, as typed by hand.)

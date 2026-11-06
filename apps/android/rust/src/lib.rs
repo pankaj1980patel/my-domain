@@ -1193,6 +1193,37 @@ impl MdEngine {
         Ok(self.inner.share_code(&code, app.as_deref())?)
     }
 
+    /// Send verification code `code` (found in a notification of `app`,
+    /// from `issuer`, may be empty) to those of `nodes` that are your
+    /// computers and take codes: only the code, app, issuer and expiry go,
+    /// end-to-end encrypted, over a live link (else it waits two minutes at
+    /// most). Returns the computers it went or will go to; throws if none
+    /// of them takes codes, or it doesn't look like a code.
+    pub fn send_verification_code(
+        &self,
+        code: String,
+        app: String,
+        issuer: String,
+        nodes: Vec<String>,
+    ) -> MdResult<Vec<String>> {
+        Ok(self
+            .inner
+            .send_verification_code(&code, &app, &issuer, &nodes)?)
+    }
+
+    /// Your computers as JSON, for "choose computers":
+    /// `[{"node": id, "supported": bool}]` (`supported` false: its app is
+    /// too old for verification codes).
+    pub fn verification_code_computers_json(&self) -> String {
+        let list: Vec<serde_json::Value> = self
+            .inner
+            .verification_code_computers()
+            .into_iter()
+            .map(|(node, supported)| serde_json::json!({"node": node, "supported": supported}))
+            .collect();
+        serde_json::Value::Array(list).to_string()
+    }
+
     pub fn share_call_notification(&self, caller: String, number: Option<String>, state: String) {
         self.inner
             .share_call_notification(&caller, number.as_deref(), &state);

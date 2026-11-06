@@ -62,6 +62,13 @@ pub enum CoreEvent {
         code: String,
         app: Option<String>,
     },
+    /// Your phone sent a verification code to show here
+    /// (`features::otp_relay`): show "Code 482913 from <app>" with Copy
+    /// until `expires_at`. Never log it, keep it in a history or put it in
+    /// the activity list; `Debug` hides the code.
+    VerificationCode(crate::features::otp_relay::VerificationCode),
+    /// Verification code `id` expired or was dismissed (it's wiped).
+    VerificationCodeGone { id: String },
     /// A peer shared an OS notification.
     Notification {
         from: String,
@@ -584,6 +591,8 @@ impl CoreEvent {
             CoreEvent::Clipboard { .. } => "clipboard-event",
             CoreEvent::ClipboardHistory { .. } => "clipboard-history",
             CoreEvent::CodeCopied { .. } => "code-copied",
+            CoreEvent::VerificationCode(_) => "verification-code",
+            CoreEvent::VerificationCodeGone { .. } => "verification-code-gone",
             CoreEvent::Notification { .. } => "notification-event",
             CoreEvent::NotificationAction { .. } => "notification-action-event",
             CoreEvent::NotificationRemoved { .. } => "notification-removed-event",
@@ -1099,6 +1108,41 @@ mod tests {
         assert_eq!(
             (layout.name(), layout.ui_payload()),
             ("kvm-layout", json!({"layout": []}))
+        );
+    }
+
+    #[test]
+    fn verification_codes_keep_their_shape_and_never_print_the_code() {
+        let ev = CoreEvent::VerificationCode(crate::features::otp_relay::VerificationCode {
+            id: "otp-1".into(),
+            from: "phone".into(),
+            code: "482913".into(),
+            app: "HDFC Bank".into(),
+            issuer: String::new(),
+            expires_at: 1_700_000_000_000,
+        });
+        assert_eq!(ev.name(), "verification-code");
+        let mut v = ev.to_json();
+        assert_eq!(v["kind"], "verification_code");
+        assert_eq!(v["code"], "482913");
+        assert_eq!(v["expires_at"], 1_700_000_000_000u64);
+        let mut keys: Vec<String> = v
+            .as_object_mut()
+            .map(|o| o.keys().cloned().collect())
+            .unwrap_or_default();
+        keys.sort();
+        assert_eq!(
+            keys,
+            ["app", "code", "expires_at", "from", "id", "issuer", "kind"]
+        );
+        assert!(!format!("{ev:?}").contains("482913"));
+        let gone = CoreEvent::VerificationCodeGone { id: "otp-1".into() };
+        assert_eq!(
+            (gone.name(), gone.to_json()),
+            (
+                "verification-code-gone",
+                json!({"kind": "verification_code_gone", "id": "otp-1"})
+            )
         );
     }
 

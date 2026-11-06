@@ -19,7 +19,10 @@
 //    secondary field (an app, a time, keys), then in the text; a word at
 //    the start of a word counts a little more; newer items come first among
 //    equals;
-//  - only local data: nothing here leaves the computer.
+//  - only local data: nothing here leaves the computer;
+//  - never verification codes (otp_codes.rs): they're kept in none of the
+//    sources above (not the clipboard history, not Activity), and none may
+//    be added here.
 //
 // Folding is a simple one: lower case, accents taken off the Latin letters
 // (Latin-1 and Latin Extended-A) and combining accents dropped, typographic

@@ -1,6 +1,6 @@
 ---
 title: Phone notifications on the computer
-keywords: notification, notifications, mirror, history, mute, apps, reply, dismiss, buttons, actions, conversation, private mode, otp, bank, locked, in use, do not disturb, dnd, quiet, pop-up, alerts, computer notifications, linux, from computer
+keywords: notification, notifications, verification code, one-time code, otp code, copy code, 2fa, sign-in code, कोड, ओटीपी, mirror, history, mute, apps, reply, dismiss, buttons, actions, conversation, private mode, otp, bank, locked, in use, do not disturb, dnd, quiet, pop-up, alerts, computer notifications, linux, from computer
 platforms: desktop, android
 ---
 Your phone's notifications can show on your computer, where you can read them, reply, tap their buttons or dismiss them.
@@ -32,6 +32,18 @@ Only notifications worth seeing come: not ongoing ones (music, downloads, naviga
 **Private mode** (on the phone's Notifications tile, on by default) keeps sensitive notifications on the phone: one-time codes, banks, payment apps and password managers show only "New notification from" the app. Their text never leaves the phone, and nothing of it is kept in the history. You can still dismiss them.
 
 The computer applies the same rule to a phone with an older my-domain app, which sends everything: it drops the content before showing or keeping it.
+
+## Verification codes on the computer
+
+When a sign-in, bank or messaging app's notification on your phone carries a one-time code, your computer can show it as **Code 482913 from Bank** with a **Copy** button, so you can paste it where you're signing in.
+
+- Turn it on on the phone: **Settings → Send verification codes to my computers** (off by default), and choose which computers get codes. It works with Notification access only: my-domain never reads your SMS, call log or contacts.
+- The phone finds the code next to words like code, OTP, verification, passcode or PIN (also कोड, ओटीपी, सत्यापन and other languages), and skips amounts, phone numbers, dates and labelled order or reference numbers. Only a code it's sure enough of is sent.
+- On the computer the code shows in a notification with **Copy** (macOS and Windows; Linux shows a plain one), as a toast in the window and at the top of the quick panel, until it expires.
+- **Copy verification codes automatically** (computer Settings, off by default) puts each code straight on the clipboard. Either way a copied code is marked private, so clipboard managers skip it, it isn't synced to your other devices or kept in the clipboard history, and it's cleared from the clipboard after 90 seconds if it's still there.
+- A computer with an older my-domain app doesn't get codes: update it.
+
+See [Privacy](help:privacy) for what is sent.
 
 ## Only while the phone isn't in use
 

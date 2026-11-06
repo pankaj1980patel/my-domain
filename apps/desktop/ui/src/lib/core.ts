@@ -550,6 +550,21 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
       addActivity({ icon: "", tone: "ok", node: from, text: t("activity.codeCopied", { device }) });
       if (!secondary) toast(app ? t("code.copiedFrom", { app, device }) : t("code.copied", { device }), "ok");
     }),
+    // A verification code from your phone (otp_codes.rs posts the OS
+    // notification and copies it if that's on): a toast with Copy. Never
+    // in Activity or any history.
+    on<{ id: string; from: string; code: string; app: string; issuer: string }>("verification-code", (c) => {
+      if (secondary) return;
+      const from = c.issuer || c.app || peerName(c.from);
+      void commands.otpAutoCopy().then((auto) =>
+        auto
+          ? toast(t("otp.toastCopied", { code: c.code, from }), "ok")
+          : toast(t("otp.toast", { code: c.code, from }), "ok", {
+              label: t("otp.copy"),
+              run: () => void copyVerificationCode(c.id),
+            }),
+      );
+    }),
     on<null>("clip-history-changed", () => setClipTick((x) => x + 1)),
     // A phone shares its screen with this computer (the backend brings
     // its page up); its screen tile watches. A stop is the tile's to show.
@@ -1003,6 +1018,19 @@ export async function loadClipHistory() {
 
 export async function clearClipHistory() {
   await commands.clearClipboardHistory();
+}
+
+/** Copy a verification code your phone sent (concealed; cleared from the
+ *  clipboard after 90 seconds). Says so, or that it expired. */
+export async function copyVerificationCode(id: string): Promise<boolean> {
+  try {
+    await unwrap(commands.copyVerificationCode(id));
+    toast(t("otp.copied"), "ok");
+    return true;
+  } catch {
+    toast(t("otp.expired"), "error");
+    return false;
+  }
 }
 
 /** Copy a history entry back onto this computer's clipboard. */

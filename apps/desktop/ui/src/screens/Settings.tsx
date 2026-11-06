@@ -35,6 +35,7 @@ import { SettingsBackup } from "../components/SettingsBackup";
 import { UpdatesSetting } from "../components/UpdatesSetting";
 import { updateStatus } from "../lib/updates";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
+import { OtpSetting } from "../components/OtpSetting";
 import { AddDevice } from "../components/AddDevice";
 import { OwnFingerprint } from "../components/VerifyDevice";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
@@ -194,6 +195,7 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
         </label>
         <p class="muted small">{t("settings.clipHistoryHint")}</p>
         <ClipPrivacySetting />
+        <OtpSetting />
         <label class="switch-row">
           <span>{t("settings.chatHistory")}</span>
           <input type="checkbox" role="switch" checked={chatKeep()} onChange={(e) => setChatKeep(e.currentTarget.checked).catch(() => {})} />

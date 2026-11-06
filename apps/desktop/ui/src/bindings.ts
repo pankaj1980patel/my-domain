@@ -605,6 +605,16 @@ export const commands = {
 	mediaWatch: (nodeId: string) => typedError<boolean, string>(__TAURI_INVOKE("media_watch", { nodeId })),
 	/**  Whether device `node_id` takes media commands. */
 	mediaSupported: (nodeId: string) => __TAURI_INVOKE<boolean>("media_supported", { nodeId }),
+	/**  The codes your phone sent that are still valid, newest first. */
+	verificationCodes: () => __TAURI_INVOKE<OtpView[]>("verification_codes"),
+	/**  Copy code `id` to the clipboard (concealed; cleared after 90 seconds). */
+	copyVerificationCode: (id: string) => typedError<null, string>(__TAURI_INVOKE("copy_verification_code", { id })),
+	/**  Forget code `id` now. */
+	dismissVerificationCode: (id: string) => __TAURI_INVOKE<boolean>("dismiss_verification_code", { id }),
+	/**  Whether codes are copied as they arrive. */
+	otpAutoCopy: () => __TAURI_INVOKE<boolean>("otp_auto_copy"),
+	/**  Copy codes as they arrive (off by default). */
+	setOtpAutoCopy: (on: boolean) => __TAURI_INVOKE<void>("set_otp_auto_copy", { on }),
 	/**
 	 *  Ask a phone for a photo (`mode` "photo") or a scan ("scan"). Returns the
 	 *  request's id; `insert-state`, `insert-received` and `insert-ended`
@@ -3166,6 +3176,17 @@ export type OtherLink_Serialize = {
 	/**  The device that said so, and how long ago. */
 	reported_by: string,
 	reported_ago_s: number,
+};
+
+/**  A code shown here, for the window and the quick panel. */
+export type OtpView = {
+	id: string,
+	from: string,
+	code: string,
+	app: string,
+	issuer: string,
+	/**  Milliseconds until it's gone. */
+	expires_in_ms: number,
 };
 
 /**  A page's arrangement: tile ids in order, and the hidden ones. */

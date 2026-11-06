@@ -45,6 +45,7 @@ mod labels;
 mod ladder;
 mod media;
 mod notes;
+mod otp_relay;
 mod read_later;
 mod remote_download;
 pub use media::MAX_AWAKE_MINUTES;

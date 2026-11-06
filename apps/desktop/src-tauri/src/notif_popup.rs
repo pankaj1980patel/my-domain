@@ -423,7 +423,7 @@ fn interactive(_app: &AppHandle, _p: PopUp) -> bool {
 }
 
 #[cfg(windows)]
-mod win {
+pub(crate) mod win {
     use std::sync::{Arc, Mutex, OnceLock};
 
     use windows::core::{Interface, HSTRING};

@@ -1,6 +1,6 @@
 //! State for the gallery, photo backup, battery alerts, remote input, Do
 //! Not Disturb, screen sharing, the phone's audio, synced folders, shared
-//! device labels, notes, the connection check, the phone's camera, timers, the read-later list, the links map, nearby media mode, shared mouse and keyboard, insert from phone, printing, rich notifications, device kinds, app versions and first-run setup, in one place so the
+//! device labels, notes, the connection check, the phone's camera, timers, the read-later list, the links map, nearby media mode, shared mouse and keyboard, insert from phone, printing, rich notifications, device kinds, app versions, first-run setup and verification codes, in one place so the
 //! engine's context gains one field for all of them.
 
 #[derive(Default)]
@@ -31,4 +31,5 @@ pub struct Extras {
     pub device_kind: super::device_kind::DeviceKinds,
     pub app_info: super::app_info::AppInfo,
     pub onboarding: super::onboarding::OnboardingState,
+    pub otp: super::otp_relay::OtpRelay,
 }

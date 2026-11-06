@@ -161,6 +161,8 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let (ctx, peer) = (ctx.clone(), node_id.to_string());
     std::thread::spawn(move || {
         crate::features::addr_update::announce(&ctx, Some(std::slice::from_ref(&peer)));
+        // A verification code that waited for this link (two minutes at most).
+        crate::features::otp_relay::link_up(&ctx, &peer);
         crate::features::dnd::link_up(&ctx, &peer);
         crate::features::labels::link_up(&ctx, &peer);
         crate::features::notes::link_up(&ctx, &peer);

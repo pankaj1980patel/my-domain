@@ -47,6 +47,7 @@ pub mod notif_rich;
 pub mod notification;
 pub mod onboarding;
 pub mod opus_audio;
+pub mod otp_relay;
 pub mod p2p_ping;
 pub mod print;
 pub mod read_later;
@@ -198,6 +199,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(browse::BrowseHandler));
         r.register(Arc::new(share::ShareHandler));
         r.register(Arc::new(media::MediaHandler));
+        r.register(Arc::new(otp_relay::OtpRelayHandler));
         r.register(Arc::new(p2p_ping::P2pPingHandler));
         r.register(Arc::new(addr_update::AddrUpdateHandler));
         r.register(Arc::new(signal_fwd::SignalFwdHandler));

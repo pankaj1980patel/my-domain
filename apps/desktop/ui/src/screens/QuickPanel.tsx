@@ -12,8 +12,8 @@
 
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
-import { commands, type ClipRecord_Serialize as Clip, type TransferEntry_Serialize as Entry } from "../bindings";
-import { clipTick, copyText, loadPanel, peerName, startEvents, state, unwrap } from "../lib/core";
+import { commands, type ClipRecord_Serialize as Clip, type OtpView, type TransferEntry_Serialize as Entry } from "../bindings";
+import { clipTick, copyText, copyVerificationCode, loadPanel, peerName, startEvents, state, unwrap } from "../lib/core";
 import { linkLabel } from "../lib/words";
 import { linkStateOf } from "../components/ui";
 import { DeviceAvatar } from "../components/DeviceLabel";
@@ -35,9 +35,17 @@ export default function QuickPanel() {
   const [transfers, setTransfers] = createSignal<Entry[]>([]);
   const [query, setQuery] = createSignal("");
   const [copied, setCopied] = createSignal<number | null>(null);
+  // The latest verification code still valid, and when it goes (ms).
+  const [otp, setOtp] = createSignal<{ v: OtpView; until: number } | null>(null);
+  const [tick, setTick] = createSignal(Date.now());
   let root: HTMLDivElement | undefined;
   let search: HTMLInputElement | undefined;
 
+  const loadOtp = () =>
+    commands.verificationCodes().then(
+      (list) => setOtp(list[0] ? { v: list[0], until: Date.now() + list[0].expires_in_ms } : null),
+      () => setOtp(null),
+    );
   const loadClips = () => commands.quickPanelClips(RECENT).then(setClips, () => {});
   const loadTransfers = () =>
     commands.transferList().then(
@@ -55,6 +63,7 @@ export default function QuickPanel() {
       await loadPanel().catch(() => {});
       loadClips();
       loadTransfers();
+      loadOtp();
     }
     requestAnimationFrame(() => (rows()[0] ?? search)?.focus());
   };
@@ -63,7 +72,20 @@ export default function QuickPanel() {
     refresh();
     // Shown again from the icon: fresh data, and focus back at the top.
     const off = listen("quick-panel-shown", () => refresh());
-    onCleanup(() => off.then((f) => f()));
+    const offCode = listen("verification-code", () => loadOtp());
+    const offGone = listen("verification-code-gone", () => loadOtp());
+    // The seconds left, and the code gone once it expires.
+    const every = window.setInterval(() => {
+      setTick(Date.now());
+      const o = otp();
+      if (o && Date.now() >= o.until) setOtp(null);
+    }, 1000);
+    onCleanup(() => {
+      off.then((f) => f());
+      offCode.then((f) => f());
+      offGone.then((f) => f());
+      clearInterval(every);
+    });
   });
 
   // Clips and transfers that change while it's open.
@@ -172,6 +194,36 @@ export default function QuickPanel() {
 
       <div class="qp-body">
         <Show when={ready() !== false} fallback={<p class="muted small qp-empty">{t("panel.signedOut")}</p>}>
+          <Show when={otp()}>
+            {(o) => {
+              const from = () => o().v.issuer || o().v.app || peerName(o().v.from);
+              const left = () => Math.max(0, Math.ceil((o().until - tick()) / 1000));
+              return (
+                <section class="qp-section" aria-labelledby="qp-otp">
+                  <h2 id="qp-otp" class="qp-h">
+                    {t("otp.panelTitle")}
+                  </h2>
+                  <ul class="qp-list">
+                    <li data-qp-row>
+                      <button
+                        type="button"
+                        class="qp-item"
+                        aria-label={t("otp.panelCopy", { code: o().v.code, from: from() })}
+                        onClick={() => void copyVerificationCode(o().v.id).then((ok) => ok && setTimeout(hide, 600))}
+                      >
+                        <span class="qp-item-text">
+                          <strong>{o().v.code}</strong> · {from()}
+                        </span>
+                        <span class="qp-item-meta muted small">
+                          {t("otp.copy")} · {t("otp.left", { n: left() })}
+                        </span>
+                      </button>
+                    </li>
+                  </ul>
+                </section>
+              );
+            }}
+          </Show>
           <section class="qp-section" aria-labelledby="qp-devices">
             <h2 id="qp-devices" class="qp-h">
               {t("panel.devices")}

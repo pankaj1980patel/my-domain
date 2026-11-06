@@ -269,7 +269,10 @@
     <string name="settings_clip_hide_concealed">पासवर्ड और दूसरी छिपी क्लिप कभी सिंक न करें</string>
     <string name="settings_clip_hide_concealed_hint">पासवर्ड मैनेजर से कॉपी किया गया पासवर्ड इसी फ़ोन पर रहता है: वह न सिंक होता है, न क्लिपबोर्ड के इतिहास में रखा जाता है। आपका कंप्यूटर जो पासवर्ड भेजता है वे क्लिपबोर्ड पर निजी चिह्नित होकर आते हैं, ताकि कीबोर्ड उन्हें न दिखाए।</string>
     <string name="settings_clip_history_hint">आपके डिवाइस के बीच क्लिपबोर्ड के रूप में भेजा गया टेक्स्ट इसी फ़ोन पर (आखिरी 200), हर डिवाइस की स्क्रीन पर रखा जाता है। इसे बंद करने पर सब भुला दिया जाता है।</string>
-    <string name="settings_share_codes_hint">जब किसी सूचना में कोई कोड आता है, तो वह आपके कंप्यूटर पर कॉपी हो जाता है ताकि आप उसे वहाँ पेस्ट कर सकें।</string>
+    <string name="settings_share_codes_hint">जब किसी सूचना (मैसेज, बैंक, साइन-इन) में कोई वन-टाइम कोड आता है, तो आपका कंप्यूटर “कोड 482913, Bank से · कॉपी करें” दिखाता है। सिर्फ़ कोड, ऐप और भेजने वाले का नाम भेजा जाता है, एंड-टू-एंड एन्क्रिप्टेड, और कंप्यूटर 5 मिनट बाद उसे भूल जाता है। सिर्फ़ सूचनाओं से पढ़ा जाता है, आपके SMS से कभी नहीं।</string>
+    <string name="settings_share_codes_pick">कोड इन पर भेजें:</string>
+    <string name="settings_share_codes_old">%1$s (पहले उसका ऐप अपडेट करें)</string>
+    <string name="settings_share_codes_none">आपका कोई कंप्यूटर अभी लिंक नहीं है।</string>
     <string name="settings_device_key">डिवाइस कुंजी</string>
     <string name="settings_key_hint">आपके सभी डिवाइस को एक ही कुंजी इस्तेमाल करनी होगी। इसे यहाँ बदलने का मतलब है इसे हर डिवाइस पर बदलना।</string>
     <string name="settings_change_key">डिवाइस कुंजी बदलें</string>

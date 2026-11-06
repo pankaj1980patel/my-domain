@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number
+keywords: privacy, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -52,6 +52,10 @@ Verified devices show a **Verified** badge on their page and on the connection m
 ## Copied passwords
 
 A password copied from a password manager is never synced to your other devices, kept in a clipboard history or saved to [Read later](help:read-later), and if you send it on purpose the other device keeps it out of its history and notifications too. On the computer you can also exclude apps whose copies should never be synced. See [Messages, clipboard and clipboard history](help:messages-clipboard).
+
+## Verification codes
+
+**Send verification codes to my computers** is off until you turn it on on the phone. Then only four things go, end-to-end encrypted like every message: the code, the app it came from, who it's from (when the text says, like "Google") and when it expires. Never the notification's text. They go only to the computers you chose, only over a live link (a code waits at most 2 minutes for one), and the computer forgets the code after 5 minutes. Codes are never logged, never kept in Activity, a history or search, and a copied one is marked private and cleared from the clipboard after 90 seconds. The phone reads them from notifications only: never from your SMS. Private mode for the notification itself works as before. See [Phone notifications on the computer](help:notifications).
 
 ## What stays on each device
 

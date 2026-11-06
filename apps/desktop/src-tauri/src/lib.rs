@@ -51,6 +51,7 @@ mod notes;
 mod notif_history;
 mod notif_popup;
 mod notify;
+mod otp_codes;
 mod page_layout;
 mod phone_audio;
 mod phone_notifs;
@@ -383,6 +384,14 @@ impl EventSink for TauriSink {
                 passphrase.as_deref(),
                 host_ip.as_deref(),
             );
+            return;
+        }
+        // A verification code from your phone: never logged, never in
+        // Activity or any history (`activity_record` skips it too); shown
+        // here (`otp_codes`) and in the window only.
+        if let CoreEvent::VerificationCode(c) = &ev {
+            otp_codes::on_code(&self.app, c);
+            let _ = self.app.emit(ev.name(), ev.ui_payload());
             return;
         }
         if cfg!(debug_assertions) {
@@ -830,6 +839,8 @@ fn activity_record(app: &AppHandle, ev: &CoreEvent) {
         CoreEvent::PeerDisconnected { node_id } => {
             activity::record(app, "link_down", Some(node_id), "", "")
         }
+        // Verification codes are never kept anywhere: not here either.
+        CoreEvent::VerificationCode(_) | CoreEvent::VerificationCodeGone { .. } => {}
         CoreEvent::CallNotification {
             from,
             caller,
@@ -1922,6 +1933,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         media_ctl::media_command,
         media_ctl::media_watch,
         media_ctl::media_supported,
+        otp_codes::verification_codes,
+        otp_codes::copy_verification_code,
+        otp_codes::dismiss_verification_code,
+        otp_codes::otp_auto_copy,
+        otp_codes::set_otp_auto_copy,
         insert_capture::insert_request,
         insert_capture::insert_cancel,
         insert_capture::insert_supported,
@@ -2067,6 +2083,7 @@ pub fn run() {
             app.manage(clip_history::ClipHistory::load(&handle));
             // Before the Engine: its clipboard watcher asks.
             clip_privacy::load(&handle);
+            otp_codes::load(&handle);
             app.manage(chat_history::ChatHistory::load(&handle));
             app.manage(insert_capture::InsertPrefs::load(&handle));
             app.manage(transfers::TransferHistory::load(&handle));

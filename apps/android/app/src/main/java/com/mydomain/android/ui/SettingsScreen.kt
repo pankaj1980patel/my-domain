@@ -60,7 +60,8 @@ fun ClipSyncSwitch(label: String) {
 }
 
 /** Sending verification codes found in notifications to the computers
- *  (NotifListener reads the same "share_codes" pref). Off by default. */
+ *  (NotifListener reads the same "share_codes" pref). Off by default; when
+ *  on, which of your computers get them (all, until you choose). */
 @Composable
 fun ShareCodesSwitch() {
     val prefs = LocalContext.current.getSharedPreferences("md", Context.MODE_PRIVATE)
@@ -68,6 +69,27 @@ fun ShareCodesSwitch() {
     SwitchRow(stringResource(R.string.settings_share_codes), on) {
         on = it
         prefs.edit().putBoolean(NotifListener.PREF_SHARE_CODES, it).apply()
+    }
+    if (on) {
+        val computers = remember {
+            NotifListener.codeComputers(Core.engine()?.verificationCodeComputersJson() ?: "[]")
+        }
+        var chosen by remember { mutableStateOf(NotifListener.chosenComputers(prefs)) }
+        if (computers.isEmpty()) {
+            Muted(stringResource(R.string.settings_share_codes_none))
+        } else {
+            Muted(stringResource(R.string.settings_share_codes_pick))
+            computers.forEach { (node, supported) ->
+                val name = Core.peerName(node)
+                val label = if (supported) name else stringResource(R.string.settings_share_codes_old, name)
+                SwitchRow(label, supported && (chosen == null || node in chosen!!)) { pick ->
+                    val now = (chosen ?: computers.filter { it.second }.map { it.first }.toSet()).toMutableSet()
+                    if (pick) now += node else now -= node
+                    chosen = now
+                    prefs.edit().putStringSet(NotifListener.PREF_CODE_COMPUTERS, now).apply()
+                }
+            }
+        }
     }
     Muted(stringResource(R.string.settings_share_codes_hint))
 }

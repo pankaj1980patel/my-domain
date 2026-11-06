@@ -291,6 +291,12 @@ pub struct CoreConfig {
     /// default; off behaves like an app from before (tests use it to play
     /// an older peer).
     pub media_ctl: bool,
+    /// Verification codes on the computer (`features::otp_relay`): this end
+    /// says `otp_relay` in its status and `addr_update`, shows the codes
+    /// your phone sends (`otp_code`), and may send them to computers that
+    /// say it. On by default; off behaves like an app from before (tests
+    /// use it to play an older peer).
+    pub otp_relay: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -361,6 +367,7 @@ impl Default for CoreConfig {
             notif_rich: true,
             transfer_batches: true,
             media_ctl: true,
+            otp_relay: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

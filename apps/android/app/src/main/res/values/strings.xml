@@ -267,7 +267,10 @@
     <string name="settings_clip_hide_concealed">Never sync passwords and other concealed clips</string>
     <string name="settings_clip_hide_concealed_hint">A password copied from a password manager stays on this phone: it isn’t synced or kept in the clipboard history. Passwords your computer sends go on the clipboard marked private, so the keyboard doesn’t show them.</string>
     <string name="settings_clip_history_hint">Text and pictures sent between your devices as clipboard are kept on this phone (the last 200 clips; the newest 50 pictures, 100 MB at most), on each device’s screen. Turning this off forgets it all.</string>
-    <string name="settings_share_codes_hint">When a code arrives in a notification, it\'s copied on your computers so you can paste it there.</string>
+    <string name="settings_share_codes_hint">When a one-time code arrives in a notification (messages, banks, sign-ins), your computer shows “Code 482913 from Bank · Copy”. Only the code, the app and who it’s from are sent, end-to-end encrypted, and the computer forgets it after 5 minutes. Read from notifications only, never your SMS.</string>
+    <string name="settings_share_codes_pick">Send codes to:</string>
+    <string name="settings_share_codes_old">%1$s (update its app first)</string>
+    <string name="settings_share_codes_none">None of your computers is linked yet.</string>
     <string name="settings_device_key">Device key</string>
     <string name="settings_key_hint">All your devices must use the same key. Changing it here means changing it on every device.</string>
     <string name="settings_change_key">Change device key</string>

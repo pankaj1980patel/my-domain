@@ -852,6 +852,18 @@ export const en = {
   "code.copied": "A code from {device} is on your clipboard",
   "code.copiedFrom": "A code from {app} on {device} is on your clipboard",
 
+  // Verification codes from your phone (otp_codes.rs)
+  "otp.toast": "Code {code} from {from}",
+  "otp.toastCopied": "Code {code} from {from} · copied",
+  "otp.copy": "Copy",
+  "otp.copied": "Copied. It’s cleared from the clipboard in 90 seconds.",
+  "otp.expired": "That code has expired.",
+  "otp.panelTitle": "Verification code",
+  "otp.panelCopy": "Copy code {code} from {from}",
+  "otp.left": "{n} s left",
+  "otp.autoCopy": "Copy verification codes automatically",
+  "otp.autoCopyHint": "When your phone sends a one-time code (turn that on in the phone’s Settings), it goes straight on this clipboard, marked private so clipboard managers skip it, and is cleared after 90 seconds. Off: the code shows with a Copy button. Codes are never kept in a history and are forgotten after 5 minutes.",
+
   // Commands another computer lets you run (CommandsTile)
   "run.title": "Commands",
   "run.hint": "Set up on {name}, in my-domain's Settings there. It shows a notification each time one runs.",

@@ -25,7 +25,9 @@ import com.mydomain.android.core.NotifFacts
 import com.mydomain.android.core.NotifFilter
 import com.mydomain.android.core.NotifSkip
 import com.mydomain.android.core.Tone
-import com.mydomain.android.core.findCode
+import com.mydomain.android.core.MIN_CONFIDENCE
+import com.mydomain.android.core.codeTargets
+import com.mydomain.android.core.detectCode
 import com.mydomain.android.core.notifFingerprint
 import java.io.ByteArrayOutputStream
 import org.json.JSONArray
@@ -36,9 +38,11 @@ import org.json.JSONObject
  * forwards each to the peers subscribed to that package (app-notification
  * pub/sub). The user must enable this under Settings → Notification access.
  *
- * With "Send verification codes to my computers" on, a one-time code found
- * in any notification (SMS, banks, Google, ...) also goes to the connected
- * devices, which copy it to their clipboard. The code is never logged.
+ * With "Send verification codes to my computers" on (off by default), a
+ * one-time code found in a notification (messaging, bank and sign-in apps;
+ * never read from SMS itself) goes to the computers chosen: only the code,
+ * the app, who it's from and when it expires, never the notification's
+ * text. The code is never logged, nor kept in the activity list.
  *
  * Forwarded notifications carry their key and buttons, so another device
  * can press one, reply, or dismiss it ([onAction]); when one goes away here
@@ -117,7 +121,7 @@ class NotifListener : NotificationListenerService() {
         Core.labLog("notification from ${n.packageName}")
         if (getSharedPreferences("md", MODE_PRIVATE).getBoolean(PREF_SHARE_CODES, false)) {
             val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
-            shareCode(listOf(title, text, big).joinToString("\n"), label)
+            shareCode(title, listOf(text, big).filter { it.isNotBlank() }.distinct().joinToString("\n"), label)
         }
     }
 
@@ -131,11 +135,14 @@ class NotifListener : NotificationListenerService() {
         runCatching { Core.engine()?.shareAppNotificationRemoved(pkg, n.key) }
     }
 
-    /** Send the verification code in [text], if any, unless the same code
+    /** Send the verification code in [text] (titled [title]), if one is
+     *  there surely enough, to the computers chosen, unless the same code
      *  went out in the last 2 minutes (an SMS often shows up from two apps,
      *  and notifications get re-posted). */
-    private fun shareCode(text: String, label: String) {
-        val code = findCode(text) ?: return
+    private fun shareCode(title: String, text: String, label: String) {
+        val found = detectCode(text, title, label) ?: return
+        if (found.confidence < MIN_CONFIDENCE) return
+        val code = found.code
         val now = System.currentTimeMillis()
         synchronized(recent) {
             recent.entries.removeAll { now - it.value > DEDUPE_MS }
@@ -143,13 +150,15 @@ class NotifListener : NotificationListenerService() {
         }
         // Logged without the code itself.
         val engine = Core.engine() ?: return Core.labLog("code from $label not sent: engine not running")
-        runCatching { engine.shareCode(code, label) }.onFailure {
+        val prefs = getSharedPreferences("md", MODE_PRIVATE)
+        val targets = codeTargets(codeComputers(engine.verificationCodeComputersJson()), chosenComputers(prefs))
+        if (targets.isEmpty()) return Core.labLog("code from $label not sent: no computer takes codes")
+        runCatching { engine.sendVerificationCode(code, label, found.issuer, targets) }.onFailure {
             Core.labLog("code from $label not sent: ${it.javaClass.simpleName}")
             return
         }
         synchronized(recent) { recent[code] = now }
-        Core.labLog("shared a verification code from $label")
-        Core.addActivity(getString(R.string.act_code_sent), Tone.Ok)
+        Core.labLog("sent a verification code from $label")
     }
 
     /** The notification's buttons, in order: `[{"title":..,"reply":..}]`;
@@ -356,6 +365,19 @@ class NotifListener : NotificationListenerService() {
 
         /** SharedPreferences ("md") switch, default off. */
         const val PREF_SHARE_CODES = "share_codes"
+        /** The computers chosen for codes (a string set of node ids);
+         *  unset: all your computers. */
+        const val PREF_CODE_COMPUTERS = "code_computers"
+
+        /** The chosen computers, or null for all of them. */
+        fun chosenComputers(prefs: android.content.SharedPreferences): Set<String>? =
+            if (prefs.contains(PREF_CODE_COMPUTERS)) prefs.getStringSet(PREF_CODE_COMPUTERS, emptySet()).orEmpty() else null
+
+        /** `MdEngine.verificationCodeComputersJson` as (node id, takes codes). */
+        fun codeComputers(json: String): List<Pair<String, Boolean>> = runCatching {
+            val arr = JSONArray(json)
+            (0 until arr.length()).map { arr.getJSONObject(it).let { o -> o.optString("node") to o.optBoolean("supported") } }
+        }.getOrDefault(emptyList())
         private const val DEDUPE_MS = 2 * 60 * 1000L
 
         /** Codes sent recently -> when (memory only). */
