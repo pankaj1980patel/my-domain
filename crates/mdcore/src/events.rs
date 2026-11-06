@@ -286,6 +286,10 @@ pub enum CoreEvent {
         items: Vec<crate::model::ReadLaterItem>,
         removed: Vec<String>,
     },
+    /// Device `from` sent its list of links (`features::links_map`): the
+    /// map (`Engine::links_map`) may have changed. This device's own link
+    /// changes come as `PeerConnected` / `PeerDisconnected`.
+    LinksMapChanged { from: String },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -415,6 +419,7 @@ impl CoreEvent {
             CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
+            CoreEvent::LinksMapChanged { .. } => "links-map-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
@@ -578,6 +583,17 @@ mod tests {
                 "read": true, "saved_at": 5, "saved_on": "Mac", "updated_at": 6, "by": "node",
             }], "removed": ["u2"]})
         );
+    }
+
+    #[test]
+    fn links_map_changes_keep_their_shape() {
+        let ev = CoreEvent::LinksMapChanged { from: "n1".into() };
+        assert_eq!(ev.name(), "links-map-changed");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "links_map_changed", "from": "n1"})
+        );
+        assert_eq!(ev.ui_payload(), json!({"from": "n1"}));
     }
 
     #[test]

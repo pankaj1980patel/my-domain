@@ -653,6 +653,8 @@ export const commands = {
 	speedTest: (nodeId: string, bytes: number) => typedError<string, string>(__TAURI_INVOKE("speed_test", { nodeId, bytes })),
 	/**  Stop a running speed test. */
 	cancelSpeedTest: (id: string) => __TAURI_INVOKE<boolean>("cancel_speed_test", { id }),
+	/**  The map, laid out (quick: nothing is measured). */
+	linksMap: () => __TAURI_INVOKE<MapView_Serialize>("links_map"),
 	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
@@ -1438,6 +1440,69 @@ export type Diagnosis_Serialize = {
 	attempts: Attempt_Serialize[],
 };
 
+/**  A line on the map. */
+export type Edge = Edge_Serialize | Edge_Deserialize;
+
+/**  A line on the map. */
+export type Edge_Deserialize = {
+	/**  "me:<node>" for this computer's links, "<a>|<b>" for the others. */
+	id: string,
+	a: string,
+	b: string,
+	/**  One end is this computer. */
+	mine: boolean,
+	/**  "lan", "direct", "punched", "webrtc", "relay", "ble", or "none". */
+	how: string,
+	/**  The colour family: "lan", "direct", "relay", "ble", "none". */
+	tone: string,
+	/**  An SVG stroke-dasharray (none: a solid line). */
+	dash?: string | null,
+	/**  The SVG path. */
+	path: string,
+	label_x: number | null,
+	label_y: number | null,
+	/**  What the label says (an i18n key). */
+	label_key: string,
+	/**  The round trip, worded ("4 ms"); none when not known. */
+	latency?: string | null,
+	/**
+	 *  Why it isn't connected, or only through the relay or Bluetooth:
+	 *  per path tried, and anything wrong with the device itself (this
+	 *  computer's lines only; empty for a direct link).
+	 */
+	why: Why_Deserialize[],
+};
+
+/**  A line on the map. */
+export type Edge_Serialize = {
+	/**  "me:<node>" for this computer's links, "<a>|<b>" for the others. */
+	id: string,
+	a: string,
+	b: string,
+	/**  One end is this computer. */
+	mine: boolean,
+	/**  "lan", "direct", "punched", "webrtc", "relay", "ble", or "none". */
+	how: string,
+	/**  The colour family: "lan", "direct", "relay", "ble", "none". */
+	tone: string,
+	/**  An SVG stroke-dasharray (none: a solid line). */
+	dash: string | null,
+	/**  The SVG path. */
+	path: string,
+	label_x: number | null,
+	label_y: number | null,
+	/**  What the label says (an i18n key). */
+	label_key: string,
+	/**  The round trip, worded ("4 ms"); none when not known. */
+	latency: string | null,
+	/**
+	 *  Why it isn't connected, or only through the relay or Bluetooth:
+	 *  per path tried, and anything wrong with the device itself (this
+	 *  computer's lines only; empty for a direct link).
+	 */
+	why: Why_Serialize[],
+};
+
 /**  The "Send from the file manager" setting. */
 export type FileManagerMenu = {
 	/**  "macos", "windows" or "linux". */
@@ -1672,6 +1737,31 @@ export type LinkStats_Serialize = {
 	label: string,
 };
 
+/**  Everything the map shows (`Engine::links_map`). */
+export type LinksMap = LinksMap_Serialize | LinksMap_Deserialize;
+
+/**  Everything the map shows (`Engine::links_map`). */
+export type LinksMap_Deserialize = {
+	/**  This device. */
+	node_id: string,
+	name: string,
+	/**  Your other devices, by name. */
+	devices: MapDevice_Deserialize[],
+	/**  Links between them that they reported. */
+	others: OtherLink_Deserialize[],
+};
+
+/**  Everything the map shows (`Engine::links_map`). */
+export type LinksMap_Serialize = {
+	/**  This device. */
+	node_id: string,
+	name: string,
+	/**  Your other devices, by name. */
+	devices: MapDevice_Serialize[],
+	/**  Links between them that they reported. */
+	others: OtherLink_Serialize[],
+};
+
 /**
  *  This computer's node id and the actions it can run on itself, for its
  *  own schedules (Settings).
@@ -1679,6 +1769,149 @@ export type LinkStats_Serialize = {
 export type LocalActions = {
 	node: string,
 	actions: string[],
+};
+
+/**  One of your devices on the map. */
+export type MapDevice = MapDevice_Serialize | MapDevice_Deserialize;
+
+/**  One of your devices on the map. */
+export type MapDevice_Deserialize = {
+	node_id: string,
+	name: string,
+	/**  Where this device heard of it. */
+	source: Source,
+	/**  The live link (none: not connected). */
+	link?: MapLink_Deserialize | null,
+	/**
+	 *  Not connected: "unreachable" (tried, no link) or "not_connected"
+	 *  (not tried); connected: the link's `how`.
+	 */
+	state: string,
+	/**  Why it's unreachable (the connection check's reasons). */
+	reason?: string | null,
+	/**
+	 *  Seconds since its link went down (none: connected now, or not seen
+	 *  since this device kept count).
+	 */
+	last_seen_ago_s?: number | null,
+	/**  It shares its own links (`links_map: 1`). */
+	shares_links: boolean,
+	/**
+	 *  What stopped each path the last time it was tried, in `PATHS`
+	 *  order (a path that worked since, or carries the link, isn't listed).
+	 */
+	tries: PathTry[],
+	/**
+	 *  Something wrong with the device as a whole: "bad_key" (what it sent
+	 *  couldn't be read: a different device key).
+	 */
+	problem?: string | null,
+};
+
+/**  One of your devices on the map. */
+export type MapDevice_Serialize = {
+	node_id: string,
+	name: string,
+	/**  Where this device heard of it. */
+	source: Source,
+	/**  The live link (none: not connected). */
+	link: MapLink_Serialize | null,
+	/**
+	 *  Not connected: "unreachable" (tried, no link) or "not_connected"
+	 *  (not tried); connected: the link's `how`.
+	 */
+	state: string,
+	/**  Why it's unreachable (the connection check's reasons). */
+	reason: string | null,
+	/**
+	 *  Seconds since its link went down (none: connected now, or not seen
+	 *  since this device kept count).
+	 */
+	last_seen_ago_s: number | null,
+	/**  It shares its own links (`links_map: 1`). */
+	shares_links: boolean,
+	/**
+	 *  What stopped each path the last time it was tried, in `PATHS`
+	 *  order (a path that worked since, or carries the link, isn't listed).
+	 */
+	tries: PathTry[],
+	/**
+	 *  Something wrong with the device as a whole: "bad_key" (what it sent
+	 *  couldn't be read: a different device key).
+	 */
+	problem: string | null,
+};
+
+/**  How this device is linked to one of your devices. */
+export type MapLink = MapLink_Serialize | MapLink_Deserialize;
+
+/**  How this device is linked to one of your devices. */
+export type MapLink_Deserialize = {
+	/**  "lan", "direct", "punched", "webrtc", "relay" or "ble". */
+	how: string,
+	transport: TransportKind,
+	/**  The other end's address, when the link has one. */
+	remote?: string | null,
+	/**
+	 *  What that address is: "local" (on this network), "ipv6" (a global
+	 *  IPv6 address, no NAT), "mapped" (a port its router forwards),
+	 *  "public" (its public IPv4 address); none without an address.
+	 */
+	addr_kind?: string | null,
+	/**  QUIC's measured round trip and loss (QUIC links only). */
+	rtt_ms?: number | null,
+	loss_pct?: number | null,
+	/**  Seconds since the link came up (none: not known). */
+	since_s?: number | null,
+	/**  Seconds since anything was heard over it. */
+	heard_ago_s: number,
+};
+
+/**  How this device is linked to one of your devices. */
+export type MapLink_Serialize = {
+	/**  "lan", "direct", "punched", "webrtc", "relay" or "ble". */
+	how: string,
+	transport: TransportKind,
+	/**  The other end's address, when the link has one. */
+	remote: string | null,
+	/**
+	 *  What that address is: "local" (on this network), "ipv6" (a global
+	 *  IPv6 address, no NAT), "mapped" (a port its router forwards),
+	 *  "public" (its public IPv4 address); none without an address.
+	 */
+	addr_kind: string | null,
+	/**  QUIC's measured round trip and loss (QUIC links only). */
+	rtt_ms: number | null,
+	loss_pct: number | null,
+	/**  Seconds since the link came up (none: not known). */
+	since_s: number | null,
+	/**  Seconds since anything was heard over it. */
+	heard_ago_s: number,
+};
+
+/**  Everything the map screen draws. */
+export type MapView = MapView_Serialize | MapView_Deserialize;
+
+/**  Everything the map screen draws. */
+export type MapView_Deserialize = {
+	width: number | null,
+	height: number | null,
+	me: Spot,
+	spots: Spot[],
+	edges: Edge_Deserialize[],
+	/**  The core's data, for the list and the details. */
+	map: LinksMap_Deserialize,
+};
+
+/**  Everything the map screen draws. */
+export type MapView_Serialize = {
+	width: number | null,
+	height: number | null,
+	me: Spot,
+	spots: Spot[],
+	edges: Edge_Serialize[],
+	/**  The core's data, for the list and the details. */
+	map: LinksMap_Serialize,
 };
 
 /**  How our NAT maps a socket's outgoing traffic, as far as hole punching cares. */
@@ -1802,6 +2035,33 @@ export type NotifApp = {
 	muted: boolean,
 };
 
+/**  A link between two of your other devices, as one of them said. */
+export type OtherLink = OtherLink_Serialize | OtherLink_Deserialize;
+
+/**  A link between two of your other devices, as one of them said. */
+export type OtherLink_Deserialize = {
+	/**  The two devices, `a` < `b`. */
+	a: string,
+	b: string,
+	how: string,
+	rtt_ms?: number | null,
+	/**  The device that said so, and how long ago. */
+	reported_by: string,
+	reported_ago_s: number,
+};
+
+/**  A link between two of your other devices, as one of them said. */
+export type OtherLink_Serialize = {
+	/**  The two devices, `a` < `b`. */
+	a: string,
+	b: string,
+	how: string,
+	rtt_ms: number | null,
+	/**  The device that said so, and how long ago. */
+	reported_by: string,
+	reported_ago_s: number,
+};
+
 /**  A page's arrangement: tile ids in order, and the hidden ones. */
 export type PageLayout = PageLayout_Serialize | PageLayout_Deserialize;
 
@@ -1825,6 +2085,16 @@ export type PageLayout_Deserialize = {
 export type PageLayout_Serialize = {
 	order: string[],
 	hidden: string[],
+};
+
+/**  The last attempt over one path, and what stopped it. */
+export type PathTry = {
+	/**  "lan", "internet", "relay" or "ble". */
+	path: string,
+	/**  A code from that path's reasons. */
+	reason: string,
+	/**  How long ago, in seconds. */
+	ago_s: number,
 };
 
 /**
@@ -2380,6 +2650,14 @@ export type ShortcutView_Serialize = {
  */
 export type Source = "registry" | "lan" | "manual";
 
+/**  A device's place. */
+export type Spot = {
+	node_id: string,
+	x: number | null,
+	y: number | null,
+	connected: boolean,
+};
+
 /**  One synced folder, as the UI shows it (the core's `SyncPair`). */
 export type SyncPairView = SyncPairView_Serialize | SyncPairView_Deserialize;
 
@@ -2638,6 +2916,35 @@ export type WebhookSettings_Serialize = {
 	running: boolean,
 	/**  Why it isn't listening, e.g. the port is taken. */
 	error: string | null,
+};
+
+/**  One reason, worded by i18n keys. */
+export type Why = Why_Serialize | Why_Deserialize;
+
+/**  One reason, worded by i18n keys. */
+export type Why_Deserialize = {
+	/**  "lan", "internet", "relay", "ble", or "device". */
+	path: string,
+	reason: string,
+	/**  The path's name, what went wrong, and what you can do (i18n keys). */
+	path_key: string,
+	what_key: string,
+	fix_key: string,
+	/**  How long ago it was tried (none: a state, not an attempt). */
+	ago_s?: number | null,
+};
+
+/**  One reason, worded by i18n keys. */
+export type Why_Serialize = {
+	/**  "lan", "internet", "relay", "ble", or "device". */
+	path: string,
+	reason: string,
+	/**  The path's name, what went wrong, and what you can do (i18n keys). */
+	path_key: string,
+	what_key: string,
+	fix_key: string,
+	/**  How long ago it was tried (none: a state, not an attempt). */
+	ago_s: number | null,
 };
 
 /**  One network card this computer can be woken through. */

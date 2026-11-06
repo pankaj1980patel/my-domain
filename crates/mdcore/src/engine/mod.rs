@@ -339,6 +339,7 @@ impl<P: Platform> Engine<P> {
             config.camera,
             config.timers,
             config.read_later,
+            config.links_map,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

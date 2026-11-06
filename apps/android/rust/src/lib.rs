@@ -833,6 +833,22 @@ impl MdEngine {
         serde_json::to_string(&d).map_err(|e| MdError::Failed(e.to_string()))
     }
 
+    /// "How your devices are connected", as JSON (the core's `LinksMap`):
+    /// this phone's link to each of your devices (or why there is none, per
+    /// path tried), and the links your other devices reported between
+    /// themselves. Quick: measures nothing. Changes come as
+    /// `peer_connected` / `peer_disconnected` / `links_map_changed` events.
+    pub fn links_map(&self) -> MdResult<String> {
+        serde_json::to_string(&self.inner.links_map()).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// The phone's Bluetooth can't link now (`reason`: "off",
+    /// "not_paired", "out_of_range", "unsupported"), or can again (none):
+    /// the map shows it for devices not linked by Bluetooth.
+    pub fn set_ble_state(&self, reason: Option<String>) {
+        self.inner.set_ble_state(reason.as_deref());
+    }
+
     /// Start a speed test with a device (`bytes` each way, at most 32 MB).
     /// Returns its id; progress and the result come as `speed_test` events.
     pub fn speed_test(&self, node_id: String, bytes: u32) -> MdResult<String> {

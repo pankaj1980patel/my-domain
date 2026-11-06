@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-keywords: problem, help, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key
+keywords: problem, help, how connected, connections map, map, links, why not connected, upnp, bluetooth, not working, can't connect, offline, not connected, firewall, relay, internet, slow, check connection, speed test, ping, round trip, unreachable, battery optimisation, background, wi-fi, network, router, vpn, company network, sign in, key
 platforms: desktop, android
 ---
 ## A device doesn't appear
@@ -30,6 +30,26 @@ Open the device and find the **Connection** tile (on the phone, on a computer's 
 Below that are the details: the round trip in milliseconds (measured just now, while the devices are connected), the addresses each device has, whether each network is "open" or "strict" (two strict networks can only meet through the relay server), whether the relay server answers, and the last few connection attempts.
 
 **Test speed** sends a few megabytes each way over the current connection and shows how fast it went, both ways, in Mbit/s, the same way files travel. It only works while connected, and you can cancel it at any time. Measuring needs my-domain to be up to date on both devices; if the other one is older, the check says so.
+
+## See how all your devices are connected
+
+On the Devices page, choose **How they're connected** (on a computer it's also in the command palette). This device sits in the middle with your other devices around it, and each line says how they're linked:
+
+- **Local network** (green): directly on your Wi‑Fi or home network, the fastest.
+- **Direct over the internet** (blue): straight across the internet, through both routers if needed.
+- **Relay server** (amber): through my-domain's server. It works and stays end-to-end encrypted (the server can't read it), just slower.
+- **Bluetooth** (purple, dotted): close by with no shared network; fine for messages, slow for files.
+- **Not connected** (grey, dashed), with when the device was last seen.
+
+Where it's known, the round trip shows next to the line. Lines between your *other* devices (say, your phone and your laptop) appear too, once those devices are connected here and up to date: each one tells the others how it is linked. Tap a device or a line for the details (the path, the address and what kind it is, since when, the encryption) and **Connection details** to open that device's Connection tile. The same is listed as text under the picture, for screen readers.
+
+For a device that isn't connected, or only through the relay or Bluetooth, the details say **why**, per way it was tried, with what you can do:
+
+- **Local network**: it's on a different network, nothing here saw it, or it's here but didn't answer (a firewall or the router's client isolation; see above).
+- **Internet, directly**: the device didn't answer (asleep, off or offline), both networks are strict (only the relay can join them), getting through the routers timed out, or neither router opens a port (turn on UPnP or NAT-PMP).
+- **Relay server**: not signed in, the server can't be reached, it refused the sign-in (sign out and in again), it's full, or the device didn't answer through it.
+- **Bluetooth**: it's off, not paired, or out of range.
+- **The device**: what it sends can't be read, because it uses a different device key.
 
 ## The phone is slow to answer, or misses things when the screen is off
 

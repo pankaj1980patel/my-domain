@@ -84,6 +84,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::read_later::extend_status(ctx, &mut status);
                 // Whether it answers pings and speed tests.
                 super::diag::extend_status(ctx, &mut status);
+                // Whether it shares its link list (the map).
+                super::links_map::extend_status(ctx, &mut status);
                 // Whether it knows the camera messages.
                 super::camera::extend_status(ctx, &mut status);
                 // Whether it shares timers.
@@ -113,6 +115,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::notes::remember(ctx, &from, &status[super::notes::FLAG]);
                 super::read_later::remember(ctx, &from, &status[super::read_later::FLAG]);
                 super::diag::remember(ctx, &from, &status[super::diag::FLAG]);
+                super::links_map::remember(ctx, &from, &status[super::links_map::FLAG]);
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
                 super::timers::remember(ctx, &from, &status[super::timers::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });

@@ -28,6 +28,7 @@ import TimerAlarm from "./components/TimerAlarm";
 import { timers } from "./lib/timers";
 import { notes } from "./lib/notes";
 import ReadLater from "./screens/ReadLater";
+import LinksMap from "./screens/LinksMap";
 import { readLater, unreadCount } from "./lib/readLater";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
@@ -40,6 +41,7 @@ type View =
   | { name: "notes"; request?: NoteRequest }
   | { name: "timers" }
   | { name: "readLater" }
+  | { name: "linksMap" }
   | { name: "activity" }
   | { name: "transfers" }
   | { name: "settings" }
@@ -66,6 +68,7 @@ export default function App() {
     notes: "nav.notes",
     timers: "nav.timers",
     readLater: "nav.readLater",
+    linksMap: "map.title",
     activity: "nav.activity",
     transfers: "nav.transfers",
     settings: "nav.settings",
@@ -102,6 +105,13 @@ export default function App() {
     if (!section) return;
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.getElementById(section)?.scrollIntoView({ block: "start" })),
+    );
+  };
+  // The map's "Connection details": the device's page, at its Connection tile.
+  const openConnection = (node: string) => {
+    go({ name: "device", node });
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => document.querySelector(".conn-tile")?.scrollIntoView({ block: "start" })),
     );
   };
   // A search result opens where it lives: a device's page with that
@@ -185,7 +195,7 @@ export default function App() {
             <ul class="nav-list">
               <li>
                 <button
-                  class={`nav-item ${is("home") ? "active" : ""}`}
+                  class={`nav-item ${is("home") || is("linksMap") ? "active" : ""}`}
                   aria-current={is("home") ? "page" : undefined}
                   onClick={() => go({ name: "home" })}
                 >
@@ -319,7 +329,10 @@ export default function App() {
           <main class="content" id="main" tabIndex={-1} ref={main}>
             <Switch>
               <Match when={view().name === "home"}>
-                <Home onOpen={(node) => go({ name: "device", node })} />
+                <Home onOpen={(node) => go({ name: "device", node })} onMap={() => go({ name: "linksMap" })} />
+              </Match>
+              <Match when={view().name === "linksMap"}>
+                <LinksMap onDevice={openConnection} />
               </Match>
               <Match when={view().name === "device" && view()}>
                 {(v) => <Device node={(v() as { node: string }).node} onBack={() => go({ name: "home" })} />}

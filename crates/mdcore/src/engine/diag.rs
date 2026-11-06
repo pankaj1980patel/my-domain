@@ -110,6 +110,25 @@ impl<P: Platform> Engine<P> {
         diag::cancel_test(&self.ctx, id)
     }
 
+    /// "How your devices are connected": this device's links, the state of
+    /// each of your devices, and the links between your other devices that
+    /// they reported (`features::links_map`). Quick: measures nothing.
+    pub fn links_map(&self) -> crate::features::links_map::LinksMap {
+        crate::features::links_map::snapshot(&self.ctx)
+    }
+
+    /// The platform's Bluetooth can't link to anything now (`reason`:
+    /// "off", "not_paired", "out_of_range", "unsupported"), or can again
+    /// (`None`). The map shows it for the devices not linked by Bluetooth.
+    pub fn set_ble_state(&self, reason: Option<&str>) {
+        crate::features::links_map::ble_state(&self.ctx, reason);
+    }
+
+    /// `node_id` shares its own links for the map (its app is new enough).
+    pub fn links_map_supported(&self, node_id: &str) -> bool {
+        crate::features::links_map::supports(&self.ctx, node_id)
+    }
+
     /// Ping `node_id` once over its live link: the round trip, or `None`
     /// (no link, no answer, or an app too old to answer).
     pub fn ping(&self, node_id: &str) -> Option<f64> {

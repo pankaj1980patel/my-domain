@@ -6,7 +6,7 @@ import { friendlyError } from "../lib/words";
 import { DeviceCard, Empty, toast } from "../components/ui";
 import { t } from "../i18n";
 
-export default function Home(props: { onOpen: (node: string) => void }) {
+export default function Home(props: { onOpen: (node: string) => void; onMap: () => void }) {
   const devices = createMemo(() =>
     [...state.peers].sort((a, b) => {
       const la = state.links[a.node_id] ? 0 : 1;
@@ -35,12 +35,19 @@ export default function Home(props: { onOpen: (node: string) => void }) {
             </Show>
           </p>
         </div>
+        <div class="row">
+        <Show when={state.peers.length > 0}>
+          <button class="btn btn-soft" onClick={props.onMap}>
+            {t("map.openMap")}
+          </button>
+        </Show>
         <button
           class="btn btn-ghost"
           onClick={() => refreshDevices().then(() => toast(t("home.refreshed"), "ok"), (e) => toast(friendlyError(e), "error"))}
         >
           {t("home.refresh")}
         </button>
+        </div>
       </header>
 
       <Show

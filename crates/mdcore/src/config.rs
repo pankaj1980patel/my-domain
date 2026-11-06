@@ -167,6 +167,12 @@ pub struct CoreConfig {
     /// understands the `timers` message. On by default; off behaves like
     /// an app from before (tests use it to play an older peer).
     pub timers: bool,
+    /// "How your devices are connected" (`features::links_map`): this end
+    /// says `links_map` in its status and `addr_update`, sends its own
+    /// link list to the devices that say it too, and understands theirs.
+    /// On by default; off behaves like an app from before (tests use it
+    /// to play an older peer).
+    pub links_map: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -211,6 +217,7 @@ impl Default for CoreConfig {
             wake_relay: true,
             camera: true,
             timers: true,
+            links_map: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

@@ -36,6 +36,7 @@ fun HomeScreen(
     onBattery: () -> Unit = {},
     onTimers: () -> Unit = {},
     onReadLater: () -> Unit = {},
+    onLinksMap: () -> Unit = {},
 ) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
@@ -86,6 +87,8 @@ fun HomeScreen(
             item { TimersEntry(onTimers) }
             // Links saved to read later, the same on all your devices.
             item { ReadLaterEntryCard(onReadLater) }
+            // How each device is linked, and why one isn't (LinksMapScreen).
+            item { LinksMapEntry(onLinksMap) }
             // Once after sign-in: what this phone can turn on (SetupScreen).
             item { SetupHomeCard(onSetup) }
             // While heavy background work waits to save battery (SaveBatteryTile).

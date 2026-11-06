@@ -31,6 +31,7 @@ mod device;
 mod device_labels;
 mod diagnostics;
 mod fcm;
+mod links_map;
 mod location;
 mod note_reminders;
 mod notes;
@@ -1709,6 +1710,7 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         diagnostics::diagnose,
         diagnostics::speed_test,
         diagnostics::cancel_speed_test,
+        links_map::links_map,
         settings_backup::settings_backup_save,
         settings_backup::settings_restore_open,
         settings_backup::settings_restore_apply,

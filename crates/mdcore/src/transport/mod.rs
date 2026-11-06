@@ -165,6 +165,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::notes::link_up(&ctx, &peer);
         crate::features::timers::link_up(&ctx, &peer);
         crate::features::read_later::link_up(&ctx, &peer);
+        crate::features::links_map::link_up(&ctx, &peer);
     });
 }
 
@@ -218,6 +219,7 @@ pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     let removed = ctx.p2p_conns.lock().remove(node_id).is_some();
     if removed {
         crate::features::diag::note(ctx, node_id, "link_down", None);
+        crate::features::links_map::link_down(ctx, node_id);
         ctx.sink.emit(CoreEvent::PeerDisconnected {
             node_id: node_id.to_string(),
         });
@@ -262,6 +264,9 @@ fn note_undecryptable<P: Platform>(
 ) {
     ctx.decrypt_fail_count
         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if let Some(node) = from_node {
+        crate::features::links_map::undecryptable(ctx, node);
+    }
     let now = now_secs();
     {
         let mut last = ctx.decrypt_fail_last.lock();

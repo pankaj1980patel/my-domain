@@ -255,6 +255,8 @@ object Core {
     /** Events that change the share sheet's device targets (which devices,
      *  and which have a live link: those rank first). */
     private val SHARE_TARGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected")
+    /** Events after which "How your devices are connected" reads its map again. */
+    private val MAP_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "links_map_changed", "labels_changed")
 
     /** The app context, for strings built outside the screens (set by
      *  MainActivity and NetService, whichever starts first). */
@@ -452,6 +454,7 @@ object Core {
             apply(o, peersNow)
             if (kind in WIDGET_KINDS) HomeWidget.refresh(app)
             if (kind in SHARE_TARGET_KINDS) ShareTargets.refresh(app)
+            if (kind in MAP_KINDS) LinksMap.changed()
         }
     }
 

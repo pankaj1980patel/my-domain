@@ -4,7 +4,7 @@
 
 use super::signaling::{relay_target, send_signal_via};
 use super::*;
-use crate::features::diag;
+use crate::features::{diag, links_map};
 
 impl<P: Platform> Engine<P> {
     /// Kick off the connection ladder on a background thread (returns at once).
@@ -96,6 +96,15 @@ const HEAD_START: Duration = Duration::from_millis(500);
 /// How long the QUIC rungs get on their own before the relay comes up too.
 const QUICK_WAIT: Duration = Duration::from_millis(3000);
 
+/// What came of signalling the peer (for the map's "why", see
+/// `features::links_map`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Asked {
+    PushFailed,
+    NoAnswer,
+    Answered,
+}
+
 /// Rung 3: offer our QUIC addresses by signal, dial the ones the peer
 /// answers with, and give the link (ours, or the peer's dial to us) time to
 /// come up.
@@ -104,7 +113,8 @@ fn signaled_quic<P: Platform>(
     server_url: &Arc<Mutex<Option<String>>>,
     token: &Arc<Mutex<Option<String>>>,
     node_id: &str,
-) {
+) -> Asked {
+    let mut asked = Asked::Answered;
     let sid = uuid::Uuid::new_v4().to_string();
     let (tx, rx) = mpsc::channel::<Vec<String>>();
     ctx.quic_waiters.lock().insert(sid.clone(), tx);
@@ -120,13 +130,18 @@ fn signaled_quic<P: Platform>(
             } else if !is_live(ctx, node_id) {
                 // The push went (or a neighbour forwarded it); no answer.
                 diag::note(ctx, node_id, "no_answer", None);
+                asked = Asked::NoAnswer;
             }
             // The peer dials us too, so a link may exist even if ours failed.
             wait_direct(ctx, node_id, 3000);
         }
-        Err(e) => diag::note(ctx, node_id, "push_failed", Some(&e.to_string())),
+        Err(e) => {
+            diag::note(ctx, node_id, "push_failed", Some(&e.to_string()));
+            asked = Asked::PushFailed;
+        }
     }
     ctx.quic_waiters.lock().remove(&sid);
+    asked
 }
 
 /// Marks a ladder to (this device, peer) as running until dropped. A
@@ -238,6 +253,8 @@ fn ladder_once<P: Platform>(
     // it while signaled QUIC carries on and may still upgrade the link.
     // Hole punching and WebRTC start only once both QUIC rungs are done, so
     // two kinds of direct link never race each other.
+    // What signalling the peer came to (for the map's "why").
+    let asked: Mutex<Vec<Asked>> = Mutex::new(Vec::new());
     let direct = std::thread::scope(|s| {
         let mut quick = Vec::new();
         // Rung 0 — direct QUIC to the peer's advertised address. One
@@ -269,8 +286,12 @@ fn ladder_once<P: Platform>(
             if !signaled && (rung0_done || start.elapsed() >= HEAD_START) {
                 signaled = true;
                 emit("signaled_quic", None);
-                let (ctx, server_url, token, node_id) = (&ctx, &server_url, &token, &node_id);
-                quick.push(s.spawn(move || signaled_quic(ctx, server_url, token, node_id)));
+                let (ctx, server_url, token, node_id, asked) =
+                    (&ctx, &server_url, &token, &node_id, &asked);
+                quick.push(s.spawn(move || {
+                    let a = signaled_quic(ctx, server_url, token, node_id);
+                    asked.lock().push(a);
+                }));
             }
             if signaled && quick.iter().all(|h| h.is_finished()) {
                 break;
@@ -288,9 +309,17 @@ fn ladder_once<P: Platform>(
         // link in the background (a direct link replaces the relayed one
         // when it comes up).
         if rungs.relay && !is_live(&ctx, &node_id) {
-            if let Some((url, tok)) = relay_target(&ctx, &server_url, &token) {
+            let target = relay_target(&ctx, &server_url, &token);
+            if target.is_none() {
+                links_map::tried(&ctx, &node_id, "relay", "signed_out");
+            }
+            if let Some((url, tok)) = target {
                 emit("relay", None);
-                if transport::relay::ensure_relay(&ctx, &url, &tok).is_ok() {
+                let opened = transport::relay::ensure_relay(&ctx, &url, &tok);
+                if let Err(e) = &opened {
+                    links_map::tried(&ctx, &node_id, "relay", links_map::relay_reason(e));
+                }
+                if opened.is_ok() {
                     transport::relay::add_relay_link(&ctx, &node_id);
                     let sid = uuid::Uuid::new_v4().to_string();
                     let _ = send_signal_via(
@@ -303,6 +332,7 @@ fn ladder_once<P: Platform>(
                     transport::relay::send_hello(&ctx, &node_id);
                     if !wait_live(&ctx, &node_id, 8000) {
                         diag::note(&ctx, &node_id, "relay_no_answer", None);
+                        links_map::tried(&ctx, &node_id, "relay", "peer_offline");
                     }
                 } else {
                     diag::note(&ctx, &node_id, "relay_unreachable", None);
@@ -317,6 +347,19 @@ fn ladder_once<P: Platform>(
     if direct {
         return; // the link emits PeerConnected
     }
+    // The local network didn't do it: say why.
+    if rungs.quic {
+        let mine = ctx.identity.lock().ip.clone();
+        let why = links_map::lan_reason(
+            &mine,
+            &peer.ip,
+            peer.quic_port,
+            peer.source == crate::model::Source::Lan,
+        );
+        links_map::tried(&ctx, &node_id, "lan", why);
+    }
+    let mut punch_answered = false;
+    let mut punch_timed_out = false;
 
     // Both behind symmetric NATs: STUN addresses are useless to the other
     // side, so punching and WebRTC's direct path can only time out (~40 s).
@@ -351,10 +394,12 @@ fn ladder_once<P: Platform>(
                         peer_cands,
                         node_id.clone(),
                     );
+                    punch_answered = true;
                     // hole_punch (≤8s) + bidirectional confirmation (≤3s).
                     if wait_direct(&ctx, &node_id, 12000) {
                         return;
                     }
+                    punch_timed_out = true;
                 } else {
                     ctx.punch_waiters.lock().remove(&sid);
                 }
@@ -402,6 +447,16 @@ fn ladder_once<P: Platform>(
 
     if transport::is_direct(&ctx, &node_id) {
         return;
+    }
+    // Nor directly over the internet: say why, the most telling first.
+    {
+        let asked = asked.into_inner();
+        let push_failed = !asked.is_empty() && asked.iter().all(|a| *a == Asked::PushFailed);
+        let answered = punch_answered || asked.contains(&Asked::Answered);
+        let mapped = ctx.identity.lock().mapped_quic.is_some() || peer.mapped_quic.is_some();
+        let why =
+            links_map::internet_reason(push_failed, answered, hopeless, punch_timed_out, mapped);
+        links_map::tried(&ctx, &node_id, "internet", why);
     }
     if is_live(&ctx, &node_id) {
         // On the relay. Keep looking for a direct path in the background.

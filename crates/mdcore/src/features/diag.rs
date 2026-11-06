@@ -233,15 +233,7 @@ impl Diagnosis {
     /// The verdict and reason for a link (or none) and what was tried.
     pub fn judge(link: Option<&LinkInfo>, attempts: &[Attempt]) -> (String, Option<String>) {
         if let Some(l) = link {
-            let v = match l.transport {
-                TransportKind::Ble => "ble",
-                TransportKind::Relay => "relay",
-                TransportKind::WebRtc => "webrtc",
-                TransportKind::Punch => "punched",
-                TransportKind::Quic if l.lan => "lan",
-                TransportKind::Quic => "direct",
-            };
-            return (v.into(), None);
+            return (super::links_map::how(l.transport, l.lan).into(), None);
         }
         if attempts.is_empty() {
             return ("not_connected".into(), None);
