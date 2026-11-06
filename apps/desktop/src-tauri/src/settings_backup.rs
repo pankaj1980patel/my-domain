@@ -85,6 +85,7 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "kvm_swap_mods",
             "print_allow",
             "print_ask",
+            "updates_auto",
         ],
     },
     KvSection {

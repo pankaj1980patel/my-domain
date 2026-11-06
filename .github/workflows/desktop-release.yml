@@ -6,8 +6,10 @@
 # - Push a tag vX.Y.Z: the same, plus a DRAFT GitHub Release with every file
 #   attached. Publish the draft by hand once it looks right.
 #
-# Nothing is code-signed yet (no secrets). See docs/release.md for how to
-# cut a release, what each file is, and how to open the unsigned apps.
+# Nothing is code-signed yet. With the TAURI_SIGNING_PRIVATE_KEY secrets the
+# desktop update files are signed and latest.json is attached for the app's
+# automatic updates (docs/RELEASING.md); without them that's skipped. See
+# docs/release.md for what each file is and how to open the unsigned apps.
 name: App release
 
 on:
@@ -73,6 +75,13 @@ jobs:
           - name: macos-aarch64
             os: macos-latest
             bundles: app,dmg
+            arch: aarch64
+          # Intel Macs: built natively on an Intel runner (Homebrew's
+          # OpenSSL there is x86_64), so the updater has darwin-x86_64.
+          - name: macos-x86_64
+            os: macos-15-intel
+            bundles: app,dmg
+            arch: x86_64
           - name: linux-x86_64
             os: ubuntu-22.04
             bundles: deb,appimage
@@ -132,29 +141,74 @@ jobs:
       - run: npm ci
         working-directory: apps/desktop/ui
 
+      # Automatic updates (docs/RELEASING.md): with the TAURI_SIGNING_PRIVATE_KEY
+      # secret and a public key (tauri.conf.json's plugins > updater > pubkey,
+      # or the repository variable TAURI_UPDATER_PUBKEY, which wins), the
+      # bundler signs the update files (.sig next to each) and the app checks
+      # for updates. Without them the build still works: no update files,
+      # and the app says it can't update itself.
+      - name: Updater signing setup
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
+        run: |
+          set -euo pipefail
+          conf=apps/desktop/src-tauri/tauri.conf.json
+          pub="${UPDATER_PUBKEY:-$(jq -r '.plugins.updater.pubkey // ""' "$conf")}"
+          extra="$RUNNER_TEMP/updater-config.json"
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY}" ] || [ -z "$pub" ] || [ "$pub" = "REPLACE_WITH_UPDATER_PUBLIC_KEY" ]; then
+            echo "::warning::Updater signing skipped: set the TAURI_SIGNING_PRIVATE_KEY secret and the public key (see docs/RELEASING.md). This build won't update itself."
+            echo '{"bundle":{"createUpdaterArtifacts":false}}' > "$extra"
+            echo "UPDATER_SIGNED=0" >> "$GITHUB_ENV"
+          else
+            jq -n --arg k "$pub" '{plugins:{updater:{pubkey:$k}}}' > "$extra"
+            echo "UPDATER_SIGNED=1" >> "$GITHUB_ENV"
+          fi
+          echo "UPDATER_CONFIG=$extra" >> "$GITHUB_ENV"
+
       # The workspace's shared target/ dir: bundles land in
       # <repo>/target/release/bundle/<kind>/.
       - name: Build and bundle
         working-directory: apps/desktop
-        run: npx tauri build --bundles ${{ matrix.bundles }}
+        shell: bash
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --bundles ${{ matrix.bundles }} --config "$UPDATER_CONFIG"
 
-      # Copy the files out under names that say version + platform.
+      # Copy the files out under names that say version + platform, each
+      # update file with its .sig when signed (scripts/updater-manifest.py
+      # expects these names).
       - name: Collect bundles (macOS)
         if: runner.os == 'macOS'
+        env:
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
           mkdir -p dist
           b=target/release/bundle
-          cp "$b"/dmg/*.dmg "dist/my-domain_${VERSION}_macos_aarch64.dmg"
-          tar -czf "dist/my-domain_${VERSION}_macos_aarch64.app.tar.gz" -C "$b/macos" my-domain.app
+          out="dist/my-domain_${VERSION}_macos_${ARCH}"
+          cp "$b"/dmg/*.dmg "$out.dmg"
+          if [ "$UPDATER_SIGNED" = 1 ]; then
+            cp "$b"/macos/my-domain.app.tar.gz "$out.app.tar.gz"
+            cp "$b"/macos/my-domain.app.tar.gz.sig "$out.app.tar.gz.sig"
+          else
+            tar -czf "$out.app.tar.gz" -C "$b/macos" my-domain.app
+          fi
       - name: Collect bundles (Linux)
         if: runner.os == 'Linux'
         run: |
           set -euo pipefail
           mkdir -p dist
           b=target/release/bundle
-          cp "$b"/deb/*.deb "dist/my-domain_${VERSION}_linux_amd64.deb"
-          cp "$b"/appimage/*.AppImage "dist/my-domain_${VERSION}_linux_x86_64.AppImage"
+          out="dist/my-domain_${VERSION}"
+          cp "$b"/deb/*.deb "${out}_linux_amd64.deb"
+          cp "$b"/appimage/*.AppImage "${out}_linux_x86_64.AppImage"
+          if [ "$UPDATER_SIGNED" = 1 ]; then
+            cp "$b"/appimage/*.AppImage.sig "${out}_linux_x86_64.AppImage.sig"
+            for s in "$b"/deb/*.deb.sig; do [ -f "$s" ] && cp "$s" "${out}_linux_amd64.deb.sig"; done
+          fi
       - name: Collect bundles (Windows)
         if: runner.os == 'Windows'
         shell: bash
@@ -162,8 +216,13 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           b=target/release/bundle
-          cp "$b"/msi/*.msi "dist/my-domain_${VERSION}_windows_x64.msi"
-          cp "$b"/nsis/*.exe "dist/my-domain_${VERSION}_windows_x64-setup.exe"
+          out="dist/my-domain_${VERSION}"
+          cp "$b"/msi/*.msi "${out}_windows_x64.msi"
+          cp "$b"/nsis/*.exe "${out}_windows_x64-setup.exe"
+          if [ "$UPDATER_SIGNED" = 1 ]; then
+            cp "$b"/msi/*.msi.sig "${out}_windows_x64.msi.sig"
+            cp "$b"/nsis/*.exe.sig "${out}_windows_x64-setup.exe.sig"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -217,10 +276,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
+      # latest.json for the app's updater, from the signed files (none
+      # signed: none written, and the release goes out without updates).
+      # Its "What's new" is the annotated tag's message.
+      - name: Update manifest (latest.json)
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          : > "$RUNNER_TEMP/notes.txt"
+          # Only an annotated tag has its own message (a lightweight one
+          # would give the commit's).
+          if [ "$(git cat-file -t "${GITHUB_REF_NAME}")" = tag ]; then
+            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/-----BEGIN PGP SIGNATURE-----/,$d' > "$RUNNER_TEMP/notes.txt"
+          fi
+          python3 scripts/updater-manifest.py dist "$VERSION" "${GITHUB_REF_NAME}" "${GITHUB_REPOSITORY}" "$RUNNER_TEMP/notes.txt"
       - run: ls -l dist
       - uses: softprops/action-gh-release@v2
         with:
@@ -233,4 +309,5 @@ jobs:
 
             These builds are not code-signed. See docs/release.md for how to
             open them on macOS and Windows. The Android APK is signed with
-            the debug key.
+            the debug key. Installed desktop apps update themselves once
+            this release is published (when latest.json is attached).

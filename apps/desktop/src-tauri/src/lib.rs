@@ -72,6 +72,7 @@ mod timers;
 mod transfers;
 mod tray;
 mod tray_battery;
+mod updates;
 mod webhooks;
 mod wifi_direct;
 mod wifi_share;
@@ -1994,7 +1995,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         settings_backup::settings_backup_save,
         settings_backup::settings_restore_open,
         settings_backup::settings_restore_apply,
-        settings_backup::restart_app
+        settings_backup::restart_app,
+        updates::update_status,
+        updates::update_check,
+        updates::update_install,
+        updates::update_later,
+        updates::set_update_auto
     ])
 }
 
@@ -2029,6 +2035,9 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        // Automatic updates (`updates.rs`); checks only in release builds
+        // signed with the updater key.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(move |app| {
             let handle = app.handle().clone();
             // Before the Engine: its first events may already notify.
@@ -2063,6 +2072,7 @@ pub fn run() {
             app.manage(quick_panel::QuickPanelPref::load(&handle));
             app.manage(tray_battery::TrayBatteryPref::load(&handle));
             app.manage(settings_backup::Pending::default());
+            app.manage(updates::Updates::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -2151,6 +2161,8 @@ pub fn run() {
                 eprintln!("[tray] couldn't create the tray icon: {e}");
             }
             tray_battery::spawn(handle.clone());
+            // Look for a new version 30 s from now, then every 6 h.
+            updates::spawn(handle.clone());
             Ok(())
         })
         // Closing the window hides it to the tray; the tray's "Quit" exits.
@@ -2174,6 +2186,13 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|_app, _event| {
+            // Quitting with an update downloaded ("Install updates
+            // automatically"): install it first (`updates.rs`).
+            if let tauri::RunEvent::ExitRequested { api, .. } = &_event {
+                if updates::on_exit_requested(_app) {
+                    api.prevent_exit();
+                }
+            }
             // Quitting while this computer's sound plays on a phone: put
             // the speakers back as they were (`mute_here.rs`).
             if let tauri::RunEvent::Exit = _event {

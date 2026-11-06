@@ -832,6 +832,19 @@ export const commands = {
 	settingsRestoreApply: (sections: string[]) => typedError<RestoreResult, string>(__TAURI_INVOKE("settings_restore_apply", { sections })),
 	/**  Restart the app (after a restore). */
 	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
+	/**  Settings → Updates and the banner. */
+	updateStatus: () => __TAURI_INVOKE<UpdateStatus_Serialize>("update_status"),
+	/**  "Check now". */
+	updateCheck: () => __TAURI_INVOKE<UpdateStatus_Serialize>("update_check"),
+	/**
+	 *  "Install and restart" (and "Restart now" once it's downloaded):
+	 *  download if needed, install, start the new version.
+	 */
+	updateInstall: () => typedError<null, string>(__TAURI_INVOKE("update_install")),
+	/**  "Later": hide the banner for this version until the next start. */
+	updateLater: () => __TAURI_INVOKE<void>("update_later"),
+	/**  "Install updates automatically". */
+	setUpdateAuto: (on: boolean) => __TAURI_INVOKE<UpdateStatus_Serialize>("set_update_auto", { on }),
 };
 
 /* Types */
@@ -1187,6 +1200,27 @@ export type Automation_Serialize = {
 	enabled: boolean,
 	/**  The last time it fired, local "YYYY-MM-DD HH:MM". */
 	last_fired: string | null,
+};
+
+/**  A release found newer than this one. */
+export type AvailableUpdate = AvailableUpdate_Serialize | AvailableUpdate_Deserialize;
+
+/**  A release found newer than this one. */
+export type AvailableUpdate_Deserialize = {
+	version: string,
+	/**  The release notes from latest.json (plain text / Markdown). */
+	notes?: string | null,
+	/**  When it was published (RFC 3339), if latest.json says. */
+	date?: string | null,
+};
+
+/**  A release found newer than this one. */
+export type AvailableUpdate_Serialize = {
+	version: string,
+	/**  The release notes from latest.json (plain text / Markdown). */
+	notes: string | null,
+	/**  When it was published (RFC 3339), if latest.json says. */
+	date: string | null,
 };
 
 /**  The setting, as the UI sees it. */
@@ -4098,6 +4132,81 @@ export type Trigger_Serialize = {
 	node: string,
 	/**  For "battery_below": the percent (1–99). */
 	level: number | null,
+};
+
+/**  Everything Settings and the banner show. */
+export type UpdateStatus = UpdateStatus_Serialize | UpdateStatus_Deserialize;
+
+/**  Everything Settings and the banner show. */
+export type UpdateStatus_Deserialize = {
+	/**  This app's version. */
+	current: string,
+	/**
+	 *  Why updates are off here: "dev" (a debug build) or "unsigned" (built
+	 *  without the updater key). `None`: they're on.
+	 */
+	disabled?: string | null,
+	/**  "Install updates automatically". */
+	auto_install: boolean,
+	/**  Always "stable" for now. */
+	channel: string,
+	/**
+	 *  "idle", "checking", "downloading", "ready" (downloaded, installs on
+	 *  quit or on restart) or "installing".
+	 */
+	phase: string,
+	/**  Unix seconds of the last finished check. */
+	last_check?: number | null,
+	/**
+	 *  The last check or install failed: "network", "server", "signature"
+	 *  or "install". Cleared by the next success.
+	 */
+	error?: string | null,
+	available?: AvailableUpdate_Deserialize | null,
+	/**
+	 *  "Later" was chosen for `available` (the banner stays hidden until a
+	 *  newer one or the next start).
+	 */
+	later: boolean,
+	/**  Bytes downloaded so far and the total, if known. */
+	downloaded: number | null,
+	total?: number | null,
+};
+
+/**  Everything Settings and the banner show. */
+export type UpdateStatus_Serialize = {
+	/**  This app's version. */
+	current: string,
+	/**
+	 *  Why updates are off here: "dev" (a debug build) or "unsigned" (built
+	 *  without the updater key). `None`: they're on.
+	 */
+	disabled: string | null,
+	/**  "Install updates automatically". */
+	auto_install: boolean,
+	/**  Always "stable" for now. */
+	channel: string,
+	/**
+	 *  "idle", "checking", "downloading", "ready" (downloaded, installs on
+	 *  quit or on restart) or "installing".
+	 */
+	phase: string,
+	/**  Unix seconds of the last finished check. */
+	last_check: number | null,
+	/**
+	 *  The last check or install failed: "network", "server", "signature"
+	 *  or "install". Cleared by the next success.
+	 */
+	error: string | null,
+	available: AvailableUpdate_Serialize | null,
+	/**
+	 *  "Later" was chosen for `available` (the banner stays hidden until a
+	 *  newer one or the next start).
+	 */
+	later: boolean,
+	/**  Bytes downloaded so far and the total, if known. */
+	downloaded: number | null,
+	total: number | null,
 };
 
 /**  What waking a sleeping computer did (`Engine::wake_device`). */

@@ -1495,6 +1495,42 @@ input[type="checkbox"][role="switch"]:checked::after {
   display: block;
 }
 
+/* --- "Version X is available" (components/UpdateBanner.tsx) --- */
+
+.update-banner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin-bottom: var(--s-3);
+  padding: var(--s-3);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-md);
+}
+.update-banner p {
+  margin: 0;
+}
+.update-banner-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+.update-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.update-progress progress {
+  flex: 1;
+  max-width: 320px;
+}
+.update-notes {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 /* --- a device's security key changed (components/KeyChangeBanner.tsx) --- */
 
 .key-banner {

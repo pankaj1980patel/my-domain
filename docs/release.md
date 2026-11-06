@@ -8,6 +8,9 @@ installable desktop apps and the Android APK.
 - **Push a tag `vX.Y.Z`**: the same build, plus a **draft** GitHub Release with
   every file attached. Nothing is public until you publish the draft.
 
+Automatic updates for the desktop app (the signing key, latest.json, how a
+release reaches installed apps) are in [RELEASING.md](RELEASING.md).
+
 The server binary has its own workflow (`server-release.yml`), which also
 attaches its file to the release of a `v*` tag.
 

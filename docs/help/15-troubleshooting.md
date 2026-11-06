@@ -96,3 +96,17 @@ On the phone, see [Set up this phone](help:setup-phone). On a Mac, check System 
 ## Sign-in problems
 
 Check the username and password. On a company network that inspects secure connections, my-domain uses your computer's trusted certificates, so it should work if your browser does.
+
+## Updates
+
+On a computer, my-domain looks for a new version 30 seconds after it starts and then every 6 hours. It never installs one without asking unless you tell it to.
+
+- When there's a new version, a banner says **Version X is available**. **What's new** shows the release notes, **Install and restart** downloads it (you see the progress), installs it and starts the new version, and **Later** hides the banner until my-domain starts again.
+- **Settings → Updates** shows the version you have, **Check now**, and **Install updates automatically** (off at first). With it on, a new version downloads in the background and installs the next time you quit my-domain (or press **Restart now**).
+- Only stable releases are offered. Every download is checked against my-domain's signing key before it's installed; one that doesn't match is refused.
+- No internet, or the update server not answering: nothing pops up, Settings → Updates just says it couldn't check, and it tries again later.
+- "This build can't update itself": it was built without the update key (or it's a development build). Download the new version from the releases page instead.
+- On Linux, the **AppImage** replaces itself; a **.deb** install asks for your password to install the new version.
+- On a Mac the app may ask for your password to replace itself if it's in a folder you can't write to. Unsigned builds may ask for permissions (Bluetooth, microphone, location) again after an update.
+
+Phones update through their app store or by installing the new APK.

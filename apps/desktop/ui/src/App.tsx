@@ -11,6 +11,7 @@ import CommandPalette, { type Place } from "./components/CommandPalette";
 import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
 import DropAnywhere from "./components/DropAnywhere";
+import UpdateBanner from "./components/UpdateBanner";
 import { DownloadAsk, DownloadOnPicker } from "./components/DownloadOn";
 import { initRemoteDownloads } from "./lib/remoteDownload";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
@@ -337,6 +338,7 @@ export default function App() {
             <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
           </nav>
           <main class="content" id="main" tabIndex={-1} ref={main}>
+            <UpdateBanner />
             <Switch>
               <Match when={view().name === "home"}>
                 <Home onOpen={(node) => go({ name: "device", node })} onMap={() => go({ name: "linksMap" })} />

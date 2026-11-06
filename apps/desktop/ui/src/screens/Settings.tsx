@@ -31,6 +31,8 @@ import { InsertSetting } from "../components/InsertSetting";
 import { PrintSetting } from "../components/PrintSetting";
 import { RemoteDownloadSetting } from "../components/RemoteDownloadSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
+import { UpdatesSetting } from "../components/UpdatesSetting";
+import { updateStatus } from "../lib/updates";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
 import { OwnFingerprint } from "../components/VerifyDevice";
@@ -387,6 +389,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </Show>
       </article>
 
+      <UpdatesSetting />
+
       <article class="tile" id="settings-appearance">
         <h2>{t("settings.appearance")}</h2>
         <p class="muted small">{t("settings.appearanceHint")}</p>
@@ -416,7 +420,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
 
       {/* A button (no look of one), so the 7 taps work from the keyboard too. */}
       <button type="button" class="version muted small" onClick={tapVersion}>
-        {t("settings.version", { version: "0.1.0" })}
+        {t("settings.version", { version: updateStatus()?.current ?? "" })}
       </button>
 
     </section>
