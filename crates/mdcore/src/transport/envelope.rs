@@ -43,6 +43,32 @@
 //! `CoreConfig::envelope_v2` off plays an older app: version 1 only, and no
 //! checks.
 //!
+//! Signatures (`env: 3`): the account key alone says only that one of the
+//! account's devices sealed an envelope, so a paired device that's been
+//! compromised (or removed but still holding the passphrase) could seal one
+//! as another device and send it over the relay or Bluetooth, where `src`
+//! is only what the server or the `Hello` says. So a device that says
+//! `env: 3` gets every version 2 envelope signed by the sender's own
+//! device key (`device_key`, Ed25519) over [`signed_bytes`]: a label, the
+//! header (as [`aad`]), the nonce and the ciphertext. The receiver checks
+//! it against the key it pinned for `src` (over QUIC the handshake already
+//! proved it; it's checked there too, being cheap and uniform). A sender
+//! that has never met the recipient directly (it pinned no key for it)
+//! adds its public key (`pk`); a receiver with no key pinned for `src`
+//! takes it on first use, as QUIC does (a key that differs from a pinned
+//! one is never taken from `pk`). Once a device was seen sending a signed
+//! envelope that checked out, its unsigned ones are refused (a downgrade,
+//! remembered across restarts), and so is one whose signature doesn't
+//! check out. Trusting a device's new key (`Engine::trust_new_key`) forgets
+//! both downgrade marks for it ([`Guard::reset`]): the new install starts
+//! over. `CoreConfig::envelope_sig` off plays an app from before (`env: 2`).
+//! Binary media records (`transport::media`) aren't envelopes and aren't
+//! signed. The cost per message is logged by the unit test
+//! `signing_cost_per_message`.
+//!
+//! A device removed by the user (`features::revoke`) is refused too,
+//! whatever its envelope.
+//!
 //! Every refusal is counted per device (`Engine::envelope_info`, the
 //! connection report) and logged without content.
 
@@ -64,6 +90,8 @@ use crate::platform::Platform;
 
 /// This envelope version.
 pub const VERSION: u8 = 2;
+/// What a device says (`env: 3`) when it also takes signed envelopes.
+pub const SIGNED: u8 = 3;
 /// The status and `addr_update` flag saying which version a device reads.
 pub const FLAG: &str = "env";
 /// How far a message's send time may be from this device's clock, either way.
@@ -74,6 +102,8 @@ pub const MAX_PER_PEER: usize = 65_536;
 const MAX_PEERS: usize = 256;
 /// kv key: node id -> 1 (it said `env: 2`) or 2 (it sent version 2).
 const PEERS_KEY: &str = "env_peers";
+/// kv key: node id -> 1 (it said `env: 3`) or 2 (it sent a signed one).
+const SIG_KEY: &str = "env_sig_peers";
 /// Where the ids are written as they arrive (or, without a data file, kv).
 const SEEN_FILE: &str = "env_seen.log";
 const SEEN_KEY: &str = "env_seen";
@@ -146,7 +176,48 @@ pub fn seal_with(
         dst: dst.to_string(),
         mid: hex(&mid),
         ts,
+        ..Default::default()
     })
+}
+
+/// What the sender's device key signs: a label, the header (as the AEAD
+/// binds it), then the nonce and the ciphertext, each with its length.
+/// `None` for an envelope that isn't a well-formed version 2 one.
+pub fn signed_bytes(env: &Envelope) -> Option<Vec<u8>> {
+    if env.v != VERSION {
+        return None;
+    }
+    let mid = parse_mid(&env.mid)?;
+    let nonce = STANDARD.decode(&env.nonce).ok()?;
+    let ct = STANDARD.decode(&env.ciphertext).ok()?;
+    let ad = aad(&env.src, &env.dst, &mid, env.ts);
+    let mut out = Vec::with_capacity(48 + ad.len() + nonce.len() + ct.len());
+    out.extend_from_slice(b"my-domain envelope signature\0");
+    for part in [&ad[..], &nonce[..], &ct[..]] {
+        out.extend_from_slice(&u32::try_from(part.len()).unwrap_or(u32::MAX).to_be_bytes());
+        out.extend_from_slice(part);
+    }
+    Some(out)
+}
+
+/// Sign a version 2 envelope with this device's key; with `with_key`, add
+/// the public key too (the recipient may not have it pinned).
+pub fn sign(env: &mut Envelope, key: &crate::device_key::DeviceKey, with_key: bool) {
+    let Some(msg) = signed_bytes(env) else {
+        return;
+    };
+    env.sig = STANDARD.encode(key.sign(&msg));
+    if with_key {
+        env.pk = key.public();
+    }
+}
+
+/// Whether `env`'s signature is `key`'s (base64, as pinned).
+pub fn signature_ok(env: &Envelope, key: &str) -> bool {
+    let (Some(msg), Ok(sig)) = (signed_bytes(env), STANDARD.decode(&env.sig)) else {
+        return false;
+    };
+    crate::device_key::verify(key, &msg, &sig)
 }
 
 /// Seal `plaintext` from `src` to `dst`: a fresh id, sent now.
@@ -212,6 +283,12 @@ pub enum Reject {
     WrongRecipient,
     /// Its sender isn't the device the link says it came from.
     Spoofed,
+    /// No signature from a device seen signing (a downgrade).
+    Unsigned,
+    /// A signature that isn't the sender's pinned key's.
+    BadSignature,
+    /// From a device the user removed (`features::revoke`).
+    Revoked,
 }
 
 impl Reject {
@@ -222,6 +299,9 @@ impl Reject {
             Reject::Downgrade => "downgrade",
             Reject::WrongRecipient => "wrong_recipient",
             Reject::Spoofed => "spoofed",
+            Reject::Unsigned => "unsigned",
+            Reject::BadSignature => "bad_signature",
+            Reject::Revoked => "revoked",
         }
     }
 }
@@ -247,6 +327,16 @@ pub struct EnvelopeInfo {
     pub wrong_recipient: u32,
     /// Refused: sealed by another device than the link's.
     pub spoofed: u32,
+    /// It says it takes signed envelopes (`env: 3`): it gets them.
+    pub signed: bool,
+    /// It was seen signing: its unsigned envelopes are refused.
+    pub sig_required: bool,
+    /// Refused: unsigned after it was seen signing.
+    pub unsigned: u32,
+    /// Refused: a signature that isn't its device key's.
+    pub bad_signature: u32,
+    /// Refused: it was removed from your devices.
+    pub revoked: u32,
     /// Its clock minus this one's, in ms (with the time on the way), from
     /// its last version 2 envelope.
     pub skew_ms: Option<i32>,
@@ -307,6 +397,8 @@ struct Store {
 pub struct Guard {
     /// node id -> 1 (said `env: 2`) or 2 (sent version 2).
     peers: Mutex<HashMap<String, u8>>,
+    /// node id -> 1 (said `env: 3`) or 2 (sent a signed one that checked out).
+    sig: Mutex<HashMap<String, u8>>,
     seen: Mutex<HashMap<String, PeerSeen>>,
     stats: Mutex<HashMap<String, EnvelopeInfo>>,
     store: Mutex<Store>,
@@ -324,6 +416,11 @@ impl Guard {
         if let Some(text) = platform.kv_get(PEERS_KEY) {
             if let Ok(map) = serde_json::from_str::<HashMap<String, u8>>(&text) {
                 *g.peers.lock() = map;
+            }
+        }
+        if let Some(text) = platform.kv_get(SIG_KEY) {
+            if let Ok(map) = serde_json::from_str::<HashMap<String, u8>>(&text) {
+                *g.sig.lock() = map;
             }
         }
         let file = platform.data_file(SEEN_FILE);
@@ -433,15 +530,33 @@ impl Guard {
         if flag.as_u64().is_some_and(|v| v >= u64::from(VERSION)) {
             self.raise(platform, node, 1);
         }
+        if flag.as_u64().is_some_and(|v| v >= u64::from(SIGNED)) {
+            self.raise_sig(platform, node, 1);
+        }
     }
 
     /// Note what `node` reads (never lowers it), and keep it if it changed.
     fn raise<P: Platform + ?Sized>(&self, platform: &P, node: &str, level: u8) {
+        Self::raise_in(&self.peers, PEERS_KEY, platform, node, level);
+    }
+
+    /// Note that `node` takes (1) or sends (2) signed envelopes.
+    fn raise_sig<P: Platform + ?Sized>(&self, platform: &P, node: &str, level: u8) {
+        Self::raise_in(&self.sig, SIG_KEY, platform, node, level);
+    }
+
+    fn raise_in<P: Platform + ?Sized>(
+        map: &Mutex<HashMap<String, u8>>,
+        kv: &str,
+        platform: &P,
+        node: &str,
+        level: u8,
+    ) {
         if node.is_empty() || node.starts_with("manual:") {
             return;
         }
         let text = {
-            let mut peers = self.peers.lock();
+            let mut peers = map.lock();
             if peers.get(node).copied().unwrap_or(0) >= level
                 || (peers.len() >= MAX_PEERS && !peers.contains_key(node))
             {
@@ -450,7 +565,40 @@ impl Guard {
             peers.insert(node.to_string(), level);
             serde_json::to_string(&*peers).unwrap_or_default()
         };
-        platform.kv_set(PEERS_KEY, &text);
+        platform.kv_set(kv, &text);
+    }
+
+    /// Sign what goes to `node` (it said `env: 3`, or sent a signed one).
+    pub fn sends_sig(&self, node: &str) -> bool {
+        self.sig.lock().get(node).copied().unwrap_or(0) >= 1
+    }
+
+    /// `node` was seen signing: refuse its unsigned envelopes.
+    pub fn requires_sig(&self, node: &str) -> bool {
+        self.sig.lock().get(node).copied().unwrap_or(0) >= 2
+    }
+
+    /// A signed envelope from `node` checked out (and was taken).
+    pub fn signed_by<P: Platform + ?Sized>(&self, platform: &P, node: &str) {
+        self.raise_sig(platform, node, 2);
+    }
+
+    /// The user trusted `node`'s new key (a new install): forget that it
+    /// was seen sending version 2 and signed envelopes, so the new install
+    /// isn't refused as a downgrade before it hears what this one reads.
+    /// What it said it reads is kept.
+    pub fn reset<P: Platform + ?Sized>(&self, platform: &P, node: &str) {
+        for (map, kv) in [(&self.peers, PEERS_KEY), (&self.sig, SIG_KEY)] {
+            let text = {
+                let mut m = map.lock();
+                match m.get_mut(node) {
+                    Some(level) if *level >= 2 => *level = 1,
+                    _ => continue,
+                }
+                serde_json::to_string(&*m).unwrap_or_default()
+            };
+            platform.kv_set(kv, &text);
+        }
     }
 
     /// Send `node` version 2 (it said it reads it, or sent one).
@@ -548,6 +696,9 @@ impl Guard {
                 Reject::Downgrade => &mut s.downgrades,
                 Reject::WrongRecipient => &mut s.wrong_recipient,
                 Reject::Spoofed => &mut s.spoofed,
+                Reject::Unsigned => &mut s.unsigned,
+                Reject::BadSignature => &mut s.bad_signature,
+                Reject::Revoked => &mut s.revoked,
             };
             *c = c.saturating_add(1);
             n = *c;
@@ -561,14 +712,23 @@ impl Guard {
         let mut info = self.stats.lock().get(node).cloned().unwrap_or_default();
         info.version = if level >= 1 { VERSION } else { 1 };
         info.v2_only = level >= 2;
+        let sig = self.sig.lock().get(node).copied().unwrap_or(0);
+        info.signed = sig >= 1;
+        info.sig_required = sig >= 2;
         info
     }
 }
 
-/// Say in this device's status (and `addr_update`) that it reads version 2.
+/// Say in this device's status (and `addr_update`) that it reads version 2
+/// (`env: 2`), and takes signed envelopes (`env: 3`).
 pub fn extend_status<P: Platform>(ctx: &crate::engine::NetCtx<P>, status: &mut Value) {
     if ctx.config.envelope_v2 {
-        status[FLAG] = VERSION.into();
+        status[FLAG] = if ctx.config.envelope_sig {
+            SIGNED
+        } else {
+            VERSION
+        }
+        .into();
     }
 }
 
@@ -576,7 +736,12 @@ pub fn extend_status<P: Platform>(ctx: &crate::engine::NetCtx<P>, status: &mut V
 /// it reads.
 pub fn remember<P: Platform>(ctx: &crate::engine::NetCtx<P>, node: &str, flag: &Value) {
     if ctx.config.envelope_v2 {
-        ctx.env.advertised(&*ctx.platform, node, flag);
+        // An app from before signatures doesn't know `env: 3`.
+        let flag = match flag.as_u64() {
+            Some(v) if !ctx.config.envelope_sig => Value::from(v.min(u64::from(VERSION))),
+            _ => flag.clone(),
+        };
+        ctx.env.advertised(&*ctx.platform, node, &flag);
     }
 }
 
@@ -718,5 +883,115 @@ mod tests {
         }
         assert_eq!(p.insert([0xff; 16], now, now), Some(now - 1000));
         assert_eq!(p.mids.len(), MAX_PER_PEER);
+    }
+
+    use crate::device_key::DeviceKey;
+
+    #[test]
+    fn a_signature_binds_header_and_ciphertext_to_the_device_key() {
+        let a = DeviceKey::ephemeral();
+        let mut env = seal(&KEY, "a", "b", b"hi").unwrap();
+        sign(&mut env, &a, false);
+        assert!(env.pk.is_empty());
+        assert!(signature_ok(&env, &a.public()));
+        assert!(!signature_ok(&env, &DeviceKey::ephemeral().public()));
+        let tweak: [fn(&mut Envelope); 5] = [
+            |e| e.src = "c".into(),
+            |e| e.dst = "c".into(),
+            |e| e.ts += 1,
+            |e| e.mid = "00".repeat(16),
+            |e| e.nonce = STANDARD.encode([0u8; 24]),
+        ];
+        for t in tweak {
+            let mut e = env.clone();
+            t(&mut e);
+            assert!(!signature_ok(&e, &a.public()), "{e:?}");
+        }
+        // Another ciphertext under the same header.
+        let mut other =
+            seal_with(&KEY, "a", "b", parse_mid(&env.mid).unwrap(), env.ts, b"ho").unwrap();
+        other.sig = env.sig.clone();
+        assert!(!signature_ok(&other, &a.public()));
+        // With its key, for a device that never met it.
+        sign(&mut env, &a, true);
+        assert_eq!(env.pk, a.public());
+    }
+
+    #[test]
+    fn signing_state_is_kept_and_reset_on_a_new_key() {
+        let p = kv();
+        {
+            let g = Guard::load(&p);
+            g.advertised(&p, "a", &Value::from(3));
+            g.advertised(&p, "old", &Value::from(2));
+            assert!(g.sends_sig("a") && !g.requires_sig("a"));
+            assert!(g.sends_v2("old") && !g.sends_sig("old"));
+            assert_eq!(g.check(&p, "me", "a", &hdr(1, now_ms()), true), Ok(()));
+            g.signed_by(&p, "a");
+        }
+        let g = Guard::load(&p);
+        assert!(
+            g.requires_sig("a") && g.requires_v2("a"),
+            "kept across a restart"
+        );
+        let i = g.info("a");
+        assert!(i.signed && i.sig_required && i.v2_only);
+        // The user trusts its new key: a new install, starting over.
+        g.reset(&p, "a");
+        assert!(!g.requires_sig("a") && !g.requires_v2("a"));
+        assert!(
+            g.sends_sig("a") && g.sends_v2("a"),
+            "what it said it reads stays"
+        );
+        let g = Guard::load(&p);
+        assert!(
+            !g.requires_sig("a") && !g.requires_v2("a"),
+            "the reset is kept"
+        );
+    }
+
+    /// What a signature costs per message (sign on one end, check on the
+    /// other), next to sealing and opening: printed for the security
+    /// review (`cargo test -p mdcore --lib signing_cost -- --nocapture`).
+    #[test]
+    fn signing_cost_per_message() {
+        let a = DeviceKey::ephemeral();
+        let body = vec![7u8; 512];
+        const N: u32 = 300;
+        let t = std::time::Instant::now();
+        let envs: Vec<Envelope> = (0..N)
+            .map(|_| seal(&KEY, "a", "b", &body).unwrap())
+            .collect();
+        let seal_t = t.elapsed() / N;
+        let t = std::time::Instant::now();
+        for e in &envs {
+            assert!(open(&KEY, e).is_some());
+        }
+        let open_t = t.elapsed() / N;
+        let mut signed = envs.clone();
+        let t = std::time::Instant::now();
+        for e in &mut signed {
+            sign(e, &a, false);
+        }
+        let sign_t = t.elapsed() / N;
+        let key = a.public();
+        let t = std::time::Instant::now();
+        for e in &signed {
+            assert!(signature_ok(e, &key));
+        }
+        let verify_t = t.elapsed() / N;
+        let extra = serde_json::to_string(&signed[0]).unwrap().len()
+            - serde_json::to_string(&envs[0]).unwrap().len();
+        eprintln!(
+            "[envelope cost, 512-byte body, per message] seal {seal_t:?}, open {open_t:?}, \
+             sign {sign_t:?}, verify {verify_t:?}, +{extra} bytes on the wire"
+        );
+        // Loose bounds (debug builds, busy machines): a signature mustn't
+        // cost anything like a frame time.
+        assert!(sign_t < std::time::Duration::from_millis(5), "{sign_t:?}");
+        assert!(
+            verify_t < std::time::Duration::from_millis(5),
+            "{verify_t:?}"
+        );
     }
 }

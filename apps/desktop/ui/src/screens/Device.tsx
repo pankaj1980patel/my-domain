@@ -80,6 +80,7 @@ import { NearbyBadge } from "../components/NearbyBadge";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
 import VerifyDevice from "../components/VerifyDevice";
+import { RemoveDeviceButton } from "../components/RemovedDevices";
 
 /** Every tile a device's page can show, in default order. A new tile is one
  *  entry here (its `id` is kept in saved layouts: never rename one); a saved
@@ -242,6 +243,7 @@ export default function Device(props: { node: string; onBack: () => void; onHeal
                   {arranging() ? t("layout.done") : t("layout.edit")}
                 </button>
                 <VerifyDevice node={props.node} />
+                <RemoveDeviceButton node={props.node} name={peerName(props.node)} onRemoved={props.onBack} />
               </div>
               <Show when={peerModel(p().node_id)}>
                 {(model) => <p class="muted small device-model">{model()}</p>}

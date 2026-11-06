@@ -1284,6 +1284,10 @@
     <string name="conn_envelope">संदेश सुरक्षा</string>
     <string name="conn_envelope_v2">दोहराव से सुरक्षित (संस्करण 2)</string>
     <string name="conn_envelope_v1">पुराना ऐप: संस्करण 1, दोहराव से सुरक्षा नहीं</string>
+    <string name="conn_envelope_signed">दोहराव से सुरक्षित, और उसकी डिवाइस कुंजी से हस्ताक्षरित</string>
+    <string name="conn_refused_sig">मना किए गए हस्ताक्षर</string>
+    <string name="conn_refused_sig_value">%1$d बिना हस्ताक्षर · %2$d गलत हस्ताक्षर · %3$d हटाए गए डिवाइस से</string>
+
     <string name="conn_clock_skew">घड़ी का अंतर</string>
     <string name="conn_refused">मना किए गए संदेश</string>
     <string name="conn_refused_value">%1$d दोहराए गए · %2$d पुराने · %3$d पुराने संस्करण के · %4$d गलत पते के · %5$d गलत भेजने वाले के</string>
@@ -1562,6 +1566,18 @@
     <string name="map_fix_ble_unsupported">इसके बजाय Wi‑Fi या इंटरनेट इस्तेमाल करें।</string>
     <string name="map_fix_device_bad_key">दोनों पर एक ही डिवाइस कुंजी इस्तेमाल करें (सेटिंग्स → डिवाइस कुंजी)।</string>
     <string name="map_fix_device_key_changed">अगर आपने %1$s पर ऐप दोबारा इंस्टॉल किया या उसका डेटा मिटाया, तो नई कुंजी पर भरोसा करें। नहीं तो न करें।</string>
+    <string name="remove_device">डिवाइस हटाएँ</string>
+    <string name="remove_device_title">%1$s को हमेशा के लिए हटाएँ?</string>
+    <string name="remove_device_body">%1$s आपके सभी डिवाइस से हट जाएगा, और वे इससे फिर नहीं जुड़ेंगे, एक ही वाई-फ़ाई पर भी, और भले ही इसके पास अब भी आपका पासफ़्रेज़ हो। ऐप के उस इंस्टॉल के लिए यह स्थायी है। आप इसे सेटिंग्स → हटाए गए डिवाइस में वापस ले सकते हैं।</string>
+    <string name="remove_device_passphrase">अगर डिवाइस खो गया है या आपको उस पर भरोसा नहीं है, तो अपना पासफ़्रेज़ भी बदलें: जिस डिवाइस के पास यह है, वह नए डिवाइस के रूप में फिर जुड़ सकता है।</string>
+    <string name="remove_device_done">%1$s हटा दिया गया</string>
+    <string name="removed_devices_title">हटाए गए डिवाइस</string>
+    <string name="removed_devices_none">कोई डिवाइस हटाया नहीं गया। जो डिवाइस आप (उसके पेज पर) हटाते हैं, वह यहाँ दिखता है।</string>
+    <string name="removed_devices_hint">आपके डिवाइस इन्हें मना कर देते हैं, आपके पासफ़्रेज़ के साथ भी। “फिर से अनुमति दें” इसे सभी पर वापस ले लेता है।</string>
+    <string name="removed_devices_by_me">इस फ़ोन पर हटाया गया</string>
+    <string name="removed_devices_by">%1$s पर हटाया गया</string>
+    <string name="removed_devices_allow">फिर से अनुमति दें</string>
+    <string name="removed_devices_allowed">%1$s को फिर से अनुमति है</string>
     <string name="key_change_title">%1$s की सुरक्षा कुंजी बदल गई</string>
     <string name="key_change_body">ऐसा तब होता है जब ऐप दोबारा इंस्टॉल किया जाए या उसका डेटा मिटाया जाए। अगर आपने ऐसा नहीं किया, तो इस पर भरोसा न करें।</string>
     <string name="key_change_refused">जब तक आप तय न करें, %1$s से सिर्फ़ रिले सर्वर से ही जुड़ा जा सकता है, अगर जुड़ सके।</string>

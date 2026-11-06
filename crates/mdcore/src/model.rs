@@ -144,6 +144,11 @@ pub struct Plaintext {
 /// a random message id (`mid`, 128 bits in hex) and the send time (`ts`,
 /// unix ms). An older app ignores the extra fields (and can't open it, so
 /// it's only sent to devices that said `env: 2`).
+///
+/// A version 2 envelope may also carry the sender's device-key signature
+/// (`sig`, Ed25519, base64) over its header and ciphertext, and, when the
+/// sender has never met the recipient directly, its public key (`pk`): see
+/// `transport::envelope` (signatures go only to devices that said `env: 3`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Envelope {
     pub nonce: String,
@@ -158,6 +163,10 @@ pub struct Envelope {
     pub mid: String,
     #[serde(default, skip_serializing_if = "is_zero_u64")]
     pub ts: u64,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub sig: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub pk: String,
 }
 
 fn is_zero_u64(v: &u64) -> bool {

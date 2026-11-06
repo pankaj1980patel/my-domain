@@ -280,7 +280,15 @@ export default function ConnectionTile(props: { node: string }) {
                 </dd>
               </Show>
               <dt>{t("conn.envelope")}</dt>
-              <dd>{t(d().envelope.version >= 2 ? "conn.envelope.v2" : "conn.envelope.v1")}</dd>
+              <dd>
+                {t(
+                  d().envelope.version >= 2
+                    ? d().envelope.signed
+                      ? "conn.envelope.signed"
+                      : "conn.envelope.v2"
+                    : "conn.envelope.v1",
+                )}
+              </dd>
               <Show when={d().envelope.skew_ms != null}>
                 <dt>{t("conn.clockSkew")}</dt>
                 <dd>{msText(Math.abs(d().envelope.skew_ms!))}</dd>
@@ -303,6 +311,16 @@ export default function ConnectionTile(props: { node: string }) {
                     downgrades: d().envelope.downgrades,
                     wrong: d().envelope.wrong_recipient,
                     spoofed: d().envelope.spoofed,
+                  })}
+                </dd>
+              </Show>
+              <Show when={d().envelope.unsigned + d().envelope.bad_signature + d().envelope.revoked > 0}>
+                <dt>{t("conn.refusedSig")}</dt>
+                <dd>
+                  {t("conn.refusedSigValue", {
+                    unsigned: d().envelope.unsigned,
+                    bad: d().envelope.bad_signature,
+                    revoked: d().envelope.revoked,
                   })}
                 </dd>
               </Show>

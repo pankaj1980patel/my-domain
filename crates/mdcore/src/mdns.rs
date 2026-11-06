@@ -147,6 +147,11 @@ fn on_resolved<P: Platform>(ctx: &NetCtx<P>, svc: &ResolvedService) {
     if crate::crypto::lan_tag_of(&ctx.key).as_deref() != Some(beacon.tag.as_str()) {
         return;
     }
+    // A device you removed isn't added back (`features::revoke`).
+    if ctx.revoked.is_revoked(&beacon.node_id) {
+        return;
+    }
+
     let snapshot = {
         let mut map = ctx.peers.lock();
         merge_beacon(&mut map, &beacon, ip).then(|| map.values().cloned().collect())

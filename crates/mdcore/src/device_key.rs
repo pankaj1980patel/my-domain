@@ -71,6 +71,8 @@ const ED25519_SPKI: [u8; 12] = [
 pub struct DeviceKey {
     pkcs8: Vec<u8>,
     public: Vec<u8>,
+    /// The key itself, parsed once (signing envelopes and revocations).
+    pair: rcgen::KeyPair,
 }
 
 impl DeviceKey {
@@ -128,6 +130,7 @@ impl DeviceKey {
         DeviceKey {
             pkcs8: pair.serialize_der(),
             public: pair.public_key_raw().to_vec(),
+            pair,
         }
     }
 
@@ -136,7 +139,20 @@ impl DeviceKey {
         Some(DeviceKey {
             public: pair.public_key_raw().to_vec(),
             pkcs8: der,
+            pair,
         })
+    }
+
+    /// A key of its own, kept nowhere: tests play another device with it.
+    pub fn ephemeral() -> DeviceKey {
+        Self::generate()
+    }
+
+    /// Sign `msg` with this device's key (Ed25519: 64 bytes).
+    pub fn sign(&self, msg: &[u8]) -> Vec<u8> {
+        use rcgen::SigningKey as _;
+        // Ed25519 signing can't fail (no randomness, no hashing choice).
+        self.pair.sign(msg).unwrap_or_default()
     }
 
     /// The public key, base64: what other devices remember us by.
@@ -153,6 +169,29 @@ impl DeviceKey {
         let key = PrivatePkcs8KeyDer::from(self.pkcs8.clone());
         Ok((cert.der().clone(), key.into()))
     }
+}
+
+/// Whether `sig` is `key`'s (base64, as pinned) Ed25519 signature of `msg`.
+pub fn verify(key: &str, msg: &[u8], sig: &[u8]) -> bool {
+    use rustls::pki_types::{alg_id, SignatureVerificationAlgorithm};
+    type Alg = &'static dyn SignatureVerificationAlgorithm;
+    static ED25519: std::sync::OnceLock<Option<Alg>> = std::sync::OnceLock::new();
+    let Ok(raw) = B64.decode(key) else {
+        return false;
+    };
+    if raw.len() != 32 || sig.len() != 64 {
+        return false;
+    }
+    ED25519
+        .get_or_init(|| {
+            rustls::crypto::ring::default_provider()
+                .signature_verification_algorithms
+                .all
+                .iter()
+                .copied()
+                .find(|a| a.public_key_alg_id() == alg_id::ED25519)
+        })
+        .is_some_and(|a| a.verify_signature(&raw, msg, sig).is_ok())
 }
 
 /// The Ed25519 key in a certificate, base64; `None` for any other kind

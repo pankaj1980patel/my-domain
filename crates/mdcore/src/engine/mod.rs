@@ -48,6 +48,7 @@ mod notes;
 mod otp_relay;
 mod read_later;
 mod remote_download;
+mod revoke;
 pub use media::MAX_AWAKE_MINUTES;
 mod messaging;
 pub use messaging::QUEUED;
@@ -208,6 +209,8 @@ pub struct NetCtx<P: Platform> {
     pub(crate) ble_links: ble::BleLinks,
     /// Envelope versions, ids seen and refusals (see `transport::envelope`).
     pub env: Arc<transport::envelope::Guard>,
+    /// The devices the user removed (see `features::revoke`).
+    pub revoked: Arc<crate::features::revoke::Revocations>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -248,6 +251,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             peer_keys: self.peer_keys.clone(),
             ble_links: self.ble_links.clone(),
             env: self.env.clone(),
+            revoked: self.revoked.clone(),
             seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
@@ -375,6 +379,7 @@ impl<P: Platform> Engine<P> {
         // Discovery socket. If multicast bind fails (some networks/permissions),
         // fall back to a plain UDP socket for sending — messaging still works.
         let iface_mode = platform.iface_mode();
+        let revoked = Arc::new(crate::features::revoke::Revocations::load(&*platform));
         let disco_send: Arc<UdpSocket> = match discovery::bind_multicast(&iface_mode) {
             Ok(recv) => {
                 let send = Arc::new(recv.try_clone().map_err(|e| e.to_string())?);
@@ -383,8 +388,11 @@ impl<P: Platform> Engine<P> {
                 let sink_c = sink.clone();
                 let send_c = send.clone();
                 let key_c = key.clone();
+                let revoked_c = revoked.clone();
                 std::thread::spawn(move || {
-                    discovery::discovery_recv_loop(recv, send_c, peers_c, identity_c, sink_c, key_c)
+                    discovery::discovery_recv_loop(
+                        recv, send_c, peers_c, identity_c, sink_c, key_c, revoked_c,
+                    )
                 });
                 send
             }
@@ -416,6 +424,7 @@ impl<P: Platform> Engine<P> {
             peer_keys: Arc::default(),
             ble_links: Arc::default(),
             env: Arc::new(transport::envelope::Guard::load(&*platform)),
+            revoked,
             subs: subs.clone(),
             removal_subs: Arc::default(),
             quic_failed: Arc::default(),

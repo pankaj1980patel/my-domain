@@ -172,6 +172,8 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
             item(key = "health") { HealthDeviceBanner(node, onHealth) }
             // Compare security keys with it; "Verified" once you have.
             item(key = "verify") { VerifyRow(node) }
+            // Remove it for good (asks first; "Allow again" in Settings).
+            item(key = "remove") { RemoveDeviceRow(node, Core.peerName(node), onBack) }
             if (editing) item { DeviceLabelEditor(node) { editing = false } }
             if (arranging) {
                 arrangeItems(node, name, kind, tiles, layout, said, { said = it }) { arranging = false }

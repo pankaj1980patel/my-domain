@@ -217,8 +217,10 @@ fn a_recorded_bluetooth_envelope_sent_again_is_refused() {
 
 #[test]
 fn stale_misaddressed_and_misattributed_envelopes_are_refused() {
-    let a = TestNode::start_full(MockPlatform::new("env-chk-a"), offline());
-    let b = TestNode::start_full(MockPlatform::new("env-chk-b"), offline());
+    // Without signatures: these frames are made here, as `a` would make
+    // them, and only `a` holds its device key (signatures: below).
+    let a = TestNode::start_full(MockPlatform::new("env-chk-a"), before_signatures());
+    let b = TestNode::start_full(MockPlatform::new("env-chk-b"), before_signatures());
     TestNode::pair(&a, &b);
     let r = radio(&a, &b);
     negotiated(&a, &b);
@@ -429,4 +431,178 @@ fn quic_links_use_version_2_too() {
     let i = info(&b, &a);
     assert!(i.accepted >= 2 && i.v2_only, "{i:?}");
     assert_eq!(refused(&i), 0);
+}
+
+// --- signatures (env: 3) ------------------------------------------------------
+
+use mdcore::device_key::DeviceKey;
+
+/// Both sign, and `b` has taken a signed one from `a` (signatures required).
+fn signing(a: &TestNode, b: &TestNode) {
+    negotiated(a, b);
+    wait_for("env: 3 both ways", || {
+        info(a, b).signed && info(b, a).signed
+    });
+    a.engine.send(&b.node_id(), "signed warm up").unwrap();
+    b.sink.wait_for_message("signed warm up");
+    wait_for("a signed envelope", || info(b, a).sig_required);
+}
+
+/// A version 2 frame from `src` to `dst`, signed by `by` (none: unsigned),
+/// carrying `by`'s key when `with_pk`.
+fn forged(src: &str, dst: &str, text: &str, by: Option<&DeviceKey>, with_pk: bool) -> String {
+    forged_with(&key(), src, dst, text, by, with_pk)
+}
+
+/// As `forged`, under the account key `account`.
+fn forged_with(
+    account: &[u8; 32],
+    src: &str,
+    dst: &str,
+    text: &str,
+    by: Option<&DeviceKey>,
+    with_pk: bool,
+) -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(1 << 40);
+    let mut mid = [0u8; 16];
+    mid[8..].copy_from_slice(&NEXT.fetch_add(1, Ordering::Relaxed).to_be_bytes());
+    let mut env =
+        envelope::seal_with(account, src, dst, mid, envelope::now_ms(), &body(text)).unwrap();
+    if let Some(k) = by {
+        envelope::sign(&mut env, k, with_pk);
+    }
+    serde_json::to_string(&WsFrame::Msg(env)).unwrap()
+}
+
+#[test]
+fn a_paired_device_cannot_pass_as_another_over_bluetooth_once_signed() {
+    let a = TestNode::start_full(MockPlatform::new("sig-ble-a"), offline());
+    let b = TestNode::start_full(MockPlatform::new("sig-ble-b"), offline());
+    TestNode::pair(&a, &b);
+    let r = radio(&a, &b);
+    signing(&a, &b);
+    let signed = r.a_to_b.log().iter().any(|f| {
+        serde_json::from_slice::<serde_json::Value>(f)
+            .is_ok_and(|v| v["type"] == "msg" && v["sig"].as_str().is_some_and(|s| !s.is_empty()))
+    });
+    assert!(signed, "signed over Bluetooth");
+
+    // A compromised device of the account: it has the account key and a
+    // device key of its own, and seals as `a` on a's Bluetooth link.
+    let mallory = DeviceKey::ephemeral();
+    let (ida, idb) = (a.node_id(), b.node_id());
+    let frames = [
+        forged(&ida, &idb, "forged, its own key", Some(&mallory), true),
+        forged(&ida, &idb, "forged, its key only", Some(&mallory), false),
+        forged(&ida, &idb, "forged, unsigned", None, false),
+    ];
+    for f in &frames {
+        b.engine.ble_frame(r.id_b, f.as_bytes());
+    }
+    wait_for("the forgeries refused", || {
+        let i = info(&b, &a);
+        i.bad_signature >= 2 && i.unsigned >= 1
+    });
+    for text in [
+        "forged, its own key",
+        "forged, its key only",
+        "forged, unsigned",
+    ] {
+        assert_eq!(received(&b, text), 0, "{text} was taken");
+    }
+    // a's own messages still go.
+    a.engine.send(&idb, "really from a").unwrap();
+    b.sink.wait_for_message("really from a");
+}
+
+#[test]
+fn the_relay_cannot_attribute_a_forged_signed_envelope() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let a = relay_node("sig-rl-a", &reg, &hub, &relay);
+    let b = relay_node("sig-rl-b", &reg, &hub, &relay);
+    TestNode::pair(&a, &b);
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LONG).as_deref(), Some("relay"));
+    signing(&a, &b);
+
+    // The server (or a device behind it) hands b frames "from a".
+    let mallory = DeviceKey::ephemeral();
+    let (ida, idb) = (a.node_id(), b.node_id());
+    let family = mdcore::crypto::derive_key("family key", "alice").unwrap();
+    let bad = forged_with(&family, &ida, &idb, "relay forged", Some(&mallory), true);
+    assert!(relay.inject(&idb, &ida, &bad));
+    let bare = forged_with(&family, &ida, &idb, "relay unsigned", None, false);
+    assert!(relay.inject(&idb, &ida, &bare));
+    wait_for("the forgeries refused", || {
+        let i = info(&b, &a);
+        i.bad_signature >= 1 && i.unsigned >= 1
+    });
+    assert_eq!(received(&b, "relay forged"), 0);
+    assert_eq!(received(&b, "relay unsigned"), 0);
+    a.engine.send(&idb, "relayed and signed").unwrap();
+    b.sink.wait_for_message("relayed and signed");
+}
+
+fn before_signatures() -> CoreConfig {
+    CoreConfig {
+        envelope_sig: false,
+        ..offline()
+    }
+}
+
+#[test]
+fn an_app_from_before_signatures_still_talks_both_ways() {
+    let new = TestNode::start_full(MockPlatform::new("sig-new"), offline());
+    let old = TestNode::start_full(MockPlatform::new("sig-old"), before_signatures());
+    TestNode::pair(&new, &old);
+    let r = radio(&new, &old);
+    negotiated(&new, &old);
+    old.engine
+        .send(&new.node_id(), "unsigned from the older app")
+        .unwrap();
+    new.sink.wait_for_message("unsigned from the older app");
+    new.engine.send(&old.node_id(), "to the older app").unwrap();
+    old.sink.wait_for_message("to the older app");
+    settle();
+    let i = info(&new, &old);
+    assert!(!i.signed && !i.sig_required, "{i:?}");
+    assert_eq!(refused(&i) + i.unsigned + i.bad_signature, 0, "{i:?}");
+    let signed = r.a_to_b.log().iter().any(|f| {
+        serde_json::from_slice::<serde_json::Value>(f)
+            .is_ok_and(|v| v["type"] == "msg" && v.get("sig").is_some())
+    });
+    assert!(!signed, "never signed to an app that didn't say env: 3");
+}
+
+#[test]
+fn trusting_a_new_key_resets_the_downgrade_marks() {
+    let b = TestNode::start("sig-tr-b");
+    let a = TestNode::start("sig-tr-a");
+    TestNode::pair(&a, &b);
+    assert_eq!(a.engine.send(&b.node_id(), "first").unwrap(), "QUIC");
+    b.sink.wait_for_message("first");
+    signing(&a, &b);
+    let i = info(&b, &a);
+    assert!(i.v2_only && i.sig_required, "{i:?}");
+    drop(a);
+    std::thread::sleep(Duration::from_millis(300));
+
+    // Reinstalled: the same node id with a new key, refused until trusted.
+    let a = TestNode::start("sig-tr-a");
+    TestNode::pair(&a, &b);
+    let _ = a.engine.send(&b.node_id(), "new install");
+    let change = b
+        .sink
+        .wait_until(LONG, |e| match e {
+            CoreEvent::KeyChanged {
+                new_fingerprint, ..
+            } => Some(new_fingerprint.clone()),
+            _ => None,
+        })
+        .expect("key change");
+    b.engine.trust_new_key(&a.node_id(), &change).unwrap();
+    let i = info(&b, &a);
+    assert!(!i.v2_only && !i.sig_required, "marks reset: {i:?}");
+    assert_eq!(i.version, 2, "what it said it reads stays");
 }

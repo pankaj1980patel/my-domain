@@ -855,6 +855,16 @@ export const commands = {
 	/**  You compared and they match (`verified`), or you take that back. */
 	setDeviceVerified: (nodeId: string, verified: boolean) => typedError<null, string>(__TAURI_INVOKE("set_device_verified", { nodeId, verified })),
 	/**
+	 *  Remove `node_id` for good, for that install (`mdcore::features::revoke`):
+	 *  your other devices hear of it and refuse it too, even with the
+	 *  passphrase. Undone with `allow_device_again`.
+	 */
+	removeDevice: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("remove_device", { nodeId })),
+	/**  "Allow again": take a removal back (on all your devices). */
+	allowDeviceAgain: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("allow_device_again", { nodeId })),
+	/**  The removed devices (Settings), the most recently removed first. */
+	removedDevices: () => __TAURI_INVOKE<RemovedDevice[]>("removed_devices"),
+	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
 	 *  closed.
@@ -2118,6 +2128,16 @@ export type EnvelopeInfo_Deserialize = {
 	wrong_recipient: number,
 	/**  Refused: sealed by another device than the link's. */
 	spoofed: number,
+	/**  It says it takes signed envelopes (`env: 3`): it gets them. */
+	signed: boolean,
+	/**  It was seen signing: its unsigned envelopes are refused. */
+	sig_required: boolean,
+	/**  Refused: unsigned after it was seen signing. */
+	unsigned: number,
+	/**  Refused: a signature that isn't its device key's. */
+	bad_signature: number,
+	/**  Refused: it was removed from your devices. */
+	revoked: number,
 	/**
 	 *  Its clock minus this one's, in ms (with the time on the way), from
 	 *  its last version 2 envelope.
@@ -2146,6 +2166,16 @@ export type EnvelopeInfo_Serialize = {
 	wrong_recipient: number,
 	/**  Refused: sealed by another device than the link's. */
 	spoofed: number,
+	/**  It says it takes signed envelopes (`env: 3`): it gets them. */
+	signed: boolean,
+	/**  It was seen signing: its unsigned envelopes are refused. */
+	sig_required: boolean,
+	/**  Refused: unsigned after it was seen signing. */
+	unsigned: number,
+	/**  Refused: a signature that isn't its device key's. */
+	bad_signature: number,
+	/**  Refused: it was removed from your devices. */
+	revoked: number,
 	/**
 	 *  Its clock minus this one's, in ms (with the time on the way), from
 	 *  its last version 2 envelope.
@@ -3760,6 +3790,20 @@ export type RemoteDownloadView_Serialize = {
 	error: string | null,
 	path: string | null,
 	started_at: number | null,
+};
+
+/**  A removed device, for the apps' list. */
+export type RemovedDevice = {
+	node_id: string,
+	/**  Its name when it was removed (the node id if none). */
+	name: string,
+	/**  Its key's short fingerprint ("" when it never connected with one). */
+	fingerprint: string,
+	/**  Seconds since it was removed. */
+	removed_ago_s: number,
+	/**  Which device removed it: this one, or another (by its name here). */
+	by_me: boolean,
+	by_name: string,
 };
 
 /**  A checked backup, ready to restore. */

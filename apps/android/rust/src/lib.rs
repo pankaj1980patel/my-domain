@@ -1027,6 +1027,26 @@ impl MdEngine {
         self.inner.dismiss_key_change(&node_id)
     }
 
+    /// Remove `node_id` for good, for that install: a signed revocation goes
+    /// to all your devices, which drop it and refuse it from then on (even
+    /// with the passphrase). Undone with `allow_device_again`.
+    pub fn remove_device(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.remove_device(&node_id)?)
+    }
+
+    /// "Allow again": take a removal back, on all your devices.
+    pub fn allow_device_again(&self, node_id: String) -> MdResult<()> {
+        Ok(self.inner.allow_device_again(&node_id)?)
+    }
+
+    /// The removed devices as JSON (the core's `RemovedDevice` list, the
+    /// most recently removed first). Changes come as a
+    /// `revocations_changed` event.
+    pub fn removed_devices(&self) -> MdResult<String> {
+        serde_json::to_string(&self.inner.removed_devices())
+            .map_err(|e| MdError::Failed(e.to_string()))
+    }
+
     /// This phone's own security key as a short fingerprint (Settings, Add
     /// a device): what your other devices show for it.
     pub fn own_fingerprint(&self) -> String {

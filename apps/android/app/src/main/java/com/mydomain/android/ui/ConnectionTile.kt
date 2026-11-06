@@ -122,7 +122,13 @@ private fun secsText(s: Long): String = when {
 private fun EnvelopeDetails(e: JSONObject) {
     Detail(
         stringResource(R.string.conn_envelope),
-        stringResource(if (e.optInt("version") >= 2) R.string.conn_envelope_v2 else R.string.conn_envelope_v1),
+        stringResource(
+            when {
+                e.optInt("version") >= 2 && e.optBoolean("signed") -> R.string.conn_envelope_signed
+                e.optInt("version") >= 2 -> R.string.conn_envelope_v2
+                else -> R.string.conn_envelope_v1
+            },
+        ),
     )
     if (!e.isNull("skew_ms")) {
         Detail(stringResource(R.string.conn_clock_skew), msText(kotlin.math.abs(e.optLong("skew_ms"))))
@@ -136,6 +142,17 @@ private fun EnvelopeDetails(e: JSONObject) {
         Detail(
             stringResource(R.string.conn_refused),
             stringResource(R.string.conn_refused_value, replays, stale, downgrades, wrong, spoofed),
+        )
+    }
+    // Signatures (env: 3): unsigned after it signed, a wrong signature, or
+    // from a device you removed.
+    val unsigned = e.optInt("unsigned")
+    val badSig = e.optInt("bad_signature")
+    val revoked = e.optInt("revoked")
+    if (unsigned + badSig + revoked > 0) {
+        Detail(
+            stringResource(R.string.conn_refused_sig),
+            stringResource(R.string.conn_refused_sig_value, unsigned, badSig, revoked),
         )
     }
 }

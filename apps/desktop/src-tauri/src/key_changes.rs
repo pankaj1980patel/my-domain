@@ -65,6 +65,29 @@ pub fn set_device_verified(
     engine.set_device_verified(&node_id, verified)
 }
 
+/// Remove `node_id` for good, for that install (`mdcore::features::revoke`):
+/// your other devices hear of it and refuse it too, even with the
+/// passphrase. Undone with `allow_device_again`.
+#[tauri::command]
+#[specta::specta]
+pub fn remove_device(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.remove_device(&node_id)
+}
+
+/// "Allow again": take a removal back (on all your devices).
+#[tauri::command]
+#[specta::specta]
+pub fn allow_device_again(node_id: String, engine: State<Eng>) -> Result<(), CoreError> {
+    engine.allow_device_again(&node_id)
+}
+
+/// The removed devices (Settings), the most recently removed first.
+#[tauri::command]
+#[specta::specta]
+pub fn removed_devices(engine: State<Eng>) -> Vec<mdcore::features::revoke::RemovedDevice> {
+    engine.removed_devices()
+}
+
 /// The pop-up for a device whose key changed: (title, body).
 pub fn notice(device: &str) -> (String, String) {
     (

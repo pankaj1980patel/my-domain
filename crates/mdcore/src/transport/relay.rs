@@ -571,6 +571,15 @@ fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {
     let (Some(from), Some(data)) = (v["from"].as_str(), v["data"].as_str()) else {
         return;
     };
+    // A device you removed gets no relayed link (`features::revoke`); its
+    // envelopes are counted as refused.
+    if ctx.revoked.is_revoked(from) {
+        if let Ok(WsFrame::Msg(env)) = serde_json::from_str::<WsFrame>(data) {
+            handle_incoming(ctx, &env, Some(from), String::new(), "RELAY");
+        }
+        return;
+    }
+
     match serde_json::from_str::<WsFrame>(data) {
         Ok(WsFrame::Hello { bin_media, .. }) => {
             if let Some(r) = ctx.relay.lock().as_mut() {

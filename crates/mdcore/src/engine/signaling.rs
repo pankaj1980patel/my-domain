@@ -172,6 +172,10 @@ pub(super) fn relay_target<P: Platform>(
 /// server's WebSocket (see transport/relay.rs). Drives the responder side of
 /// the connection ladder.
 pub(crate) fn handle_signal<P: Platform>(ctx: &NetCtx<P>, from: &str, payload: &str) {
+    // A device you removed can't ask for a link (`features::revoke`).
+    if ctx.revoked.is_revoked(from) {
+        return;
+    }
     // The same signal may arrive by several paths (forwarded by a neighbour,
     // and from the server): handle it once.
     if !crate::features::signal_fwd::first_time(ctx, from, payload) {

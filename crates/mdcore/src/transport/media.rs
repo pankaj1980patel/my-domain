@@ -287,6 +287,10 @@ pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8])
 
 /// As `on_record`; `ble`: it came over a Bluetooth link.
 pub(crate) fn on_record_via<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8], ble: bool) {
+    // Nothing from a device you removed (`features::revoke`).
+    if ctx.revoked.is_revoked(from) {
+        return;
+    }
     let Some(key) = *ctx.key.lock() else {
         return;
     };

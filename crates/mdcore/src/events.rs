@@ -453,6 +453,12 @@ pub enum CoreEvent {
         old_fingerprint: String,
         new_fingerprint: String,
     },
+    /// The removed devices changed (`features::revoke`): removed here or on
+    /// another device of yours, or allowed again. The ones removed are
+    /// already gone from the peers (`PeersUpdated`) and their links closed;
+    /// the apps refresh their "Removed devices" list
+    /// (`Engine::removed_devices`).
+    RevocationsChanged { node_ids: Vec<String> },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -640,6 +646,8 @@ impl CoreEvent {
             CoreEvent::WifiDirectRequest { .. } => "wifi-direct-request",
             CoreEvent::WifiDirect { .. } => "wifi-direct-changed",
             CoreEvent::KeyChanged { .. } => "key-changed",
+            CoreEvent::RevocationsChanged { .. } => "revocations-changed",
+
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",

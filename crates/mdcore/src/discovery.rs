@@ -165,6 +165,7 @@ pub fn discovery_recv_loop(
     identity: Arc<Mutex<Identity>>,
     sink: Arc<dyn EventSink>,
     key: crate::engine::KeyHolder,
+    revoked: Arc<crate::features::revoke::Revocations>,
 ) {
     let mut buf = [0u8; 2048];
     loop {
@@ -190,6 +191,11 @@ pub fn discovery_recv_loop(
         if beacon.tag != tag {
             continue;
         }
+        // A device you removed isn't added back (nor answered).
+        if revoked.is_revoked(&beacon.node_id) {
+            continue;
+        }
+
         let snapshot = {
             let mut map = peers.lock();
             merge_beacon(&mut map, &beacon, src.ip()).then(|| map.values().cloned().collect())

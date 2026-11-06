@@ -4602,3 +4602,8 @@ html.kvm-window body {
   justify-content: flex-end;
   margin-top: var(--s-4);
 }
+
+/* Settings: removed devices (components/RemovedDevices.tsx). */
+.removed-list { display: flex; flex-direction: column; gap: 10px; }
+.removed-row { align-items: center; gap: 8px; }
+.removed-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }

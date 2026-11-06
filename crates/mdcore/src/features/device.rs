@@ -80,6 +80,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::folder_sync::extend_status(ctx, &mut status);
                 // Whether it shares device labels.
                 super::labels::extend_status(ctx, &mut status);
+                // Whether it keeps the removed devices.
+                super::revoke::extend_status(ctx, &mut status);
                 // Whether it shares notes.
                 super::notes::extend_status(ctx, &mut status);
                 // Whether it shares the read-later list.
@@ -150,6 +152,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::audio_share::remember(ctx, &from, &status);
                 super::folder_sync::remember(ctx, &from, &status);
                 super::labels::remember(ctx, &from, &status[super::labels::FLAG]);
+                super::revoke::remember(ctx, &from, &status[super::revoke::FLAG]);
                 super::notes::remember(ctx, &from, &status[super::notes::FLAG]);
                 super::read_later::remember(ctx, &from, &status[super::read_later::FLAG]);
                 super::diag::remember(ctx, &from, &status[super::diag::FLAG]);

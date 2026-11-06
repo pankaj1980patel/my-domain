@@ -1286,6 +1286,10 @@
     <string name="conn_envelope">Message protection</string>
     <string name="conn_envelope_v2">Replay-protected (version 2)</string>
     <string name="conn_envelope_v1">Older app: version 1, no replay protection</string>
+    <string name="conn_envelope_signed">Replay-protected and signed by its device key</string>
+    <string name="conn_refused_sig">Refused signatures</string>
+    <string name="conn_refused_sig_value">%1$d unsigned · %2$d wrong signature · %3$d from a removed device</string>
+
     <string name="conn_clock_skew">Clock difference</string>
     <string name="conn_refused">Messages refused</string>
     <string name="conn_refused_value">%1$d copies · %2$d stale · %3$d downgraded · %4$d misaddressed · %5$d wrong sender</string>
@@ -1564,6 +1568,18 @@
     <string name="map_fix_ble_unsupported">Use Wi‑Fi or the internet instead.</string>
     <string name="map_fix_device_bad_key">Use the same device key on both (Settings → Device key).</string>
     <string name="map_fix_device_key_changed">If you reinstalled the app on %1$s or cleared its data, trust the new key. If not, don’t.</string>
+    <string name="remove_device">Remove device</string>
+    <string name="remove_device_title">Remove %1$s for good?</string>
+    <string name="remove_device_body">%1$s is removed from all your devices, and they won’t connect to it again, even on the same Wi-Fi and even though it still has your passphrase. This is permanent for that install of the app. You can undo it in Settings → Removed devices.</string>
+    <string name="remove_device_passphrase">If you lost the device or don’t trust it, also change your passphrase: a device that has it can still join again as a new device.</string>
+    <string name="remove_device_done">Removed %1$s</string>
+    <string name="removed_devices_title">Removed devices</string>
+    <string name="removed_devices_none">No removed devices. A device you remove (on its page) is listed here.</string>
+    <string name="removed_devices_hint">Your devices refuse these, even with your passphrase. “Allow again” undoes it on all of them.</string>
+    <string name="removed_devices_by_me">Removed on this phone</string>
+    <string name="removed_devices_by">Removed on %1$s</string>
+    <string name="removed_devices_allow">Allow again</string>
+    <string name="removed_devices_allowed">%1$s is allowed again</string>
     <string name="key_change_title">%1$s’s security key changed</string>
     <string name="key_change_body">This happens when the app is reinstalled or its data is cleared. If you didn’t do that, don’t trust it.</string>
     <string name="key_change_refused">Until you decide, %1$s is reached only through the relay server, if at all.</string>

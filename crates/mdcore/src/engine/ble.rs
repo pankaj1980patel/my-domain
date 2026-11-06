@@ -184,6 +184,10 @@ impl<P: Platform> Engine<P> {
     /// Route `peer` over Bluetooth link `id` when it has no route at all
     /// (first `Hello`, or a better link that has since gone).
     fn route_ble(&self, id: u64, peer: &str) {
+        // A device you removed gets no link (`features::revoke`).
+        if self.ctx.revoked.is_revoked(peer) {
+            return;
+        }
         let Some(tx) = self.ctx.ble_links.lock().get(&id).map(|l| l.tx.clone()) else {
             return;
         };

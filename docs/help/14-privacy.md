@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number
+keywords: privacy, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -41,6 +41,17 @@ To be sure a device is really yours and nothing sits between them, verify it onc
 3. If they match, choose **They match: mark as verified**. Or, on the phone, point the camera at the QR code the computer shows under **Verify** and open the link: the phone checks both keys itself and marks the computer verified. A code made for another device, from a device the phone doesn't know, or with keys that don't match is refused.
 
 Verified devices show a **Verified** badge on their page and on the connection map. If a verified device's key ever changes, the badge goes away, and the key-changed warning says it was verified before. Verify it again after you've checked and trusted the new key.
+
+## Messages are signed by the device that sent them
+
+Your devices also sign every message with their own security key, so a message says which of your devices sent it, and that can't be faked: not by the server passing it along, not over Bluetooth, and not by another of your devices (one that was stolen, say). A message whose signature doesn't match the sender's key is refused, and so is an unsigned one from a device that signs. Older versions of the app don't sign; your devices still talk to them as before until they update. **Connection** on a device's page shows whether its messages are signed, and how many were refused.
+
+## Removing a device
+
+If you lose a device, sell it or stop trusting it, open its page and choose **Remove device**. It's removed from all your devices: they forget it, close any connection to it, and refuse it from then on, on your Wi-Fi, through the server and over Bluetooth, even though it still has your device key. This is **permanent for that install** of the app: the removal is signed by the device you made it on and kept on every device of yours, so it isn't found and added back.
+
+- **Settings → Removed devices** lists them, with who removed each. **Allow again** takes a removal back on all your devices (only do this for a device you have back and trust).
+- A removed device that still has your device key could join again as a **new** device (with a QR code or a code, or after a reinstall). It then shows up in your list as a new device, and you can remove that too. To keep it out for good, also choose **Change device key** in Settings on your other devices.
 
 ## Consent: the device being reached decides
 

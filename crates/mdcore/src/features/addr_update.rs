@@ -64,6 +64,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::media::extend_status(ctx, &mut msg);
         super::otp_relay::extend_status(ctx, &mut msg);
         crate::transport::envelope::extend_status(ctx, &mut msg);
+        super::revoke::extend_status(ctx, &mut msg);
         super::device_kind::extend_status(ctx, &mut msg);
         super::app_info::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
@@ -116,6 +117,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
             *p != before
         };
         super::labels::remember(ctx, &from, &msg.json(super::labels::FLAG));
+        super::revoke::remember(ctx, &from, &msg.json(super::revoke::FLAG));
         super::notes::remember(ctx, &from, &msg.json(super::notes::FLAG));
         super::read_later::remember(ctx, &from, &msg.json(super::read_later::FLAG));
         super::diag::remember(ctx, &from, &msg.json(super::diag::FLAG));

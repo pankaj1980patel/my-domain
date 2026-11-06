@@ -454,6 +454,9 @@ fun SettingsScreen(
             GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
         }
 
+        // Devices removed for good, each with "Allow again".
+        RemovedDevicesTile(Modifier.foundMark(focus == "removed-devices"))
+
         Tile(Modifier.foundMark(focus == "device"), title = stringResource(R.string.settings_this_device)) {
             Text(
                 boldArg(R.string.settings_seen_as, niceName(Core.me?.name ?: "")),

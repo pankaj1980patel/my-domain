@@ -719,6 +719,12 @@ async fn run_connection<P: Platform>(
     // The handshake proved which key the peer holds: it must be the one this
     // node id used before (or a first meeting).
     let key = peer_key(&conn);
+    // A device you removed, by its node id or its key under any id
+    // (`features::revoke`): before its key is looked at (or pinned).
+    if ctx.revoked.refuses(&peer_id, key.as_deref()) {
+        conn.close(0u32.into(), b"removed");
+        return;
+    }
     match crate::device_key::check(&ctx.peer_keys, &*ctx.platform, &peer_id, key.as_deref()) {
         crate::device_key::Verdict::Accept => {}
         crate::device_key::Verdict::Refuse => {

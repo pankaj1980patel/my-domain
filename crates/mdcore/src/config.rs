@@ -304,6 +304,12 @@ pub struct CoreConfig {
     /// version 1 from a device seen sending version 2. On by default; off
     /// behaves like an app from before (tests use it to play an older peer).
     pub envelope_v2: bool,
+    /// Signed envelopes (`transport::envelope`, `env: 3`): this end signs
+    /// version 2 envelopes with its device key for devices that said
+    /// `env: 3`, checks the signatures it gets against the key pinned for
+    /// the sender, and refuses unsigned ones from a device seen signing.
+    /// On by default; off plays an app from before signatures (`env: 2`).
+    pub envelope_sig: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -376,6 +382,7 @@ impl Default for CoreConfig {
             media_ctl: true,
             otp_relay: true,
             envelope_v2: true,
+            envelope_sig: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

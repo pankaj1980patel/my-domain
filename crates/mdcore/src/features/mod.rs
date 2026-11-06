@@ -53,6 +53,7 @@ pub mod print;
 pub mod read_later;
 pub mod reconnect;
 pub mod remote_download;
+pub mod revoke;
 pub mod screen;
 pub mod share;
 pub mod signal_fwd;
@@ -221,6 +222,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(otp_relay::OtpRelayHandler));
         r.register(Arc::new(p2p_ping::P2pPingHandler));
         r.register(Arc::new(addr_update::AddrUpdateHandler));
+        r.register(Arc::new(revoke::RevokeHandler));
         r.register(Arc::new(signal_fwd::SignalFwdHandler));
         r.register(Arc::new(gallery::GalleryHandler));
         r.register(Arc::new(battery::BatteryHandler));

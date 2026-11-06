@@ -71,7 +71,10 @@ pub(crate) fn emit_peers<P: Platform>(ctx: &NetCtx<P>) {
     ctx.sink.emit(CoreEvent::PeersUpdated { peers: list });
 }
 
-fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, devices: Vec<RegistryDevice>) {
+fn apply_registry_peers<P: Platform>(ctx: &NetCtx<P>, mut devices: Vec<RegistryDevice>) {
+    // The server still lists a device you removed (it may sign in again):
+    // it isn't added back (`features::revoke`).
+    devices.retain(|d| !ctx.revoked.is_revoked(&d.node_id));
     // What kind of device each is, before the list is taken apart.
     for d in &devices {
         if let Some(kind) = &d.kind {
@@ -217,7 +220,11 @@ impl<P: Platform> Engine<P> {
     /// routed by node_id, so they reach a peer added this way. Used by tests
     /// today and by QR/code pairing later.
     pub fn upsert_peer(&self, peer: Peer) {
+        if self.ctx.revoked.is_revoked(&peer.node_id) {
+            return; // removed: "Allow again" first
+        }
         self.ctx.peers.lock().insert(peer.node_id.clone(), peer);
+
         self.emit_peers();
     }
 

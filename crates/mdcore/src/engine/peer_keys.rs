@@ -65,6 +65,9 @@ impl<P: Platform> Engine<P> {
         )
         .map_err(CoreError::InvalidInput)?;
         diag::note(&self.ctx, node_id, "key_trusted", None);
+        // A new install: it starts over with envelope versions and
+        // signatures (it isn't refused as a downgrade before it says).
+        self.ctx.env.reset(&*self.ctx.platform, node_id);
         self.ctx.quic_failed.lock().remove(node_id);
         // Reconnect off the caller's thread (it may be the QUIC runtime's).
         let ctx = self.ctx.clone();

@@ -102,6 +102,10 @@ pub fn mark_live<P: Platform>(
     kind: TransportKind,
     addr: Option<SocketAddr>,
 ) {
+    // A device you removed gets no link, whatever it came over.
+    if ctx.revoked.is_revoked(node_id) {
+        return;
+    }
     let newly = {
         let mut m = ctx.p2p_conns.lock();
         match m.get_mut(node_id) {
@@ -166,6 +170,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::otp_relay::link_up(&ctx, &peer);
         crate::features::dnd::link_up(&ctx, &peer);
         crate::features::labels::link_up(&ctx, &peer);
+        crate::features::revoke::link_up(&ctx, &peer);
         crate::features::notes::link_up(&ctx, &peer);
         crate::features::timers::link_up(&ctx, &peer);
         crate::features::read_later::link_up(&ctx, &peer);
@@ -378,6 +383,11 @@ fn open_envelope<P: Platform>(
         note_undecryptable(ctx, from_node, ip.to_string(), protocol);
         return None;
     };
+    // A device you removed: nothing it sends is used (`features::revoke`).
+    if let Some(node) = from_node.filter(|n| ctx.revoked.is_revoked(n)) {
+        refused(ctx, node, protocol, envelope::Reject::Revoked);
+        return None;
+    }
     // An older app: version 1 only, nothing checked.
     if !ctx.config.envelope_v2 {
         let pt = decrypt(&key, env);
@@ -399,26 +409,97 @@ fn open_envelope<P: Platform>(
             return None;
         };
         let me = ctx.identity.lock().node_id.clone();
+        // The sender's signature, when it's the link's and for this device
+        // (anything else is refused below, as spoofed or misaddressed).
+        let signed = if hdr.src == from && hdr.dst == me {
+            match check_signature(ctx, from, env) {
+                Ok(signed) => signed,
+                Err(why) => {
+                    refused(ctx, from, protocol, why);
+                    return None;
+                }
+            }
+        } else {
+            false
+        };
         // Copies can only be recorded where the link isn't encrypted end
         // to end: those ids go to disk too.
         let recordable = matches!(protocol, "RELAY" | "BLE");
         let verdict = ctx.env.check(&*ctx.platform, &me, from, &hdr, recordable);
+        if signed && verdict.is_ok() {
+            ctx.env.signed_by(&*ctx.platform, from);
+        }
         (pt, verdict)
     };
     match verdict {
         Ok(()) => Some(pt),
         Err(why) => {
-            let n = ctx.env.count(from, why);
-            // The first of each kind, then every hundredth: a flood of
-            // copies mustn't flood the log. Never the content.
-            if n == 1 || n.is_multiple_of(100) {
-                eprintln!(
-                    "[envelope] refused ({}) from {from} over {protocol}: {n} so far",
-                    why.as_str()
-                );
-            }
+            refused(ctx, from, protocol, why);
             None
         }
+    }
+}
+
+/// Count and log a refused envelope from `from`.
+fn refused<P: Platform>(ctx: &NetCtx<P>, from: &str, protocol: &str, why: envelope::Reject) {
+    let n = ctx.env.count(from, why);
+    // The first of each kind, then every hundredth: a flood of copies
+    // mustn't flood the log. Never the content.
+    if n == 1 || n.is_multiple_of(100) {
+        eprintln!(
+            "[envelope] refused ({}) from {from} over {protocol}: {n} so far",
+            why.as_str()
+        );
+    }
+}
+
+/// Check a version 2 envelope's signature (`transport::envelope`, `env: 3`)
+/// against the device key pinned for its sender `from`. `Ok(true)`: signed
+/// and it checks out; `Ok(false)`: unsigned, or signed with no key to check
+/// it against, from a device not seen signing (taken on the account key
+/// alone, as before signatures).
+fn check_signature<P: Platform>(
+    ctx: &NetCtx<P>,
+    from: &str,
+    env: &Envelope,
+) -> Result<bool, envelope::Reject> {
+    use envelope::Reject;
+    if !ctx.config.envelope_sig {
+        return Ok(false);
+    }
+    let required = ctx.env.requires_sig(from);
+    if env.sig.is_empty() {
+        return if required {
+            Err(Reject::Unsigned)
+        } else {
+            Ok(false)
+        };
+    }
+    if let Some(pin) = crate::device_key::pinned(&ctx.peer_keys, &*ctx.platform, from) {
+        return if envelope::signature_ok(env, &pin) {
+            Ok(true)
+        } else {
+            Err(Reject::BadSignature)
+        };
+    }
+    // Never met directly: the key it sent along, on first use (as a QUIC
+    // handshake would pin it), once its signature checks out.
+    if !env.pk.is_empty() {
+        if !envelope::signature_ok(env, &env.pk) {
+            return Err(Reject::BadSignature);
+        }
+        if ctx.revoked.key_revoked(&env.pk) {
+            return Err(Reject::Revoked);
+        }
+        return match crate::device_key::check(&ctx.peer_keys, &*ctx.platform, from, Some(&env.pk)) {
+            crate::device_key::Verdict::Accept => Ok(true),
+            _ => Err(Reject::BadSignature),
+        };
+    }
+    if required {
+        Err(Reject::Unsigned)
+    } else {
+        Ok(false)
     }
 }
 
@@ -513,7 +594,16 @@ pub(crate) fn seal<P: Platform>(
     let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
     let env = if ctx.config.envelope_v2 && ctx.env.sends_v2(node_id) {
         let me = ctx.identity.lock().node_id.clone();
-        envelope::seal(&k, &me, node_id, &plaintext)
+        let mut env = envelope::seal(&k, &me, node_id, &plaintext);
+        if ctx.config.envelope_sig && ctx.env.sends_sig(node_id) {
+            if let Some(env) = env.as_mut() {
+                // Never met directly: it may not have our key pinned.
+                let with_key =
+                    crate::device_key::pinned(&ctx.peer_keys, &*ctx.platform, node_id).is_none();
+                envelope::sign(env, &ctx.device_key, with_key);
+            }
+        }
+        env
     } else {
         encrypt(&k, &plaintext)
     };
