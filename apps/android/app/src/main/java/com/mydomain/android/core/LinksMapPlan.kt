@@ -19,6 +19,11 @@ data class MapLinkInfo(
     val lossPct: Double? = null,
     val sinceS: Long? = null,
     val heardAgoS: Long = 0,
+    /** A media stream runs over it on the local network now (the
+     *  "Nearby · low latency" badge). */
+    val nearbyMedia: Boolean = false,
+    /** That stream's end-to-end latency, when measured. */
+    val mediaLatencyMs: Int? = null,
 )
 
 /** What stopped one path the last time it was tried. */

@@ -1243,6 +1243,14 @@
     <string name="camera_settings_title">Camera on your computers</string>
     <string name="camera_keep_locked">Keep streaming while locked</string>
     <string name="camera_keep_locked_hint">Off: the camera stops as soon as the phone locks or its screen goes off. On: it keeps going (with its notification) until you or the computer stops it. Your computers always ask first, every time.</string>
+    <string name="nearby_settings_title">Nearby mode</string>
+    <string name="nearby_switch">Use nearby mode for media</string>
+    <string name="nearby_switch_hint">While audio, a screen or the camera streams with a device on the same Wi-Fi (or in Bluetooth range), it moves to a direct link on your network for less delay, without a gap. If that link drops, it goes back the way it came.</string>
+    <string name="nearby_badge">Nearby · low latency</string>
+    <string name="nearby_latency">%1$d ms</string>
+    <string name="nearby_latency_was">%1$d ms (was %2$d ms)</string>
+    <string name="caudio_stats_buffer">Buffer: %1$d ms (aiming for %2$d ms)</string>
+    <string name="caudio_stats_loss">Ran dry: %1$d · Filled in: %2$d ms · Recovered: %3$d · Output gaps: %4$d</string>
     <!-- Timers (TimersScreen.kt, TimerAlarms.kt) -->
     <string name="channel_timers">Timers running</string>
     <string name="channel_timer_alarm">Timers ringing</string>
@@ -1315,6 +1323,7 @@
     <string name="map_d_address">Address</string>
     <string name="map_d_since">Connected</string>
     <string name="map_d_heard">Last heard</string>
+    <string name="map_d_media_latency">Media latency</string>
     <string name="map_d_encryption">Encryption</string>
     <string name="map_d_last_seen">Last seen</string>
     <string name="map_d_reported_by">Reported by</string>

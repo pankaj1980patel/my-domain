@@ -34,6 +34,7 @@ mod fcm;
 mod key_changes;
 mod links_map;
 mod location;
+mod nearby;
 mod note_reminders;
 mod notes;
 mod notif_history;
@@ -339,6 +340,9 @@ impl EventSink for TauriSink {
         // Ring / open-link need the desktop to act, not just the UI. Off the
         // core's thread: these look up peers and talk to the OS.
         match &ev {
+            // A stream moved to (or off) a nearby link: the phone's audio
+            // here may buffer less.
+            CoreEvent::NearbyMedia(s) => phone_audio::on_nearby(&self.app, s),
             // The tray's device submenus follow the peer list and link state,
             // and automations wait for devices to connect or disconnect.
             CoreEvent::PeersUpdated { .. }
@@ -1716,6 +1720,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         diagnostics::speed_test,
         diagnostics::cancel_speed_test,
         links_map::links_map,
+        nearby::nearby_media,
+        nearby::set_nearby_media,
+        nearby::nearby_status,
         key_changes::key_changes,
         key_changes::trust_new_key,
         key_changes::dismiss_key_change,
@@ -1819,6 +1826,8 @@ pub fn run() {
                     engine.set_audio_roles(true, computer_audio::supported());
                     // Labels given here before they were shared.
                     device_labels::seed(&handle, &engine);
+                    // "Use nearby mode for media", as saved.
+                    nearby::init(&handle, &engine);
                     app.manage(engine);
                 }
                 Err(e) => {

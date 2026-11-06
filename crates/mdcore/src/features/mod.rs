@@ -10,6 +10,8 @@
 //! (protocol v2) instead; that seam is documented in `crate::service`.
 
 pub mod addr_update;
+pub mod audio_codec;
+pub mod audio_jitter;
 pub mod audio_share;
 pub mod backup;
 pub mod battery;
@@ -31,6 +33,7 @@ pub mod input;
 pub mod labels;
 pub mod links_map;
 pub mod media;
+pub mod nearby;
 pub mod notes;
 pub mod notif_apps;
 pub mod notification;
@@ -131,8 +134,9 @@ impl<P: Platform> ControlRegistry<P> {
     /// and speed-test messages (`CoreConfig::diag`), `wake_relay`
     /// (`CoreConfig::wake_relay`), `camera_ctl` (`CoreConfig::camera`),
     /// `timers` (`CoreConfig::timers`), the `read_later*` messages
-    /// (`CoreConfig::read_later`), and `links_map`
-    /// (`CoreConfig::links_map`).
+    /// (`CoreConfig::read_later`), `links_map`
+    /// (`CoreConfig::links_map`), and the `nearby_*` clock pings
+    /// (`CoreConfig::nearby`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -145,6 +149,7 @@ impl<P: Platform> ControlRegistry<P> {
         timers: bool,
         read_later: bool,
         links_map: bool,
+        nearby: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -197,6 +202,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if links_map {
             r.register(Arc::new(links_map::LinksMapHandler));
+        }
+        if nearby {
+            r.register(Arc::new(nearby::NearbyHandler));
         }
         r
     }

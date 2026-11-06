@@ -12,6 +12,7 @@ import { peerName, state } from "../../lib/core";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
+import { NearbyBadge } from "../../components/NearbyBadge";
 
 const isMac = () => /mac/i.test(navigator.platform || navigator.userAgent);
 
@@ -47,6 +48,7 @@ export default function ComputerAudioTile(props: { node: string }) {
               <span class="computer-audio-dot" aria-hidden="true" />
               {t("computerAudio.playing", { name: name() })}
             </p>
+            <NearbyBadge node={props.node} />
           </Show>
           <Show when={asked()}>
             <p class="small" aria-live="polite">

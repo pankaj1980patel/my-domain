@@ -54,7 +54,7 @@ const PATH: Record<string, Key> = {
 
 /** The label's words: how, and the round trip where known. */
 function label(e: MapEdge): string {
-  const how = t(e.label_key as Key);
+  const how = e.nearby ? `${t(e.label_key as Key)} · ${t("nearby.badge")}` : t(e.label_key as Key);
   return e.latency ? `${how} · ${e.latency}` : how;
 }
 
@@ -294,6 +294,13 @@ function Details(props: {
         </button>
       </div>
       <p class={`map-how tone-${e().tone}`}>{t(e().label_key as Key)}</p>
+      <Show when={e().nearby}>
+        <p class="small">
+          <span class="nearby-badge" title={t("nearby.badgeHint")}>
+            {t("nearby.badge")}
+          </span>
+        </p>
+      </Show>
       <Show when={e().mine && props.device?.problem === "key_changed"}>
         <KeyChangeBanner node={e().b} showDismissed />
       </Show>

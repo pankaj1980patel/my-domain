@@ -37,9 +37,12 @@ fn net(relay: FakeRelay) -> Net {
     }
 }
 
-/// A node that only connects through `net`'s relay.
-fn node(net: &Net, id: &str, bin_media: bool) -> TestNode {
+/// A node that only connects through `net`'s relay, with the smaller
+/// audio (`features::audio_codec`) on or off: off, the PCM arrives byte
+/// for byte, which most tests below compare.
+fn node_with(net: &Net, id: &str, bin_media: bool, audio_codec: bool) -> TestNode {
     let config = CoreConfig {
+        audio_codec,
         relay_url: Some(net.relay.url()),
         rungs: ConnectRungs {
             relay: true,
@@ -72,8 +75,18 @@ fn learn_status(asker: &TestNode, of: &TestNode) {
 /// `src` sends audio and its screen, `dst` listens and watches, over a live
 /// relayed link; each with binary media on or off.
 fn linked(net: &Net, test: &str, src_bin: bool, dst_bin: bool) -> (TestNode, TestNode) {
-    let src = node(net, &format!("{test}-src"), src_bin);
-    let dst = node(net, &format!("{test}-dst"), dst_bin);
+    linked_with(net, test, src_bin, dst_bin, false)
+}
+
+fn linked_with(
+    net: &Net,
+    test: &str,
+    src_bin: bool,
+    dst_bin: bool,
+    codec: bool,
+) -> (TestNode, TestNode) {
+    let src = node_with(net, &format!("{test}-src"), src_bin, codec);
+    let dst = node_with(net, &format!("{test}-dst"), dst_bin, codec);
     TestNode::pair(&src, &dst);
     src.engine.connect(&dst.node_id()).unwrap();
     assert_eq!(src.wait_connected(&dst, WAIT).as_deref(), Some("relay"));
@@ -291,5 +304,44 @@ fn binary_through_the_relay_respects_the_same_rules_as_json() {
     }
     std::thread::sleep(Duration::from_millis(500));
     assert!(audio_from(&dst, &src).is_empty(), "played after stopping");
+    no_chat(&dst);
+}
+
+#[test]
+fn audio_through_the_relay_goes_as_adpcm_when_both_read_it() {
+    // Both say `audio_codec`: each 20 ms frame goes as two 10 ms ADPCM
+    // records, a quarter of the bytes, and plays as the same PCM length.
+    let n = net(FakeRelay::start());
+    let (src, dst) = linked_with(&n, "relaybin-adpcm", true, true, true);
+    std::thread::sleep(Duration::from_millis(300));
+    let to = [dst.node_id()];
+    let before = n.relay.bytes_from(&src.node_id());
+    for i in 0..AUDIO_FRAMES {
+        let pcm = pattern(AUDIO_BYTES, i);
+        assert_eq!(
+            src.engine
+                .audio_frame_to(&pcm, RATE_DIRECT, 2, &to)
+                .unwrap(),
+            1
+        );
+        // Paced (two records a frame; the relay queue holds 64).
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let deadline = Instant::now() + WAIT;
+    while audio_from(&dst, &src).len() < AUDIO_FRAMES * 2 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let got = audio_from(&dst, &src);
+    assert_eq!(got.len(), AUDIO_FRAMES * 2, "records lost");
+    assert!(got.windows(2).all(|w| w[1].0 > w[0].0), "out of order");
+    let samples: usize = got.iter().map(|(_, p)| p.len()).sum();
+    assert_eq!(samples, AUDIO_FRAMES * AUDIO_BYTES);
+    let bytes = n.relay.bytes_from(&src.node_id()) - before;
+    let pcm = (AUDIO_FRAMES * AUDIO_BYTES) as u64;
+    assert!(bytes * 100 <= pcm * 40, "{bytes} B for {pcm} B of PCM");
+    assert_eq!(
+        dst.engine.audio_rx_stats(&src.node_id()).frames,
+        (AUDIO_FRAMES * 2) as u32
+    );
     no_chat(&dst);
 }

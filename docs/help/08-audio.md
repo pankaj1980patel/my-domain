@@ -37,3 +37,20 @@ Each time, the computer shows a notification that its sound is playing on your p
 - **Mac:** macOS 13 or later. macOS asks for the Screen Recording permission the first time (it covers system sound); you may need to restart my-domain after allowing it. The Mac can play a phone's audio and send its own sound at the same time.
 - **Linux:** needs PulseAudio or PipeWire's Pulse support. Only one direction at a time, so the sound doesn't loop back.
 - **Windows:** only one direction at a time, for the same reason.
+
+## Nearby mode
+
+When the phone and the computer are on the same network (or in Bluetooth range) while audio plays, the sound moves by itself to a direct link on your local network, without a break, and waits less before playing. The audio view then shows **Nearby · low latency** and how long the sound takes to arrive, for example "12 ms (was 140 ms)". The connection map shows it on the line too.
+
+- If that link drops, the sound carries on through the internet straight away.
+- Turn it off in Settings with **Use nearby mode for media** (on by default; kept in the settings backup).
+
+## When the sound breaks up
+
+my-domain works hard to keep the sound steady:
+
+- It waits a little longer after a dropout and less once things are steady. On the same network it can wait as little as 30 ms; through the internet up to 200 ms.
+- A short gap is filled with a soft repeat of what just played, faded out, instead of a click or silence.
+- Through the internet the sound is packed smaller, and each packet also carries the one before it, so a single lost packet is recovered.
+- **Details** under the audio view shows how much is buffered, gaps filled in, lost packets recovered and dropouts. Many dropouts usually mean weak Wi-Fi: move closer to the router, or use the same network for both devices.
+- On the phone, the sound keeps playing with the screen off; my-domain keeps Wi-Fi awake only while it plays.

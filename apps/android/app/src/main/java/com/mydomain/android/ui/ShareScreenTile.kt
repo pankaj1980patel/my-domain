@@ -22,6 +22,7 @@ fun ShareScreenTile(node: String, name: String) {
             SoftButton(stringResource(R.string.screen_share_start, name), { ScreenShare.share(ctx, node) })
         } else {
             Muted(stringResource(R.string.screen_share_now, name), Modifier.announce())
+            NearbyMediaBadge(node)
             if (PhoneHelper.instance != null) {
                 SwitchRow(stringResource(R.string.screen_share_allow, name), ScreenShare.control) { ScreenShare.allowControl(it) }
                 Muted(stringResource(R.string.screen_share_allow_hint, name))

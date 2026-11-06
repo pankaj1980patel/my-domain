@@ -10,7 +10,10 @@
 //! older apps ignore the fields. Likewise `ping: 1` when it answers pings
 //! and speed tests (`features::diag`), `wol: 1` when it sends
 //! Wake-on-LAN packets for the others (`features::wake`), and `links_map: 1`
-//! when it shares its link list for the map (`features::links_map`).
+//! when it shares its link list for the map (`features::links_map`),
+//! `nearby: 1` for nearby media mode (`features::nearby`) and
+//! `audio_codec: 1` when it reads the smaller audio
+//! (`features::audio_codec`).
 //!
 //! Only peers we already know are updated: this message can't create one.
 //! It arrives end-to-end encrypted with the shared key, like every message.
@@ -45,6 +48,8 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::read_later::extend_status(ctx, &mut msg);
         super::diag::extend_status(ctx, &mut msg);
         super::links_map::extend_status(ctx, &mut msg);
+        super::nearby::extend_status(ctx, &mut msg);
+        super::audio_share::extend_codec(ctx, &mut msg);
         super::camera::extend_status(ctx, &mut msg);
         super::timers::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
@@ -99,6 +104,8 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::read_later::remember(ctx, &from, &msg.json(super::read_later::FLAG));
         super::diag::remember(ctx, &from, &msg.json(super::diag::FLAG));
         super::links_map::remember(ctx, &from, &msg.json(super::links_map::FLAG));
+        super::nearby::remember(ctx, &from, &msg.json(super::nearby::FLAG));
+        super::audio_share::remember_codec(ctx, &from, &msg.json(super::audio_share::CODEC_FLAG));
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));

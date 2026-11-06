@@ -30,10 +30,12 @@ use crate::transport::{self, P2pConns};
 
 mod background;
 mod ble;
+pub(crate) use ble::ble_linked;
 pub use ble::BleSender;
 mod control;
 mod diag;
 mod join;
+mod nearby;
 pub use join::{JoinInvite, JoinStatus};
 mod labels;
 mod ladder;
@@ -342,6 +344,7 @@ impl<P: Platform> Engine<P> {
             config.timers,
             config.read_later,
             config.links_map,
+            config.nearby,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

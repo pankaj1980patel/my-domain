@@ -253,6 +253,14 @@ pub fn close_if_unused<P: Platform>(ctx: &NetCtx<P>, idle: Duration) -> bool {
     if routed.iter().any(|p| super::is_live(ctx, p)) {
         return false;
     }
+    // A stream moved off it to a local link (`features::nearby`) falls
+    // back to it if that link goes: kept open while the stream runs.
+    if peers
+        .keys()
+        .any(|p| crate::features::nearby::media_running(ctx, p))
+    {
+        return false;
+    }
     // Take it out now, not when its loop gets round to closing: a link
     // that needs the relay meanwhile must open a fresh connection, not
     // route through this one as it goes.

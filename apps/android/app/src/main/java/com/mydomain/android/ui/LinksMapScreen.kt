@@ -58,6 +58,7 @@ import com.mydomain.android.core.LinksMapPlan
 import com.mydomain.android.core.LinksMapPlan.Pt
 import com.mydomain.android.core.LinksMapPlan.Tone
 import com.mydomain.android.core.MapDeviceInfo
+import com.mydomain.android.core.NearbyBadge
 import com.mydomain.android.core.OtherLinkInfo
 import com.mydomain.android.core.timeAgo
 import kotlinx.coroutines.delay
@@ -422,6 +423,7 @@ private fun DeviceRow(d: MapDeviceInfo, onDetails: () -> Unit) {
         Box(Modifier.size(10.dp).background(toneColor(LinksMapPlan.tone(d.link?.how)), CircleShape))
         Column(Modifier.weight(1f)) {
             Text("$name: $line", style = MaterialTheme.typography.bodyMedium, color = T.text)
+            if (NearbyBadge.onMapLink(d.link?.nearbyMedia == true, d.link != null)) NearbyPill()
             if (whys.isNotEmpty()) Muted(whys.joinToString(" · "))
         }
         GhostButton(stringResource(R.string.map_details), onDetails, small = true)
@@ -476,6 +478,10 @@ private fun Details(map: LinksMapInfo, pick: Picked, onClose: () -> Unit, onDevi
                     l.sinceS?.let { Kv(stringResource(R.string.map_d_since), ago(it)) }
                     Kv(stringResource(R.string.map_d_heard), ago(l.heardAgoS))
                     LinksMapPlan.latency(l.rttMs)?.let { Kv(stringResource(R.string.conn_rtt), it) }
+                    if (l.nearbyMedia) {
+                        NearbyPill()
+                        l.mediaLatencyMs?.let { Kv(stringResource(R.string.map_d_media_latency), stringResource(R.string.nearby_latency, it)) }
+                    }
                     Kv(stringResource(R.string.map_d_encryption), stringResource(encRes(l.how)))
                 } else {
                     Kv(

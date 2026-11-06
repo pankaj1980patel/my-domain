@@ -1241,6 +1241,14 @@
     <string name="camera_settings_title">कंप्यूटर पर कैमरा</string>
     <string name="camera_keep_locked">लॉक होने पर भी चलता रहे</string>
     <string name="camera_keep_locked_hint">बंद: फ़ोन लॉक होते ही या स्क्रीन बंद होते ही कैमरा रुक जाता है। चालू: यह (अपनी सूचना के साथ) तब तक चलता रहता है जब तक आप या कंप्यूटर इसे रोक न दें। आपके कंप्यूटर हर बार पहले पूछते हैं।</string>
+    <string name="nearby_settings_title">पास वाला मोड</string>
+    <string name="nearby_switch">मीडिया के लिए पास वाला मोड इस्तेमाल करें</string>
+    <string name="nearby_switch_hint">जब ऑडियो, स्क्रीन या कैमरा किसी ऐसे डिवाइस के साथ चल रहा हो जो उसी Wi-Fi पर (या Bluetooth की पहुँच में) है, तो वह बिना रुके आपके नेटवर्क पर सीधे लिंक पर चला जाता है, ताकि देरी कम हो। अगर वह लिंक टूट जाए, तो वह पहले वाले रास्ते पर लौट आता है।</string>
+    <string name="nearby_badge">पास में · कम देरी</string>
+    <string name="nearby_latency">%1$d ms</string>
+    <string name="nearby_latency_was">%1$d ms (पहले %2$d ms)</string>
+    <string name="caudio_stats_buffer">बफ़र: %1$d ms (लक्ष्य %2$d ms)</string>
+    <string name="caudio_stats_loss">खाली हुआ: %1$d · भरा गया: %2$d ms · वापस मिला: %3$d · आउटपुट में रुकावट: %4$d</string>
     <!-- Timers (TimersScreen.kt, TimerAlarms.kt) -->
     <string name="channel_timers">चल रहे टाइमर</string>
     <string name="channel_timer_alarm">बजते टाइमर</string>
@@ -1313,6 +1321,7 @@
     <string name="map_d_address">पता</string>
     <string name="map_d_since">जुड़ा</string>
     <string name="map_d_heard">आख़िरी बार सुना</string>
+    <string name="map_d_media_latency">मीडिया की देरी</string>
     <string name="map_d_encryption">एन्क्रिप्शन</string>
     <string name="map_d_last_seen">आख़िरी बार देखा</string>
     <string name="map_d_reported_by">किसने बताया</string>

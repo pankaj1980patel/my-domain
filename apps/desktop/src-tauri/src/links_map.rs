@@ -62,6 +62,9 @@ pub struct Edge {
     pub label_key: String,
     /// The round trip, worded ("4 ms"); none when not known.
     pub latency: Option<String>,
+    /// A media stream runs over it on the local network: the "Nearby ·
+    /// low latency" badge on the line.
+    pub nearby: bool,
     /// Why it isn't connected, or only through the relay or Bluetooth:
     /// per path tried, and anything wrong with the device itself (this
     /// computer's lines only; empty for a direct link).
@@ -238,6 +241,7 @@ fn my_edge(me: &Spot, d: &MapDevice, at: (f64, f64)) -> Edge {
         label_y: r1(me.y + (at.1 - me.y) * LABEL_AT),
         label_key: label_key(how),
         latency: latency(d.link.as_ref().and_then(|l| l.rtt_ms)),
+        nearby: d.link.as_ref().is_some_and(|l| l.nearby_media),
         why: whys(d),
     }
 }
@@ -282,6 +286,7 @@ fn other_edge(o: &OtherLink, a: (f64, f64), b: (f64, f64), c: (f64, f64)) -> Edg
         label_y: ly,
         label_key: label_key(&o.how),
         latency: latency(o.rtt_ms),
+        nearby: false,
         why: Vec::new(),
     }
 }
@@ -356,6 +361,8 @@ mod tests {
                 loss_pct: None,
                 since_s: Some(5),
                 heard_ago_s: 0,
+                nearby_media: h == "lan",
+                media_latency_ms: None,
             }),
             state: how.unwrap_or("not_connected").into(),
             reason: None,

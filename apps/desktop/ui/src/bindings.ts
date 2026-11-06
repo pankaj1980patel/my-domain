@@ -655,6 +655,15 @@ export const commands = {
 	cancelSpeedTest: (id: string) => __TAURI_INVOKE<boolean>("cancel_speed_test", { id }),
 	/**  The map, laid out (quick: nothing is measured). */
 	linksMap: () => __TAURI_INVOKE<MapView_Serialize>("links_map"),
+	/**  Whether nearby mode is on. */
+	nearbyMedia: () => __TAURI_INVOKE<boolean>("nearby_media"),
+	/**  Turn nearby mode on or off (kept). */
+	setNearbyMedia: (on: boolean) => __TAURI_INVOKE<void>("set_nearby_media", { on }),
+	/**
+	 *  How a media stream with `node_id` stands: near, on a local low-latency
+	 *  link (the badge), its latency now and before the last move.
+	 */
+	nearbyStatus: (nodeId: string) => __TAURI_INVOKE<NearbyStatus_Serialize>("nearby_status", { nodeId }),
 	/**  The devices whose key changed, newest first (dismissed ones marked). */
 	keyChanges: () => __TAURI_INVOKE<KeyChange[]>("key_changes"),
 	/**
@@ -1481,6 +1490,11 @@ export type Edge_Deserialize = {
 	/**  The round trip, worded ("4 ms"); none when not known. */
 	latency?: string | null,
 	/**
+	 *  A media stream runs over it on the local network: the "Nearby ·
+	 *  low latency" badge on the line.
+	 */
+	nearby: boolean,
+	/**
 	 *  Why it isn't connected, or only through the relay or Bluetooth:
 	 *  per path tried, and anything wrong with the device itself (this
 	 *  computer's lines only; empty for a direct link).
@@ -1510,6 +1524,11 @@ export type Edge_Serialize = {
 	label_key: string,
 	/**  The round trip, worded ("4 ms"); none when not known. */
 	latency: string | null,
+	/**
+	 *  A media stream runs over it on the local network: the "Nearby ·
+	 *  low latency" badge on the line.
+	 */
+	nearby: boolean,
 	/**
 	 *  Why it isn't connected, or only through the relay or Bluetooth:
 	 *  per path tried, and anything wrong with the device itself (this
@@ -1901,6 +1920,13 @@ export type MapLink_Deserialize = {
 	since_s?: number | null,
 	/**  Seconds since anything was heard over it. */
 	heard_ago_s: number,
+	/**
+	 *  A media stream runs over it on the local network now: the
+	 *  "Nearby · low latency" badge (`features::nearby`).
+	 */
+	nearby_media: boolean,
+	/**  That stream's end-to-end latency, when measured. */
+	media_latency_ms?: number | null,
 };
 
 /**  How this device is linked to one of your devices. */
@@ -1923,6 +1949,13 @@ export type MapLink_Serialize = {
 	since_s: number | null,
 	/**  Seconds since anything was heard over it. */
 	heard_ago_s: number,
+	/**
+	 *  A media stream runs over it on the local network now: the
+	 *  "Nearby · low latency" badge (`features::nearby`).
+	 */
+	nearby_media: boolean,
+	/**  That stream's end-to-end latency, when measured. */
+	media_latency_ms: number | null,
 };
 
 /**  Everything the map screen draws. */
@@ -1965,6 +1998,56 @@ export type NatKind =
  *  BOTH sides are like this.
  */
 "symmetric";
+
+/**
+ *  Where a stream to one device stands (`Engine::nearby_status`,
+ *  `CoreEvent::NearbyMedia`).
+ */
+export type NearbyStatus = NearbyStatus_Serialize | NearbyStatus_Deserialize;
+
+/**
+ *  Where a stream to one device stands (`Engine::nearby_status`,
+ *  `CoreEvent::NearbyMedia`).
+ */
+export type NearbyStatus_Deserialize = {
+	node_id: string,
+	/**  A stream runs with it now (either way). */
+	media: boolean,
+	/**  It's near: "lan" (on this network) or "ble" (in Bluetooth range). */
+	near?: string | null,
+	/**  The stream is on a local link now (the "Nearby · low latency" badge). */
+	low_latency: boolean,
+	/**  How the link is carried (`links_map::how`), "" without one. */
+	path: string,
+	/**  End-to-end media latency now, in ms (none: not measured yet). */
+	latency_ms?: number | null,
+	/**  The latency on the link before the last move. */
+	before_ms?: number | null,
+	/**  The ping's round trip. */
+	rtt_ms?: number | null,
+};
+
+/**
+ *  Where a stream to one device stands (`Engine::nearby_status`,
+ *  `CoreEvent::NearbyMedia`).
+ */
+export type NearbyStatus_Serialize = {
+	node_id: string,
+	/**  A stream runs with it now (either way). */
+	media: boolean,
+	/**  It's near: "lan" (on this network) or "ble" (in Bluetooth range). */
+	near: string | null,
+	/**  The stream is on a local link now (the "Nearby · low latency" badge). */
+	low_latency: boolean,
+	/**  How the link is carried (`links_map::how`), "" without one. */
+	path: string,
+	/**  End-to-end media latency now, in ms (none: not measured yet). */
+	latency_ms: number | null,
+	/**  The latency on the link before the last move. */
+	before_ms: number | null,
+	/**  The ping's round trip. */
+	rtt_ms: number | null,
+};
 
 /**  A new automation, from the UI. */
 export type NewAutomation = NewAutomation_Serialize | NewAutomation_Deserialize;
@@ -2228,6 +2311,19 @@ export type PhoneAudioStatus_Deserialize = {
 	underruns: number,
 	late: number,
 	trimmed: number,
+	/**  The adaptive buffer's target now, ms. */
+	target_ms: number,
+	/**  Gaps filled by concealment so far, ms. */
+	concealed_ms: number,
+	/**  Lost frames recovered from the redundant copy in the next. */
+	recovered: number,
+	/**  The speed nudge following the phone's clock, parts per million. */
+	drift_ppm: number,
+	/**  On a nearby low-latency link now (the badge). */
+	low_latency: boolean,
+	/**  End-to-end latency now and before the last move, ms. */
+	latency_ms?: number | null,
+	before_ms?: number | null,
 	/**  The phone's rate, Hz (0 until it plays). */
 	rate: number,
 	/**  The output it plays on (`None`: the system default). */
@@ -2250,6 +2346,19 @@ export type PhoneAudioStatus_Serialize = {
 	underruns: number,
 	late: number,
 	trimmed: number,
+	/**  The adaptive buffer's target now, ms. */
+	target_ms: number,
+	/**  Gaps filled by concealment so far, ms. */
+	concealed_ms: number,
+	/**  Lost frames recovered from the redundant copy in the next. */
+	recovered: number,
+	/**  The speed nudge following the phone's clock, parts per million. */
+	drift_ppm: number,
+	/**  On a nearby low-latency link now (the badge). */
+	low_latency: boolean,
+	/**  End-to-end latency now and before the last move, ms. */
+	latency_ms: number | null,
+	before_ms: number | null,
 	/**  The phone's rate, Hz (0 until it plays). */
 	rate: number,
 	/**  The output it plays on (`None`: the system default). */

@@ -290,6 +290,12 @@ pub enum CoreEvent {
     /// map (`Engine::links_map`) may have changed. This device's own link
     /// changes come as `PeerConnected` / `PeerDisconnected`.
     LinksMapChanged { from: String },
+    /// How a running media stream with a device stands
+    /// (`features::nearby`): whether it's near, on a local low-latency link
+    /// (the "Nearby · low latency" badge), and the end-to-end latency now
+    /// and before the last move. When it changes, and every couple of
+    /// seconds while a stream runs.
+    NearbyMedia(crate::features::nearby::NearbyStatus),
     /// Device `node_id` came with another key than the one this device
     /// remembers (reinstalled, data cleared, or someone else using its id)
     /// and its direct connections are refused until the user trusts it
@@ -431,6 +437,7 @@ impl CoreEvent {
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",
             CoreEvent::LinksMapChanged { .. } => "links-map-changed",
+            CoreEvent::NearbyMedia(_) => "nearby-media",
             CoreEvent::KeyChanged { .. } => "key-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
@@ -606,6 +613,27 @@ mod tests {
             json!({"kind": "links_map_changed", "from": "n1"})
         );
         assert_eq!(ev.ui_payload(), json!({"from": "n1"}));
+    }
+
+    #[test]
+    fn nearby_media_keeps_its_shape() {
+        let ev = CoreEvent::NearbyMedia(crate::features::nearby::NearbyStatus {
+            node_id: "n1".into(),
+            media: true,
+            near: Some("lan".into()),
+            low_latency: true,
+            path: "lan".into(),
+            latency_ms: Some(12),
+            before_ms: Some(140),
+            rtt_ms: Some(3),
+        });
+        assert_eq!(ev.name(), "nearby-media");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "nearby_media", "node_id": "n1", "media": true, "near": "lan",
+                "low_latency": true, "path": "lan", "latency_ms": 12, "before_ms": 140, "rtt_ms": 3})
+        );
+        assert_eq!(ev.ui_payload()["low_latency"], json!(true));
     }
 
     #[test]

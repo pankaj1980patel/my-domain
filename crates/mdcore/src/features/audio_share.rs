@@ -58,6 +58,14 @@
 //!   one (the PCM itself, as a DATAGRAM when it fits; `transport::media`),
 //!   not as base64 twice over: about 1.5 Mbit/s for 48 kHz stereo instead
 //!   of 2.8. It arrives as the same `CoreEvent::AudioFrame`.
+//! - To a device that says `audio_codec: 1` and isn't on a local link
+//!   (`features::nearby`), a frame goes as two 10 ms IMA ADPCM records (a
+//!   quarter of the bytes; `features::audio_codec`), and over QUIC each
+//!   also carries the one before it, so a lost DATAGRAM is recovered from
+//!   the next (counted in `rx_stats`). Repeats are dropped by `seq`. On a
+//!   local link it stays PCM. The JSON message carries the time it was
+//!   sent (`ts`), as a binary record does, for the latency
+//!   (`features::nearby`).
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -96,6 +104,123 @@ pub const SOURCE_FLAG: &str = "audio_source";
 
 const CAPS_PREFIX: &str = "audio_caps:";
 
+/// What a device says in its status and `addr_update`: it reads ADPCM and
+/// redundant audio records (`features::audio_codec`).
+pub const CODEC_FLAG: &str = "audio_codec";
+const CODEC_VERSION: u64 = 1;
+/// Seqs remembered per source, to drop repeats.
+const SEEN: usize = 128;
+
+/// What arrived from one source (`Engine::audio_rx_stats`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AudioRxStats {
+    /// Records played (each 10 or 20 ms).
+    pub frames: u32,
+    /// Lost ones recovered from the redundant copy in the next.
+    pub recovered: u32,
+    /// Repeats dropped.
+    pub duplicates: u32,
+}
+
+#[derive(Default)]
+struct Rx {
+    session: u32,
+    seen: std::collections::VecDeque<u64>,
+    stats: AudioRxStats,
+}
+
+impl Rx {
+    fn seen(&self, seq: u64) -> bool {
+        self.seen.contains(&seq)
+    }
+    fn mark(&mut self, seq: u64) {
+        self.seen.push_back(seq);
+        while self.seen.len() > SEEN {
+            self.seen.pop_front();
+        }
+    }
+    fn oldest(&self) -> Option<u64> {
+        self.seen.iter().min().copied()
+    }
+
+    /// Record `seq` (of sender run `session`), carrying a redundant copy
+    /// of `red` if any: (play the redundant copy first, play this one).
+    /// The copy is played only when its record never came and isn't older
+    /// than everything remembered (then it's too late anyway); a repeat is
+    /// dropped.
+    fn accept(&mut self, session: u32, seq: u64, red: Option<u64>) -> (bool, bool) {
+        if self.session != session {
+            *self = Rx {
+                session,
+                ..Default::default()
+            };
+        }
+        if self.seen(seq) {
+            self.stats.duplicates = self.stats.duplicates.saturating_add(1);
+            return (false, false);
+        }
+        let recover = red.is_some_and(|rs| self.oldest().is_some_and(|o| rs > o) && !self.seen(rs));
+        if let (true, Some(rs)) = (recover, red) {
+            self.mark(rs);
+            self.stats.recovered = self.stats.recovered.saturating_add(1);
+            self.stats.frames = self.stats.frames.saturating_add(1);
+        }
+        self.mark(seq);
+        self.stats.frames = self.stats.frames.saturating_add(1);
+        (recover, true)
+    }
+}
+
+/// The sender's ADPCM coder (for one format) and its last 10 ms record
+/// (its seq and payload), for the redundant copy in the next.
+#[derive(Default)]
+struct Coder {
+    format: (u32, u8),
+    enc: super::audio_codec::Encoder,
+    last: Option<(u64, Vec<u8>)>,
+}
+
+/// Say this device reads the smaller audio.
+pub fn extend_codec<P: Platform>(ctx: &NetCtx<P>, status: &mut serde_json::Value) {
+    if ctx.config.audio_codec {
+        status[CODEC_FLAG] = CODEC_VERSION.into();
+    }
+}
+
+/// `node` said (`flag`) whether it reads the smaller audio.
+pub fn remember_codec<P: Platform>(ctx: &NetCtx<P>, node: &str, flag: &serde_json::Value) {
+    if node.is_empty() {
+        return;
+    }
+    let on = flag.as_u64().is_some_and(|v| v >= CODEC_VERSION);
+    ctx.extras.audio.codec.lock().insert(node.to_string(), on);
+}
+
+/// `node` reads the smaller audio (and this build sends it).
+pub fn codec_of<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    ctx.config.audio_codec
+        && ctx
+            .extras
+            .audio
+            .codec
+            .lock()
+            .get(node)
+            .copied()
+            .unwrap_or(false)
+}
+
+/// What arrived from source `node` so far.
+pub fn rx_stats<P: Platform>(ctx: &NetCtx<P>, node: &str) -> AudioRxStats {
+    ctx.extras
+        .audio
+        .rx
+        .lock()
+        .get(node)
+        .map(|r| r.stats)
+        .unwrap_or_default()
+}
+
 /// Both sides' state.
 #[derive(Default)]
 pub struct AudioShare {
@@ -109,6 +234,11 @@ pub struct AudioShare {
     /// read from `kv`.
     caps: Mutex<HashMap<String, (bool, bool)>>,
     seq: AtomicU64,
+    /// Who said `audio_codec`.
+    codec: Mutex<HashMap<String, bool>>,
+    coder: Mutex<Coder>,
+    /// Sink: per source, what arrived.
+    rx: Mutex<HashMap<String, Rx>>,
 }
 
 /// This device plays (`sink`) or sends (`source`) audio; said in its
@@ -312,33 +442,184 @@ pub fn send_frame_to<P: Platform>(
     if to.is_empty() {
         return Ok(0);
     }
-    let seq = ctx.extras.audio.seq.fetch_add(1, Ordering::Relaxed);
+    // Two seqs a frame: the ADPCM path sends it as two halves.
+    let seq = ctx.extras.audio.seq.fetch_add(2, Ordering::Relaxed);
+    let ts_ms = media::now_ms();
     let header = media::Header {
         session: ctx.quic.media_session,
         seq,
-        ts_ms: media::now_ms(),
-        format: media::Format::Pcm { rate, channels },
+        ts_ms,
+        format: media::Format::Pcm {
+            rate,
+            channels,
+            flags: 0,
+        },
     };
+    // The ADPCM halves, coded once if a peer takes them.
+    let mut coded: Option<Halves> = None;
     // The JSON message, made only if a peer needs it.
     let mut msg: Option<String> = None;
-    Ok(to
+    let sent = to
         .iter()
-        .filter(|n| match media::send(ctx, n, &header, pcm) {
-            Sent::Yes => true,
-            Sent::Dropped => false,
-            Sent::NotBinary => {
-                let msg = msg.get_or_insert_with(|| {
-                    let me = ctx.identity.lock().node_id.clone();
-                    json!({
-                        "type": "audio_frame", "from": me, "seq": seq, "rate": rate, "ch": channels,
-                        "data": base64::engine::general_purpose::STANDARD.encode(pcm),
-                    })
-                    .to_string()
-                });
-                send(ctx, n, msg).is_ok()
+        .filter(|n| {
+            crate::features::nearby::sent(ctx, n);
+            let path = media::binary_path(ctx, n);
+            if path.is_some() && codec_of(ctx, n) && !crate::features::nearby::low_latency(ctx, n) {
+                let halves =
+                    coded.get_or_insert_with(|| code_halves(ctx, pcm, rate, channels, seq));
+                // Redundancy only where a record can be lost (QUIC
+                // DATAGRAMs); the relay is a reliable stream.
+                return send_halves(ctx, n, &header, halves, path == Some(true));
+            }
+            match media::send(ctx, n, &header, pcm) {
+                Sent::Yes => true,
+                Sent::Dropped => false,
+                Sent::NotBinary => {
+                    let msg = msg.get_or_insert_with(|| {
+                        let me = ctx.identity.lock().node_id.clone();
+                        json!({
+                            "type": "audio_frame", "from": me, "seq": seq, "rate": rate,
+                            "ch": channels, "ts": ts_ms,
+                            "data": base64::engine::general_purpose::STANDARD.encode(pcm),
+                        })
+                        .to_string()
+                    });
+                    send(ctx, n, msg).is_ok()
+                }
             }
         })
-        .count())
+        .count();
+    if let Some([_, (s, data, _)]) = coded {
+        ctx.extras.audio.coder.lock().last = Some((s, data));
+    }
+    Ok(sent)
+}
+
+/// A frame as two ADPCM records: (seq, payload, RED payload with the
+/// record before it, when there is one).
+type Halves = [(u64, Vec<u8>, Option<Vec<u8>>); 2];
+
+/// Code a frame as two ADPCM halves, seqs `seq` and `seq + 1`.
+fn code_halves<P: Platform>(
+    ctx: &NetCtx<P>,
+    pcm: &[u8],
+    rate: u32,
+    channels: u8,
+    seq: u64,
+) -> Halves {
+    use super::audio_codec::pack_red;
+    let mut c = ctx.extras.audio.coder.lock();
+    if c.format != (rate, channels) {
+        *c = Coder {
+            format: (rate, channels),
+            ..Default::default()
+        };
+    }
+    let bytes_per = 2 * usize::from(channels);
+    let frames = pcm.len() / bytes_per;
+    let cut = frames.div_ceil(2) * bytes_per;
+    let a = c.enc.encode(&pcm[..cut], channels);
+    let b = c.enc.encode(&pcm[cut..], channels);
+    let prev = c.last.take().filter(|(s, _)| s + 1 == seq);
+    let red_a = prev.map(|(_, p)| pack_red(&a, 1, &p));
+    let red_b = Some(pack_red(&b, 1, &a));
+    [(seq, a, red_a), (seq + 1, b, red_b)]
+}
+
+/// Send both halves to `node`; true if any went.
+fn send_halves<P: Platform>(
+    ctx: &NetCtx<P>,
+    node: &str,
+    header: &media::Header,
+    halves: &Halves,
+    red: bool,
+) -> bool {
+    use super::audio_codec::{FLAG_ADPCM, FLAG_RED};
+    let media::Format::Pcm { rate, channels, .. } = header.format else {
+        return false;
+    };
+    let mut any = false;
+    for (seq, data, with_prev) in halves {
+        let (payload, flags) = match (red, with_prev) {
+            (true, Some(p)) => (p, FLAG_ADPCM | FLAG_RED),
+            _ => (data, FLAG_ADPCM),
+        };
+        let h = media::Header {
+            seq: *seq,
+            format: media::Format::Pcm {
+                rate,
+                channels,
+                flags,
+            },
+            ..*header
+        };
+        any |= media::send(ctx, node, &h, payload) == Sent::Yes;
+    }
+    any
+}
+
+/// A coded audio record (`flags`: `audio_codec::FLAG_*`) from `from`:
+/// recover the one before it from its redundant copy if that was lost,
+/// drop repeats, decode, deliver.
+pub(crate) fn deliver_coded<P: Platform>(
+    ctx: &NetCtx<P>,
+    from: &str,
+    h: &media::Header,
+    payload: &[u8],
+) {
+    use super::audio_codec::{decode, unpack_red, FLAG_ADPCM, FLAG_RED, KNOWN_FLAGS};
+    let media::Format::Pcm {
+        rate,
+        channels,
+        flags,
+    } = h.format
+    else {
+        return;
+    };
+    if flags & !KNOWN_FLAGS != 0 || !ctx.extras.audio.listening.lock().contains(from) {
+        return;
+    }
+    let (primary, red) = if flags & FLAG_RED != 0 {
+        match unpack_red(payload) {
+            Some((p, back, r)) => (p, h.seq.checked_sub(u64::from(back)).map(|s| (s, r))),
+            None => return,
+        }
+    } else {
+        (payload, None)
+    };
+    let pcm_of = |data: &[u8]| -> Option<Vec<u8>> {
+        if flags & FLAG_ADPCM != 0 {
+            decode(data, channels)
+        } else {
+            Some(data.to_vec())
+        }
+    };
+    // Decoded before it counts: a damaged record isn't played.
+    let Some(main) = pcm_of(primary) else {
+        return;
+    };
+    let before = match red {
+        Some((rs, r)) => pcm_of(r).map(|p| (rs, p)),
+        None => None,
+    };
+    let (recover, play) = ctx
+        .extras
+        .audio
+        .rx
+        .lock()
+        .entry(from.to_string())
+        .or_default()
+        .accept(h.session, h.seq, before.as_ref().map(|(rs, _)| *rs));
+    let mut out: Vec<(u64, Vec<u8>)> = Vec::new();
+    if let (true, Some(b)) = (recover, before) {
+        out.push(b);
+    }
+    if play {
+        out.push((h.seq, main));
+    }
+    for (seq, pcm) in out {
+        deliver(ctx, from, seq, rate, channels, &pcm);
+    }
 }
 
 /// Audio that came as a binary frame (`transport::media`) from `from`, the
@@ -451,6 +732,7 @@ impl<P: Platform> ControlHandler<P> for AudioShareHandler {
                 if data.is_empty() || data.len() > MAX_FRAME_BYTES * 4 / 3 + 4 {
                     return;
                 }
+                crate::features::nearby::received(ctx, &from, msg.json("ts").as_u64().unwrap_or(0));
                 ctx.sink.emit(CoreEvent::AudioFrame {
                     from,
                     seq: msg.json("seq").as_u64().unwrap_or(0),
@@ -474,6 +756,35 @@ mod tests {
         assert_eq!(rate_for(TransportKind::Punch), Some(RATE_DIRECT));
         assert_eq!(rate_for(TransportKind::Relay), Some(RATE_RELAY));
         assert_eq!(rate_for(TransportKind::Ble), None);
+    }
+
+    #[test]
+    fn a_lost_record_is_recovered_from_the_next_once() {
+        let mut rx = Rx::default();
+        assert_eq!(rx.accept(7, 10, None), (false, true));
+        assert_eq!(rx.accept(7, 11, Some(10)), (false, true), "10 came");
+        // 12 lost: 13 carries it.
+        assert_eq!(rx.accept(7, 13, Some(12)), (true, true));
+        // 12 turns up late after all: a repeat.
+        assert_eq!(rx.accept(7, 12, Some(11)), (false, false));
+        assert_eq!(rx.accept(7, 13, Some(12)), (false, false), "duplicate");
+        assert_eq!(
+            rx.stats,
+            AudioRxStats {
+                frames: 4,
+                recovered: 1,
+                duplicates: 2
+            }
+        );
+        // Too old to matter: not played.
+        let mut rx = Rx::default();
+        for s in 100..300 {
+            rx.accept(1, s, None);
+        }
+        assert_eq!(rx.accept(1, 301, Some(5)), (false, true));
+        // The sender restarted: counting starts over.
+        assert_eq!(rx.accept(2, 0, None), (false, true));
+        assert_eq!(rx.stats.frames, 1);
     }
 
     #[test]

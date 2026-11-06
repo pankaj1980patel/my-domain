@@ -10,7 +10,9 @@
 //! ```text
 //! record    = [version u8 = 1][nonce 24][ciphertext(header ‖ payload) + tag 16]
 //! header    = [kind u8][f0 u8][f1 u16][f2 u32][session u32][seq u64][ts_ms u64]   (28 bytes, big-endian)
-//!   kind 1  = audio:  f0 channels, f1 0, f2 rate (Hz); payload s16le PCM, interleaved
+//!   kind 1  = audio:  f0 channels, f1 flags, f2 rate (Hz); payload s16le PCM, interleaved
+//!             (f1 0; to a device that says `audio_codec`, f1 may say ADPCM
+//!             and/or a redundant copy of the record before: `features::audio_codec`)
 //!   kind 2  = screen: f0 quality, f1 width, f2 height (0: not said); payload a JPEG
 //!   kind 3  = camera: as kind 2, a phone camera's picture (`features::camera`)
 //! ```
@@ -68,7 +70,13 @@ pub enum MediaKind {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Format {
     /// s16le PCM, `channels` interleaved, at `rate` Hz.
-    Pcm { rate: u32, channels: u8 },
+    Pcm {
+        rate: u32,
+        channels: u8,
+        /// `features::audio_codec::FLAG_*` (0: plain PCM; older apps send
+        /// only that, and get only that).
+        flags: u16,
+    },
     /// A JPEG; 0 for what the sender didn't say.
     Jpeg {
         width: u16,
@@ -116,7 +124,11 @@ pub fn now_ms() -> u64 {
 
 fn header_bytes(h: &Header) -> [u8; HEADER_LEN] {
     let (kind, f0, f1, f2) = match h.format {
-        Format::Pcm { rate, channels } => (MediaKind::Audio, channels, 0u16, rate),
+        Format::Pcm {
+            rate,
+            channels,
+            flags,
+        } => (MediaKind::Audio, channels, flags, rate),
         Format::Jpeg {
             width,
             height,
@@ -152,6 +164,7 @@ fn parse_header(b: &[u8]) -> Option<Header> {
         1 => Format::Pcm {
             rate: u32_at(4),
             channels: b[1],
+            flags: u16_at(2),
         },
         2 => Format::Jpeg {
             width: u16_at(2),
@@ -209,6 +222,20 @@ pub(crate) enum Sent {
     NotBinary,
 }
 
+/// Whether `node`'s link takes binary records now: `Some(true)` over QUIC
+/// (DATAGRAMs, which can be lost), `Some(false)` through the relay.
+pub(crate) fn binary_path<P: Platform>(ctx: &NetCtx<P>, node: &str) -> Option<bool> {
+    if !ctx.config.bin_media {
+        return None;
+    }
+    let route = ctx.ws_conns.lock().get(node).map(|(id, _)| *id)?;
+    if ctx.quic.reads_media(node, route) {
+        Some(true)
+    } else {
+        super::relay::reads_media(ctx, node, route).then_some(false)
+    }
+}
+
 /// Send a frame to `node` as a binary record, if its link takes them.
 pub(crate) fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, h: &Header, payload: &[u8]) -> Sent {
     if !ctx.config.bin_media {
@@ -253,10 +280,14 @@ pub(crate) fn on_record<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[u8])
         return;
     };
     super::note_use(&ctx.p2p_conns, from);
+    crate::features::nearby::received(ctx, from, h.ts_ms);
     match h.format {
-        Format::Pcm { rate, channels } => {
-            crate::features::audio_share::deliver(ctx, from, h.seq, rate, channels, &payload)
-        }
+        Format::Pcm {
+            rate,
+            channels,
+            flags: 0,
+        } => crate::features::audio_share::deliver(ctx, from, h.seq, rate, channels, &payload),
+        Format::Pcm { .. } => crate::features::audio_share::deliver_coded(ctx, from, &h, &payload),
         Format::Jpeg { .. } => crate::features::screen::deliver(ctx, from, h.seq, &payload),
         Format::Camera { .. } => crate::features::camera::deliver(ctx, from, h.seq, &payload),
     }
@@ -276,6 +307,7 @@ mod tests {
             format: Format::Pcm {
                 rate: 48_000,
                 channels: 2,
+                flags: 0,
             },
         }
     }

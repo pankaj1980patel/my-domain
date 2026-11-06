@@ -59,6 +59,47 @@ const QUEUE: usize = 50;
 
 // --- the pure part: captured samples to frames ---
 
+/// Sends frames on a steady clock, one every `FRAME_MS`, however the
+/// capture hands them over: ScreenCaptureKit and WASAPI deliver audio in
+/// bursts, and a burst on the wire is a burst in the phone's buffer
+/// (late frames, then an underrun). Frame `n` goes at `start + n * FRAME_MS`.
+/// Falling behind by more than `MAX_BEHIND` (the capture stalled) starts
+/// the clock again from now, as does getting ahead by more than
+/// `MAX_AHEAD` (the capture's clock runs fast: never let a backlog grow).
+#[derive(Default)]
+pub struct Pacer {
+    start: Option<Instant>,
+    sent: u32,
+}
+
+/// Behind the clock by more than this: start it again.
+pub const MAX_BEHIND: Duration = Duration::from_millis(60);
+/// Ahead of real time by more than this: start it again.
+pub const MAX_AHEAD: Duration = Duration::from_millis(100);
+
+impl Pacer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// When the next frame should go, given it's `now`.
+    pub fn due(&mut self, now: Instant) -> Instant {
+        let start = *self.start.get_or_insert(now);
+        let due = start + Duration::from_millis(u64::from(FRAME_MS) * u64::from(self.sent));
+        if now > due + MAX_BEHIND || due > now + MAX_AHEAD {
+            self.start = Some(now);
+            self.sent = 0;
+            return now;
+        }
+        due
+    }
+
+    /// The frame went.
+    pub fn sent(&mut self) {
+        self.sent = self.sent.saturating_add(1);
+    }
+}
+
 /// Captured audio (f32, any channels, any rate) to the frames the phone
 /// plays: s16le stereo at `out_rate`, `FRAME_MS` each. Resampled linearly.
 pub struct Encoder {
@@ -587,6 +628,7 @@ fn run(
     let mut checked: Option<Instant> = None;
     let mut listening: Vec<String> = Vec::new();
     let mut why: Option<String> = None;
+    let mut pacer = Pacer::new();
     while !stop.load(Ordering::Relaxed) {
         let got = frames.recv_timeout(Duration::from_millis(100));
         let now = Instant::now();
@@ -618,9 +660,16 @@ fn run(
         if listening.is_empty() {
             continue;
         }
+        // One frame every 20 ms, not in the capture's bursts.
+        let due = pacer.due(Instant::now());
+        let wait = due.saturating_duration_since(Instant::now());
+        if !wait.is_zero() {
+            std::thread::sleep(wait);
+        }
         if let Some(engine) = app.try_state::<Eng>() {
             let _ = engine.audio_frame_to(&pcm, rate, 2, &listening);
         }
+        pacer.sent();
     }
     drop(capture);
     // Ended by itself (not by Stop): tell the phones and the window.
@@ -1210,6 +1259,37 @@ mod tests {
             .iter()
             .map(|b| i16::from_le_bytes(*b))
             .collect()
+    }
+
+    #[test]
+    fn frames_go_on_a_steady_clock() {
+        let t0 = Instant::now();
+        let ms = |n: u64| Duration::from_millis(n);
+        let mut p = Pacer::new();
+        // A burst of five frames at once: spread 20 ms apart.
+        let dues: Vec<Instant> = (0..5)
+            .map(|_| {
+                let d = p.due(t0);
+                p.sent();
+                d
+            })
+            .collect();
+        assert_eq!(dues, (0..5).map(|i| t0 + ms(20 * i)).collect::<Vec<_>>());
+        // On time afterwards: still on the clock.
+        assert_eq!(p.due(t0 + ms(95)), t0 + ms(100));
+        p.sent();
+        // The capture stalled: the clock starts again, no catch-up burst.
+        let late = t0 + ms(400);
+        assert_eq!(p.due(late), late);
+        p.sent();
+        assert_eq!(p.due(late), late + ms(20));
+        // Frames far faster than real time: never a growing backlog.
+        let mut p = Pacer::new();
+        for _ in 0..6 {
+            p.due(t0);
+            p.sent();
+        }
+        assert_eq!(p.due(t0), t0, "120 ms ahead: started again");
     }
 
     #[test]

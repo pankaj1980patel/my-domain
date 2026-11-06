@@ -12,11 +12,14 @@ import android.content.pm.ServiceInfo
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
+import android.os.Process
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.getValue
@@ -26,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.mydomain.android.core.AudioJitter
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.PlaybackPlan
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.ffi.MdException
 import org.json.JSONObject
@@ -149,14 +153,41 @@ object ComputerAudio {
         ComputerAudioService.current?.stop(tell = true)
     }
 
-    /** A frame from a computer (the core's thread; many a second): into the
-     *  buffer if it's the one playing here. */
-    fun onFrame(payloadJson: String) {
+    /** A frame from a computer (the core's thread; many a second; the
+     *  bytes as they came, no JSON): into the buffer if it's the one
+     *  playing here. Nothing else happens on this thread. */
+    fun onFrame(from: String, seq: Long, rate: Int, channels: Int, pcm: ByteArray) {
         val svc = ComputerAudioService.current ?: return
-        val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
-        if (o.optString("from") != svc.node) return
-        val pcm = runCatching { android.util.Base64.decode(o.optString("pcm"), android.util.Base64.DEFAULT) }.getOrNull() ?: return
-        svc.push(o.optLong("seq"), o.optInt("rate"), o.optInt("channels"), pcm)
+        if (from != svc.node) return
+        svc.push(seq, rate, channels, pcm)
+    }
+
+    /** The stream with [node] moved to (or off) a nearby local link: a
+     *  smaller buffer floor, and the output's low-latency mode. */
+    fun onNearby(node: String, lowLatency: Boolean) {
+        val svc = ComputerAudioService.current ?: return
+        if (node == svc.node) svc.setLowLatency(lowLatency)
+    }
+
+    /** What the tile's details show while it plays. */
+    data class PlayStats(
+        val bufferedMs: Int,
+        val targetMs: Int,
+        val underruns: Int,
+        val concealedMs: Int,
+        val late: Int,
+        val recovered: Long,
+        val outputUnderruns: Int,
+        val driftPpm: Int,
+        val lowLatency: Boolean,
+    )
+
+    /** The details of what plays now (null: nothing). */
+    var stats by mutableStateOf<PlayStats?>(null)
+        private set
+
+    internal fun publishStats(s: PlayStats?) {
+        main.post { stats = s }
     }
 
     /** The link to [node] went: if it played here, that's the end. */
@@ -269,9 +300,11 @@ class ComputerAudioService : Service() {
         }
         node = n
         jitter.reset()
+        setLowLatency(Core.nearby[n]?.lowLatency == true)
         lastFrame = 0L
         startedAt = System.currentTimeMillis()
         current = this
+        holdLocks()
         ComputerAudio.published(n, false)
         if (!running) {
             running = true
@@ -286,6 +319,73 @@ class ComputerAudioService : Service() {
         val first = lastFrame == 0L
         lastFrame = System.currentTimeMillis()
         if (first) ComputerAudio.published(node, true)
+    }
+
+    /** On a nearby local link: a lower buffer floor, and the output opened
+     *  in low-latency mode (the player reopens it). */
+    fun setLowLatency(on: Boolean) {
+        jitter.setLowLatency(on)
+        lowLatency = on
+    }
+
+    @Volatile
+    private var lowLatency = false
+    @Volatile
+    private var outputUnderruns = 0
+    private var wifiLock: WifiManager.WifiLock? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+
+    /** Keep the radio awake (Wi-Fi power save batches packets: stutter)
+     *  and the CPU running with the screen off, only while playing. */
+    @Suppress("DEPRECATION", "InlinedApi")
+    private fun holdLocks() {
+        if (wifiLock == null) {
+            val mode = when (PlaybackPlan.wifiLock(Build.VERSION.SDK_INT)) {
+                PlaybackPlan.WifiLock.LowLatency -> WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                PlaybackPlan.WifiLock.HighPerf -> WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = runCatching {
+                applicationContext.getSystemService(WifiManager::class.java)
+                    ?.createWifiLock(mode, "mydomain:computer-audio")
+                    ?.apply { setReferenceCounted(false); acquire() }
+            }.onFailure { Log.w(TAG, "no Wi-Fi lock: $it") }.getOrNull()
+        }
+        if (wakeLock == null) {
+            wakeLock = runCatching {
+                getSystemService(PowerManager::class.java)
+                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mydomain:computer-audio")
+                    ?.apply { setReferenceCounted(false); acquire() }
+            }.onFailure { Log.w(TAG, "no wake lock: $it") }.getOrNull()
+        }
+    }
+
+    private fun releaseLocks() {
+        runCatching { wifiLock?.takeIf { it.isHeld }?.release() }
+        wifiLock = null
+        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        wakeLock = null
+    }
+
+    private fun publishStats() {
+        val n = node
+        if (n.isEmpty()) return ComputerAudio.publishStats(null)
+        val s = jitter.stats()
+        val recovered = runCatching {
+            JSONObject(Core.engine()?.audioRxStats(n) ?: "{}").optLong("recovered")
+        }.getOrDefault(0L)
+        ComputerAudio.publishStats(
+            ComputerAudio.PlayStats(
+                bufferedMs = s.bufferedMs,
+                targetMs = s.targetMs,
+                underruns = s.underruns,
+                concealedMs = s.concealedMs,
+                late = s.late,
+                recovered = recovered,
+                outputUnderruns = outputUnderruns,
+                driftPpm = s.driftPpm,
+                lowLatency = jitter.lowLatency(),
+            ),
+        )
     }
 
     /** Renew the listen every 10 s (connecting first if needed), and stop
@@ -328,34 +428,42 @@ class ComputerAudioService : Service() {
                 main.post { stopSaying(getString(R.string.caudio_stalled, Core.peerName(n))) }
                 return
             }
+            publishStats()
             Thread.sleep(CHECK_MS)
         }
     }
 
-    /** The player: 10 ms at a time from the buffer to the output (silence
-     *  while it fills); a blocking write keeps the pace. */
+    /** The player, on its own urgent-audio thread (frames arrive on the
+     *  core's thread and only go into the buffer): [PlaybackPlan.PERIOD_MS]
+     *  at a time from the buffer to the output at the stream's rate
+     *  (silence while it fills); the blocking write keeps the pace. The
+     *  output is reopened when the rate or the nearby mode changes. One
+     *  buffer, reused: nothing is allocated per write. */
     private fun play() {
+        Process.setThreadPriority(Process.THREAD_PRIORITY_URGENT_AUDIO)
         var track: AudioTrack? = null
-        var trackRate = 0
+        var opened: PlaybackPlan.Track? = null
+        var underrunBase = 0
         var buf = ShortArray(0)
         try {
             while (running && current === this) {
-                val rate = jitter.rate
-                if (rate == 0) {
+                val wanted = PlaybackPlan.trackFor(jitter.rate, lowLatency, Build.VERSION.SDK_INT)
+                if (wanted.rate == 0) {
                     Thread.sleep(10)
                     continue
                 }
-                if (rate != trackRate) {
-                    track?.release()
-                    track = openTrack(rate)
-                    trackRate = rate
+                if (PlaybackPlan.reopen(opened, wanted)) {
+                    track?.let { runCatching { it.stop() }; it.release() }
+                    track = openTrack(wanted)
+                    opened = wanted
                     if (track == null) {
                         main.post { stopSaying(getString(R.string.caudio_cant_play)) }
                         return
                     }
+                    underrunBase = underrunsOf(track)
                     track.play()
                 }
-                val frames = rate / 100
+                val frames = PlaybackPlan.periodFrames(wanted.rate)
                 if (buf.size != frames * 2) buf = ShortArray(frames * 2)
                 jitter.pull(buf, frames)
                 val t = track ?: break
@@ -363,16 +471,20 @@ class ComputerAudioService : Service() {
                     Log.w(TAG, "the output went")
                     break
                 }
+                outputUnderruns = PlaybackPlan.underruns(underrunBase, underrunsOf(t))
             }
         } catch (e: Exception) {
             Log.w(TAG, "player: $e")
         } finally {
-            runCatching { track?.stop() }
-            track?.release()
+            track?.let { runCatching { it.stop() }; it.release() }
         }
     }
 
-    private fun openTrack(rate: Int): AudioTrack? = runCatching {
+    private fun underrunsOf(t: AudioTrack): Int =
+        if (Build.VERSION.SDK_INT >= PlaybackPlan.SDK_UNDERRUNS) t.underrunCount else -1
+
+    private fun openTrack(wanted: PlaybackPlan.Track): AudioTrack? = runCatching {
+        val rate = wanted.rate
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -387,14 +499,17 @@ class ComputerAudioService : Service() {
             .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
             .build()
         val min = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-        // About 40 ms of room: small, the jitter buffer does the rest.
-        AudioTrack.Builder()
+        // A few times the minimum: room for a hiccup of this thread; the
+        // jitter buffer does the real smoothing.
+        val b = AudioTrack.Builder()
             .setAudioAttributes(attrs.build())
             .setAudioFormat(format)
-            .setBufferSizeInBytes(maxOf(min, rate / 25 * 4))
+            .setBufferSizeInBytes(PlaybackPlan.bufferBytes(min, rate))
             .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
-            .takeIf { it.state == AudioTrack.STATE_INITIALIZED }
+        if (wanted.lowLatency && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            b.setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
+        }
+        b.build().takeIf { it.state == AudioTrack.STATE_INITIALIZED }
     }.onFailure { Log.w(TAG, "can't play: $it") }.getOrNull()
 
     /** The computer stopped sending (or said no to this phone's listen). */
@@ -423,6 +538,8 @@ class ComputerAudioService : Service() {
         val n = node
         if (tell && n.isNotEmpty()) Thread { runCatching { Core.engine()?.audioListen(n, false) } }.start()
         if (wasCurrent) ComputerAudio.published(null, false, why)
+        releaseLocks()
+        ComputerAudio.publishStats(null)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -430,6 +547,7 @@ class ComputerAudioService : Service() {
     override fun onDestroy() {
         if (current === this) stop(tell = true)
         running = false
+        releaseLocks()
         super.onDestroy()
     }
 

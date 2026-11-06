@@ -20,6 +20,7 @@ fun PhoneAudioTile(node: String, name: String) {
             SoftButton(stringResource(R.string.audio_tile_start, name), { PhoneAudio.playOn(ctx, node) })
         } else {
             Muted(stringResource(R.string.audio_tile_now, name), Modifier.announce())
+            NearbyMediaBadge(node)
             Muted(stringResource(R.string.audio_tile_hint))
             GhostButton(stringResource(R.string.audio_stop), { PhoneAudio.stopWith(node) })
         }

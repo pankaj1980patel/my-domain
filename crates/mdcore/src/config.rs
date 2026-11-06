@@ -173,6 +173,18 @@ pub struct CoreConfig {
     /// On by default; off behaves like an app from before (tests use it
     /// to play an older peer).
     pub links_map: bool,
+    /// Nearby media mode (`features::nearby`): this end says `nearby` in
+    /// its status and `addr_update`, answers the clock pings, and moves a
+    /// running stream to a local link when the other device is near. On
+    /// by default; off behaves like an app from before (tests use it to
+    /// play an older peer).
+    pub nearby: bool,
+    /// Smaller, sturdier audio (`features::audio_codec`): this end says
+    /// `audio_codec` in its status and `addr_update`, reads ADPCM and
+    /// redundant audio records, and sends them to devices that say it too
+    /// when the link isn't local. On by default; off behaves like an app
+    /// from before.
+    pub audio_codec: bool,
     /// How often a synced folder is scanned and compared with the other
     /// device while there's a link to it.
     pub sync_every: std::time::Duration,
@@ -218,6 +230,8 @@ impl Default for CoreConfig {
             camera: true,
             timers: true,
             links_map: true,
+            nearby: true,
+            audio_codec: true,
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,

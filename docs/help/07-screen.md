@@ -39,3 +39,7 @@ The phone can be a touchpad and keyboard for the computer (move, click, scroll, 
 ## Limits
 
 The camera sends about a dozen pictures a second, enough to look around; it is not a video call. The phone's screen is a picture about twice a second, not smooth video: fine for checking something or helping someone, not for watching films or games. It works best on the same network.
+
+## Nearby mode
+
+While you watch a screen or the phone's camera and both devices are on the same network (or in Bluetooth range), the picture moves by itself to a direct link on your local network, without a break, and only the newest picture is sent, so it lags less. The view shows **Nearby · low latency** and how long a picture takes to arrive. If that link drops, it carries on through the internet straight away. Turn it off in Settings with **Use nearby mode for media**.

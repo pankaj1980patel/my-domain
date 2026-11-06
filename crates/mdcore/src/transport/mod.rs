@@ -169,6 +169,41 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     });
 }
 
+/// The live link to `node_id` is now carried another way: a QUIC link on
+/// the local network took over from a punched or WebRTC one, or the relay
+/// took over from a local link that went (`features::nearby`). Updates the
+/// kind and address; when how it's carried changed, tells the UI with
+/// `PeerConnected` (no `PeerDisconnected` in between: the stream never
+/// stopped) and the map.
+pub fn relabel<P: Platform>(
+    ctx: &NetCtx<P>,
+    node_id: &str,
+    kind: TransportKind,
+    addr: Option<SocketAddr>,
+) {
+    let lan = crate::features::diag::is_lan;
+    let changed = {
+        let mut m = ctx.p2p_conns.lock();
+        let Some(c) = m.get_mut(node_id) else {
+            return;
+        };
+        let changed = c.kind != kind || lan(c.addr) != lan(addr);
+        c.kind = kind;
+        c.addr = addr;
+        c.last_seen = now_secs();
+        changed
+    };
+    if changed {
+        let how = crate::features::links_map::how(kind, lan(addr));
+        crate::features::diag::note(ctx, node_id, "link_up", Some(how));
+        ctx.sink.emit(CoreEvent::PeerConnected {
+            node_id: node_id.to_string(),
+            transport: kind,
+        });
+        crate::features::links_map::link_up(ctx, node_id);
+    }
+}
+
 /// Refresh `last_seen` for an existing live peer (e.g. on pong/keepalive).
 pub fn touch_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     if let Some(c) = ctx.p2p_conns.lock().get_mut(node_id) {

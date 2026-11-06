@@ -69,6 +69,8 @@ object LinksMap {
                     lossPct = l.doubleOrNull("loss_pct"),
                     sinceS = l.longOrNull("since_s"),
                     heardAgoS = l.optLong("heard_ago_s"),
+                    nearbyMedia = l.optBoolean("nearby_media"),
+                    mediaLatencyMs = l.intOrNull("media_latency_ms"),
                 )
             }
             MapDeviceInfo(

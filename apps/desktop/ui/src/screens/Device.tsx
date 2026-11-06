@@ -65,6 +65,7 @@ import ComputerAudioTile from "./device/ComputerAudioTile";
 import CameraTile from "./device/CameraTile";
 import WakeButton from "./device/WakeButton";
 import ConnectionTile from "./device/ConnectionTile";
+import { NearbyBadge } from "../components/NearbyBadge";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
 
@@ -1051,6 +1052,7 @@ function ScreenTile(props: { node: string }) {
       <h2>{title()}</h2>
       <p class="muted small">{isPhone() ? t("phoneScreen.hint") : t("screen.hint")}</p>
       <Show when={watching()}>
+        <NearbyBadge node={props.node} />
         <div
           class="screen-stage"
           classList={{ "screen-stage-full": full() }}

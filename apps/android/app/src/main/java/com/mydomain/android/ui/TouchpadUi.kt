@@ -172,6 +172,7 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
         val shown = Core.screens[node]
         Pad(node, click, Modifier.fillMaxWidth().weight(1f), shown, pointMode)
         if (shown != null) {
+            NearbyMediaBadge(node)
             GhostButton(
                 stringResource(if (pointMode) R.string.touchpad_point_on else R.string.touchpad_point_off),
                 { pointMode = !pointMode }, Modifier.fillMaxWidth(), small = true,

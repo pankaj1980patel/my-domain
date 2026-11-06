@@ -24,6 +24,7 @@ import { FileManagerSetting } from "../components/FileManagerSetting";
 import { SyncSetting } from "../components/SyncSetting";
 import { WakeSetting } from "../components/WakeSetting";
 import { TrayBatterySetting } from "../components/TrayBatterySetting";
+import { NearbySetting } from "../components/NearbySetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
@@ -190,6 +191,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </label>
         <p class="muted small">{t("settings.quickPanelHint")}</p>
         <TrayBatterySetting />
+        <NearbySetting />
         <label class="switch-row">
           <span>{t("settings.remoteInput")}</span>
           <input type="checkbox" role="switch" checked={remoteInput()} onChange={(e) => toggleRemoteInput(e.currentTarget.checked)} />

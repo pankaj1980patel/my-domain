@@ -238,6 +238,21 @@ fun CameraSettingsTile() {
     }
 }
 
+/** "Use nearby mode for media" (NearbyMode), on by default: a stream
+ *  with a device that's near moves to a direct local link. */
+@Composable
+fun NearbySettingsTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(com.mydomain.android.NearbyMode.enabled(ctx)) }
+    Tile(title = stringResource(R.string.nearby_settings_title)) {
+        SwitchRow(stringResource(R.string.nearby_switch), on) {
+            on = it
+            com.mydomain.android.NearbyMode.set(ctx, it)
+        }
+        Muted(stringResource(R.string.nearby_switch_hint))
+    }
+}
+
 /** The Accessibility service (PhoneHelper): radios switched and keys
  *  pressed for your computers, on any phone. */
 @Composable
@@ -387,6 +402,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
         Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
         Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
+        Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 

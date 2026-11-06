@@ -148,6 +148,11 @@ pub struct MapLink {
     pub since_s: Option<u32>,
     /// Seconds since anything was heard over it.
     pub heard_ago_s: u32,
+    /// A media stream runs over it on the local network now: the
+    /// "Nearby · low latency" badge (`features::nearby`).
+    pub nearby_media: bool,
+    /// That stream's end-to-end latency, when measured.
+    pub media_latency_ms: Option<u32>,
 }
 
 /// One of your devices on the map.
@@ -696,6 +701,11 @@ pub fn snapshot<P: Platform>(ctx: &NetCtx<P>) -> LinksMap {
                         .find(|a| a.stage == "link_up")
                         .map(|a| a.ago_s),
                     heard_ago_s: ago(c.last_seen),
+                    nearby_media: super::nearby::media_running(ctx, &p.node_id)
+                        && super::nearby::is_local_link(c.kind, c.addr),
+                    media_latency_ms: super::nearby::media_running(ctx, &p.node_id)
+                        .then(|| super::nearby::status(ctx, &p.node_id).latency_ms)
+                        .flatten(),
                 }
             });
             let linked_by = conns

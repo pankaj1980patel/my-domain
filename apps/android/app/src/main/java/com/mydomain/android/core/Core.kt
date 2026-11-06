@@ -193,6 +193,9 @@ object Core {
 
     /** The latest snapshot of each computer screen being watched. */
     val screens = mutableStateMapOf<String, ImageBitmap>()
+    /** node id -> how a media stream with it stands (nearby media mode:
+     *  the "Nearby · low latency" badge and the latency). */
+    val nearby = mutableStateMapOf<String, NearbyBadge.State>()
     val devLog = mutableStateListOf<DevEvent>()
 
     /** node id -> what's playing there (absent: nothing, or not asked). */
@@ -256,7 +259,7 @@ object Core {
      *  and which have a live link: those rank first). */
     private val SHARE_TARGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected")
     /** Events after which "How your devices are connected" reads its map again. */
-    private val MAP_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "links_map_changed", "labels_changed")
+    private val MAP_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "links_map_changed", "labels_changed", "nearby_media")
 
     /** The app context, for strings built outside the screens (set by
      *  MainActivity and NetService, whichever starts first). */
@@ -580,6 +583,8 @@ object Core {
                 )
             }
             "ring" -> addActivity(str(R.string.act_ring, peerName(o.optString("from"))), Tone.Warn)
+            // A media stream moved to (or off) a local link, or its latency.
+            "nearby_media" -> nearby[node] = nearbyState(o)
             // A device came back with another security key: refused until
             // the user decides (its screen asks).
             "key_changed" -> {
@@ -1187,3 +1192,14 @@ object ClipboardSync {
     fun request(from: String): String =
         JSONObject().put("type", "clipboard_request").put("from", from).toString()
 }
+
+/** A `nearby-media` event (or `nearbyStatus`) as the screens use it. */
+fun nearbyState(o: JSONObject): NearbyBadge.State = NearbyBadge.State(
+    media = o.optBoolean("media"),
+    near = if (o.isNull("near")) null else o.optString("near").ifEmpty { null },
+    lowLatency = o.optBoolean("low_latency"),
+    path = o.optString("path"),
+    latencyMs = if (o.isNull("latency_ms")) null else o.optInt("latency_ms"),
+    beforeMs = if (o.isNull("before_ms")) null else o.optInt("before_ms"),
+    rttMs = if (o.isNull("rtt_ms")) null else o.optInt("rtt_ms"),
+)

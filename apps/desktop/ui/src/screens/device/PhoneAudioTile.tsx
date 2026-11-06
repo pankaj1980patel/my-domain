@@ -14,6 +14,7 @@ import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 import { HelpLink } from "../../help/HelpLink";
+import { NearbyBadge } from "../../components/NearbyBadge";
 
 export default function PhoneAudioTile(props: { node: string }) {
   const [st, setSt] = createSignal<PhoneAudioStatus | null>(null);
@@ -96,7 +97,20 @@ export default function PhoneAudioTile(props: { node: string }) {
                 underruns: st()?.underruns ?? 0,
               })}
             </p>
+            <details class="small">
+              <summary class="muted">{t("phoneAudio.details")}</summary>
+              <p class="muted small phone-audio-stats">
+                {t("phoneAudio.detailStats", {
+                  target: st()?.target_ms ?? 0,
+                  concealed: st()?.concealed_ms ?? 0,
+                  recovered: st()?.recovered ?? 0,
+                  late: st()?.late ?? 0,
+                  ppm: st()?.drift_ppm ?? 0,
+                })}
+              </p>
+            </details>
           </Show>
+          <NearbyBadge node={props.node} />
           <label class="row small">
             <span class="muted">{t("phoneAudio.output")}</span>
             <select aria-label={t("phoneAudio.output")} onFocus={refreshOutputs} onChange={(e) => setOutput(e.currentTarget.value)}>

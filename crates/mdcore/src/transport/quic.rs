@@ -94,16 +94,29 @@ struct PeerConn {
 /// opened on first use and fed by a bounded queue.
 #[derive(Default)]
 struct MediaLanes {
+    /// The link is on the local network (`features::nearby`): pictures
+    /// keep only the newest frame waiting.
+    local: bool,
     /// Audio, screen, camera.
-    lanes: Mutex<[Option<tokio::sync::mpsc::Sender<Vec<u8>>>; 3]>,
+    lanes: Mutex<[Option<Lane>; 3]>,
+}
+
+/// A media stream's queue.
+enum Lane {
+    /// Up to `lane_depth` frames; a full one drops the new frame.
+    Queue(tokio::sync::mpsc::Sender<Vec<u8>>),
+    /// The newest frame only: a new one replaces one not yet sent (on a
+    /// local link a stale picture is worth less than a fresh one).
+    Latest(tokio::sync::watch::Sender<Option<Vec<u8>>>),
 }
 
 /// Frames a media lane holds before it drops new ones: a second of 20 ms
-/// audio, a few snapshots.
-fn lane_depth(kind: MediaKind) -> usize {
+/// audio, a few snapshots (`None`: the newest only).
+fn lane_depth(kind: MediaKind, local: bool) -> Option<usize> {
     match kind {
-        MediaKind::Audio => 50,
-        MediaKind::Screen | MediaKind::Camera => 8,
+        MediaKind::Audio => Some(50),
+        MediaKind::Screen | MediaKind::Camera if local => None,
+        MediaKind::Screen | MediaKind::Camera => Some(8),
     }
 }
 
@@ -311,37 +324,68 @@ impl QuicLink {
         }
         let i = kind as usize - 1;
         let mut l = lanes.lanes.lock();
-        let tx = l[i].get_or_insert_with(|| self.open_lane(conn, kind));
-        match tx.try_send(record) {
-            Ok(()) => Sent::Yes,
-            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => Sent::Dropped,
-            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
-                // The stream failed (the connection is going): the JSON
-                // path over the same link decides.
-                l[i] = None;
-                Sent::NotBinary
-            }
+        let lane = l[i].get_or_insert_with(|| self.open_lane(conn, kind, lanes.local));
+        let sent = match lane {
+            Lane::Queue(tx) => match tx.try_send(record) {
+                Ok(()) => Sent::Yes,
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => Sent::Dropped,
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => Sent::NotBinary,
+            },
+            Lane::Latest(tx) => match tx.send(Some(record)) {
+                Ok(()) => Sent::Yes,
+                Err(_) => Sent::NotBinary,
+            },
+        };
+        if sent == Sent::NotBinary {
+            // The stream failed (the connection is going): the JSON path
+            // over the same link decides.
+            l[i] = None;
         }
+        sent
     }
 
-    /// Open a media stream on `conn` and feed it from the returned queue.
-    fn open_lane(&self, conn: Connection, kind: MediaKind) -> tokio::sync::mpsc::Sender<Vec<u8>> {
-        let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(lane_depth(kind));
-        self.rt.spawn(async move {
-            let Ok(mut s) = conn.open_uni().await else {
-                return;
-            };
-            if s.write_all(media::STREAM_MAGIC).await.is_err() {
-                return;
+    /// Open a media stream on `conn` and feed it from the returned lane.
+    fn open_lane(&self, conn: Connection, kind: MediaKind, local: bool) -> Lane {
+        let start = |conn: Connection| async move {
+            let mut s = conn.open_uni().await.ok()?;
+            s.write_all(media::STREAM_MAGIC).await.ok()?;
+            Some(s)
+        };
+        match lane_depth(kind, local) {
+            Some(depth) => {
+                let (tx, mut rx) = tokio::sync::mpsc::channel::<Vec<u8>>(depth);
+                self.rt.spawn(async move {
+                    let Some(mut s) = start(conn).await else {
+                        return;
+                    };
+                    while let Some(record) = rx.recv().await {
+                        if write_frame(&mut s, &record).await.is_err() {
+                            return;
+                        }
+                    }
+                    let _ = s.finish();
+                });
+                Lane::Queue(tx)
             }
-            while let Some(record) = rx.recv().await {
-                if write_frame(&mut s, &record).await.is_err() {
-                    return;
-                }
+            None => {
+                let (tx, mut rx) = tokio::sync::watch::channel::<Option<Vec<u8>>>(None);
+                self.rt.spawn(async move {
+                    let Some(mut s) = start(conn).await else {
+                        return;
+                    };
+                    while rx.changed().await.is_ok() {
+                        let record = rx.borrow_and_update().clone();
+                        if let Some(record) = record {
+                            if write_frame(&mut s, &record).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                    let _ = s.finish();
+                });
+                Lane::Latest(tx)
             }
-            let _ = s.finish();
-        });
-        tx
+        }
     }
 
     /// Measured path stats of the QUIC link to `peer`: (RTT, lost packets,
@@ -593,6 +637,12 @@ async fn run_connection<P: Platform>(
     // This link replaced another one, and whether the peer restarted since
     // (a new `boot`).
     let (mut replaced, mut restarted) = (false, false);
+    // Nearby media mode (`features::nearby`): a link on the local network
+    // takes over from one that goes the long way round, whichever side
+    // dialed. Only between devices that both know this rule (both ends
+    // must agree which link stays).
+    let local = crate::features::diag::is_local_addr(remote.ip());
+    let nearby_wins = local && crate::features::nearby::supports(&ctx, &peer_id);
     {
         let mut g = ctx.ws_conns.lock();
         if let Some((existing_id, _)) = g.get(&peer_id) {
@@ -605,9 +655,23 @@ async fn run_connection<P: Platform>(
                 .map(|pc| (pc.dialed, pc.remote, pc.conn.clone(), pc.boot.clone()));
             let replace = match &existing {
                 // Not QUIC: replace the relay (or a link that never went
-                // live); keep a working direct link (WebRTC).
-                None => !super::is_direct(&ctx, &peer_id),
+                // live); keep a working direct link (WebRTC), unless this
+                // one is local and it isn't.
+                None => {
+                    !super::is_direct(&ctx, &peer_id)
+                        || (nearby_wins
+                            && !ctx
+                                .p2p_conns
+                                .lock()
+                                .get(&peer_id)
+                                .is_some_and(|c| crate::features::diag::is_lan(c.addr)))
+                }
                 Some((_, _, _, was_boot)) if !boot.is_empty() && *was_boot != boot => true,
+                Some((_, was_remote, _, _))
+                    if nearby_wins && !crate::features::diag::is_local_addr(was_remote.ip()) =>
+                {
+                    true
+                }
                 Some((was_dialed, was_remote, _, _)) if *was_dialed == dialer => {
                     *was_remote != remote
                 }
@@ -639,12 +703,21 @@ async fn run_connection<P: Platform>(
                 conn: conn.clone(),
                 dialed: dialer,
                 boot,
-                media: (ctx.config.bin_media && bin_media >= media::VERSION).then(Arc::default),
+                media: (ctx.config.bin_media && bin_media >= media::VERSION).then(|| {
+                    Arc::new(MediaLanes {
+                        local,
+                        ..Default::default()
+                    })
+                }),
             },
         );
     }
     let was_live = super::is_live(&ctx, &peer_id);
     mark_live(&ctx, &peer_id, kind, Some(remote));
+    if was_live {
+        // It took over from another direct link: say how it's carried now.
+        super::relabel(&ctx, &peer_id, kind, Some(remote));
+    }
     if was_live && restarted {
         super::peer_came_up(&ctx, &peer_id);
     } else if was_live && replaced {
@@ -713,8 +786,15 @@ async fn run_connection<P: Platform>(
         }
         ours
     };
+    // A local link that went mid-stream falls back to the relay at once
+    // (`features::nearby`); otherwise the peer is gone.
     if ours {
-        drop_live(&ctx, &peer_id);
+        let fell_back = tokio::task::block_in_place(|| {
+            crate::features::nearby::link_lost(&ctx, &peer_id, remote)
+        });
+        if !fell_back {
+            drop_live(&ctx, &peer_id);
+        }
     }
 }
 

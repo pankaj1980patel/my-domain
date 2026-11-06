@@ -211,6 +211,7 @@ pub(super) fn send_jpeg<P: Platform>(
     // The JSON message, made only if a peer needs it.
     let mut msg: Option<String> = None;
     to.iter()
+        .inspect(|n| super::nearby::sent(ctx, n))
         .filter(|n| match media::send(ctx, n, &header, jpeg) {
             Sent::Yes => true,
             Sent::Dropped => false,
@@ -218,7 +219,7 @@ pub(super) fn send_jpeg<P: Platform>(
                 let msg = msg.get_or_insert_with(|| {
                     let me = ctx.identity.lock().node_id.clone();
                     let mut m = json!({
-                        "type": "screen_frame", "from": me, "seq": seq,
+                        "type": "screen_frame", "from": me, "seq": seq, "ts": header.ts_ms,
                         "data": base64::engine::general_purpose::STANDARD.encode(jpeg),
                     });
                     if camera {
@@ -267,6 +268,9 @@ impl<P: Platform> ControlHandler<P> for ScreenHandler {
         // The phone's camera (`features::camera`): its own watchers, offers
         // and frames. (An app from before reads these as about the screen,
         // which is why they only ever go to a device that says it knows.)
+        if msg.kind() == "screen_frame" {
+            super::nearby::received(ctx, &from, msg.json("ts").as_u64().unwrap_or(0));
+        }
         if ctx.config.camera && msg.str("source") == super::camera::SOURCE {
             return super::camera::handle_screen(ctx, from, msg);
         }

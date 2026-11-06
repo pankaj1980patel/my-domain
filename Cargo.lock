@@ -4393,6 +4393,7 @@ name = "mydomain_net"
 version = "0.1.0"
 dependencies = [
  "android_logger",
+ "base64 0.22.1",
  "log",
  "md-testkit",
  "mdcore",

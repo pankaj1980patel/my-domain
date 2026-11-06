@@ -13,6 +13,7 @@ import { peerName, setState } from "../../lib/core";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
+import { NearbyBadge } from "../../components/NearbyBadge";
 import { focusSoon, rememberFocus, trapTab } from "../../lib/a11y";
 import { HelpLink } from "../../help/HelpLink";
 
@@ -179,6 +180,7 @@ export default function CameraTile(props: { node: string }) {
       </h2>
       <p class="muted small">{t("camera.hint")}</p>
       <Show when={phase() !== "off"}>
+        <NearbyBadge node={props.node} />
         <div
           class="screen-stage camera-stage"
           classList={{ "screen-stage-full": full() }}

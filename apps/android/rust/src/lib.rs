@@ -153,6 +153,10 @@ fn as_str(v: impl serde::Serialize) -> String {
 #[uniffi::export(callback_interface)]
 pub trait EventListener: Send + Sync {
     fn on_event(&self, name: String, payload_json: String);
+    /// An `audio-frame` event, many a second: the PCM as bytes (s16le,
+    /// `channels` interleaved, at `rate` Hz), so the player never parses
+    /// JSON or base64 per frame. Never comes as `on_event`.
+    fn on_audio_frame(&self, from: String, seq: u64, rate: u32, channels: u8, pcm: Vec<u8>);
 }
 
 /// The app's secure store for the session token and the derived device key
@@ -519,9 +523,25 @@ struct ListenerSink {
 
 impl EventSink for ListenerSink {
     fn emit(&self, ev: CoreEvent) {
-        if let Some(l) = self.listener.lock().unwrap().as_ref() {
-            l.on_event(ev.name().to_string(), ev.to_json().to_string());
+        let guard = self.listener.lock().unwrap();
+        let Some(l) = guard.as_ref() else {
+            return;
+        };
+        if let CoreEvent::AudioFrame {
+            from,
+            seq,
+            rate,
+            channels,
+            pcm,
+        } = ev
+        {
+            use base64::Engine as _;
+            if let Ok(pcm) = base64::engine::general_purpose::STANDARD.decode(pcm.as_bytes()) {
+                l.on_audio_frame(from, seq, rate, channels, pcm);
+            }
+            return;
         }
+        l.on_event(ev.name().to_string(), ev.to_json().to_string());
     }
 }
 
@@ -1500,6 +1520,30 @@ impl MdEngine {
     ) -> MdResult<u32> {
         let sent = self.inner.audio_frame_to(&pcm, rate, channels, &nodes)?;
         Ok(u32::try_from(sent).unwrap_or(u32::MAX))
+    }
+
+    /// The switch "Use nearby mode for media" (on by default).
+    pub fn nearby_media(&self) -> bool {
+        self.inner.nearby_media()
+    }
+
+    pub fn set_nearby_media(&self, on: bool) {
+        self.inner.set_nearby_media(on);
+    }
+
+    /// How a media stream with `node_id` stands, as JSON (the core's
+    /// `NearbyStatus`: near, low_latency, path, latency_ms, before_ms,
+    /// rtt_ms). Changes come as `nearby-media` events.
+    pub fn nearby_status(&self, node_id: String) -> MdResult<String> {
+        serde_json::to_string(&self.inner.nearby_status(&node_id))
+            .map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// What arrived from audio source `node_id`, as JSON (the core's
+    /// `AudioRxStats`: frames, recovered, duplicates).
+    pub fn audio_rx_stats(&self, node_id: String) -> MdResult<String> {
+        serde_json::to_string(&self.inner.audio_rx_stats(&node_id))
+            .map_err(|e| MdError::Failed(e.to_string()))
     }
 
     /// Send a picture copied on this phone (a PNG or JPEG file) to a

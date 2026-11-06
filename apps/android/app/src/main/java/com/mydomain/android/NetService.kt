@@ -96,6 +96,8 @@ class NetService : Service() {
         // A computer's sound plays here (any Android: ComputerAudio.kt);
         // this phone's audio on a computer: Android 10 or later.
         Core.engine()?.setAudioRoles(true, PhoneAudio.supported)
+        // "Use nearby mode for media" (Settings).
+        NearbyMode.apply(this)
         // Labels given on this phone before they were shared.
         Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
         PhotoBackup.start(this)
@@ -337,14 +339,22 @@ class NetService : Service() {
      * needs Android: OS notifications and the clipboard.
      */
     private val coreEvents = object : EventListener {
+        // A computer's sound, many frames a second, as bytes (no JSON or
+        // base64 on this path): straight to the player's buffer, never
+        // logged or kept.
+        override fun onAudioFrame(from: String, seq: ULong, rate: UInt, channels: UByte, pcm: ByteArray) {
+            ComputerAudio.onFrame(from, seq.toLong(), rate.toInt(), channels.toInt(), pcm)
+        }
+
         override fun onEvent(name: String, payloadJson: String) {
-            // A computer's sound, many frames a second: straight to the
-            // player, never logged or kept.
-            if (name == "audio-frame") {
-                ComputerAudio.onFrame(payloadJson)
+            Core.onEvent(name, payloadJson)
+            // The player follows a move to (or off) a local link.
+            if (name == "nearby-media") {
+                runCatching { JSONObject(payloadJson) }.getOrNull()?.let {
+                    ComputerAudio.onNearby(it.optString("node_id"), it.optBoolean("low_latency"))
+                }
                 return
             }
-            Core.onEvent(name, payloadJson)
             // A screen snapshot is for the UI alone (and big): don't parse it again.
             if (name == "screen-frame") return
             serviceScope.launch {

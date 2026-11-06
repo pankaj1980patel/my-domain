@@ -23,6 +23,13 @@ impl EventListener for Recorder {
         let v = serde_json::from_str(&payload_json).unwrap();
         self.0.lock().unwrap().push((name, v));
     }
+
+    fn on_audio_frame(&self, from: String, seq: u64, rate: u32, channels: u8, pcm: Vec<u8>) {
+        let v = serde_json::json!({
+            "from": from, "seq": seq, "rate": rate, "channels": channels, "pcm": pcm,
+        });
+        self.0.lock().unwrap().push(("audio-frame".into(), v));
+    }
 }
 
 impl Recorder {
@@ -286,7 +293,7 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     assert_eq!(st["from"], desktop.node_id().as_str());
 
     // The computer's sound on the phone: the phone learns the desktop sends
-    // its sound, listens, and gets its frames as `audio-frame` events.
+    // its sound, listens, and gets its frames as bytes (`on_audio_frame`).
     desktop.engine.set_audio_roles(true, true);
     phone.set_audio_roles(true, true);
     assert!(!phone.audio_source(desktop.node_id()));
@@ -308,13 +315,12 @@ fn the_bridge_pushes_events_and_types_its_errors() {
         .audio_frame_to(&[1, 0, 2, 0], 48_000, 2, std::slice::from_ref(&id.node_id))
         .unwrap();
     let frame = events.wait_for("audio-frame", |_| true);
-    assert_eq!(frame["kind"], "audio_frame");
     assert_eq!(frame["from"], desktop.node_id().as_str());
     assert_eq!(
         (frame["rate"].clone(), frame["channels"].clone()),
         (48_000.into(), 2.into())
     );
-    assert_eq!(frame["pcm"], "AQACAA==");
+    assert_eq!(frame["pcm"], serde_json::json!([1, 0, 2, 0]));
     phone.audio_listen(desktop.node_id(), false).unwrap();
     assert!(matches!(
         phone.audio_listen("nobody".into(), true),

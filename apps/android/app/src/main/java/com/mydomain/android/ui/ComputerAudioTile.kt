@@ -22,6 +22,8 @@ fun ComputerAudioTile(node: String, name: String) {
                     else stringResource(R.string.caudio_tile_waiting, name),
                     Modifier.announce(),
                 )
+                NearbyMediaBadge(node)
+                ComputerAudioDetails()
                 GhostButton(stringResource(R.string.audio_stop), { ComputerAudio.stop() })
             }
             else -> {

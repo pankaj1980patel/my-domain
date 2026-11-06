@@ -135,3 +135,11 @@ impl<P: Platform> Engine<P> {
         mark_live(&self.ctx, peer, TransportKind::Ble, None);
     }
 }
+
+/// A Bluetooth connection to `node` is open (it's in range).
+pub(crate) fn ble_linked<P: Platform>(ctx: &NetCtx<P>, node: &str) -> bool {
+    ctx.ble_links
+        .lock()
+        .values()
+        .any(|l| l.peer.as_deref() == Some(node))
+}
