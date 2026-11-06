@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent
+keywords: privacy, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -15,6 +15,18 @@ The my-domain server helps your devices find each other and, when they can't con
 - when devices are online, and when one wakes another.
 
 It can't read what you send: it never has your device key. Messages are not stored on the server.
+
+## Adding a device with a QR code
+
+The QR code under **Settings → Add a device** is a one-time join link. It holds:
+
+- the server's address and your username;
+- a random one-time secret, which the server never sees (it is only told a one-way hash of it);
+- your device key, locked with that secret.
+
+It **never contains your password**. It signs in **one** device, only within **5 minutes**, and stops working once used or when you close it. Anyone who photographs it in those minutes could join your account, so show it only to your own devices, and close it once your device has joined.
+
+The **6-digit code** is for a device that can't scan. So that it can bring the device key too, the server keeps a copy of the key locked with the code until it's used or expires (at most 5 minutes). Six digits are short, so scanning is the more private way: then the key never reaches the server at all. Wrong codes are limited, so they can't be guessed one after another.
 
 ## Consent: the device being reached decides
 

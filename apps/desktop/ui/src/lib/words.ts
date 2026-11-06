@@ -66,6 +66,11 @@ export function progressLabel(stage: string | undefined): string | null {
 /** Turn a core error into something a person can act on. */
 export function friendlyError(e: unknown): string {
   const m = (e instanceof Error ? e.message : String(e)).toLowerCase();
+  // Adding a device (mdcore join / registry pair_*).
+  if (m.includes("update the server to use qr join")) return t("error.updateServer");
+  if (m.includes("expired or was already used")) return t("error.joinCodeUsed");
+  if (m.includes("too many tries")) return t("error.tooManyTries");
+  if (m.includes("join code is damaged") || m.includes("isn't a my-domain join code")) return t("error.badJoinLink");
   if (m.includes("not connected yet")) return t("error.notConnectedYet");
   if (m.includes("connection closed")) return t("error.connectionClosed");
   if (m.includes("encryption key")) return t("error.noKey");

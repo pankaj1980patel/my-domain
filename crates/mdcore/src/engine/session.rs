@@ -90,16 +90,27 @@ impl<P: Platform> Engine<P> {
             return Err("server URL is required".into());
         }
         let resp = auth_call(server_url, path, username.trim(), password)?;
+        self.adopt_session(server_url, resp.token, resp.username);
+        Ok(())
+    }
+
+    /// Signed in: keep the session (and where) for this run and the next.
+    pub(super) fn adopt_session(&self, server_url: &str, token: String, username: String) {
         let url = base(server_url);
         *self.server_url.lock() = Some(url.clone());
-        self.ctx
-            .platform
-            .secret_set(SECRET_TOKEN, Some(&resp.token));
-        *self.token.lock() = Some(resp.token);
-        *self.username.lock() = Some(resp.username.clone());
+        self.ctx.platform.secret_set(SECRET_TOKEN, Some(&token));
+        *self.token.lock() = Some(token);
         self.ctx.platform.kv_set("server_url", &url);
-        self.ctx.platform.kv_set("username", &resp.username);
-        Ok(())
+        self.ctx.platform.kv_set("username", &username);
+        *self.username.lock() = Some(username);
+    }
+
+    /// Use (and keep) an already-derived device key, e.g. one handed over
+    /// by a join link.
+    pub(super) fn adopt_key(&self, key: [u8; 32]) {
+        self.save_key(&key);
+        *self.ctx.key.lock() = Some(key);
+        self.announce_with_key();
     }
 
     pub fn auth_login(

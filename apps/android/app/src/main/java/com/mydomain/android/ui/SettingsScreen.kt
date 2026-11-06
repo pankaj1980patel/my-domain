@@ -341,6 +341,7 @@ fun SettingsScreen(
                 boldArg(R.string.settings_signed_in_as, Core.session?.username ?: prefs.getString("user", null) ?: "…"),
                 style = MaterialTheme.typography.bodyMedium, color = T.text,
             )
+            AddDevice()
             GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
         }
 

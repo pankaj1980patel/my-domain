@@ -59,6 +59,10 @@ fun friendlyError(e: Throwable): String {
     val raw = e.message ?: e.toString()
     val m = raw.lowercase()
     return when {
+        "update the server to use qr join" in m -> str(R.string.error_update_server)
+        "expired or was already used" in m -> str(R.string.error_join_code_used)
+        "too many tries" in m -> str(R.string.error_too_many_tries)
+        "join code is damaged" in m || "isn't a my-domain join code" in m -> str(R.string.error_bad_join_link)
         "connection closed" in m -> str(R.string.error_connection_closed)
         "invalid credentials" in m || "401" in m -> str(R.string.error_bad_credentials)
         "already exists" in m || "409" in m -> str(R.string.error_username_taken)

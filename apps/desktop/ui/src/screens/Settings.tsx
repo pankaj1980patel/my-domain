@@ -25,6 +25,7 @@ import { SyncSetting } from "../components/SyncSetting";
 import { WakeSetting } from "../components/WakeSetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
+import { AddDevice } from "../components/AddDevice";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -146,9 +147,12 @@ export default function Settings(props: { onDeveloper: () => void }) {
       <article class="tile" id="settings-account">
         <h2>{t("settings.account")}</h2>
         <p>{tRich("settings.signedInAs", { name: <strong>{state.account.username || "…"}</strong> })}</p>
-        <button class="btn btn-ghost" onClick={signOut}>
-          {t("settings.signOut")}
-        </button>
+        <div class="join-actions">
+          <AddDevice />
+          <button class="btn btn-ghost" onClick={signOut}>
+            {t("settings.signOut")}
+          </button>
+        </div>
       </article>
 
       <article class="tile" id="settings-device">

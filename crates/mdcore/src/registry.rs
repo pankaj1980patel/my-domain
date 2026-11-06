@@ -232,6 +232,103 @@ pub fn health_ok(url: &str) -> bool {
         .is_ok()
 }
 
+// --- adding a device by QR code / 6-digit code (server `/pair/*`) ---
+
+/// What an older server without `/pair/*` gets turned into (the apps show
+/// "Update the server to use QR join").
+pub const PAIR_OLD_SERVER: &str = "update the server to use qr join";
+
+fn pair_err(e: ureq::Error) -> String {
+    match e {
+        ureq::Error::Status(404 | 405, _) => PAIR_OLD_SERVER.to_string(),
+        other => http_err(other),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PairCreated {
+    pub code: String,
+    pub expires_in: u64,
+}
+
+/// Start a pairing: `claim` is the join link's [`crate::join::claim_id`],
+/// `code` the 6-digit code and `code_box` the key sealed under it.
+/// `Ok(None)` when the server says the code is taken (pick another).
+pub fn pair_create(
+    url: &str,
+    token: &str,
+    claim: &str,
+    code: &str,
+    code_box: &str,
+) -> Result<Option<PairCreated>, String> {
+    match crate::tls::http()
+        .post(&format!("{}/pair/create", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "claim": claim, "code": code, "code_box": code_box }))
+    {
+        Ok(r) => r
+            .into_json::<PairCreated>()
+            .map(Some)
+            .map_err(|e| e.to_string()),
+        Err(ureq::Error::Status(409, _)) => Ok(None),
+        Err(e) => Err(pair_err(e)),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct PairClaimed {
+    pub token: String,
+    pub username: String,
+    #[serde(default)]
+    pub code_box: Option<String>,
+}
+
+/// Trade a join link's claim, or a typed code, for a session.
+pub fn pair_claim(
+    url: &str,
+    claim: Option<&str>,
+    code: Option<&str>,
+    name: &str,
+) -> Result<PairClaimed, String> {
+    crate::tls::http()
+        .post(&format!("{}/pair/claim", base(url)))
+        .timeout(Duration::from_secs(10))
+        .send_json(serde_json::json!({ "claim": claim, "code": code, "name": name }))
+        .map_err(pair_err)?
+        .into_json::<PairClaimed>()
+        .map_err(|e| e.to_string())
+}
+
+#[derive(Deserialize)]
+pub struct PairStatusResp {
+    /// "none", "waiting" or "joined".
+    pub state: String,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+pub fn pair_status(url: &str, token: &str) -> Result<PairStatusResp, String> {
+    crate::tls::http()
+        .get(&format!("{}/pair/status", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .call()
+        .map_err(pair_err)?
+        .into_json::<PairStatusResp>()
+        .map_err(|e| e.to_string())
+}
+
+pub fn pair_cancel(url: &str, token: &str) -> Result<(), String> {
+    crate::tls::http()
+        .post(&format!("{}/pair/cancel", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({}))
+        .map_err(pair_err)?;
+    Ok(())
+}
+
 pub fn registry_fetch(
     url: &str,
     token: &str,

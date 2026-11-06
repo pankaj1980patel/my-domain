@@ -401,6 +401,26 @@ pub struct Session {
     pub has_key: bool,
 }
 
+/// "Add a device": a one-time join link as a QR code, and as 6 digits.
+#[derive(uniffi::Record)]
+pub struct JoinInvite {
+    pub link: String,
+    pub code: String,
+    /// Seconds it stays valid.
+    pub expires_in: u32,
+    /// Modules per side.
+    pub qr_size: u32,
+    /// Row-major, 1 = dark, `qr_size * qr_size` of them (no margin).
+    pub qr_modules: Vec<u8>,
+}
+
+/// Has the new device joined: "waiting", "joined" (with its name), "none".
+#[derive(uniffi::Record)]
+pub struct JoinStatus {
+    pub state: String,
+    pub name: Option<String>,
+}
+
 #[derive(uniffi::Record)]
 pub struct FirewallStatus {
     pub outbound_ok: bool,
@@ -571,6 +591,46 @@ impl MdEngine {
 
     pub fn logout(&self) {
         self.inner.logout();
+    }
+
+    // --- adding a device by QR code / 6-digit code (mdcore `join`) ---
+
+    /// Start adding a device: a fresh single-use invite, valid 5 minutes.
+    pub fn join_invite(&self) -> MdResult<JoinInvite> {
+        let inv = self.inner.join_invite()?;
+        let qr = mdcore::qr::QrCode::encode(inv.link.as_bytes())
+            .ok_or_else(|| MdError::Failed("the join link is too long for a QR code".into()))?;
+        Ok(JoinInvite {
+            link: inv.link,
+            code: inv.code,
+            expires_in: inv.expires_in,
+            qr_size: qr.size as u32,
+            qr_modules: qr.modules.iter().map(|&d| u8::from(d)).collect(),
+        })
+    }
+
+    pub fn join_status(&self) -> MdResult<JoinStatus> {
+        let s = self.inner.join_status()?;
+        Ok(JoinStatus {
+            state: s.state,
+            name: s.name,
+        })
+    }
+
+    /// The invite was closed: withdraw it.
+    pub fn join_cancel(&self) -> MdResult<()> {
+        Ok(self.inner.join_cancel()?)
+    }
+
+    /// Sign in with a scanned `mydomain://join?…` link (the account and
+    /// device key come with it).
+    pub fn join_with_link(&self, link: String) -> MdResult<()> {
+        Ok(self.inner.join_with_link(&link)?)
+    }
+
+    /// Sign in with the 6-digit code another device shows.
+    pub fn join_with_code(&self, server_url: String, code: String) -> MdResult<()> {
+        Ok(self.inner.join_with_code(&server_url, &code)?)
     }
 
     pub fn session(&self) -> Session {

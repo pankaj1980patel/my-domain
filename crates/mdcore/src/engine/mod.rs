@@ -33,6 +33,8 @@ mod ble;
 pub use ble::BleSender;
 mod control;
 mod diag;
+mod join;
+pub use join::{JoinInvite, JoinStatus};
 mod labels;
 mod ladder;
 mod media;

@@ -9,6 +9,7 @@ mod devices;
 mod error;
 mod fcm;
 mod models;
+mod pair;
 mod relay;
 mod signal;
 mod state;
@@ -93,6 +94,7 @@ async fn main() -> anyhow::Result<()> {
     }
     let relay_state = relay::RelayState::new(jwt_secret.clone());
     let relay = relay::router(relay_state.clone());
+    let pairing = pair::router(pair::PairState::new(jwt_secret.clone()));
     let state = AppState {
         db,
         jwt_secret,
@@ -115,6 +117,8 @@ async fn main() -> anyhow::Result<()> {
         .with_state(state)
         // WebSocket relay (own state: needs only the JWT secret).
         .merge(relay)
+        // Add a device by QR code / 6-digit code (own state, in memory).
+        .merge(pairing)
         .layer(CorsLayer::permissive());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

@@ -171,6 +171,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="*/*" />
             </intent-filter>
+            <!-- Add a device: the camera app or Google Lens opens a scanned join
+                 QR code (mydomain://join?…, see core/JoinLinks.kt). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mydomain" android:host="join" />
+            </intent-filter>
             <!-- Direct Share: each of your devices in the share sheet (ShareTargets.kt),
                  and the New note launcher shortcut. -->
             <meta-data

@@ -10,6 +10,10 @@ pub enum AppError {
     Unauthorized,
     BadRequest(String),
     Conflict(String),
+    /// Expired, used, or never there (a join code).
+    Gone(String),
+    /// Too many failed attempts; try again later.
+    TooMany,
     Internal(String),
 }
 
@@ -19,6 +23,11 @@ impl IntoResponse for AppError {
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized".to_string()),
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m),
+            AppError::Gone(m) => (StatusCode::GONE, m),
+            AppError::TooMany => (
+                StatusCode::TOO_MANY_REQUESTS,
+                "too many tries, wait a minute".to_string(),
+            ),
             AppError::Internal(m) => (StatusCode::INTERNAL_SERVER_ERROR, m),
         };
         (status, Json(json!({ "error": msg }))).into_response()

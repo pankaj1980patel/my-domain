@@ -101,6 +101,17 @@ fn the_bridge_pushes_events_and_types_its_errors() {
     let session = phone.session();
     assert_eq!(session.username.as_deref(), Some(TEST_USER));
     assert!(session.has_key && session.server_url.is_none());
+    // Adding a device needs a server session; joining needs a real link
+    // or a 6-digit code (refused before any server is asked).
+    assert!(matches!(phone.join_invite(), Err(MdError::NotLoggedIn)));
+    assert!(matches!(
+        phone.join_with_link("https://example.com".into()),
+        Err(MdError::Failed(_))
+    ));
+    assert!(matches!(
+        phone.join_with_code("http://127.0.0.1:9".into(), "12".into()),
+        Err(MdError::Failed(_))
+    ));
     assert!(matches!(
         phone.send("nobody".into(), "hi".into()),
         Err(MdError::PeerNotFound)

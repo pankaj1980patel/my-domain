@@ -216,6 +216,10 @@ object Core {
     /** Ask the UI to open this note (a reminder's notification). */
     var showNote by mutableStateOf<String?>(null)
 
+    /** A scanned `mydomain://join?…` link (the camera or Lens opened it),
+     *  waiting for the sign-in screen to join with it. */
+    var pendingJoin by mutableStateOf<String?>(null)
+
     /** Text or a link shared to the app from another app, waiting for the
      *  user to pick a device (files win if both came). */
     var pendingText by mutableStateOf<String?>(null); private set
@@ -686,6 +690,30 @@ object Core {
         val e = engine() ?: throw IllegalStateException("not started")
         block(e)
     }
+
+    /** Join the account another device invites to, with its 6-digit code
+     *  (on [server]) or a scanned join link: signed in with that device's
+     *  key, no password. */
+    suspend fun joinAccount(server: String, codeOrLink: String) {
+        withContext(Dispatchers.IO) {
+            var e = engine()
+            repeat(50) { if (e == null) { Thread.sleep(100); e = engine() } }
+            val engine = e ?: throw IllegalStateException("not started")
+            val v = codeOrLink.trim()
+            if (JoinLinks.isJoinLink(v)) engine.joinWithLink(v) else engine.joinWithCode(server, v)
+            runCatching { engine.refresh() }
+        }
+        reload()
+    }
+
+    /** "Add a device": a one-time QR code and 6-digit code (5 minutes). */
+    suspend fun joinInvite() = call { it.joinInvite() }
+
+    /** Has the invited device joined ("waiting", "joined" + name, "none")? */
+    suspend fun joinStatus() = call { it.joinStatus() }
+
+    /** The invite was closed: withdraw it. */
+    suspend fun joinCancel() = call { it.joinCancel() }
 
     /** Sign in (or create the account), set the device key, load devices. */
     suspend fun signIn(server: String, user: String, pass: String, key: String, create: Boolean) {

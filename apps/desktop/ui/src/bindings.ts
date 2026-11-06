@@ -20,6 +20,16 @@ export const commands = {
 	setEncryptionKey: (passphrase: string) => typedError<null, string>(__TAURI_INVOKE("set_encryption_key", { passphrase })),
 	updateEncryptionKey: (newPassphrase: string, password: string) => typedError<null, string>(__TAURI_INVOKE("update_encryption_key", { newPassphrase, password })),
 	generateKey: () => __TAURI_INVOKE<string>("generate_key"),
+	/**  "Add a device": a one-time QR code (and 6-digit code), valid 5 minutes. */
+	joinInvite: () => typedError<JoinInvite, string>(__TAURI_INVOKE("join_invite")),
+	/**  Has the new device joined yet ("waiting", "joined" + name, "none")? */
+	joinStatus: () => typedError<JoinStatus_Serialize, string>(__TAURI_INVOKE("join_status")),
+	/**  The QR was closed: withdraw the invite. */
+	joinCancel: () => typedError<null, string>(__TAURI_INVOKE("join_cancel")),
+	/**  Sign in with the 6-digit code another device shows. */
+	joinWithCode: (serverUrl: string, code: string) => typedError<null, string>(__TAURI_INVOKE("join_with_code", { serverUrl, code })),
+	/**  Sign in with a pasted `mydomain://join?…` link. */
+	joinWithLink: (link: string) => typedError<null, string>(__TAURI_INVOKE("join_with_link", { link })),
 	logout: () => __TAURI_INVOKE<void>("logout"),
 	refreshFromServer: () => typedError<null, string>(__TAURI_INVOKE("refresh_from_server")),
 	scanLan: () => __TAURI_INVOKE<void>("scan_lan"),
@@ -1493,6 +1503,45 @@ export type Identity_Serialize = {
 	ipv6?: string,
 	/**  Public `ip:port` the home router forwards to our QUIC port (UPnP). */
 	mapped_quic?: string,
+};
+
+/**  What "Add a device" shows. */
+export type JoinInvite = {
+	/**  The `mydomain://join?…` link the QR code holds. */
+	link: string,
+	/**  The same invite as 6 digits, for a device that can't scan. */
+	code: string,
+	/**  Seconds it stays valid. */
+	expires_in: number,
+	/**
+	 *  The QR code: modules per side, and its dark modules as an SVG path
+	 *  with a 4-module margin (`viewBox="0 0 {qr_size+8} {qr_size+8}"`).
+	 */
+	qr_size: number,
+	qr_path: string,
+};
+
+/**  Has the new device joined yet? */
+export type JoinStatus = JoinStatus_Serialize | JoinStatus_Deserialize;
+
+/**  Has the new device joined yet? */
+export type JoinStatus_Deserialize = {
+	/**
+	 *  "waiting", "joined" (then `name` says who), or "none" (expired or
+	 *  cancelled).
+	 */
+	state: string,
+	name?: string | null,
+};
+
+/**  Has the new device joined yet? */
+export type JoinStatus_Serialize = {
+	/**
+	 *  "waiting", "joined" (then `name` says who), or "none" (expired or
+	 *  cancelled).
+	 */
+	state: string,
+	name: string | null,
 };
 
 /**  Where the layout a page shows came from. */

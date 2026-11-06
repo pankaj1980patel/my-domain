@@ -9,7 +9,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use mdcore::capabilities::Clipboard;
-use mdcore::engine::{Engine, FirewallStatus, SavedSession, SessionInfo};
+use mdcore::engine::{Engine, FirewallStatus, JoinInvite, JoinStatus, SavedSession, SessionInfo};
 use mdcore::events::{CoreEvent, EventSink};
 use mdcore::kv::FileKv;
 use mdcore::model::{Identity, Peer};
@@ -744,6 +744,51 @@ fn generate_key(engine: State<Eng>) -> String {
     engine.generate_key()
 }
 
+/// Run a blocking engine call (it talks to the server) off the main thread.
+async fn off_main<T: Send + 'static>(
+    app: AppHandle,
+    f: impl FnOnce(&Eng) -> Result<T, CoreError> + Send + 'static,
+) -> Result<T, CoreError> {
+    tauri::async_runtime::spawn_blocking(move || f(&app.state::<Eng>()))
+        .await
+        .map_err(|e| CoreError::Other(e.to_string()))?
+}
+
+/// "Add a device": a one-time QR code (and 6-digit code), valid 5 minutes.
+#[tauri::command]
+#[specta::specta]
+async fn join_invite(app: AppHandle) -> Result<JoinInvite, CoreError> {
+    off_main(app, |e| e.join_invite()).await
+}
+
+/// Has the new device joined yet ("waiting", "joined" + name, "none")?
+#[tauri::command]
+#[specta::specta]
+async fn join_status(app: AppHandle) -> Result<JoinStatus, CoreError> {
+    off_main(app, |e| e.join_status()).await
+}
+
+/// The QR was closed: withdraw the invite.
+#[tauri::command]
+#[specta::specta]
+async fn join_cancel(app: AppHandle) -> Result<(), CoreError> {
+    off_main(app, |e| e.join_cancel()).await
+}
+
+/// Sign in with the 6-digit code another device shows.
+#[tauri::command]
+#[specta::specta]
+async fn join_with_code(app: AppHandle, server_url: String, code: String) -> Result<(), CoreError> {
+    off_main(app, move |e| e.join_with_code(&server_url, &code)).await
+}
+
+/// Sign in with a pasted `mydomain://join?…` link.
+#[tauri::command]
+#[specta::specta]
+async fn join_with_link(app: AppHandle, link: String) -> Result<(), CoreError> {
+    off_main(app, move |e| e.join_with_link(&link)).await
+}
+
 #[tauri::command]
 #[specta::specta]
 fn logout(engine: State<Eng>) {
@@ -1448,6 +1493,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         set_encryption_key,
         update_encryption_key,
         generate_key,
+        join_invite,
+        join_status,
+        join_cancel,
+        join_with_code,
+        join_with_link,
         logout,
         refresh_from_server,
         scan_lan,

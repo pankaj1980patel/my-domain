@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +18,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.JoinLinks
 import com.mydomain.android.ui.App
 import com.mydomain.android.ui.MdTheme
 
@@ -63,6 +65,7 @@ class MainActivity : ComponentActivity() {
         openSettings(intent)
         openDevice(intent)
         if (savedInstanceState == null) openNote(intent)
+        if (savedInstanceState == null) takeJoinLink(intent)
         setContent { MdTheme { App(prefs) } }
     }
 
@@ -106,6 +109,22 @@ class MainActivity : ComponentActivity() {
             NotesWidget.ACTION_NEW_NOTE, NotesWidget.ACTION_SHOW_NOTES, NotesWidget.ACTION_OPEN_NOTE -> intent.action = null
         }
         Core.showNote = id
+    }
+
+    /** A scanned "Add a device" QR code (`mydomain://join?…`, opened by the
+     *  camera app or Lens): the sign-in screen asks before joining with it.
+     *  Not again from Recents; not on a phone that's already signed in. */
+    private fun takeJoinLink(intent: Intent?) {
+        if (intent?.action != Intent.ACTION_VIEW) return
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        val link = intent.dataString ?: return
+        if (!JoinLinks.isJoinLink(link)) return
+        intent.data = null
+        if (Core.ready) {
+            Toast.makeText(this, R.string.join_already_signed_in, Toast.LENGTH_LONG).show()
+            return
+        }
+        Core.pendingJoin = link
     }
 
     /** A launcher shortcut ([ShareTargets]) asked for a device's screen. */
@@ -186,6 +205,7 @@ class MainActivity : ComponentActivity() {
         askWifiScan(intent)
         openDevice(intent)
         openNote(intent)
+        takeJoinLink(intent)
         if (!directShare(intent)) takeShare(intent)
     }
 

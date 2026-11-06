@@ -728,6 +728,18 @@ export async function signIn(server: string, user: string, pass: string, key: st
   commands.reportFirewall();
 }
 
+/** Join the account another device invites to: its 6-digit code (with
+ *  the server, as for signing in) or a pasted `mydomain://join?…` link.
+ *  Signs in with that device's key; no password. */
+export async function joinAccount(server: string, codeOrLink: string) {
+  const v = codeOrLink.trim();
+  await unwrap(/^mydomain:\/\/join\?/i.test(v) ? commands.joinWithLink(v) : commands.joinWithCode(server, v));
+  await startEvents();
+  await refreshDevices().catch(() => {});
+  await loadAll();
+  commands.reportFirewall();
+}
+
 /** Started signed in (the session came back from the OS keychain)? Then
  *  load the app without the sign-in screen. */
 export async function resume(): Promise<boolean> {

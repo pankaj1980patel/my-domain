@@ -18,6 +18,10 @@
 //!   POST /devices/probe     (Bearer)   -> {tcp_reachable, ws_reachable, udp_reachable}
 //!   GET  /health                       -> 200
 //!   POST /signal            (Bearer)   recorded (delivery is SignalHub's job)
+//!   POST /pair/create (Bearer), POST /pair/claim, GET /pair/status (Bearer),
+//!   POST /pair/cancel (Bearer)  adding a device by QR / code (single use;
+//!                               no expiry here). `without_pairing` turns
+//!                               them off, like a server from before them.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -56,6 +60,18 @@ struct State {
     relay: Option<crate::relay::RelayConns>,
     /// How many signals went over the WebSocket.
     signals_via_ws: usize,
+    /// username -> that account's pairing.
+    pairings: HashMap<String, Pairing>,
+    /// Answer /pair/* with 404 (an older server).
+    no_pairing: bool,
+}
+
+#[derive(Clone, Default)]
+struct Pairing {
+    claim: Option<String>,
+    code: Option<String>,
+    code_box: Option<String>,
+    joined: Option<String>,
 }
 
 pub struct FakeRegistry {
@@ -138,6 +154,31 @@ impl FakeRegistry {
 
     pub fn signals(&self) -> Vec<Value> {
         self.state.lock().unwrap().signals.clone()
+    }
+
+    /// Behave like a server from before `/pair/*` (404).
+    pub fn without_pairing(&self) {
+        self.state.lock().unwrap().no_pairing = true;
+    }
+
+    /// The code box stored for `username`'s pairing (what the server holds).
+    pub fn pairing_box(&self, username: &str) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .pairings
+            .get(username)
+            .and_then(|p| p.code_box.clone())
+    }
+
+    /// The claim `username`'s pairing was created with.
+    pub fn pairing_claim(&self, username: &str) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .pairings
+            .get(username)
+            .and_then(|p| p.claim.clone())
     }
 }
 
@@ -297,6 +338,98 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
                         st.signals_via_ws += 1;
                     }
                     st.signals.push(body);
+                    drop(st);
+                    respond(req, 200, json!({}))
+                }
+                _ => {
+                    drop(st);
+                    respond(req, 404, json!({"error": "not found"}))
+                }
+            }
+        }
+        (_, p) if p.starts_with("/pair/") => {
+            if st.no_pairing {
+                drop(st);
+                return respond(req, 404, Value::Null);
+            }
+            if p == "/pair/claim" {
+                let claim = body["claim"].as_str().map(String::from);
+                let code = body["code"].as_str().map(String::from);
+                let found = st.pairings.iter().find_map(|(u, pr)| {
+                    let by_claim = claim.is_some() && pr.claim == claim;
+                    let by_code = code.is_some() && pr.code == code;
+                    (by_claim || by_code).then(|| (u.clone(), by_code))
+                });
+                let Some((u, by_code)) = found else {
+                    drop(st);
+                    return respond(
+                        req,
+                        410,
+                        json!({"error": "this join code has expired or was already used"}),
+                    );
+                };
+                let token = st
+                    .tokens
+                    .iter()
+                    .find(|(_, user)| **user == u)
+                    .map(|(t, _)| t.clone())
+                    .unwrap_or_else(|| session_token(&u));
+                st.tokens.insert(token.clone(), u.clone());
+                let pr = st.pairings.get_mut(&u).unwrap();
+                pr.claim = None;
+                pr.code = None;
+                pr.joined = Some(s("name"));
+                let code_box = pr.code_box.clone().filter(|_| by_code);
+                drop(st);
+                return respond(
+                    req,
+                    200,
+                    json!({"token": token, "username": u, "code_box": code_box}),
+                );
+            }
+            let Some(user) = user else {
+                drop(st);
+                return respond(req, 401, json!({"error": "unauthorized"}));
+            };
+            match (method.as_str(), p) {
+                ("POST", "/pair/create") => {
+                    let code = s("code");
+                    if st
+                        .pairings
+                        .iter()
+                        .any(|(u, pr)| *u != user && pr.code.as_deref() == Some(code.as_str()))
+                    {
+                        drop(st);
+                        return respond(req, 409, json!({"error": "code in use"}));
+                    }
+                    st.pairings.insert(
+                        user,
+                        Pairing {
+                            claim: Some(s("claim")),
+                            code: Some(code.clone()),
+                            code_box: body["code_box"].as_str().map(String::from),
+                            joined: None,
+                        },
+                    );
+                    drop(st);
+                    respond(req, 200, json!({"code": code, "expires_in": 300}))
+                }
+                ("GET", "/pair/status") => {
+                    let out = match st.pairings.get(&user).cloned() {
+                        None => json!({"state": "none"}),
+                        Some(Pairing {
+                            joined: Some(name), ..
+                        }) => {
+                            st.pairings.remove(&user);
+                            json!({"state": "joined", "name": name})
+                        }
+                        Some(_) => json!({"state": "waiting"}),
+                    };
+                    drop(st);
+                    respond(req, 200, out)
+                }
+                ("POST", "/pair/cancel") => {
+                    st.pairings.remove(&user);
                     drop(st);
                     respond(req, 200, json!({}))
                 }

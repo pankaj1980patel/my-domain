@@ -47,6 +47,15 @@
     <string name="signin_have_account">क्या आपका पहले से खाता है?</string>
     <string name="signin_new_here">यहाँ नए हैं?</string>
     <string name="signin_create_an_account">एक खाता बनाएँ</string>
+    <string name="signin_join_with_code">कोड से जुड़ें</string>
+    <string name="signin_join_title">अपने खाते से जुड़ें</string>
+    <string name="signin_join_hint">जिस डिवाइस पर पहले से साइन इन है, उस पर सेटिंग्स खोलें और डिवाइस जोड़ें चुनें। उसका QR कोड कैमरे से स्कैन करें, या वहाँ दिखा 6 अंकों का कोड लिखें।</string>
+    <string name="signin_join_code">दूसरे डिवाइस पर दिखा कोड</string>
+    <string name="signin_join">जुड़ें</string>
+    <string name="signin_joining">जुड़ रहे हैं…</string>
+    <string name="signin_join_missing">6 अंकों का कोड लिखें।</string>
+    <string name="signin_use_password">इसके बजाय पासवर्ड से साइन इन करें</string>
+    <string name="signin_join_confirm">इस फ़ोन को %1$s के खाते से जोड़ें? सिर्फ़ तभी, जब आपने अभी अपने ही डिवाइस पर दिखा कोड स्कैन किया हो।</string>
 
     <!-- Home -->
     <string name="home_title">आपके डिवाइस</string>
@@ -172,6 +181,17 @@
     <string name="settings_account">खाता</string>
     <string name="settings_signed_in_as">%1$s के रूप में साइन इन है</string>
     <string name="settings_sign_out">साइन आउट करें</string>
+    <string name="join_add_device">डिवाइस जोड़ें</string>
+    <string name="join_making">कोड बना रहे हैं…</string>
+    <string name="join_scan">दूसरे फ़ोन का कैमरा इस कोड पर रखें। किसी कंप्यूटर पर कोड से जुड़ें चुनें और यह लिखें:</string>
+    <string name="join_qr_label">आपके खाते में डिवाइस जोड़ने वाला QR कोड</string>
+    <string name="join_expires_in">एक बार चलेगा, अगले %1$s तक।</string>
+    <string name="join_expired">इस कोड का समय खत्म हो गया।</string>
+    <string name="join_new_code">नया कोड</string>
+    <string name="join_close">बंद करें</string>
+    <string name="join_joined">%1$s जुड़ गया</string>
+    <string name="join_privacy">यह कोड एक डिवाइस को आपके खाते में साइन इन करता है और आपकी डिवाइस कुंजी साथ ले जाता है, पासवर्ड कभी नहीं। इसे सिर्फ़ अपने डिवाइसों को दिखाएँ।</string>
+    <string name="join_already_signed_in">यह फ़ोन पहले से साइन इन है। दूसरे खाते से जुड़ने के लिए पहले साइन आउट करें।</string>
     <string name="settings_this_device">यह डिवाइस</string>
     <string name="settings_seen_as">दूसरे डिवाइस इसे %1$s के रूप में देखते हैं।</string>
     <string name="settings_clip_sync">मेरे डिवाइस के साथ क्लिपबोर्ड सिंक में रखें</string>
@@ -236,6 +256,10 @@
     <string name="error_timeout">इसमें बहुत समय लगा। अपना इंटरनेट कनेक्शन जाँचें।</string>
     <string name="error_unreachable">सर्वर तक नहीं पहुँच सके। अपना इंटरनेट कनेक्शन जाँचें।</string>
     <string name="error_not_started">my-domain अभी शुरू हो रहा है। थोड़ी देर में फिर से कोशिश करें।</string>
+    <string name="error_update_server">QR से जोड़ने के लिए सर्वर अपडेट करें।</string>
+    <string name="error_join_code_used">इस कोड का समय खत्म हो गया या यह पहले ही इस्तेमाल हो चुका है। दूसरे डिवाइस पर नया कोड बनाएँ।</string>
+    <string name="error_too_many_tries">बहुत ज़्यादा कोशिशें। एक मिनट रुककर फिर कोशिश करें।</string>
+    <string name="error_bad_join_link">यह कोड काम नहीं कर रहा। दूसरे डिवाइस पर नया कोड बनाएँ।</string>
 
     <!-- Time (core/Words.kt) -->
     <string name="time_just_now">अभी-अभी</string>

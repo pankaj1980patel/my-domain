@@ -46,7 +46,7 @@ fn verify_password(pw: &str, hash: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn make_token(secret: &str, user_id: &str, username: &str) -> Result<String, AppError> {
+pub(crate) fn make_token(secret: &str, user_id: &str, username: &str) -> Result<String, AppError> {
     let exp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
@@ -68,7 +68,6 @@ fn make_token(secret: &str, user_id: &str, username: &str) -> Result<String, App
 /// Extractor: requires a valid `Authorization: Bearer <jwt>` header.
 pub struct AuthUser {
     pub user_id: String,
-    #[allow(dead_code)]
     pub username: String,
 }
 
