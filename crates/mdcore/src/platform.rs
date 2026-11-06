@@ -61,6 +61,13 @@ pub trait Platform: Send + Sync + 'static {
         "unknown"
     }
 
+    /// This device can share its mouse and keyboard with your other
+    /// computers, and be controlled by theirs ("Share mouse and keyboard",
+    /// `features::kvm`): a computer. Default: no (a phone).
+    fn shares_input(&self) -> bool {
+        false
+    }
+
     // --- network ---
     /// Interface strategy for multicast + LAN sweep. Re-queried on network change.
     fn iface_mode(&self) -> IfaceMode;

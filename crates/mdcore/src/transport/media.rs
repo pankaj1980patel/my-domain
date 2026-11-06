@@ -17,6 +17,9 @@
 //!             `features::opus_audio`; these also go over Bluetooth links, `engine::ble`)
 //!   kind 2  = screen: f0 quality, f1 width, f2 height (0: not said); payload a JPEG
 //!   kind 3  = camera: as kind 2, a phone camera's picture (`features::camera`)
+//!   kind 4  = kvm:    f0, f1, f2 0; payload dx, dy as i16 big-endian: pointer
+//!             motion from a computer controlling another (`features::kvm`),
+//!             only to a device that says `kvm`, always as a DATAGRAM
 //! ```
 //!
 //! - Sealed with the same key and cipher as every other message
@@ -66,6 +69,7 @@ pub enum MediaKind {
     Audio = 1,
     Screen = 2,
     Camera = 3,
+    Kvm = 4,
 }
 
 /// What the payload is.
@@ -91,6 +95,8 @@ pub enum Format {
         height: u16,
         quality: u8,
     },
+    /// Pointer motion for "Share mouse and keyboard".
+    Kvm,
 }
 
 impl Format {
@@ -99,6 +105,7 @@ impl Format {
             Format::Pcm { .. } => MediaKind::Audio,
             Format::Jpeg { .. } => MediaKind::Screen,
             Format::Camera { .. } => MediaKind::Camera,
+            Format::Kvm => MediaKind::Kvm,
         }
     }
 }
@@ -141,6 +148,7 @@ fn header_bytes(h: &Header) -> [u8; HEADER_LEN] {
             height,
             quality,
         } => (MediaKind::Camera, quality, width, u32::from(height)),
+        Format::Kvm => (MediaKind::Kvm, 0, 0, 0),
     };
     let mut b = [0u8; HEADER_LEN];
     b[0] = kind as u8;
@@ -178,6 +186,7 @@ fn parse_header(b: &[u8]) -> Option<Header> {
             height: u16::try_from(u32_at(4)).ok()?,
             quality: b[1],
         },
+        4 => Format::Kvm,
         _ => return None,
     };
     Some(Header {
@@ -300,6 +309,7 @@ pub(crate) fn on_record_via<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[
         Format::Pcm { .. } => crate::features::audio_share::deliver_coded(ctx, from, &h, &payload),
         Format::Jpeg { .. } => crate::features::screen::deliver(ctx, from, h.seq, &payload),
         Format::Camera { .. } => crate::features::camera::deliver(ctx, from, h.seq, &payload),
+        Format::Kvm => crate::features::kvm::on_motion(ctx, from, &payload),
     }
 }
 

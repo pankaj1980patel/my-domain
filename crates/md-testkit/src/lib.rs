@@ -160,6 +160,9 @@ impl Platform for MockPlatform {
     fn platform_kind(&self) -> &'static str {
         "test"
     }
+    fn shares_input(&self) -> bool {
+        true
+    }
     fn iface_mode(&self) -> IfaceMode {
         IfaceMode::Single(Ipv4Addr::LOCALHOST)
     }

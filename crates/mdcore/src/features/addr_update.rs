@@ -53,6 +53,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::camera::extend_status(ctx, &mut msg);
         super::timers::extend_status(ctx, &mut msg);
         super::wifi_direct::extend_status(ctx, &mut msg);
+        super::kvm::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -110,6 +111,12 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         super::camera::remember(ctx, &from, &msg.json(super::camera::FLAG));
         super::timers::remember(ctx, &from, &msg.json(super::timers::FLAG));
         super::wifi_direct::remember(ctx, &from, &msg.json(super::wifi_direct::FLAG));
+        super::kvm::remember(
+            ctx,
+            &from,
+            &msg.json(super::kvm::FLAG),
+            &msg.json(super::kvm::OS_FLAG),
+        );
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();

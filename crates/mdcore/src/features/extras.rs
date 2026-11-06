@@ -1,6 +1,6 @@
 //! State for the gallery, photo backup, battery alerts, remote input, Do
 //! Not Disturb, screen sharing, the phone's audio, synced folders, shared
-//! device labels, notes, the connection check, the phone's camera, timers, the read-later list, the links map and nearby media mode, in one place so the
+//! device labels, notes, the connection check, the phone's camera, timers, the read-later list, the links map, nearby media mode and shared mouse and keyboard, in one place so the
 //! engine's context gains one field for all of them.
 
 #[derive(Default)]
@@ -22,4 +22,5 @@ pub struct Extras {
     pub links_map: super::links_map::LinksMapState,
     pub nearby: super::nearby::NearbyState,
     pub wifi_direct: super::wifi_direct::WifiDirectState,
+    pub kvm: super::kvm::Kvm,
 }

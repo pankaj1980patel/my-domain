@@ -38,6 +38,7 @@ mod diag;
 mod join;
 mod nearby;
 pub use join::{JoinInvite, JoinStatus};
+mod kvm;
 mod labels;
 mod ladder;
 mod media;
@@ -349,6 +350,7 @@ impl<P: Platform> Engine<P> {
             config.links_map,
             config.nearby,
             config.wifi_direct,
+            config.kvm && platform.shares_input(),
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

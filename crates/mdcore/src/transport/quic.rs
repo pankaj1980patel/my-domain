@@ -117,6 +117,8 @@ fn lane_depth(kind: MediaKind, local: bool) -> Option<usize> {
         MediaKind::Audio => Some(50),
         MediaKind::Screen | MediaKind::Camera if local => None,
         MediaKind::Screen | MediaKind::Camera => Some(8),
+        // Never on a stream (see `send_media`).
+        MediaKind::Kvm => Some(1),
     }
 }
 
@@ -331,6 +333,17 @@ impl QuicLink {
                 _ => return Sent::NotBinary,
             }
         };
+        if kind == MediaKind::Kvm {
+            // Pointer motion only ever goes as a DATAGRAM: late motion is
+            // worth nothing, and the JSON path carries it otherwise.
+            let fits = conn
+                .max_datagram_size()
+                .is_some_and(|max| record.len() <= max);
+            return match fits && conn.send_datagram(record.into()).is_ok() {
+                true => Sent::Yes,
+                false => Sent::NotBinary,
+            };
+        }
         if kind == MediaKind::Audio
             && conn
                 .max_datagram_size()

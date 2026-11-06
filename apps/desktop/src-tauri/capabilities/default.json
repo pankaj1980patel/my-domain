@@ -1,8 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Capability for the main window and the quick panel",
-  "windows": ["main", "quick-panel"],
+  "description": "Capability for the main window, the quick panel and the bar shown while another computer controls this one",
+  "windows": ["main", "quick-panel", "kvm-overlay"],
   "permissions": [
     "core:default",
     "opener:default"

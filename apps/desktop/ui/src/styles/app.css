@@ -4096,3 +4096,100 @@ html.qp-window body {
 .map-why-line { display: block; }
 .map-why { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-2); }
 .map-why li { display: grid; gap: 2px; }
+
+/* Share mouse and keyboard (KvmSetting, KvmOverlay) */
+.kvm-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr 1fr;
+  grid-template-areas:
+    ". top ."
+    "left me right"
+    ". bottom .";
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+}
+.kvm-top { grid-area: top; }
+.kvm-left { grid-area: left; }
+.kvm-right { grid-area: right; }
+.kvm-bottom { grid-area: bottom; }
+.kvm-me {
+  grid-area: me;
+  display: grid;
+  place-items: center;
+  min-height: 72px;
+  border-radius: var(--r-md);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-ring);
+  font-weight: var(--weight-strong);
+}
+.kvm-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-1);
+  min-height: 72px;
+  padding: var(--s-2);
+  border-radius: var(--r-md);
+  border: 1px dashed var(--control-border);
+  text-align: center;
+}
+.kvm-slot.kvm-filled { border-style: solid; background: var(--surface-2); }
+.kvm-slot.kvm-over { border-color: var(--accent); background: var(--accent-bg); }
+.kvm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: 2px var(--s-2);
+  border-radius: var(--r-full);
+  background: var(--btn-secondary-bg);
+  border: 1px solid var(--btn-secondary-border);
+  cursor: grab;
+}
+.kvm-x {
+  border: none;
+  background: none;
+  color: var(--text-2);
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: var(--text-md);
+}
+.kvm-list { list-style: none; padding: 0; margin: 0 0 var(--s-3); display: grid; gap: var(--s-1); }
+.kvm-status,
+.kvm-blocked {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-2) var(--s-3);
+  border-radius: var(--r-md);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning);
+}
+.kvm-status span { flex: 1; }
+html.kvm-window,
+html.kvm-window body {
+  overflow: hidden;
+  background: transparent;
+}
+.kvm-overlay {
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-3);
+  background: var(--surface-solid);
+  border: 1px solid var(--warning);
+  border-radius: var(--r-md);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+.kvm-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--warning);
+}
+@media (max-width: 520px) {
+  .kvm-grid { grid-template-columns: 1fr 1fr 1fr; }
+}

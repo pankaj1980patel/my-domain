@@ -30,6 +30,7 @@ pub mod folder_sync;
 pub mod folders;
 pub mod gallery;
 pub mod input;
+pub mod kvm;
 pub mod labels;
 pub mod links_map;
 pub mod media;
@@ -139,7 +140,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::read_later`), `links_map`
     /// (`CoreConfig::links_map`), the `nearby_*` clock pings
     /// (`CoreConfig::nearby`), and the `wifi_direct_*` messages
-    /// (`CoreConfig::wifi_direct`).
+    /// (`CoreConfig::wifi_direct`), and the `kvm_*` messages
+    /// (`CoreConfig::kvm`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -154,6 +156,7 @@ impl<P: Platform> ControlRegistry<P> {
         links_map: bool,
         nearby: bool,
         wifi_direct: bool,
+        kvm: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -212,6 +215,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if wifi_direct {
             r.register(Arc::new(wifi_direct::WifiDirectHandler));
+        }
+        if kvm {
+            r.register(Arc::new(kvm::KvmHandler));
         }
         r
     }

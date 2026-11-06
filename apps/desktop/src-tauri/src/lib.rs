@@ -33,6 +33,9 @@ mod diagnostics;
 mod fcm;
 mod hotspot;
 mod key_changes;
+mod kvm;
+mod kvm_keys;
+mod kvm_os;
 mod links_map;
 mod location;
 mod mute_here;
@@ -259,6 +262,10 @@ impl Platform for DesktopPlatform {
         "desktop"
     }
 
+    fn shares_input(&self) -> bool {
+        true
+    }
+
     fn iface_mode(&self) -> IfaceMode {
         let mut v4_addrs = Vec::new();
         if let Ok(ifaces) = if_addrs::get_if_addrs() {
@@ -333,6 +340,13 @@ impl EventSink for TauriSink {
         } = &ev
         {
             phone_audio::on_frame(from, *seq, *rate, *channels, pcm);
+            return;
+        }
+        // Share mouse and keyboard: the controlling computer's input, many
+        // events a second and keys typed: played here, never logged or
+        // handed to the window.
+        if let CoreEvent::KvmInput { events, .. } = &ev {
+            kvm::on_input(events.clone());
             return;
         }
         // Wi-Fi Direct: the core asks this computer to host a group (or
@@ -415,6 +429,9 @@ impl EventSink for TauriSink {
             }
             // The phone's touchpad: queued to one thread, so the order holds.
             CoreEvent::Input { events, .. } => remote_input::play(&self.app, events.clone()),
+            // Share mouse and keyboard: capture this computer's input, or
+            // play another's, or let go of everything.
+            CoreEvent::KvmChanged { state } => kvm::on_changed(&self.app, state),
             CoreEvent::ScreenWatch { from, on } => {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || screen_share::on_watch(&app, &from, on));
@@ -1696,6 +1713,14 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         dnd_devices,
         quiet::phone_quiet,
         remote_input_allowed,
+        kvm::kvm_settings,
+        kvm::kvm_place,
+        kvm::kvm_set_enabled,
+        kvm::kvm_set_allowed,
+        kvm::kvm_set_clip,
+        kvm::kvm_set_swap,
+        kvm::kvm_set_hotkey,
+        kvm::kvm_stop,
         set_remote_input_allowed,
         screen_allowed,
         set_screen_allowed,
@@ -1901,6 +1926,7 @@ pub fn run() {
             schedule::spawn(handle.clone());
             note_reminders::spawn(handle.clone());
             timers::spawn(handle.clone());
+            kvm::init(&handle);
             automations::spawn(handle.clone());
             battery_log::spawn(handle.clone());
             // Off by default: listens only once switched on in Settings.

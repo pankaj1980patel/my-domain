@@ -78,6 +78,9 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "phone_hotspot",
             "phone_audio_volume",
             "nearby_media",
+            "kvm_enabled",
+            "kvm_hotkey",
+            "kvm_swap_mods",
         ],
     },
     KvSection {

@@ -258,6 +258,25 @@ pub enum CoreEvent {
         from: String,
         events: Vec<crate::model::InputEvent>,
     },
+    /// "Share mouse and keyboard" (`features::kvm`): who this computer's
+    /// mouse and keyboard are with changed: it started or stopped
+    /// controlling another computer, or another computer started or
+    /// stopped controlling this one (and why). The desktop captures its
+    /// own input while "controlling", plays `KvmInput` while
+    /// "controlled", and must let go of everything at "idle".
+    KvmChanged { state: crate::model::KvmState },
+    /// Mouse and keyboard events from the computer controlling this one,
+    /// to play back in order. Many a second, and keys typed: the desktop
+    /// never logs them or hands them to the window.
+    KvmInput {
+        from: String,
+        events: Vec<crate::model::KvmEvent>,
+    },
+    /// Where your other computers sit around this one changed on another
+    /// computer (`features::kvm`): the whole layout now.
+    KvmLayout {
+        layout: Vec<crate::model::KvmNeighbor>,
+    },
     /// Another device went into (`on`) or out of Do Not Disturb.
     Dnd { from: String, on: bool },
     /// Labels your other devices set changed what devices are called here
@@ -461,6 +480,9 @@ impl CoreEvent {
             CoreEvent::SyncPairs { .. } => "sync-pairs",
             CoreEvent::BatteryAlert { .. } => "battery-alert",
             CoreEvent::Input { .. } => "input-event",
+            CoreEvent::KvmChanged { .. } => "kvm-changed",
+            CoreEvent::KvmInput { .. } => "kvm-input",
+            CoreEvent::KvmLayout { .. } => "kvm-layout",
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
@@ -821,6 +843,38 @@ mod tests {
         assert_eq!(
             ev.ui_payload(),
             json!({"node_id": "n1", "transport": "webrtc"})
+        );
+    }
+    #[test]
+    fn kvm_events_keep_their_shape() {
+        let ev = CoreEvent::KvmChanged {
+            state: crate::model::KvmState {
+                role: "idle".into(),
+                edge: Some("right".into()),
+                pos: Some(2500),
+                reason: Some("returned".into()),
+                ..Default::default()
+            },
+        };
+        assert_eq!(ev.name(), "kvm-changed");
+        assert_eq!(
+            ev.ui_payload(),
+            json!({"state": {"role": "idle", "node_id": null, "name": null,
+                "edge": "right", "pos": 2500, "reason": "returned"}})
+        );
+        let input = CoreEvent::KvmInput {
+            from: "mac".into(),
+            events: vec![crate::model::KvmEvent::Key {
+                code: 4,
+                down: true,
+            }],
+        };
+        assert_eq!(input.name(), "kvm-input");
+        assert_eq!(input.to_json()["kind"], "kvm_input");
+        let layout = CoreEvent::KvmLayout { layout: vec![] };
+        assert_eq!(
+            (layout.name(), layout.ui_payload()),
+            ("kvm-layout", json!({"layout": []}))
         );
     }
 }

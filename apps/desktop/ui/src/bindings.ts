@@ -465,6 +465,19 @@ export const commands = {
 	phoneQuiet: () => __TAURI_INVOKE<string[]>("phone_quiet"),
 	/**  Whether your phone may move the pointer and type here. */
 	remoteInputAllowed: () => __TAURI_INVOKE<boolean>("remote_input_allowed"),
+	kvmSettings: () => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_settings"),
+	/**
+	 *  Place a computer at a side of this one ("left", "right", "top",
+	 *  "bottom"), or take it off (`None`).
+	 */
+	kvmPlace: (nodeId: string, side: string | null) => typedError<KvmSettings_Serialize, string>(__TAURI_INVOKE("kvm_place", { nodeId, side })),
+	kvmSetEnabled: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_enabled", { on }),
+	kvmSetAllowed: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_allowed", { on }),
+	kvmSetClip: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_clip", { on }),
+	kvmSetSwap: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_swap", { on }),
+	kvmSetHotkey: (hotkey: string) => typedError<KvmSettings_Serialize, string>(__TAURI_INVOKE("kvm_set_hotkey", { hotkey })),
+	/**  "Take back" on the controlled computer, or Stop on the controlling one. */
+	kvmStop: () => __TAURI_INVOKE<void>("kvm_stop"),
 	setRemoteInputAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_remote_input_allowed", { on }),
 	/**  Whether your other devices may watch this screen. */
 	screenAllowed: () => __TAURI_INVOKE<boolean>("screen_allowed"),
@@ -1783,6 +1796,153 @@ export type KeyVerification = {
 	 */
 	qr_size: number,
 	qr_path: string,
+};
+
+export type KvmComputer = {
+	node_id: string,
+	name: string,
+	os: string,
+	linked: boolean,
+};
+
+/**
+ *  A computer placed next to this one for "Share mouse and keyboard":
+ *  `side` is "left", "right", "top" or "bottom" of this screen.
+ */
+export type KvmNeighbor = {
+	node_id: string,
+	side: string,
+};
+
+/**  The Settings section. */
+export type KvmSettings = KvmSettings_Serialize | KvmSettings_Deserialize;
+
+/**  The Settings section. */
+export type KvmSettings_Deserialize = {
+	/**  This computer can share its mouse and keyboard at all. */
+	supported: boolean,
+	/**
+	 *  Why not, or why it can't capture or play input yet: "wayland",
+	 *  "display" (no X server), "accessibility" (a Mac not allowed yet).
+	 */
+	blocked?: string | null,
+	/**
+	 *  Share this computer's mouse and keyboard with the computers placed
+	 *  around it.
+	 */
+	enabled: boolean,
+	/**  Let your other computers control this one. */
+	allowed: boolean,
+	clip_follows: boolean,
+	swap_mods: boolean,
+	/**  "ctrl+alt+esc", "ctrl+alt+f12" or "scroll_lock". */
+	hotkey: string,
+	layout: KvmNeighbor[],
+	/**  Your other computers that can take part. */
+	computers: KvmComputer[],
+	state: KvmState_Deserialize,
+	/**  "macos", "windows" or "linux". */
+	os: string,
+};
+
+/**  The Settings section. */
+export type KvmSettings_Serialize = {
+	/**  This computer can share its mouse and keyboard at all. */
+	supported: boolean,
+	/**
+	 *  Why not, or why it can't capture or play input yet: "wayland",
+	 *  "display" (no X server), "accessibility" (a Mac not allowed yet).
+	 */
+	blocked: string | null,
+	/**
+	 *  Share this computer's mouse and keyboard with the computers placed
+	 *  around it.
+	 */
+	enabled: boolean,
+	/**  Let your other computers control this one. */
+	allowed: boolean,
+	clip_follows: boolean,
+	swap_mods: boolean,
+	/**  "ctrl+alt+esc", "ctrl+alt+f12" or "scroll_lock". */
+	hotkey: string,
+	layout: KvmNeighbor[],
+	/**  Your other computers that can take part. */
+	computers: KvmComputer[],
+	state: KvmState_Serialize,
+	/**  "macos", "windows" or "linux". */
+	os: string,
+};
+
+/**
+ *  Who this computer's mouse and keyboard are with (`features::kvm`):
+ *  `Engine::kvm_state` and the `KvmChanged` event.
+ */
+export type KvmState = KvmState_Serialize | KvmState_Deserialize;
+
+/**
+ *  Who this computer's mouse and keyboard are with (`features::kvm`):
+ *  `Engine::kvm_state` and the `KvmChanged` event.
+ */
+export type KvmState_Deserialize = {
+	/**
+	 *  "idle", "controlling" (this computer's mouse and keyboard drive
+	 *  `node_id`) or "controlled" (`node_id`'s drive this one).
+	 */
+	role: string,
+	node_id?: string | null,
+	/**  The other computer's name. */
+	name?: string | null,
+	/**
+	 *  Controlled: the edge of this screen the pointer came in at (and
+	 *  leaves by). Controlling: the edge of this screen it went out at.
+	 *  Idle after a return: the edge of this screen it comes back at.
+	 *  "left", "right", "top" or "bottom".
+	 */
+	edge?: string | null,
+	/**
+	 *  Where along `edge`, in ten-thousandths of its length from the top
+	 *  or left.
+	 */
+	pos?: number | null,
+	/**
+	 *  Why it became idle: "returned" (the pointer came back), "stopped"
+	 *  (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
+	 *  doesn't allow being controlled), "busy", "ended".
+	 */
+	reason?: string | null,
+};
+
+/**
+ *  Who this computer's mouse and keyboard are with (`features::kvm`):
+ *  `Engine::kvm_state` and the `KvmChanged` event.
+ */
+export type KvmState_Serialize = {
+	/**
+	 *  "idle", "controlling" (this computer's mouse and keyboard drive
+	 *  `node_id`) or "controlled" (`node_id`'s drive this one).
+	 */
+	role: string,
+	node_id: string | null,
+	/**  The other computer's name. */
+	name: string | null,
+	/**
+	 *  Controlled: the edge of this screen the pointer came in at (and
+	 *  leaves by). Controlling: the edge of this screen it went out at.
+	 *  Idle after a return: the edge of this screen it comes back at.
+	 *  "left", "right", "top" or "bottom".
+	 */
+	edge: string | null,
+	/**
+	 *  Where along `edge`, in ten-thousandths of its length from the top
+	 *  or left.
+	 */
+	pos: number | null,
+	/**
+	 *  Why it became idle: "returned" (the pointer came back), "stopped"
+	 *  (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
+	 *  doesn't allow being controlled), "busy", "ended".
+	 */
+	reason: string | null,
 };
 
 /**  Where the layout a page shows came from. */

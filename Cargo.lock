@@ -4330,6 +4330,8 @@ dependencies = [
  "base64 0.22.1",
  "block2 0.6.2",
  "chrono",
+ "core-foundation 0.10.1",
+ "core-graphics",
  "cpal",
  "enigo",
  "fcm_receiver_rs",
@@ -4365,6 +4367,7 @@ dependencies = [
  "tungstenite",
  "uuid",
  "windows 0.61.3",
+ "x11rb",
 ]
 
 [[package]]

@@ -166,6 +166,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::timers::link_up(&ctx, &peer);
         crate::features::read_later::link_up(&ctx, &peer);
         crate::features::links_map::link_up(&ctx, &peer);
+        crate::features::kvm::link_up(&ctx, &peer);
     });
 }
 
@@ -255,6 +256,7 @@ pub fn drop_live<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     if removed {
         crate::features::diag::note(ctx, node_id, "link_down", None);
         crate::features::links_map::link_down(ctx, node_id);
+        crate::features::kvm::link_down(ctx, node_id);
         ctx.sink.emit(CoreEvent::PeerDisconnected {
             node_id: node_id.to_string(),
         });

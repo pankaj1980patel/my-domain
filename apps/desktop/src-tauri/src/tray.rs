@@ -76,6 +76,9 @@ const ID_NONE: &str = "app:none";
 
 /// Pop-ups are held (`set_quiet`): the tooltip says so.
 static QUIET: AtomicBool = AtomicBool::new(false);
+/// Share mouse and keyboard: who this computer's mouse and keyboard are
+/// with, said first in the tooltip (and next to the icon on a Mac).
+static KVM: Mutex<Option<String>> = Mutex::new(None);
 /// Set by "Quit" so closing the window then really exits.
 static QUITTING: AtomicBool = AtomicBool::new(false);
 /// A rebuild is already scheduled.
@@ -209,16 +212,37 @@ pub fn set_quiet(app: &AppHandle, on: bool) {
 /// Set the tooltip from what it says: quiet, and the phone's battery
 /// (`tray_battery`).
 pub(crate) fn refresh_tooltip(app: &AppHandle) {
-    let tip = tooltip_text(
+    let mut tip = tooltip_text(
         QUIET.load(Ordering::Relaxed),
         crate::tray_battery::tip_line().as_deref(),
     );
+    if let Some(line) = KVM.lock().ok().and_then(|k| k.clone()) {
+        tip = format!("{line} \u{b7} {tip}");
+    }
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(tray) = handle.tray_by_id(TRAY_ID) {
             if let Err(e) = tray.set_tooltip(Some(&tip)) {
                 eprintln!("[tray] couldn't update the tooltip: {e}");
             }
+        }
+    });
+}
+
+/// Share mouse and keyboard: `line` ("Pixel is controlling this
+/// computer", "Controlling Work PC") while it lasts, `None` after. The
+/// tooltip starts with it, and a Mac shows a mark next to the icon.
+pub fn set_kvm(app: &AppHandle, line: Option<String>) {
+    let on = line.is_some();
+    if let Ok(mut k) = KVM.lock() {
+        *k = line;
+    }
+    refresh_tooltip(app);
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id(TRAY_ID) {
+            // (Only some systems show a title; the others ignore it.)
+            let _ = tray.set_title(on.then_some("\u{21c4}"));
         }
     });
 }

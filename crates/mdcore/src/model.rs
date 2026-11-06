@@ -708,3 +708,70 @@ pub struct WakeReport {
     /// it too (node ids).
     pub relays: Vec<String>,
 }
+
+/// One thing a computer's mouse or keyboard did, for the computer it
+/// controls to play back (`features::kvm`, "Share mouse and keyboard").
+/// Moves are relative, in pixels; wheel turns in steps (`dy` positive
+/// scrolls down, `dx` positive right); keys are USB HID usage codes
+/// (keyboard page), the same on every OS.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum KvmEvent {
+    Move {
+        dx: i32,
+        dy: i32,
+    },
+    /// `button` 1 left, 2 right, 3 middle, 4 back, 5 forward.
+    Button {
+        button: u8,
+        down: bool,
+    },
+    Wheel {
+        dx: i32,
+        dy: i32,
+    },
+    Key {
+        code: u16,
+        down: bool,
+    },
+}
+
+/// Who this computer's mouse and keyboard are with (`features::kvm`):
+/// `Engine::kvm_state` and the `KvmChanged` event.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct KvmState {
+    /// "idle", "controlling" (this computer's mouse and keyboard drive
+    /// `node_id`) or "controlled" (`node_id`'s drive this one).
+    pub role: String,
+    #[serde(default)]
+    pub node_id: Option<String>,
+    /// The other computer's name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Controlled: the edge of this screen the pointer came in at (and
+    /// leaves by). Controlling: the edge of this screen it went out at.
+    /// Idle after a return: the edge of this screen it comes back at.
+    /// "left", "right", "top" or "bottom".
+    #[serde(default)]
+    pub edge: Option<String>,
+    /// Where along `edge`, in ten-thousandths of its length from the top
+    /// or left.
+    #[serde(default)]
+    pub pos: Option<u16>,
+    /// Why it became idle: "returned" (the pointer came back), "stopped"
+    /// (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
+    /// doesn't allow being controlled), "busy", "ended".
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// A computer placed next to this one for "Share mouse and keyboard":
+/// `side` is "left", "right", "top" or "bottom" of this screen.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct KvmNeighbor {
+    pub node_id: String,
+    pub side: String,
+}
