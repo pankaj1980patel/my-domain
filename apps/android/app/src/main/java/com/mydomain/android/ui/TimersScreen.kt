@@ -80,6 +80,7 @@ fun TimersScreen(onBack: () -> Unit, onHelp: () -> Unit) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(250)
+            Core.awaitOnScreen()
             now = System.currentTimeMillis()
         }
     }
@@ -303,6 +304,7 @@ fun TimersEntry(onOpen: () -> Unit) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
+            Core.awaitOnScreen()
             now = System.currentTimeMillis()
         }
     }

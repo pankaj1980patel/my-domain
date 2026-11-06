@@ -60,6 +60,12 @@ object Radios {
             .onFailure { Log.w(TAG, "can't watch the radios: $it") }
     }
 
+    /** Stop watching (NetService.onDestroy; [init] starts again). */
+    fun stop(ctx: Context) {
+        receiver?.let { runCatching { ctx.applicationContext.unregisterReceiver(it) } }
+        receiver = null
+    }
+
     /** Airplane mode, mobile data and hotspot, as far as they can be read. */
     fun state(ctx: Context, o: JSONObject) {
         val cr = ctx.contentResolver

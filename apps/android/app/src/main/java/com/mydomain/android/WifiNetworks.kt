@@ -64,6 +64,12 @@ object WifiNetworks {
             .onSuccess { receiver = r }
     }
 
+    /** Stop watching (NetService.onDestroy; [init] starts again). */
+    fun stop(ctx: Context) {
+        receiver?.let { runCatching { ctx.applicationContext.unregisterReceiver(it) } }
+        receiver = null
+    }
+
     /** The networks and what's missing, into the status. */
     fun state(o: JSONObject) {
         networks?.let { o.put("wifi_networks", it) }

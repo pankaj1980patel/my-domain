@@ -22,6 +22,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * What's playing on this phone (any app with a media session: Spotify,
@@ -53,9 +55,14 @@ object NowPlaying {
     private var last: String? = null
     /** The session a computer picked to show (`session` command). */
     private var chosen: String? = null
-    /** Pictures already encoded, by what they were made from. */
-    private var artCache: Pair<Any, String>? = null
-    private val iconCache = HashMap<String, String?>()
+    /** The artwork already encoded, by the bitmap it was made from (held
+     *  weakly: a big picture isn't kept alive for this). */
+    private var artCache: Pair<java.lang.ref.WeakReference<Bitmap>, String>? = null
+    /** App icons already encoded (main thread), the oldest dropped past [MAX_ICONS]. */
+    private const val MAX_ICONS = 32
+    private val iconCache = object : LinkedHashMap<String, String?>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String?>?): Boolean = size > MAX_ICONS
+    }
 
     private val sessionsChanged = MediaSessionManager.OnActiveSessionsChangedListener { list ->
         track(list.orEmpty())
@@ -71,6 +78,7 @@ object NowPlaying {
             try {
                 mgr.addOnActiveSessionsChangedListener(sessionsChanged, listener, main)
                 started = true
+                ResourceLedger.hold(ResourceBook.Kind.LISTENER, "NowPlaying: media sessions")
                 track(mgr.getActiveSessions(listener))
             } catch (e: SecurityException) {
                 // Notification access not granted (yet).
@@ -169,9 +177,9 @@ object NowPlaying {
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
             ?: md.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
             ?: return null
-        artCache?.let { (from, b64) -> if (from === bmp) return b64 }
+        artCache?.let { (from, b64) -> if (from.get() === bmp) return b64 }
         val b64 = encode(bmp, MediaPlan.ART_PX, Bitmap.CompressFormat.JPEG, 80) ?: return null
-        artCache = bmp to b64
+        artCache = java.lang.ref.WeakReference(bmp) to b64
         return b64
     }
 
@@ -179,7 +187,13 @@ object NowPlaying {
     private fun icon(pkg: String): String? = iconCache.getOrPut(pkg) {
         runCatching {
             val d = app.packageManager.getApplicationIcon(pkg)
-            encode(bitmapOf(d), MediaPlan.ICON_PX, Bitmap.CompressFormat.PNG, 100)
+            val b = bitmapOf(d)
+            try {
+                encode(b, MediaPlan.ICON_PX, Bitmap.CompressFormat.PNG, 100)
+            } finally {
+                // One drawn here (not the drawable's own) goes now.
+                if (!(d is BitmapDrawable && d.bitmap === b)) b.recycle()
+            }
         }.getOrNull()
     }
 
@@ -198,7 +212,11 @@ object NowPlaying {
         if (w == 0) return null
         val scaled = if (w == bmp.width && h == bmp.height) bmp else Bitmap.createScaledBitmap(bmp, w, h, true)
         val out = ByteArrayOutputStream()
-        scaled.compress(format, quality, out)
+        try {
+            scaled.compress(format, quality, out)
+        } finally {
+            if (scaled !== bmp) scaled.recycle()
+        }
         Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP)
     }.getOrNull()
 

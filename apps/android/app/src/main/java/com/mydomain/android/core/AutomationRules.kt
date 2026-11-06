@@ -85,6 +85,8 @@ class AutomationBook(list: List<Automation> = emptyList()) {
     private var wifiSsid: String? = null
     /** A join was reported without its network's name. */
     private var joinedUnnamed = false
+    /** Looks at Wi-Fi since then (the name may come late, or never). */
+    private var unnamedLooks = 0
 
     // --- the list ------------------------------------------------------------
 
@@ -148,6 +150,16 @@ class AutomationBook(list: List<Automation> = emptyList()) {
         }
     }
 
+    /** A link went down and "disconnects" waits to see if it stays down,
+     *  or Wi-Fi was joined and its name may still come: only then is a look
+     *  on a timer needed (everything else comes from events). */
+    fun waiting(): Boolean =
+        links.values.any { it.state == LinkState.DOWN } || (joinedUnnamed && unnamedLooks < UNNAMED_LOOKS)
+
+    /** When to look at the links again: soon while one [waiting], else
+     *  rarely (a safety net for a missed event). */
+    fun nextTickMs(): Long = if (waiting()) TICK_WAITING_MS else TICK_IDLE_MS
+
     /** This phone's battery is [pct] and [charging]: changes from the last
      *  values (none the first time, which only sets where things stand). */
     fun battery(pct: Int, charging: Boolean): List<Edge> {
@@ -176,11 +188,13 @@ class AutomationBook(list: List<Automation> = emptyList()) {
             return emptyList()
         }
         val out = ArrayList<Edge>()
+        if (joinedUnnamed) unnamedLooks++
         when {
             !wifiOn && connected -> {
                 out += Edge.WifiJoined(name)
                 wifiSsid = name
                 joinedUnnamed = name == null
+                unnamedLooks = 0
             }
             wifiOn && !connected -> {
                 out += Edge.WifiLeft(wifiSsid)
@@ -224,6 +238,13 @@ class AutomationBook(list: List<Automation> = emptyList()) {
     companion object {
         /** How long a link must stay down to count as "disconnects". */
         const val AWAY_AFTER_MS = 60_000L
+        /** The links' timer while a link is down (well under [AWAY_AFTER_MS]). */
+        const val TICK_WAITING_MS = 15_000L
+        /** ... and with none down: a rare look in case an event was missed. */
+        const val TICK_IDLE_MS = 5 * 60_000L
+        /** A Wi-Fi name that hasn't come after this many looks (about two
+         *  minutes of quick ones) won't: the quick looks stop. */
+        const val UNNAMED_LOOKS = 8
         /** The least time between two runs of one automation. */
         const val COOL_DOWN_MS = 60_000L
         const val MAX_AUTOMATIONS = 100

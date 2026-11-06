@@ -238,7 +238,7 @@ class NotifListener : NotificationListenerService() {
         // The sender's picture: theirs in the conversation, else the large icon.
         val avatar = runCatching { last?.person?.icon?.loadDrawable(this) }.getOrNull()
             ?: runCatching { notification.getLargeIcon()?.loadDrawable(this) }.getOrNull()
-        avatar?.let { runCatching { jpegOf(bitmapOf(it, AVATAR_PX), AVATAR_PX, AVATAR_BYTES) }.getOrNull() }
+        avatar?.let { runCatching { jpegOfDrawable(it, AVATAR_PX, AVATAR_BYTES) }.getOrNull() }
             ?.let { o.put("avatar", it) }
         picture?.let { runCatching { jpegOf(it, PICTURE_PX, PICTURE_BYTES) }.getOrNull() }?.let { o.put("picture", it) }
         return o
@@ -258,8 +258,18 @@ class NotifListener : NotificationListenerService() {
 
     /** App [pkg]'s icon as a small JPEG, base64. */
     private fun appIconJpeg(pkg: String): String? = runCatching {
-        jpegOf(bitmapOf(packageManager.getApplicationIcon(pkg), ICON_PX), ICON_PX, ICON_BYTES)
+        jpegOfDrawable(packageManager.getApplicationIcon(pkg), ICON_PX, ICON_BYTES)
     }.getOrNull()
+
+    /** [d] as a JPEG ([jpegOf]); a bitmap drawn for it here is recycled. */
+    private fun jpegOfDrawable(d: Drawable, px: Int, maxBytes: Int): String? {
+        val b = bitmapOf(d, px)
+        return try {
+            jpegOf(b, px, maxBytes)
+        } finally {
+            if (!(d is BitmapDrawable && d.bitmap === b)) b.recycle()
+        }
+    }
 
     private fun bitmapOf(d: Drawable, px: Int): Bitmap {
         if (d is BitmapDrawable && d.bitmap != null) return d.bitmap
@@ -278,15 +288,21 @@ class NotifListener : NotificationListenerService() {
         val w = maxOf(1, (src.width * scale).toInt())
         val h = maxOf(1, (src.height * scale).toInt())
         val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(out).apply {
-            drawColor(Color.WHITE)
-            drawBitmap(Bitmap.createScaledBitmap(src, w, h, true), 0f, 0f, null)
+        try {
+            val scaled = Bitmap.createScaledBitmap(src, w, h, true)
+            Canvas(out).apply {
+                drawColor(Color.WHITE)
+                drawBitmap(scaled, 0f, 0f, null)
+            }
+            if (scaled !== src) scaled.recycle()
+            for (q in intArrayOf(80, 65, 50, 35)) {
+                val bytes = ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.JPEG, q, it) }.toByteArray()
+                if (bytes.size <= maxBytes) return Base64.encodeToString(bytes, Base64.NO_WRAP)
+            }
+            return null
+        } finally {
+            out.recycle()
         }
-        for (q in intArrayOf(80, 65, 50, 35)) {
-            val bytes = ByteArrayOutputStream().also { out.compress(Bitmap.CompressFormat.JPEG, q, it) }.toByteArray()
-            if (bytes.size <= maxBytes) return Base64.encodeToString(bytes, Base64.NO_WRAP)
-        }
-        return null
     }
 
     /** Another device pressed button [index] of notification [key] (with

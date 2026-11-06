@@ -30,6 +30,28 @@ object CameraFrames {
         }
     }
 
+    /** Pictures a second sent to the computers (CameraShare sends one every 80 ms). */
+    const val SEND_FPS = 12
+
+    /**
+     * The camera's frame rate range for the preview ([ranges]: the
+     * camera's own, lower to upper): the camera needn't make 30 or 60
+     * pictures a second when about [SEND_FPS] go out; fewer frames, less
+     * power. The range with the lowest upper bound still at least [want]
+     * (the widest of those, so it can slow down in the dark); with none
+     * that fast, the fastest there is; null for none.
+     */
+    fun pickFpsRange(ranges: List<Pair<Int, Int>>, want: Int = SEND_FPS): Pair<Int, Int>? {
+        val ok = ranges.filter { (lo, hi) -> lo in 1..hi }
+        val fast = ok.filter { it.second >= want }
+        return if (fast.isNotEmpty()) {
+            val top = fast.minOf { it.second }
+            fast.filter { it.second == top }.minByOrNull { it.first }
+        } else {
+            ok.maxWithOrNull(compareBy<Pair<Int, Int>> { it.second }.thenBy { -it.first })
+        }
+    }
+
     /**
      * How the phone is held, to the nearest quarter turn clockwise (0, 90,
      * 180, 270), from an orientation sensor reading in degrees ([raw]; -1

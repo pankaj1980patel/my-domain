@@ -33,6 +33,8 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import com.mydomain.android.core.AudioPlan
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * This phone's media audio (music, videos, podcasts; never calls) played on
@@ -310,6 +312,7 @@ class PhoneAudioService : Service() {
         }
         projection = mp
         current = this
+        ResourceLedger.hold(ResourceBook.Kind.SERVICE, "PhoneAudioService")
         graceUntil = System.currentTimeMillis() + START_GRACE_MS
         targets.add(node)
         changed()
@@ -407,35 +410,43 @@ class PhoneAudioService : Service() {
             rec.release()
             return
         }
-        rec.startRecording()
         val buf = ByteArray(AudioPlan.frameBytes(rate))
         var lastListened = System.currentTimeMillis()
         var listening = emptyList<String>()
         var checkedAt = 0L
-        while (current === this) {
-            val n = rec.read(buf, 0, buf.size, AudioRecord.READ_BLOCKING)
-            if (n < 0) {
-                Log.w(TAG, "capture ended: $n")
-                break
+        ResourceLedger.hold(ResourceBook.Kind.AUDIO, "phone-audio capture")
+        try {
+            rec.startRecording()
+            while (current === this) {
+                val n = rec.read(buf, 0, buf.size, AudioRecord.READ_BLOCKING)
+                if (n < 0) {
+                    Log.w(TAG, "capture ended: $n")
+                    break
+                }
+                val engine = Core.engine() ?: break
+                val now = System.currentTimeMillis()
+                // Who listens: asked twice a second, not every frame.
+                if (now - checkedAt >= CHECK_MS) {
+                    checkedAt = now
+                    listening = engine.audioListeners().filter { it in targets }
+                    if (listening.isNotEmpty()) lastListened = now
+                    else if (AudioPlan.shouldStop(now, graceUntil, lastListened, IDLE_MS)) break
+                }
+                if (n == 0 || listening.isEmpty()) continue
+                val frame = if (n == buf.size) buf else buf.copyOf(n - n % 4)
+                if (frame.isEmpty()) continue
+                runCatching { engine.audioFrameTo(frame, rate.toUInt(), AudioPlan.CHANNELS.toUByte(), listening) }
             }
-            val engine = Core.engine() ?: break
-            val now = System.currentTimeMillis()
-            // Who listens: asked twice a second, not every frame.
-            if (now - checkedAt >= CHECK_MS) {
-                checkedAt = now
-                listening = engine.audioListeners().filter { it in targets }
-                if (listening.isNotEmpty()) lastListened = now
-                else if (AudioPlan.shouldStop(now, graceUntil, lastListened, IDLE_MS)) break
-            }
-            if (n == 0 || listening.isEmpty()) continue
-            val frame = if (n == buf.size) buf else buf.copyOf(n - n % 4)
-            if (frame.isEmpty()) continue
-            runCatching { engine.audioFrameTo(frame, rate.toUInt(), AudioPlan.CHANNELS.toUByte(), listening) }
+        } catch (e: Exception) {
+            Log.w(TAG, "capture: $e")
+        } finally {
+            // The loop owns the recorder: released here, never under a
+            // read, whichever way the loop ended.
+            record = null
+            runCatching { rec.stop() }
+            rec.release()
+            ResourceLedger.release(ResourceBook.Kind.AUDIO, "phone-audio capture")
         }
-        // The loop owns the recorder: released here, never under a read.
-        record = null
-        runCatching { rec.stop() }
-        rec.release()
         if (current === this) main.post { stop() }
     }
 
@@ -452,6 +463,7 @@ class PhoneAudioService : Service() {
         projection = null
         worker = null
         if (wasCurrent) PhoneAudio.published(emptySet())
+        ResourceLedger.release(ResourceBook.Kind.SERVICE, "PhoneAudioService")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

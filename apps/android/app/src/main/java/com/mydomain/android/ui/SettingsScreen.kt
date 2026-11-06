@@ -302,6 +302,7 @@ fun PrintSettingsTile() {
     // A computer turning printing on or off says so over its link.
     LaunchedEffect(Unit) {
         while (true) {
+            Core.awaitOnScreen()
             val engine = Core.engine()
             computers = Core.peers
                 .filter { p -> runCatching { engine?.printSupported(p.nodeId) == true }.getOrDefault(false) }
@@ -332,6 +333,7 @@ fun HelperSettingsTile() {
     // Turned on in Android's Settings: look again every few seconds.
     LaunchedEffect(Unit) {
         while (true) {
+            Core.awaitOnScreen()
             on = PhoneHelper.enabled(ctx)
             delay(2_000)
         }
@@ -358,6 +360,7 @@ fun ShizukuSettingsTile() {
     // Shizuku starts and stops in its own app: look again every few seconds.
     LaunchedEffect(Unit) {
         while (true) {
+            Core.awaitOnScreen()
             state = Privileged.state()
             delay(2_000)
         }

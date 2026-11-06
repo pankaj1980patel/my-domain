@@ -23,6 +23,8 @@ import com.mydomain.android.core.WifiDirectPlan
 import com.mydomain.android.core.WifiDirectPlan.Event
 import com.mydomain.android.core.WifiDirectPlan.Phase
 import org.json.JSONObject
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Wi-Fi Direct for big files (mdcore `features::wifi_direct`): the core asks
@@ -55,6 +57,7 @@ object WifiDirect {
     private const val POLLS = (WifiDirectPlan.SETUP_MS / POLL_MS).toInt()
 
     private val main = Handler(Looper.getMainLooper())
+    private const val CLOSE_AFTER_MS = 10_000L
     private var manager: WifiP2pManager? = null
     private var channel: WifiP2pManager.Channel? = null
     /** sid -> where that request is (main thread only). */
@@ -130,7 +133,11 @@ object WifiDirect {
         }
         val m = manager ?: (app.getSystemService(Context.WIFI_P2P_SERVICE) as? WifiP2pManager)?.also { manager = it }
         if (m == null) return fail(sid, "no Wi-Fi Direct")
-        if (channel == null) channel = runCatching { m.initialize(app, Looper.getMainLooper(), null) }.getOrNull()
+        main.removeCallbacks(closeIdle)
+        if (channel == null) {
+            channel = runCatching { m.initialize(app, Looper.getMainLooper(), null) }.getOrNull()
+            if (channel != null) ResourceLedger.hold(ResourceBook.Kind.LISTENER, "Wi-Fi Direct channel")
+        }
         if (channel == null) return fail(sid, "no channel")
         phases[sid] = next
         go()
@@ -240,12 +247,29 @@ object WifiDirect {
     private fun leave(sid: String) {
         val was = phases[sid] ?: Phase.Idle
         phases.remove(sid)
+        closeSoon()
         if (!WifiDirectPlan.removeOnLeave(was)) return
         val m = manager ?: return
         val ch = channel ?: return
         runCatching { m.removeGroup(ch, null) }
         if (was == Phase.Joining) runCatching { m.cancelConnect(ch, null) }
         Log.i(TAG, "$sid: left")
+    }
+
+    /** With no request left, close the Wi-Fi Direct channel (its link to
+     *  the system service) once the group's removal has gone through; the
+     *  next request opens a new one. */
+    private val closeIdle = Runnable {
+        if (phases.isNotEmpty()) return@Runnable
+        val ch = channel ?: return@Runnable
+        channel = null
+        if (Build.VERSION.SDK_INT >= 27) runCatching { ch.close() }
+        ResourceLedger.release(ResourceBook.Kind.LISTENER, "Wi-Fi Direct channel")
+    }
+
+    private fun closeSoon() {
+        main.removeCallbacks(closeIdle)
+        if (phases.isEmpty()) main.postDelayed(closeIdle, CLOSE_AFTER_MS)
     }
 
     /** The first time it's needed: say why and ask (on screen when the app

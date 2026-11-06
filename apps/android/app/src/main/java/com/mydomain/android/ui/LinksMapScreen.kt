@@ -182,6 +182,7 @@ fun LinksMapScreen(onBack: () -> Unit, onHelp: () -> Unit, onDevice: (String) ->
     LaunchedEffect(Unit) {
         while (true) {
             delay(5000)
+            Core.awaitOnScreen()
             runCatching { LinksMap.load() }
         }
     }

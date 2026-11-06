@@ -34,6 +34,8 @@ import com.mydomain.android.core.PlaybackPlan
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.ffi.MdException
 import org.json.JSONObject
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * A computer's sound played on this phone, and the earbuds on it (mdcore
@@ -309,6 +311,7 @@ class ComputerAudioService : Service() {
         lastFrame = 0L
         startedAt = System.currentTimeMillis()
         current = this
+        ResourceLedger.hold(ResourceBook.Kind.SERVICE, "ComputerAudioService")
         holdLocks()
         ComputerAudio.published(n, false)
         if (!running) {
@@ -341,7 +344,9 @@ class ComputerAudioService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
 
     /** Keep the radio awake (Wi-Fi power save batches packets: stutter)
-     *  and the CPU running with the screen off, only while playing. */
+     *  and the CPU running with the screen off, only while playing. The
+     *  wake lock times out by itself ([LOCK_MS]) and the listen loop renews
+     *  it, so a player that dies without a stop can't hold it for long. */
     @Suppress("DEPRECATION", "InlinedApi")
     private fun holdLocks() {
         if (wifiLock == null) {
@@ -354,21 +359,36 @@ class ComputerAudioService : Service() {
                     ?.createWifiLock(mode, "mydomain:computer-audio")
                     ?.apply { setReferenceCounted(false); acquire() }
             }.onFailure { Log.w(TAG, "no Wi-Fi lock: $it") }.getOrNull()
+            if (wifiLock != null) ResourceLedger.hold(ResourceBook.Kind.WIFI_LOCK, LOCK_TAG)
         }
         if (wakeLock == null) {
             wakeLock = runCatching {
                 getSystemService(PowerManager::class.java)
-                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mydomain:computer-audio")
-                    ?.apply { setReferenceCounted(false); acquire() }
+                    ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, LOCK_TAG)
+                    ?.apply { setReferenceCounted(false) }
             }.onFailure { Log.w(TAG, "no wake lock: $it") }.getOrNull()
         }
+        renewWakeLock()
     }
 
+    /** The wake lock for another [LOCK_MS] (not reference counted: a new
+     *  acquire replaces the timeout). Only while this plays. */
+    @Synchronized
+    private fun renewWakeLock() {
+        val w = wakeLock ?: return
+        if (current !== this) return
+        runCatching { w.acquire(LOCK_MS) }.onFailure { Log.w(TAG, "wake lock: $it") }
+        ResourceLedger.hold(ResourceBook.Kind.WAKE_LOCK, LOCK_TAG, LOCK_MS)
+    }
+
+    @Synchronized
     private fun releaseLocks() {
         runCatching { wifiLock?.takeIf { it.isHeld }?.release() }
         wifiLock = null
         runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
         wakeLock = null
+        ResourceLedger.release(ResourceBook.Kind.WIFI_LOCK, LOCK_TAG)
+        ResourceLedger.release(ResourceBook.Kind.WAKE_LOCK, LOCK_TAG)
     }
 
     private fun publishStats() {
@@ -441,9 +461,15 @@ class ComputerAudioService : Service() {
                 return
             }
             publishStats()
+            if (now - lockRenewedAt >= LOCK_RENEW_MS) {
+                lockRenewedAt = now
+                renewWakeLock()
+            }
             Thread.sleep(CHECK_MS)
         }
     }
+
+    private var lockRenewedAt = 0L
 
     /** The player, on its own urgent-audio thread (frames arrive on the
      *  core's thread and only go into the buffer): [PlaybackPlan.PERIOD_MS]
@@ -461,7 +487,9 @@ class ComputerAudioService : Service() {
             while (running && current === this) {
                 val wanted = PlaybackPlan.trackFor(jitter.rate, lowLatency, Build.VERSION.SDK_INT)
                 if (wanted.rate == 0) {
-                    Thread.sleep(10)
+                    // Nothing heard yet: wait for the first frames (a
+                    // short sleep, not a spin).
+                    Thread.sleep(WAIT_FIRST_MS)
                     continue
                 }
                 if (PlaybackPlan.reopen(opened, wanted)) {
@@ -489,6 +517,9 @@ class ComputerAudioService : Service() {
             Log.w(TAG, "player: $e")
         } finally {
             track?.let { runCatching { it.stop() }; it.release() }
+            // The output went (or failed) while still playing: stop the
+            // whole thing, or the listen and the locks would go on silently.
+            if (running && current === this) main.post { stopSaying(getString(R.string.caudio_cant_play)) }
         }
     }
 
@@ -551,6 +582,7 @@ class ComputerAudioService : Service() {
         if (tell && n.isNotEmpty()) Thread { runCatching { Core.engine()?.audioListen(n, false) } }.start()
         if (wasCurrent) ComputerAudio.published(null, false, why)
         releaseLocks()
+        ResourceLedger.release(ResourceBook.Kind.SERVICE, "ComputerAudioService")
         ComputerAudio.publishStats(null)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -560,12 +592,18 @@ class ComputerAudioService : Service() {
         if (current === this) stop(tell = true)
         running = false
         releaseLocks()
+        ResourceLedger.release(ResourceBook.Kind.SERVICE, "ComputerAudioService")
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "mydomain_caudio"
         const val ACTION_STOP = "stop"
+        private const val LOCK_TAG = "mydomain:computer-audio"
+        /** The wake lock's timeout, renewed every [LOCK_RENEW_MS] while playing. */
+        private const val LOCK_MS = 60_000L
+        private const val LOCK_RENEW_MS = 20_000L
+        private const val WAIT_FIRST_MS = 40L
         /** The core's listen lasts 25 s; renewed well before. */
         private const val RENEW_MS = 10_000L
         private const val RETRY_MS = 1_500L

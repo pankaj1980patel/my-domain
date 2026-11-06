@@ -43,6 +43,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.mydomain.android.PhoneLocation
 import com.mydomain.android.R
 import com.mydomain.android.SetupState
+import com.mydomain.android.core.Core
 import com.mydomain.android.core.SetupChecklist
 import com.mydomain.android.core.SetupItem
 import com.mydomain.android.core.SetupRow
@@ -170,6 +171,7 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
     LaunchedEffect(Unit) {
         while (true) {
             delay(3_000)
+            Core.awaitOnScreen()
             setup.refresh()
         }
     }

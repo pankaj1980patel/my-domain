@@ -38,6 +38,9 @@ import com.mydomain.android.core.CameraFrames
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.OutgoingFiles
 import java.io.ByteArrayOutputStream
+import android.util.Range
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Your computers see what this phone's camera sees (mdcore
@@ -238,6 +241,8 @@ class CameraShareService : Service() {
     @Volatile private var torch = false
     @Volatile private var hasFlash = false
     @Volatile private var sensorDeg = 90
+    /** The preview's frame rate range ([CameraFrames.pickFpsRange]). */
+    @Volatile private var fpsRange: Pair<Int, Int>? = null
     /** How the phone is held, clockwise (OrientationEventListener). */
     @Volatile private var held = 0
     private var lastSent = 0L
@@ -272,6 +277,7 @@ class CameraShareService : Service() {
         }
         current = this
         stopping = false
+        ResourceLedger.hold(ResourceBook.Kind.CAMERA, "camera share")
         val t = HandlerThread("camera-share").also { it.start() }
         thread = t
         val h = Handler(t.looper)
@@ -371,6 +377,10 @@ class CameraShareService : Service() {
         front = chars.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT
         sensorDeg = chars.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
         hasFlash = chars.get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true
+        // About a dozen pictures a second go out: no need for the camera to make 30.
+        fpsRange = CameraFrames.pickFpsRange(
+            chars.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES).orEmpty().map { it.lower to it.upper },
+        )
         if (!hasFlash) torch = false
         val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return stop("error")
         val pick = CameraFrames.pickSize(map.getOutputSizes(ImageFormat.YUV_420_888).orEmpty().map { it.width to it.height })
@@ -446,6 +456,7 @@ class CameraShareService : Service() {
             b.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE)
             b.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON)
             b.set(CaptureRequest.FLASH_MODE, if (torch) CaptureRequest.FLASH_MODE_TORCH else CaptureRequest.FLASH_MODE_OFF)
+            fpsRange?.let { (lo, hi) -> b.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, Range(lo, hi)) }
             s.setRepeatingRequest(b.build(), null, handler)
         }.onFailure { Log.w(TAG, "preview: $it") }
     }
@@ -463,20 +474,22 @@ class CameraShareService : Service() {
     private fun onPreview(r: ImageReader) {
         val image = r.acquireLatestImage() ?: return
         try {
+            // Most frames end here: the checks below (the lock screen, who
+            // watches) are calls of their own, made only for a frame that goes.
+            val now = System.currentTimeMillis()
+            if (now - lastSent < EVERY_MS) return
+            lastSent = now
             val engine = Core.engine() ?: return stop("error")
             if (!CameraShare.keepWhileLocked(this) && getSystemService(KeyguardManager::class.java)?.isKeyguardLocked == true) {
                 Log.i(TAG, "locked: camera off")
                 return stop("locked")
             }
-            val now = System.currentTimeMillis()
             val to = engine.cameraWatchers().filter { it in viewers }
             if (to.isEmpty()) {
                 if (now > graceUntil && now - lastWatched > IDLE_MS) stop(null)
                 return
             }
             lastWatched = now
-            if (now - lastSent < EVERY_MS) return
-            lastSent = now
             val (w, h) = image.width to image.height
             val pl = image.planes
             val nv21 = CameraFrames.toNv21(
@@ -574,6 +587,7 @@ class CameraShareService : Service() {
         } else {
             closeCamera()
         }
+        ResourceLedger.release(ResourceBook.Kind.CAMERA, "camera share")
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

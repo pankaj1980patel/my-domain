@@ -7,6 +7,8 @@ import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Receives connection signals pushed through FCM and feeds them to the core
@@ -70,13 +72,22 @@ class MdMessagingService : FirebaseMessagingService() {
     private fun stayAwake() {
         val pm = getSystemService(PowerManager::class.java) ?: return
         runCatching {
-            pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mydomain:push").acquire(AWAKE_AFTER_PUSH_MS)
+            val lock = synchronized(MdMessagingService::class.java) {
+                pushLock ?: pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mydomain:push")
+                    .apply { setReferenceCounted(false) }
+                    .also { pushLock = it }
+            }
+            // Not reference counted: another push restarts the timeout.
+            lock.acquire(AWAKE_AFTER_PUSH_MS)
+            ResourceLedger.hold(ResourceBook.Kind.WAKE_LOCK, "mydomain:push", AWAKE_AFTER_PUSH_MS)
         }
     }
 
     private fun ready() = runCatching { Core.engine()?.isReady() == true }.getOrDefault(false)
 
     private companion object {
+        /** The one wake lock pushes take (times out by itself). */
+        var pushLock: PowerManager.WakeLock? = null
         const val TAG = "mydomain_fcm"
         const val AWAKE_AFTER_PUSH_MS = 30_000L
     }

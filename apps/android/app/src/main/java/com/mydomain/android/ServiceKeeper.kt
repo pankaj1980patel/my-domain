@@ -38,12 +38,15 @@ object ServiceKeeper {
 
     /** The service is up: all is well, next check in the usual time. */
     fun serviceUp(ctx: Context) {
-        prefs(ctx).edit().putBoolean(KEY_ON, true).putInt(KEY_DEAD, 0).apply()
-        schedule(ctx, NetWatch.nextCheckMs(0, Math.random()))
+        val p = prefs(ctx)
+        if (!p.getBoolean(KEY_ON, false) || p.getInt(KEY_DEAD, 0) != 0) {
+            p.edit().putBoolean(KEY_ON, true).putInt(KEY_DEAD, 0).apply()
+        }
+        schedule(ctx, NetWatch.nextCheckMs(0, Math.random()), NetWatch.checkWakes(0))
     }
 
     /** Check in a few seconds (the app was swiped away). */
-    fun checkSoon(ctx: Context) = schedule(ctx, 5_000)
+    fun checkSoon(ctx: Context) = schedule(ctx, 5_000, wake = true)
 
     /** A check, a restart or an update: start the service if it's gone. */
     fun check(ctx: Context, why: String) {
@@ -63,18 +66,22 @@ object ServiceKeeper {
         }.onFailure { Log.w(TAG, "can't start the service: $it") }
         // Sooner while the phone keeps killing it; the service's own start
         // puts it back to the usual time.
-        schedule(ctx, NetWatch.nextCheckMs(dead, Math.random()))
+        schedule(ctx, NetWatch.nextCheckMs(dead, Math.random()), NetWatch.checkWakes(dead))
     }
 
-    private fun schedule(ctx: Context, delayMs: Long) {
+    /** [wake]: an alarm that wakes the phone (and may run in Doze); else
+     *  one that waits for the phone's next wake. */
+    private fun schedule(ctx: Context, delayMs: Long, wake: Boolean) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return
         val pi = PendingIntent.getBroadcast(
             ctx, 0,
             Intent(ctx, ServiceKeeperReceiver::class.java).setAction(ACTION_CHECK),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val at = SystemClock.elapsedRealtime() + delayMs
         runCatching {
-            am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + delayMs, pi)
+            if (wake) am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi)
+            else am.set(AlarmManager.ELAPSED_REALTIME, at, pi)
         }.onFailure { Log.w(TAG, "can't schedule the check: $it") }
     }
 

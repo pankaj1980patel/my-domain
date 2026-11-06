@@ -25,6 +25,8 @@ import java.io.ByteArrayOutputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * my-domain over Bluetooth LE, phone side: advertise the my-domain service
@@ -111,8 +113,12 @@ object BleLink {
     }
 
     fun stop() {
+        // Not started yet (the service is still being added): never start.
+        pendingAdvertiser = null
         advertising?.let { cb -> runCatching { advertiser?.stopAdvertising(cb) } }
         advertising = null
+        advertiser = null
+        ResourceLedger.release(ResourceBook.Kind.BLUETOOTH, "BLE advertising (low power)")
         conns.values.forEach { c -> c.linkId?.let { Core.engine()?.bleClosed(it.toULong()) } }
         conns.clear()
         runCatching { server?.close() }
@@ -138,6 +144,7 @@ object BleLink {
         val cb = object : AdvertiseCallback() {
             override fun onStartSuccess(settingsInEffect: AdvertiseSettings) {
                 Log.i(TAG, "advertising")
+                ResourceLedger.hold(ResourceBook.Kind.BLUETOOTH, "BLE advertising (low power)")
             }
 
             override fun onStartFailure(errorCode: Int) {
@@ -150,7 +157,7 @@ object BleLink {
 
     private val callback = object : BluetoothGattServerCallback() {
         override fun onServiceAdded(status: Int, service: BluetoothGattService) {
-            if (status == BluetoothGatt.GATT_SUCCESS) pendingAdvertiser?.invoke()
+            if (status == BluetoothGatt.GATT_SUCCESS && server != null) pendingAdvertiser?.invoke()
             pendingAdvertiser = null
         }
 

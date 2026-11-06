@@ -66,6 +66,13 @@ object ScreenSettings {
             .onFailure { Log.w(TAG, "can't watch the screen settings: $it") }
     }
 
+    /** Stop watching (NetService.onDestroy; [init] starts again). */
+    fun stop(ctx: Context) {
+        observer?.let { runCatching { ctx.applicationContext.contentResolver.unregisterContentObserver(it) } }
+        observer = null
+        main.removeCallbacks(push)
+    }
+
     fun canWrite(ctx: Context): Boolean = runCatching { Settings.System.canWrite(ctx) }.getOrDefault(false)
 
     /** The current settings, into the status. */

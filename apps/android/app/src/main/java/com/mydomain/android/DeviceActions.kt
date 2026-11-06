@@ -19,6 +19,8 @@ import android.provider.Settings
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * The phone side of the core's quick device actions: ring (find my phone)
@@ -268,6 +270,7 @@ object DeviceActions {
             awakeLock?.let { if (it.isHeld) runCatching { it.release() } }
             awakeLock = null
             awakeUntil = 0L
+            ResourceLedger.release(ResourceBook.Kind.WAKE_LOCK, "mydomain:keep_awake")
             if (minutes <= 0) return true
             val pm = ctx.applicationContext.getSystemService(PowerManager::class.java) ?: return false
             val ms = minutes.coerceAtMost(24 * 60) * 60_000L
@@ -277,6 +280,7 @@ object DeviceActions {
             )
             lock.setReferenceCounted(false)
             lock.acquire(ms)
+            ResourceLedger.hold(ResourceBook.Kind.WAKE_LOCK, "mydomain:keep_awake", ms)
             awakeLock = lock
             awakeUntil = System.currentTimeMillis() + ms
             return true

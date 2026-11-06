@@ -34,6 +34,9 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import android.os.SystemClock
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /** Something an automation can do: [action] with [args] (JSON object
  *  text). [always]: offered whatever the device lists in its status. */
@@ -135,8 +138,6 @@ object PhoneAutomations {
     private const val TAG = "mydomain_auto"
     private const val FILE = "automations.json"
     const val CHANNEL = "automations"
-    /** How often the links are looked at ("disconnects" waits a minute). */
-    private const val TICK_MS = 15_000L
     /** Wi-Fi's name often arrives a moment after the network. */
     private const val WIFI_SETTLE_MS = 2_000L
 
@@ -185,7 +186,6 @@ object PhoneAutomations {
         // A fresh look at everything: what changed while stopped isn't news.
         book = AutomationBook(b.list)
         watchWifi(c)
-        main.postDelayed(tick, TICK_MS)
         main.post { checkLinks() }
     }
 
@@ -193,11 +193,13 @@ object PhoneAutomations {
     fun stop(ctx: Context) {
         running = false
         main.removeCallbacks(tick)
+        tickDue = 0L
         main.removeCallbacks(wifiCheck)
         wifiCallback?.let { cb ->
             runCatching { ctx.applicationContext.getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(cb) }
         }
         wifiCallback = null
+        ResourceLedger.release(ResourceBook.Kind.LISTENER, "Automations: Wi-Fi")
         wifiNets.clear()
     }
 
@@ -216,11 +218,28 @@ object PhoneAutomations {
 
     private val tick = object : Runnable {
         override fun run() {
+            tickDue = 0L
             if (!running) return
-            checkLinks()
             checkWifi()
-            main.postDelayed(this, TICK_MS)
+            checkLinks()
         }
+    }
+
+    /** When the tick is due (uptime ms), 0 = not set. */
+    private var tickDue = 0L
+
+    /** The next look: every 15 s while something is pending (a link down,
+     *  a Wi-Fi name to come), else every 5 minutes as a safety net
+     *  ([AutomationBook.nextTickMs]); never later than one already set. */
+    private fun scheduleTick() {
+        if (!running) return
+        val b = book ?: return
+        val now = SystemClock.uptimeMillis()
+        val due = now + b.nextTickMs()
+        if (tickDue > now && tickDue <= due) return
+        main.removeCallbacks(tick)
+        tickDue = due
+        main.postAtTime(tick, due)
     }
 
     private fun checkLinks() {
@@ -228,6 +247,7 @@ object PhoneAutomations {
         val me = Core.me?.nodeId
         val nodes = Core.peers.map { it.nodeId }.filter { it != me }
         fire(b.links(nodes, Core.links.keys.toSet(), System.currentTimeMillis()))
+        scheduleTick()
     }
 
     private val wifiCheck = Runnable { checkWifi() }
@@ -243,6 +263,7 @@ object PhoneAutomations {
         val c = app ?: return
         val connected = wifiNets.isNotEmpty()
         fire(b.wifi(connected, if (connected) currentSsid(c) else null))
+        scheduleTick()
     }
 
     private fun watchWifi(c: Context) {
@@ -262,7 +283,10 @@ object PhoneAutomations {
         }
         val req = NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build()
         runCatching { cm.registerNetworkCallback(req, cb) }
-            .onSuccess { wifiCallback = cb }
+            .onSuccess {
+                wifiCallback = cb
+                ResourceLedger.hold(ResourceBook.Kind.LISTENER, "Automations: Wi-Fi")
+            }
             .onFailure { Log.w(TAG, "can't watch Wi-Fi", it) }
         // The first look (connected or not) only sets where things stand.
         wifiSoon()

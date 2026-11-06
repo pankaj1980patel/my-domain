@@ -36,6 +36,8 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.ScreenTouch
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Your computers see this phone's screen (mdcore `features::screen`, the
@@ -268,6 +270,8 @@ class ScreenShareService : Service() {
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var reader: ImageReader? = null
+    /** The picture's pixels, reused (the share's thread only). */
+    private var frameBitmap: Bitmap? = null
     private var thread: HandlerThread? = null
     private var handler: Handler? = null
     private var screenOff: BroadcastReceiver? = null
@@ -330,6 +334,7 @@ class ScreenShareService : Service() {
     private fun start(mp: MediaProjection) {
         projection = mp
         current = this
+        ResourceLedger.hold(ResourceBook.Kind.SERVICE, "ScreenShareService")
         controlAllowed = false
         graceUntil = System.currentTimeMillis() + START_GRACE_MS
         lastWatched = 0L
@@ -436,10 +441,19 @@ class ScreenShareService : Service() {
         val jpeg = runCatching {
             val plane = image.planes[0]
             val padded = plane.rowStride / plane.pixelStride
-            val bmp = Bitmap.createBitmap(padded, image.height, Bitmap.Config.ARGB_8888)
+            // One bitmap for every picture (two a second, ~4 MB each), not a new one each time.
+            val bmp = frameBitmap?.takeIf { !it.isRecycled && it.width == padded && it.height == image.height }
+                ?: Bitmap.createBitmap(padded, image.height, Bitmap.Config.ARGB_8888).also {
+                    frameBitmap?.recycle()
+                    frameBitmap = it
+                }
             bmp.copyPixelsFromBuffer(plane.buffer)
             val cropped = if (padded != image.width) Bitmap.createBitmap(bmp, 0, 0, image.width, image.height) else bmp
-            ByteArrayOutputStream().also { cropped.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }.toByteArray()
+            try {
+                ByteArrayOutputStream().also { cropped.compress(Bitmap.CompressFormat.JPEG, QUALITY, it) }.toByteArray()
+            } finally {
+                if (cropped !== bmp) cropped.recycle()
+            }
         }.getOrNull()
         image.close()
         if (jpeg != null) runCatching { engine.screenFrameTo(jpeg, to) }
@@ -469,8 +483,13 @@ class ScreenShareService : Service() {
         display = null
         reader = null
         projection = null
+        // On the share's thread, after any picture being made.
+        val h = handler
+        if (h != null) h.post { frameBitmap?.recycle(); frameBitmap = null }
+        handler = null
         thread?.quitSafely()
         thread = null
+        ResourceLedger.release(ResourceBook.Kind.SERVICE, "ScreenShareService")
         if (wasCurrent) ScreenShare.published(emptySet(), false)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()

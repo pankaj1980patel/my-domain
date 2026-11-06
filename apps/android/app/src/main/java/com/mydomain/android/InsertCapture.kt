@@ -122,6 +122,8 @@ import java.util.Locale
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Insert from phone (mdcore `features::insert_capture`): a computer asks
@@ -813,6 +815,7 @@ private class StillCamera(private val ctx: Context, private val onError: () -> U
         private set
 
     fun open(texture: SurfaceTexture) {
+        ResourceLedger.hold(ResourceBook.Kind.CAMERA, "photo / scan for a computer")
         orientation = object : OrientationEventListener(ctx) {
             override fun onOrientationChanged(deg: Int) {
                 held = CameraFrames.quarterTurn(if (deg == ORIENTATION_UNKNOWN) -1 else deg, held)
@@ -947,6 +950,7 @@ private class StillCamera(private val ctx: Context, private val onError: () -> U
     fun close() {
         if (closed) return
         closed = true
+        ResourceLedger.release(ResourceBook.Kind.CAMERA, "photo / scan for a computer")
         orientation?.disable()
         orientation = null
         handler.post {

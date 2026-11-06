@@ -89,6 +89,7 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: S
     LaunchedEffect(Unit) {
         while (true) {
             delay(1000)
+            Core.awaitOnScreen()
             now = System.currentTimeMillis()
         }
     }

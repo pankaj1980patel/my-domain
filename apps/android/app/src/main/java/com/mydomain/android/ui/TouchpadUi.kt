@@ -144,6 +144,7 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
     if (shares) {
         LaunchedEffect(node) {
             while (true) {
+                Core.awaitOnScreen()
                 Core.screenWatch(node, true)
                 delay(RENEW_MS)
             }

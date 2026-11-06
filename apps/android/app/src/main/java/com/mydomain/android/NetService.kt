@@ -20,6 +20,9 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.KeyChanges
 import com.mydomain.android.core.KeystoreSecrets
 import com.mydomain.android.core.NetWatch
+import com.mydomain.android.core.PowerPolicy
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 import com.mydomain.android.core.Tone
 import com.mydomain.android.ffi.EventListener
 import com.mydomain.android.ffi.MdEngine
@@ -58,10 +61,12 @@ class NetService : Service() {
         clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         
         val wifi = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
-        multicastLock = wifi.createMulticastLock("mydomain").apply { 
-            setReferenceCounted(true)
-            acquire() 
-        }
+        // Held only while the app is on screen, or briefly after a network
+        // change (PowerPolicy.multicastWanted): it wakes the phone for every
+        // multicast packet on the network.
+        multicastLock = wifi.createMulticastLock("mydomain").apply { setReferenceCounted(false) }
+        Core.onVisibility = { netHandler.post { updateMulticast() } }
+        updateMulticast()
 
         connectivityManager = getSystemService(CONNECTIVITY_SERVICE) as ConnectivityManager
         // Every change of the default network (a new Wi-Fi network, Wi-Fi
@@ -75,6 +80,7 @@ class NetService : Service() {
             override fun onLinkPropertiesChanged(network: Network, props: LinkProperties) = networkSoon()
         }
         runCatching { connectivityManager?.registerDefaultNetworkCallback(netCallback!!) }
+            .onSuccess { ResourceLedger.hold(ResourceBook.Kind.LISTENER, "NetService: default network") }
 
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -82,6 +88,7 @@ class NetService : Service() {
         } else {
             startForeground(1, createNotification())
         }
+        ResourceLedger.hold(ResourceBook.Kind.SERVICE, "NetService")
 
         // Restore the clipboard auto-sync ("active" mode) toggle.
         Core.enableClipSync(getSharedPreferences("md", MODE_PRIVATE).getBoolean("clip_sync", false))
@@ -163,7 +170,10 @@ class NetService : Service() {
         }
         batteryReceiver = r
         runCatching { registerReceiver(r, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }
-            .onSuccess { sticky -> sticky?.let(::pushBattery) }
+            .onSuccess { sticky ->
+                ResourceLedger.hold(ResourceBook.Kind.LISTENER, "NetService: battery")
+                sticky?.let(::pushBattery)
+            }
             .onFailure { Log.w("NetService", "battery watch failed", it) }
     }
 
@@ -454,6 +464,27 @@ class NetService : Service() {
 
     private val netHandler = Handler(Looper.getMainLooper())
     private val netCheck = Runnable { checkNetwork() }
+    /** The multicast lock stays this long after a network change (mDNS
+     *  finds the devices on the new network), then only while on screen. */
+    private var multicastUntil = 0L
+    private val multicastCheck = Runnable { updateMulticast() }
+
+    /** Take or let go of the multicast lock (main thread). */
+    private fun updateMulticast() {
+        val lock = multicastLock ?: return
+        val now = SystemClock.elapsedRealtime()
+        val want = !destroyed && PowerPolicy.multicastWanted(Core.visible, now, multicastUntil)
+        runCatching {
+            if (want && !lock.isHeld) lock.acquire()
+            if (!want && lock.isHeld) lock.release()
+        }.onFailure { Log.w("NetService", "multicast lock: $it") }
+        if (lock.isHeld) ResourceLedger.hold(ResourceBook.Kind.MULTICAST_LOCK, "mydomain")
+        else ResourceLedger.release(ResourceBook.Kind.MULTICAST_LOCK, "mydomain")
+        netHandler.removeCallbacks(multicastCheck)
+        if (want && !Core.visible) netHandler.postDelayed(multicastCheck, (multicastUntil - now).coerceAtLeast(1_000))
+    }
+
+    @Volatile private var destroyed = false
     /** The default network the core last heard about. */
     private var lastNet: NetWatch.Snapshot? = null
     private var netTold = false
@@ -490,6 +521,8 @@ class NetService : Service() {
         if (netTold && !NetWatch.significant(lastNet, now)) return
         lastNet = now
         netTold = true
+        multicastUntil = SystemClock.elapsedRealtime() + PowerPolicy.MULTICAST_AFTER_CHANGE_MS
+        updateMulticast()
         val kind = NetWatch.kind(now)
         Core.labLog("network: $kind ${now?.wifiIp.orEmpty()}")
         serviceScope.launch {
@@ -507,7 +540,8 @@ class NetService : Service() {
         // can answer passive "get clipboard" pulls), but only broadcast changes
         // to peers while ACTIVE auto-sync is enabled.
         Handler(Looper.getMainLooper()).post {
-            clipboard.addPrimaryClipChangedListener {
+            if (destroyed) return@post
+            val listener = ClipboardManager.OnPrimaryClipChangedListener {
                 val clip = clipboard.primaryClip
                 if (clip != null && clip.itemCount > 0) {
                     val text = clip.getItemAt(0).text?.toString()
@@ -527,8 +561,14 @@ class NetService : Service() {
                     }
                 }
             }
+            clipListener = listener
+            clipboard.addPrimaryClipChangedListener(listener)
+            ResourceLedger.hold(ResourceBook.Kind.LISTENER, "NetService: clipboard")
         }
     }
+
+    /** Removed in onDestroy: a new service adds its own. */
+    private var clipListener: ClipboardManager.OnPrimaryClipChangedListener? = null
 
     /** Text another device sent (`send_text`): onto the clipboard for
      *  "clipboard" (the core leaves that to us here), and a notice. */
@@ -631,9 +671,20 @@ class NetService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         running = false
+        destroyed = true
+        Core.onVisibility = null
         netHandler.removeCallbacks(netCheck)
+        netHandler.removeCallbacks(multicastCheck)
         serviceJob.cancel()
-        multicastLock?.let { if (it.isHeld) it.release() }
+        multicastLock?.let { if (it.isHeld) runCatching { it.release() } }
+        ResourceLedger.release(ResourceBook.Kind.MULTICAST_LOCK, "mydomain")
+        ResourceLedger.release(ResourceBook.Kind.SERVICE, "NetService")
+        clipListener?.let { runCatching { clipboard.removePrimaryClipChangedListener(it) } }
+        clipListener = null
+        for (l in listOf("default network", "battery", "clipboard")) ResourceLedger.release(ResourceBook.Kind.LISTENER, "NetService: $l")
+        Radios.stop(this)
+        WifiNetworks.stop(this)
+        ScreenSettings.stop(this)
         netCallback?.let { runCatching { connectivityManager?.unregisterNetworkCallback(it) } }
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
         BleLink.stop()

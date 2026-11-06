@@ -28,6 +28,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -342,7 +343,27 @@ object Core {
             now
         }
         labLog(if (now) "app visible" else "app in background")
+        onMain { onScreen = now }
+        runCatching { onVisibility?.invoke(now) }
         Thread { engine()?.setBackground(!now) }.start()
+    }
+
+    /** [visible], for the screens (main thread): their timers and polls
+     *  wait while the app is off screen ([awaitOnScreen]). */
+    var onScreen by mutableStateOf(false)
+        private set
+
+    /** Told when the app comes on or goes off screen (NetService: the
+     *  multicast lock). Any thread. */
+    @Volatile var onVisibility: ((Boolean) -> Unit)? = null
+
+    /** Return at once while the app is on screen, else when it comes back.
+     *  Each screen's repeating work (polls, clocks, watches) calls this
+     *  before each round: a screen left open behind the home screen keeps
+     *  its composition, and its loops would otherwise keep running. */
+    suspend fun awaitOnScreen() {
+        if (onScreen) return
+        androidx.compose.runtime.snapshotFlow { onScreen }.first { it }
     }
 
     /** The name to show for a device: the nickname you gave it on this

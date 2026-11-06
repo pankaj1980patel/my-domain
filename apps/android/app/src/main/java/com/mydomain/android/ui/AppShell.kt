@@ -41,6 +41,8 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.Findable
 import com.mydomain.android.core.FoundKind
 import com.mydomain.android.core.Health
+import com.mydomain.android.core.PowerPolicy
+import com.mydomain.android.PowerSaver
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.ui.platform.LocalContext
@@ -73,6 +75,7 @@ fun App(prefs: SharedPreferences) {
     // A background sign-in (device lab) can finish while sign-in shows.
     LaunchedEffect(Core.ready) {
         while (!Core.ready) {
+            Core.awaitOnScreen()
             Core.reload(); delay(500)
         }
     }
@@ -196,14 +199,23 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     }
 
     // The health check: with the server now and every 10 minutes, quickly
-    // every minute in between (the Home card and the Settings tab's badge).
+    // every minute in between (the Home card and the Settings tab's badge);
+    // every 5 and 30 minutes while saving battery, and not at all while the
+    // app is off screen (PowerPolicy.healthStep).
     val ctx = LocalContext.current
     LaunchedEffect(Unit) {
-        var i = 0
+        var lastRun: Long? = null
+        var lastServer: Long? = null
         while (true) {
-            Health.run(ctx, server = i % 10 == 0)
-            i++
-            delay(60_000)
+            Core.awaitOnScreen()
+            val now = System.currentTimeMillis()
+            val step = PowerPolicy.healthStep(now, lastRun, lastServer, PowerSaver.current.saving)
+            if (step.run) {
+                Health.run(ctx, server = step.server)
+                lastRun = now
+                if (step.server) lastServer = now
+            }
+            delay(step.waitMs)
         }
     }
     // Signed in or joined just now: first-run setup, unless done here before.
@@ -224,6 +236,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // Link quality on the status lines: refresh while the app is on screen.
     LaunchedEffect(Unit) {
         while (true) {
+            Core.awaitOnScreen()
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Core.pollQuality() }
             delay(5000)
         }

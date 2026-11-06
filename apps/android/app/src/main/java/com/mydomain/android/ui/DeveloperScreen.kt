@@ -38,6 +38,9 @@ import com.mydomain.android.core.Core
 import com.mydomain.android.core.friendlyError
 import com.mydomain.android.core.timeAgo
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.LaunchedEffect
+import com.mydomain.android.core.ResourceLedger
+import kotlinx.coroutines.delay
 
 /** Hidden Developer screen: everything technical lives here, out of the way. */
 @Composable
@@ -48,6 +51,14 @@ fun DeveloperScreen(onBack: () -> Unit) {
     var ip by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("") }
     var filter by remember { mutableStateOf("") }
+    var ledger by remember { mutableStateOf(ResourceLedger.book.snapshot()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            Core.awaitOnScreen()
+            ledger = ResourceLedger.book.snapshot()
+            delay(2_000)
+        }
+    }
 
     fun run(block: suspend () -> Unit) = scope.launch {
         try { block() } catch (e: Exception) { toast(friendlyError(e)) }
@@ -80,6 +91,15 @@ fun DeveloperScreen(onBack: () -> Unit) {
                     GhostButton("Refresh from server", { run { Core.refreshDevices(); toast("Refreshed") } }, small = true)
                     GhostButton("Scan LAN", { run { Core.call { it.scanLan() } } }, small = true)
                 }
+            }
+        }
+        // What holds the battery now (ResourceLedger): a lock or listener
+        // that never goes away here is a leak.
+        item {
+            Tile(title = "Resource ledger") {
+                if (ledger.isEmpty()) Muted("Nothing held.")
+                ledger.forEach { e -> Text(ResourceLedger.book.describe(e), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2) }
+                Muted(if (Core.onScreen) "App on screen: screen loops run." else "App off screen: screen loops wait.")
             }
         }
         item {

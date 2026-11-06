@@ -10,6 +10,8 @@ import android.util.Log
 import com.mydomain.android.core.WifiDirectPlan
 import java.net.Inet4Address
 import java.net.NetworkInterface
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * This phone's local-only hotspot for a big file with a computer that can't
@@ -53,10 +55,12 @@ object PhoneHotspot {
         val cb = object : WifiManager.LocalOnlyHotspotCallback() {
             override fun onStarted(reservation: WifiManager.LocalOnlyHotspotReservation) {
                 running = sid to reservation
+                ResourceLedger.hold(ResourceBook.Kind.HOTSPOT, "local-only hotspot")
                 val (ssid, pass) = credentials(reservation)
                 if (ssid.isNullOrEmpty() || pass.isNullOrEmpty()) {
                     runCatching { reservation.close() }
                     running = null
+                    ResourceLedger.release(ResourceBook.Kind.HOTSPOT, "local-only hotspot")
                     return WifiDirect.hotspotFailed(sid, "the hotspot has no passphrase")
                 }
                 // Its address there, once the interface has one.
@@ -65,7 +69,10 @@ object PhoneHotspot {
             }
 
             override fun onStopped() {
-                if (running?.first == sid) running = null
+                if (running?.first == sid) {
+                    running = null
+                    ResourceLedger.release(ResourceBook.Kind.HOTSPOT, "local-only hotspot")
+                }
                 Log.i(TAG, "$sid: hotspot stopped")
             }
 
@@ -83,6 +90,7 @@ object PhoneHotspot {
         if (r.first != sid) return
         running = null
         runCatching { r.second.close() }
+        ResourceLedger.release(ResourceBook.Kind.HOTSPOT, "local-only hotspot")
         Log.i(TAG, "$sid: hotspot closed")
     }
 

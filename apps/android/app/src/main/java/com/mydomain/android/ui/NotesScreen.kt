@@ -60,6 +60,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.NoteReminders
 import com.mydomain.android.R
+import com.mydomain.android.core.Core
 import com.mydomain.android.core.DeviceLabels
 import com.mydomain.android.core.Notes
 import com.mydomain.android.core.ReminderPlan
@@ -189,6 +190,7 @@ private fun rememberNow(): Long {
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000)
+            Core.awaitOnScreen()
             now = System.currentTimeMillis()
         }
     }

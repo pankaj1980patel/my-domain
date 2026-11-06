@@ -16,6 +16,8 @@ import androidx.core.app.NotificationCompat
 import com.mydomain.android.core.Core
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import com.mydomain.android.core.ResourceBook
+import com.mydomain.android.core.ResourceLedger
 
 /**
  * Where this phone is, for your own computers (find my phone): the
@@ -103,19 +105,48 @@ object PhoneLocation {
             .maxByOrNull { it.time }
             ?.let { share(app, it, fromName) }
         val best = providers.firstOrNull() ?: return
+        ResourceLedger.hold(ResourceBook.Kind.LOCATION, "fix ($best)", FIX_TIMEOUT_MS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            // Android gives up by itself (about 30 s); the cancel is a backstop.
+            val cancel = android.os.CancellationSignal()
+            main.postDelayed({ cancel.cancel() }, FIX_TIMEOUT_MS)
             runCatching {
-                lm.getCurrentLocation(best, null, Executors.newSingleThreadExecutor()) { loc ->
+                lm.getCurrentLocation(best, cancel, fixer) { loc ->
+                    ResourceLedger.release(ResourceBook.Kind.LOCATION, "fix ($best)")
                     loc?.let { share(app, it, fromName) }
                 }
             }.onFailure { Log.w(TAG, "no fix: $it") }
         } else {
+            // A single update has no timeout: indoors the GPS would look
+            // for ever. Stop looking after FIX_TIMEOUT_MS.
+            val listener = object : android.location.LocationListener {
+                override fun onLocationChanged(loc: Location) {
+                    main.removeCallbacksAndMessages(this)
+                    ResourceLedger.release(ResourceBook.Kind.LOCATION, "fix ($best)")
+                    share(app, loc, fromName)
+                }
+
+                @Deprecated("Deprecated in Java")
+                override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) {}
+                override fun onProviderEnabled(provider: String) {}
+                override fun onProviderDisabled(provider: String) {}
+            }
             @Suppress("DEPRECATION")
             runCatching {
-                lm.requestSingleUpdate(best, { loc: Location -> share(app, loc, fromName) }, android.os.Looper.getMainLooper())
+                lm.requestSingleUpdate(best, listener, android.os.Looper.getMainLooper())
+                main.postAtTime({
+                    runCatching { lm.removeUpdates(listener) }
+                    ResourceLedger.release(ResourceBook.Kind.LOCATION, "fix ($best)")
+                }, listener, android.os.SystemClock.uptimeMillis() + FIX_TIMEOUT_MS)
             }
         }
     }
+
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** One thread for the fixes' answers, not a new one each time. */
+    private val fixer by lazy { Executors.newSingleThreadExecutor() }
+    /** The longest a fresh fix is looked for. */
+    private const val FIX_TIMEOUT_MS = 60_000L
 
     private fun share(app: Context, loc: Location, fromName: String) {
         if (!allowed(app)) return

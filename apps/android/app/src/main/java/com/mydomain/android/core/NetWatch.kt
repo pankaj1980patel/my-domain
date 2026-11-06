@@ -62,6 +62,12 @@ object NetWatch {
     fun nextCheckMs(deadInARow: Int, jitter: Double): Long =
         if (deadInARow <= 0) CHECK_EVERY_MS
         else backoffMs(deadInARow - 1, CHECK_AGAIN_MS, CHECK_EVERY_MS, jitter)
+
+    /** Does that check wake the phone? Not while all is well: a service
+     *  gone while the phone sleeps can wait for its next wake (a push
+     *  starts it anyway), so the usual check rides along then. Only the
+     *  quicker checks after it was killed wake the phone. */
+    fun checkWakes(deadInARow: Int): Boolean = deadInARow > 0
 }
 
 /**

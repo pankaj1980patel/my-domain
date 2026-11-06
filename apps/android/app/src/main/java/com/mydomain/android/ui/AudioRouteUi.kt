@@ -86,6 +86,7 @@ fun ViaBluetoothBadge(node: String) {
     var via by remember(node) { mutableStateOf(false) }
     LaunchedEffect(node) {
         while (true) {
+            Core.awaitOnScreen()
             via = AudioRoutes.viaBluetooth(
                 withContext(Dispatchers.IO) { runCatching { Core.engine()?.audioVia(node) }.getOrNull() },
             )

@@ -60,6 +60,7 @@ fun MediaTile(node: String, name: String) {
     LaunchedEffect(node, controls) {
         if (!controls) return@LaunchedEffect
         while (true) {
+            Core.awaitOnScreen()
             Core.mediaWatch(node)
             delay(MediaPlan.WATCH_EVERY_MS)
         }
@@ -67,6 +68,7 @@ fun MediaTile(node: String, name: String) {
     LaunchedEffect(node) {
         while (true) {
             delay(1000)
+            Core.awaitOnScreen()
             now = System.currentTimeMillis()
         }
     }
