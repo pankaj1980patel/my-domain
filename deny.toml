@@ -16,6 +16,15 @@ ignore = [
   # quick-xml 0.39 via plist via tauri: parses the app's own plist files.
   { id = "RUSTSEC-2026-0194", reason = "quick-xml via tauri/plist; local files only" },
   { id = "RUSTSEC-2026-0195", reason = "quick-xml via tauri/plist; local files only" },
+  # zip 4.6 (fixed only in 9.x) via tauri-plugin-updater 2.12, which pins
+  # zip 4: extraction flaws (symlinks, SUID bits, a crash on a huge symlink
+  # entry). The updater only unpacks an update after its minisign signature
+  # checks out against our own public key, so a crafted archive would need
+  # the release signing key. Drop these when the plugin moves to zip >= 9.
+  { id = "RUSTSEC-2026-0367", reason = "zip via tauri-plugin-updater; signed updates only" },
+  { id = "RUSTSEC-2026-0368", reason = "zip via tauri-plugin-updater; signed updates only" },
+  { id = "RUSTSEC-2026-0369", reason = "zip via tauri-plugin-updater; signed updates only" },
+  { id = "RUSTSEC-2026-0429", reason = "zip via tauri-plugin-updater; signed updates only" },
   # crypto-bigint 0.5 via elliptic-curve 0.13 via str0m's DTLS (fixed only
   # in 0.7): timing side channels; WebRTC is the last-resort rung.
   { id = "RUSTSEC-2026-0387", reason = "crypto-bigint 0.5 via str0m; waits on upstream" },
