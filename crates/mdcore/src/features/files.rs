@@ -1080,14 +1080,25 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
             // Shorter than when it was offered, or unreadable now.
             _ => return give_up(&ctx, &id, "the file couldn't be read"),
         };
-        let damage = files
-            .corrupt_chunks
-            .fetch_update(
-                std::sync::atomic::Ordering::Relaxed,
-                std::sync::atomic::Ordering::Relaxed,
-                |n| n.checked_sub(1),
-            )
-            .is_ok();
+        // Take one from the test's count of chunks to damage, if any left
+        // (a plain compare-exchange loop: `fetch_update` is deprecated on
+        // newer Rust and its replacement missing on older).
+        let damage = {
+            use std::sync::atomic::Ordering::Relaxed;
+            let mut cur = files.corrupt_chunks.load(Relaxed);
+            loop {
+                let Some(next) = cur.checked_sub(1) else {
+                    break false;
+                };
+                match files
+                    .corrupt_chunks
+                    .compare_exchange_weak(cur, next, Relaxed, Relaxed)
+                {
+                    Ok(_) => break true,
+                    Err(now) => cur = now,
+                }
+            }
+        };
         if damage {
             buf[0] ^= 0xff;
         }
