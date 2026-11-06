@@ -29,7 +29,13 @@ import kotlinx.coroutines.launch
  *  ones first. Pull down to refresh the list. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onOpen: (String) -> Unit, onSetup: () -> Unit = {}, onSearch: () -> Unit = {}, onBattery: () -> Unit = {}) {
+fun HomeScreen(
+    onOpen: (String) -> Unit,
+    onSetup: () -> Unit = {},
+    onSearch: () -> Unit = {},
+    onBattery: () -> Unit = {},
+    onTimers: () -> Unit = {},
+) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     val pull = rememberPullToRefreshState()
@@ -75,6 +81,8 @@ fun HomeScreen(onOpen: (String) -> Unit, onSetup: () -> Unit = {}, onSearch: () 
             }
             // One search over everything kept on this phone (SearchScreen).
             item { SearchEntry(onSearch) }
+            // Countdown timers shared with your other devices (TimersScreen).
+            item { TimersEntry(onTimers) }
             // Once after sign-in: what this phone can turn on (SetupScreen).
             item { SetupHomeCard(onSetup) }
             // While heavy background work waits to save battery (SaveBatteryTile).

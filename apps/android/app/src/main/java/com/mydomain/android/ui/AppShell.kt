@@ -59,7 +59,7 @@ private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
 
 /** Sign-in until ready; then tabs (Devices, Notes, Activity, Settings) plus the
  *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
- *  this phone, Search (from Home) and Help screens. */
+ *  this phone, Timers and Search (from Home) and Help screens. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -100,6 +100,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var automations by rememberSaveable { mutableStateOf(false) }
     var transfers by rememberSaveable { mutableStateOf(false) }
     var setup by rememberSaveable { mutableStateOf(false) }
+    var timers by rememberSaveable { mutableStateOf(false) }
     // Help: open (the topic list) and the topic shown, if any. Shown over
     // whichever screen opened it, which comes back on Back.
     var help by rememberSaveable { mutableStateOf(false) }
@@ -215,6 +216,22 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
+    // A timer's notification asked for Timers.
+    LaunchedEffect(Core.showTimers) {
+        if (Core.showTimers) {
+            device = null
+            developer = false
+            automations = false
+            transfers = false
+            setup = false
+            help = false
+            leaveSearch()
+            tab = Tab.Devices
+            timers = true
+            Core.showTimers = false
+        }
+    }
+
     // A note reminder's notification asked for its note.
     LaunchedEffect(Core.showNote) {
         Core.showNote?.let { id ->
@@ -231,7 +248,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
-    val pushed = help || device != null || developer || automations || transfers || setup || search
+    val pushed = help || device != null || developer || automations || transfers || setup || timers || search
     BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
         when {
             help && helpTopic != null && !helpFromSearch -> helpTopic = null
@@ -241,6 +258,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             automations -> closeAutomations()
             transfers -> closeTransfers()
             setup -> setup = false
+            timers -> timers = false
             search -> search = false
             settingsFromSearch && tab == Tab.Settings -> backToSearch()
             notesFromSearch && tab == Tab.Notes -> backToSearch()
@@ -289,6 +307,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 developer -> DeveloperScreen(onBack = { developer = false })
                 automations -> AutomationsScreen(onBack = closeAutomations, found = foundAutomation)
                 setup -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
+                timers -> TimersScreen(onBack = { timers = false }, onHelp = { openHelp("timers") })
                 transfers -> TransfersScreen(
                     onBack = closeTransfers,
                     onOpenDevice = { deviceFocus = null; device = it },
@@ -309,6 +328,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onSetup = { setup = true },
                     onSearch = { search = true },
                     onBattery = { settingsFocus = "battery"; tab = Tab.Settings },
+                    onTimers = { timers = true },
                 )
                 tab == Tab.Notes -> NotesScreen(
                     onHelp = { openHelp("notes") },

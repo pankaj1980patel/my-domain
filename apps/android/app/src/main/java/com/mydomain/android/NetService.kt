@@ -280,6 +280,7 @@ class NetService : Service() {
         FileActions.createChannels(this)
         ComputerNotifs.createChannel(this)
         NoteReminders.createChannel(this)
+        TimerAlarms.createChannels(this)
     }
 
     private fun createNotification(): Notification {

@@ -1,4 +1,4 @@
-// App shell: sign in first, then a sidebar with Devices / Notes / Activity /
+// App shell: sign in first, then a sidebar with Devices / Notes / Timers / Activity /
 // Transfers / Search / Settings / Help. A device opens its detail page; the Developer screen
 // is hidden.
 
@@ -23,6 +23,9 @@ import Search from "./screens/Search";
 import { revealFound, type Found } from "./lib/search";
 import Notes, { type NoteRequest } from "./screens/Notes";
 import NoteReminders from "./components/NoteReminders";
+import Timers from "./screens/Timers";
+import TimerAlarm from "./components/TimerAlarm";
+import { timers } from "./lib/timers";
 import { notes } from "./lib/notes";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key } from "./i18n";
@@ -33,6 +36,7 @@ type View =
   | { name: "home" }
   | { name: "device"; node: string }
   | { name: "notes"; request?: NoteRequest }
+  | { name: "timers" }
   | { name: "activity" }
   | { name: "transfers" }
   | { name: "settings" }
@@ -57,6 +61,7 @@ export default function App() {
     home: "nav.devices",
     device: "nav.devices",
     notes: "nav.notes",
+    timers: "nav.timers",
     activity: "nav.activity",
     transfers: "nav.transfers",
     settings: "nav.settings",
@@ -136,17 +141,20 @@ export default function App() {
     const off = onOpenDevice((node) => go({ name: "device", node }));
     onCleanup(() => off.then((f) => f()));
   });
-  // The quick panel's footer: Settings, or Search with what was typed there
+  // The quick panel's footer: Settings, Timers, or Search with what was typed there
   // ("Open my-domain" just brings the window forward as it is).
   onMount(() => {
     const off = onQuickOpen((place, query) => {
       if (place === "settings") go({ name: "settings" });
+      else if (place === "timers") go({ name: "timers" });
       else if (place === "search") go({ name: "search", query: query ?? undefined });
     });
     onCleanup(() => off.then((f) => f()));
   });
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
   const connected = () => state.peers.filter((p) => state.links[p.node_id]).length;
+  // Running timers (ended ones too, until stopped).
+  const activeTimers = () => Object.values(timers.byId).filter((x) => x.state === "running").length;
   const activeTransfers = () =>
     Object.values(state.transfers).filter((x) => x.state === "waiting" || x.state === "sending" || x.state === "receiving").length;
 
@@ -189,6 +197,21 @@ export default function App() {
                   onClick={() => go({ name: "notes" })}
                 >
                   {t("nav.notes")}
+                </button>
+              </li>
+              <li>
+                <button
+                  class={`nav-item ${is("timers") ? "active" : ""}`}
+                  aria-current={is("timers") ? "page" : undefined}
+                  onClick={() => go({ name: "timers" })}
+                >
+                  {t("nav.timers")}
+                  <Show when={activeTimers() > 0}>
+                    <span class="nav-count" aria-hidden="true">
+                      {activeTimers()}
+                    </span>
+                    <span class="sr-only">, {tn("a11y.timersRunning", activeTimers())}</span>
+                  </Show>
                 </button>
               </li>
               <li>
@@ -281,6 +304,9 @@ export default function App() {
               <Match when={view().name === "notes" && view()}>
                 {(v) => <Notes request={(v() as { request?: NoteRequest }).request} />}
               </Match>
+              <Match when={view().name === "timers"}>
+                <Timers />
+              </Match>
               <Match when={view().name === "activity"}>
                 <Activity />
               </Match>
@@ -312,6 +338,7 @@ export default function App() {
         <CallOverlay />
         <SendToPicker />
         <NoteReminders onOpen={(id) => openNote(id)} />
+        <TimerAlarm onOpen={() => go({ name: "timers" })} />
         </Show>
       </Show>
       <Show when={state.ringing}>{(r) => <RingBanner from={r().from} />}</Show>

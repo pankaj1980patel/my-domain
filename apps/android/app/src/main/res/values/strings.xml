@@ -1207,4 +1207,47 @@
     <string name="camera_settings_title">Camera on your computers</string>
     <string name="camera_keep_locked">Keep streaming while locked</string>
     <string name="camera_keep_locked_hint">Off: the camera stops as soon as the phone locks or its screen goes off. On: it keeps going (with its notification) until you or the computer stops it. Your computers always ask first, every time.</string>
+    <!-- Timers (TimersScreen.kt, TimerAlarms.kt) -->
+    <string name="channel_timers">Timers running</string>
+    <string name="channel_timer_alarm">Timers ringing</string>
+    <string name="timer_untitled">Timer</string>
+    <string name="timer_paused_left">Paused · %1$s left</string>
+    <string name="timer_running_text">Counting down on your devices</string>
+    <string name="timer_pause">Pause</string>
+    <string name="timer_resume">Resume</string>
+    <string name="timer_plus_minute">+1 min</string>
+    <string name="timer_cancel">Cancel</string>
+    <string name="timer_stop">Stop</string>
+    <string name="timer_times_up">Time’s up</string>
+    <string name="timers_title">Timers</string>
+    <string name="timers_subtitle">Start one on any device: it counts down on all of them, and the ones you pick ring when it ends.</string>
+    <string name="timers_entry_hint">Start a countdown that all your devices show</string>
+    <string name="timers_may_be_late">Android hasn’t let this app set exact alarms, so a timer may ring here a few minutes late.</string>
+    <string name="timers_new">New timer</string>
+    <string name="timers_label">Label (Pasta, laundry, a break…)</string>
+    <string name="timers_mins_short">%1$d min</string>
+    <string name="timers_hours_short">%1$d h</string>
+    <string name="timers_hours">Hours</string>
+    <string name="timers_minutes">Minutes</string>
+    <string name="timers_seconds">Seconds</string>
+    <string name="timers_start">Start</string>
+    <string name="timers_ring_on">Ring on</string>
+    <string name="timers_this_phone">This phone</string>
+    <string name="timers_bad_length">A timer is from a second to a week long.</string>
+    <string name="timers_rings_nowhere">Started. It won’t ring anywhere: pick a device to ring on.</string>
+    <string name="timers_ended">Time’s up</string>
+    <string name="timers_paused">Paused</string>
+    <string name="timers_ends_at">Ends at %1$s</string>
+    <string name="timers_left">%1$s left</string>
+    <string name="timers_rings_on">Rings on %1$s.</string>
+    <string name="timers_nowhere">no device</string>
+    <string name="timers_change">Change</string>
+    <string name="timers_by">Last changed on %1$s</string>
+    <string name="timers_restart">Start again</string>
+    <string name="timers_empty_title">No timers</string>
+    <string name="timers_empty_body">Start one above. Your computers show it too.</string>
+    <plurals name="timers_running">
+        <item quantity="one">%1$d running</item>
+        <item quantity="other">%1$d running</item>
+    </plurals>
 </resources>

@@ -216,6 +216,9 @@ object Core {
     /** Ask the UI to open this note (a reminder's notification). */
     var showNote by mutableStateOf<String?>(null)
 
+    /** Ask the UI to open Timers (a timer's notification). */
+    var showTimers by mutableStateOf(false)
+
     /** A scanned `mydomain://join?…` link (the camera or Lens opened it),
      *  waiting for the sign-in screen to join with it. */
     var pendingJoin by mutableStateOf<String?>(null)
@@ -353,6 +356,7 @@ object Core {
             ShareTargets.refresh(app)
         }
         Notes.refresh()
+        Timers.refresh()
     }
 
     /** Re-read every live link's quality (called every few seconds while
@@ -462,6 +466,8 @@ object Core {
             }
             // Notes changed on your other devices (and ones deleted there).
             "notes_changed" -> Notes.applyChanged(o)
+            // Timers started or changed on your other devices (every timer shown).
+            "timers_changed" -> Timers.applyChanged(o)
             "peer_connected" -> {
                 val was = links.containsKey(node)
                 links[node] = o.optString("transport")

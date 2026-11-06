@@ -65,6 +65,7 @@ class MainActivity : ComponentActivity() {
         openSettings(intent)
         openDevice(intent)
         if (savedInstanceState == null) openNote(intent)
+        if (savedInstanceState == null) openTimers(intent)
         if (savedInstanceState == null) takeJoinLink(intent)
         setContent { MdTheme { App(prefs) } }
     }
@@ -94,6 +95,15 @@ class MainActivity : ComponentActivity() {
         if (intent?.getBooleanExtra(PhoneLocation.EXTRA_OPEN_SETTINGS, false) != true) return
         intent.removeExtra(PhoneLocation.EXTRA_OPEN_SETTINGS)
         Core.showSettings = true
+    }
+
+    /** A timer's notification ([TimerAlarms]) asked for Timers. Not again
+     *  when the app is reopened from Recents. */
+    private fun openTimers(intent: Intent?) {
+        if (intent?.getBooleanExtra(TimerAlarms.EXTRA_OPEN_TIMERS, false) != true) return
+        intent.removeExtra(TimerAlarms.EXTRA_OPEN_TIMERS)
+        if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
+        Core.showTimers = true
     }
 
     /** A note reminder's notification ([NoteReminders]) asked for its note;
@@ -205,6 +215,7 @@ class MainActivity : ComponentActivity() {
         askWifiScan(intent)
         openDevice(intent)
         openNote(intent)
+        openTimers(intent)
         takeJoinLink(intent)
         if (!directShare(intent)) takeShare(intent)
     }

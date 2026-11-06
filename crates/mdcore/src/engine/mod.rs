@@ -50,6 +50,7 @@ mod session;
 mod sharing;
 mod signaling;
 mod sync;
+mod timers;
 
 pub(crate) use signaling::handle_signal;
 pub use signaling::FirewallStatus;
@@ -335,6 +336,7 @@ impl<P: Platform> Engine<P> {
             config.diag,
             config.wake_relay,
             config.camera,
+            config.timers,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

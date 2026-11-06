@@ -51,6 +51,7 @@ mod shortcut;
 mod shortcuts;
 mod sync_folders;
 mod sysinfo;
+mod timers;
 mod transfers;
 mod tray;
 mod tray_battery;
@@ -407,6 +408,9 @@ impl EventSink for TauriSink {
             CoreEvent::SyncPairs { pairs } => sync_folders::on_pairs(&self.app, pairs),
             // A reminder set, snoozed or Done on another device.
             CoreEvent::NotesChanged { .. } => note_reminders::changed(&self.app),
+            // A timer started or changed on another device: ring it here
+            // when it ends, if it rings here.
+            CoreEvent::TimersChanged { .. } => timers::changed(&self.app),
             // OS notifications for what arrives while the window is in the
             // background (off the core's thread too: peer lookup, the OS).
             // Kept in the chat history too (`chat_history`).
@@ -1626,6 +1630,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         notes::note_delete,
         note_reminders::note_remind_done,
         note_reminders::note_remind_at,
+        timers::timers_list,
+        timers::timer_start,
+        timers::timer_action,
+        timers::timer_add,
+        timers::timer_set_ring,
+        timers::timer_devices,
         dnd_devices,
         quiet::phone_quiet,
         remote_input_allowed,
@@ -1748,6 +1758,7 @@ pub fn run() {
             app.manage(away_lock::AwayLockState::load(&handle));
             app.manage(schedule::Schedules::load(&handle));
             app.manage(note_reminders::NoteReminders::load(&handle));
+            app.manage(timers::TimerAlarm::default());
             app.manage(automations::Automations::load(&handle));
             app.manage(battery_log::BatteryLog::load(&handle));
             app.manage(commands_run::ShellCommands::load(&handle));
@@ -1807,6 +1818,7 @@ pub fn run() {
             quiet::spawn(handle.clone());
             schedule::spawn(handle.clone());
             note_reminders::spawn(handle.clone());
+            timers::spawn(handle.clone());
             automations::spawn(handle.clone());
             battery_log::spawn(handle.clone());
             // Off by default: listens only once switched on in Settings.

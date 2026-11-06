@@ -37,8 +37,9 @@ function chime(ac: AudioContext) {
   }
 }
 
-/** Ring for RING_MS; `onDone` runs when it stops by itself. */
-export function startRing(onDone: () => void) {
+/** Ring for `ms` (RING_MS by default); `onDone` runs when it stops by
+ *  itself. A timer ending here rings longer. */
+export function startRing(onDone: () => void, ms = RING_MS) {
   stopRing();
   ctx ??= new AudioContext();
   const ac = ctx;
@@ -48,7 +49,7 @@ export function startRing(onDone: () => void) {
   stopTimer = setTimeout(() => {
     stopRing();
     onDone();
-  }, RING_MS);
+  }, ms);
 }
 
 export function stopRing() {

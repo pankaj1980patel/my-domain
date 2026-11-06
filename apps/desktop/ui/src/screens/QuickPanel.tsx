@@ -275,6 +275,9 @@ export default function QuickPanel() {
           <button type="button" class="btn btn-primary btn-sm" onClick={() => openMain("home")}>
             {t("panel.openApp")}
           </button>
+          <button type="button" class="btn btn-ghost btn-sm" onClick={() => openMain("timers")}>
+            {t("nav.timers")}
+          </button>
           <button type="button" class="btn btn-ghost btn-sm" onClick={() => openMain("settings")}>
             {t("panel.settings")}
           </button>

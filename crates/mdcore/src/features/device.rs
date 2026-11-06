@@ -84,6 +84,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::diag::extend_status(ctx, &mut status);
                 // Whether it knows the camera messages.
                 super::camera::extend_status(ctx, &mut status);
+                // Whether it shares timers.
+                super::timers::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -109,6 +111,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::notes::remember(ctx, &from, &status[super::notes::FLAG]);
                 super::diag::remember(ctx, &from, &status[super::diag::FLAG]);
                 super::camera::remember(ctx, &from, &status[super::camera::FLAG]);
+                super::timers::remember(ctx, &from, &status[super::timers::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

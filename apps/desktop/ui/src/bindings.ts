@@ -410,6 +410,27 @@ export const commands = {
 	/**  Remind at `at` (unix ms: snooze, or a new time), or no more (null). */
 	noteRemindAt: (id: string, at: number | null) => typedError<NoteView_Serialize, string>(__TAURI_INVOKE("note_remind_at", { id, at })),
 	/**
+	 *  Every timer shown: running ones by when they end (ended ones first),
+	 *  then paused ones.
+	 */
+	timersList: () => __TAURI_INVOKE<TimerView[]>("timers_list"),
+	/**
+	 *  Start a timer for `duration_ms`, ringing on `ring_on` (node ids) when it
+	 *  ends. Goes to your other devices.
+	 */
+	timerStart: (label: string, durationMs: number | null, ringOn: string[]) => typedError<TimerView, string>(__TAURI_INVOKE("timer_start", { label, durationMs, ringOn })),
+	/**
+	 *  Pause, resume, cancel, dismiss (stop ringing) or restart a timer, on
+	 *  every device.
+	 */
+	timerAction: (id: string, action: string) => typedError<TimerView, string>(__TAURI_INVOKE("timer_action", { id, action })),
+	/**  Add `ms` to a timer (one that ended starts again for that long). */
+	timerAdd: (id: string, msMore: number | null) => typedError<TimerView, string>(__TAURI_INVOKE("timer_add", { id, msMore })),
+	/**  Ring on these devices when the timer ends. */
+	timerSetRing: (id: string, ringOn: string[]) => typedError<TimerView, string>(__TAURI_INVOKE("timer_set_ring", { id, ringOn })),
+	/**  Your devices that share timers (node ids), this computer not included. */
+	timerDevices: () => __TAURI_INVOKE<string[]>("timer_devices"),
+	/**
 	 *  Your phones on Do Not Disturb right now (node ids; a live link and a
 	 *  fresh word from each, see `quiet`), whether or not this computer stays
 	 *  quiet with them.
@@ -593,7 +614,7 @@ export const commands = {
 	quickPanelHide: () => __TAURI_INVOKE<void>("quick_panel_hide"),
 	/**
 	 *  The panel's footer: bring the main window forward at `place` ("home",
-	 *  "settings" or "search", with `query`), and hide the panel.
+	 *  "settings", "timers" or "search", with `query`), and hide the panel.
 	 */
 	quickPanelOpenMain: (place: string, query: string | null) => __TAURI_INVOKE<void>("quick_panel_open_main", { place, query }),
 	/**
@@ -2385,6 +2406,31 @@ export type SyncPairView_Serialize = {
 	/**  Unix seconds, 0 = never. */
 	last_synced: number | null,
 	error: string | null,
+};
+
+/**  One timer, as the UI shows it (the core's `Timer`). */
+export type TimerView = {
+	id: string,
+	label: string,
+	/**  How long it was set for, in ms. */
+	duration_ms: number | null,
+	/**  "running" or "paused". */
+	state: string,
+	/**
+	 *  Running: when it ends (unix ms; past: ended, ringing until
+	 *  dismissed). Paused: 0.
+	 */
+	ends_at: number | null,
+	/**  Paused: what's left, in ms. */
+	remaining_ms: number | null,
+	/**  The devices (node ids) that ring when it ends. */
+	ring_on: string[],
+	/**  Unix ms. */
+	created_at: number | null,
+	updated_at: number | null,
+	/**  The device that last changed it (node id) and its name then. */
+	by: string,
+	by_name: string,
 };
 
 /**  One transfer, either way. */

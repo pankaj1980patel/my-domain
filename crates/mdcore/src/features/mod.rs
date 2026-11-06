@@ -37,6 +37,7 @@ pub mod p2p_ping;
 pub mod screen;
 pub mod share;
 pub mod signal_fwd;
+pub mod timers;
 pub mod wake;
 
 use std::collections::HashMap;
@@ -126,7 +127,9 @@ impl<P: Platform> ControlRegistry<P> {
     /// `labels` message (`CoreConfig::shared_labels`), `notes` and the
     /// `notes*` messages (`CoreConfig::notes`), `ping` with the ping
     /// and speed-test messages (`CoreConfig::diag`), `wake_relay`
-    /// (`CoreConfig::wake_relay`), and `camera_ctl` (`CoreConfig::camera`).
+    /// (`CoreConfig::wake_relay`), `camera_ctl` (`CoreConfig::camera`),
+    /// and `timers` (`CoreConfig::timers`).
+    #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
         folder_sync: bool,
@@ -135,6 +138,7 @@ impl<P: Platform> ControlRegistry<P> {
         diag: bool,
         wake_relay: bool,
         camera: bool,
+        timers: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -178,6 +182,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if camera {
             r.register(Arc::new(camera::CameraHandler));
+        }
+        if timers {
+            r.register(Arc::new(timers::TimersHandler));
         }
         r
     }

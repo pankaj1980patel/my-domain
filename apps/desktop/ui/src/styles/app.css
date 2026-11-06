@@ -3768,3 +3768,102 @@ html.qp-window body {
 .screen-stage-full.camera-stage .screen-view {
   max-height: calc(100vh - 80px);
 }
+
+/* --- timers (screens/Timers.tsx, components/TimerAlarm.tsx) ----------------- */
+
+.timer-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+.timer-custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s-3);
+}
+.timer-custom .field input {
+  width: 6em;
+}
+.timer-ring {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-4);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.timer-ring legend {
+  float: left;
+  margin-right: var(--s-2);
+}
+.timer-ring-device {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.timer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--s-4);
+}
+.timer-card p {
+  margin: 0;
+}
+.timer-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timer-clock {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.timer-bar {
+  height: 6px;
+  border-radius: var(--r-full);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.timer-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.25s linear;
+}
+.timer-paused .timer-clock {
+  color: var(--text-2);
+}
+.timer-paused .timer-bar span {
+  background: var(--text-3);
+}
+.timer-ended {
+  border-color: var(--warning);
+}
+.timer-ended .timer-clock {
+  color: var(--warning);
+}
+.timer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+/* Below the note reminders, so both can show. */
+.reminder-stack.timer-alarm {
+  top: auto;
+  bottom: var(--s-6);
+}
+.timer-alarm-card {
+  border-left-color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-bar span {
+    transition: none;
+  }
+}

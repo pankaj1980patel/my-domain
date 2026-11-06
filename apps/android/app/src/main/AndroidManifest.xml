@@ -123,6 +123,12 @@
             android:name=".NoteReminderReceiver"
             android:exported="false" />
 
+        <!-- Timers: the alarm when one ends, and a timer notification's
+             Stop, +1 min, Pause, Resume and Cancel. -->
+        <receiver
+            android:name=".TimerAlarmReceiver"
+            android:exported="false" />
+
         <!-- The receiving-file notification's Cancel action. -->
         <receiver
             android:name=".FileActionReceiver"

@@ -420,6 +420,43 @@ pub struct Note {
     pub remind_done: bool,
 }
 
+/// A countdown timer shared between your devices (`features::timers`):
+/// `Engine::timers`, and the `TimersChanged` event. Every device that has
+/// it counts down from `ends_at` itself; the devices in `ring_on` ring when
+/// it ends.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Timer {
+    pub id: String,
+    /// What it's for ("Pasta"); may be blank.
+    #[serde(default)]
+    pub label: String,
+    /// How long it was set for, in ms.
+    pub duration_ms: u64,
+    /// "running" or "paused" (and, between devices only, "done" once
+    /// dismissed and "cancelled": the apps never get those).
+    pub state: String,
+    /// Running: when it ends (unix ms; past: it has ended and rings until
+    /// dismissed). Paused: 0.
+    #[serde(default)]
+    pub ends_at: u64,
+    /// Paused: what's left, in ms. Running: 0.
+    #[serde(default)]
+    pub remaining_ms: u64,
+    /// The devices (node ids) that ring when it ends.
+    #[serde(default)]
+    pub ring_on: Vec<String>,
+    /// Unix ms.
+    #[serde(default)]
+    pub created_at: u64,
+    /// Unix ms, when it last changed ...
+    pub updated_at: u64,
+    /// ... on which device (node id) ...
+    pub by: String,
+    /// ... called what then.
+    #[serde(default)]
+    pub by_name: String,
+}
+
 /// A synced folder: one folder kept the same on this device and another
 /// (`features::folder_sync`). `Engine::sync_pairs`, and the `SyncPairs`
 /// event whenever any of them changes.

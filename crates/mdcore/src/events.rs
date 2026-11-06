@@ -274,6 +274,11 @@ pub enum CoreEvent {
         notes: Vec<crate::model::Note>,
         removed: Vec<String>,
     },
+    /// Timers started or changed on your other devices
+    /// (`features::timers`): every timer shown now (a timer missing from
+    /// it was cancelled or dismissed). Starting or changing one here makes
+    /// no event.
+    TimersChanged { timers: Vec<crate::model::Timer> },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -401,6 +406,7 @@ impl CoreEvent {
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
+            CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",

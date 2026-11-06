@@ -1,6 +1,6 @@
 //! State for the gallery, photo backup, battery alerts, remote input, Do
 //! Not Disturb, screen sharing, the phone's audio, synced folders, shared
-//! device labels, notes, the connection check and the phone's camera, in one place so the
+//! device labels, notes, the connection check, the phone's camera and timers, in one place so the
 //! engine's context gains one field for all of them.
 
 #[derive(Default)]
@@ -17,4 +17,5 @@ pub struct Extras {
     pub notes: super::notes::Notes,
     pub diag: super::diag::Diag,
     pub camera: super::camera::Camera,
+    pub timers: super::timers::Timers,
 }

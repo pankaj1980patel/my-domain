@@ -344,12 +344,14 @@ private fun LostScreen(message: String, contact: String, onCall: () -> Unit, onF
  * After a restart: the lost screen back on the lock screen before the first
  * unlock (LOCKED_BOOT_COMPLETED, device-protected storage), and once
  * unlocked the service, so your computers can reach the phone and stop it.
- * Once unlocked, note reminders' alarm is set again too (Android forgets
- * alarms over a restart; [NoteReminders] kept the reminders).
+ * Once unlocked, note reminders' and timers' alarms are set again too
+ * (Android forgets alarms over a restart; [NoteReminders] and
+ * [TimerAlarms] kept them).
  */
 class LostModeBootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) runCatching { NoteReminders.check(context.applicationContext) }
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED) runCatching { TimerAlarms.check(context.applicationContext) }
         if (!LostMode.isOn(context)) return
         when (intent.action) {
             Intent.ACTION_LOCKED_BOOT_COMPLETED -> LostMode.show(context, false)

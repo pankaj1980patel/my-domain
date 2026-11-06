@@ -155,7 +155,7 @@ pub fn mark_live<P: Platform>(
 pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
     outbox::flush(ctx, node_id);
     // Our current addresses (it may only know stale ones from the server),
-    // our Do Not Disturb, if on, the device labels and the notes' digest;
+    // our Do Not Disturb, if on, the device labels, the notes' digest and the timers;
     // off this thread: sending may block.
     let (ctx, peer) = (ctx.clone(), node_id.to_string());
     std::thread::spawn(move || {
@@ -163,6 +163,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::dnd::link_up(&ctx, &peer);
         crate::features::labels::link_up(&ctx, &peer);
         crate::features::notes::link_up(&ctx, &peer);
+        crate::features::timers::link_up(&ctx, &peer);
     });
 }
 

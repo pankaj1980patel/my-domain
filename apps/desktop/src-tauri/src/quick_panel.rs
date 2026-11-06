@@ -285,7 +285,7 @@ pub fn quick_panel_hide(app: AppHandle) {
 }
 
 /// The panel's footer: bring the main window forward at `place` ("home",
-/// "settings" or "search", with `query`), and hide the panel.
+/// "settings", "timers" or "search", with `query`), and hide the panel.
 #[tauri::command]
 #[specta::specta]
 pub fn quick_panel_open_main(place: String, query: Option<String>, app: AppHandle) {

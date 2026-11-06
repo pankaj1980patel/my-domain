@@ -357,6 +357,50 @@ impl From<mdcore::model::Note> for NoteItem {
     }
 }
 
+/// A countdown timer shared with your other devices (`timers_list`, and
+/// `timers_changed` events with the same fields under `timers`).
+#[derive(uniffi::Record)]
+pub struct TimerItem {
+    pub id: String,
+    pub label: String,
+    /// How long it was set for, in ms.
+    pub duration_ms: i64,
+    /// "running" or "paused".
+    pub state: String,
+    /// Running: when it ends (unix ms; past: ended, ringing until
+    /// dismissed). Paused: 0.
+    pub ends_at: i64,
+    /// Paused: what's left, in ms.
+    pub remaining_ms: i64,
+    /// The devices (node ids) that ring when it ends.
+    pub ring_on: Vec<String>,
+    /// Unix ms.
+    pub created_at: i64,
+    pub updated_at: i64,
+    /// The device that last changed it (node id) and its name then.
+    pub by: String,
+    pub by_name: String,
+}
+
+impl From<mdcore::model::Timer> for TimerItem {
+    fn from(t: mdcore::model::Timer) -> Self {
+        let ms = |v: u64| i64::try_from(v).unwrap_or(i64::MAX);
+        TimerItem {
+            id: t.id,
+            label: t.label,
+            duration_ms: ms(t.duration_ms),
+            state: t.state,
+            ends_at: ms(t.ends_at),
+            remaining_ms: ms(t.remaining_ms),
+            ring_on: t.ring_on,
+            created_at: ms(t.created_at),
+            updated_at: ms(t.updated_at),
+            by: t.by,
+            by_name: t.by_name,
+        }
+    }
+}
+
 /// Battery alerts this phone sends your other devices.
 #[derive(uniffi::Record)]
 pub struct BatteryAlertConfig {
@@ -1534,5 +1578,56 @@ impl MdEngine {
     /// Delete a note on all your devices.
     pub fn note_delete(&self, id: String) -> MdResult<()> {
         Ok(self.inner.delete_note(&id)?)
+    }
+
+    // --- timers shared with your other devices (mdcore features::timers) ---
+
+    /// Every timer shown: running ones by when they end (ended ones
+    /// first), then paused ones. Timers started or changed on your other
+    /// devices arrive as `timers_changed` events.
+    pub fn timers_list(&self) -> Vec<TimerItem> {
+        self.inner.timers().into_iter().map(Into::into).collect()
+    }
+
+    /// Start a timer for `duration_ms` (a second to a week), ringing on
+    /// `ring_on` (node ids) when it ends. Goes to your other devices.
+    pub fn timer_start(
+        &self,
+        label: String,
+        duration_ms: i64,
+        ring_on: Vec<String>,
+    ) -> MdResult<TimerItem> {
+        let ms = u64::try_from(duration_ms).map_err(|_| MdError::Failed("how long?".into()))?;
+        Ok(self.inner.start_timer(&label, ms, &ring_on)?.into())
+    }
+
+    /// "pause", "resume", "cancel", "dismiss" (stop it ringing) or
+    /// "restart" a timer, on every device.
+    pub fn timer_action(&self, id: String, action: String) -> MdResult<TimerItem> {
+        let t = match action.as_str() {
+            "pause" => self.inner.pause_timer(&id)?,
+            "resume" => self.inner.resume_timer(&id)?,
+            "cancel" => self.inner.cancel_timer(&id)?,
+            "dismiss" => self.inner.dismiss_timer(&id)?,
+            "restart" => self.inner.restart_timer(&id)?,
+            _ => return Err(MdError::Failed("what to do?".into())),
+        };
+        Ok(t.into())
+    }
+
+    /// Add `ms` to a timer (one that ended starts again for that long).
+    pub fn timer_add(&self, id: String, ms: i64) -> MdResult<TimerItem> {
+        let ms = u64::try_from(ms).map_err(|_| MdError::Failed("how long?".into()))?;
+        Ok(self.inner.add_timer_time(&id, ms)?.into())
+    }
+
+    /// Ring on these devices when the timer ends.
+    pub fn timer_set_ring(&self, id: String, ring_on: Vec<String>) -> MdResult<TimerItem> {
+        Ok(self.inner.set_timer_ring(&id, &ring_on)?.into())
+    }
+
+    /// Device `node_id` shares timers (its app is new enough).
+    pub fn timers_supported(&self, node_id: String) -> bool {
+        self.inner.timers_supported(&node_id)
     }
 }

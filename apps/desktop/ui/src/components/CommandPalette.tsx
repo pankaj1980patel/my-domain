@@ -43,7 +43,7 @@ import { KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup } from "
 import { FoundText } from "./Found";
 import { t, tn, type Key } from "../i18n";
 
-export type Place = "home" | "notes" | "activity" | "transfers" | "settings" | "help";
+export type Place = "home" | "notes" | "timers" | "activity" | "transfers" | "settings" | "help";
 
 type Cmd = {
   /** Stable across openings: the recents list keeps these. */
@@ -311,6 +311,7 @@ export default function CommandPalette(props: {
     return [
       { id: "place.home", label: t("palette.devices"), group, run: go("home") },
       { id: "place.notes", label: t("palette.notes"), group, run: go("notes") },
+      { id: "place.timers", label: t("palette.timers"), group, run: go("timers") },
       { id: "place.activity", label: t("palette.activity"), group, run: go("activity") },
       { id: "place.transfers", label: t("palette.transfers"), group, run: go("transfers") },
       { id: "place.settings", label: t("palette.settings"), group, run: go("settings") },

@@ -13,6 +13,7 @@ import { startRing, stopRing } from "./ring";
 import { onSpeedEvent, type SpeedRun } from "./diag";
 import { niceName } from "./words";
 import { applyNotesChanged, loadNotes, onReminder, type Note } from "./notes";
+import { applyTimersChanged, loadTimers, onTimerRing, type Timer } from "./timers";
 import { toast } from "../components/ui";
 
 export type Peer = Peer_Serialize;
@@ -531,6 +532,10 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
     on<{ notes: Note[]; removed: string[] }>("notes-changed", applyNotesChanged),
     // A note's reminder came due here (the backend showed it too).
     on<Note>("note-reminder", onReminder),
+    // Timers started or changed on your other devices (every timer shown).
+    on<{ timers: Timer[] }>("timers-changed", applyTimersChanged),
+    // A timer ended and rings here (the backend brought the window up).
+    on<Timer>("timer-ring", onTimerRing),
     // Synced folders: the whole list, whenever any of them changes.
     on<{ pairs: SyncPair[] }>("sync-pairs", ({ pairs }) => setState("syncPairs", reconcile(pairs ?? []))),
     on<{ entries: ClipEntry[] }>("clipboard-history", ({ entries }) => setState("clipHistory", entries ?? [])),
@@ -705,6 +710,7 @@ export async function loadAll() {
   commands.computerAudioStatus().then((s) => setState("computerAudio", reconcile(s)), () => {});
   commands.syncPairs().then((p) => setState("syncPairs", reconcile(p)), () => {});
   loadNotes().catch(() => {});
+  loadTimers().catch(() => {});
   setState({
     me,
     peers,
