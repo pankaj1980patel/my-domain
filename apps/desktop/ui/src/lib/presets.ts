@@ -33,6 +33,14 @@ export const LOCAL_PRESETS: Preset[] = [
 /** Automations only: no action, just a notification here. */
 export const NOTIFY_PRESET: Preset = { id: "notify", action: "notify", args: {}, label: "automation.preset.notify", always: true };
 
+/** Another computer that said it may be woken (`canWake`): this computer
+ *  sends the wake-up, so it works while that one sleeps. Offered only then,
+ *  e.g. "every weekday at 08:55, wake the office PC". */
+export const WAKE_PRESET: Preset = { id: "wake", action: "wake", args: {}, label: "schedule.preset.wake", always: true };
+
+/** `presets`, with waking when the device can be woken. */
+export const withWake = (presets: Preset[], canWake: boolean) => (canWake ? [...presets, WAKE_PRESET] : presets);
+
 /** The presets `actions` allows (`always` ones regardless). */
 export const offeredPresets = (presets: Preset[], actions: string[] | undefined) =>
   presets.filter((p) => p.always || actions?.includes(p.action));

@@ -25,6 +25,9 @@
 // while its Settings switch is on (macOS and Windows; Linux trays report
 // no clicks, so the menu's "Quick panel" item opens it there). A right
 // click shows the menu.
+//
+// The phone's battery can show next to the icon, with a red dot when it's
+// low (`tray_battery`); the tooltip then says it too (`refresh_tooltip`).
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -38,7 +41,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::quick_panel::{self, Anchor, Area};
 use crate::{notify, shortcut, Eng};
 
-const TRAY_ID: &str = "main";
+pub(crate) const TRAY_ID: &str = "main";
 const DEBOUNCE: Duration = Duration::from_millis(500);
 /// How long after "Locate" an arriving position still opens the map.
 const LOCATE_WAIT_SECS: u64 = 5 * 60;
@@ -69,6 +72,8 @@ const ID_QUICK_PANEL: &str = "app:panel";
 const ID_QUIT: &str = "app:quit";
 const ID_NONE: &str = "app:none";
 
+/// Pop-ups are held (`set_quiet`): the tooltip says so.
+static QUIET: AtomicBool = AtomicBool::new(false);
 /// Set by "Quit" so closing the window then really exits.
 static QUITTING: AtomicBool = AtomicBool::new(false);
 /// A rebuild is already scheduled.
@@ -195,15 +200,34 @@ pub fn refresh(app: &AppHandle) {
 /// The tooltip says when pop-ups are held because a phone is on Do Not
 /// Disturb (`quiet`).
 pub fn set_quiet(app: &AppHandle, on: bool) {
+    QUIET.store(on, Ordering::Relaxed);
+    refresh_tooltip(app);
+}
+
+/// Set the tooltip from what it says: quiet, and the phone's battery
+/// (`tray_battery`).
+pub(crate) fn refresh_tooltip(app: &AppHandle) {
+    let tip = tooltip_text(
+        QUIET.load(Ordering::Relaxed),
+        crate::tray_battery::tip_line().as_deref(),
+    );
     let handle = app.clone();
     let _ = app.run_on_main_thread(move || {
         if let Some(tray) = handle.tray_by_id(TRAY_ID) {
-            let tip = if on { TOOLTIP_QUIET } else { "my-domain" };
-            if let Err(e) = tray.set_tooltip(Some(tip)) {
+            if let Err(e) = tray.set_tooltip(Some(&tip)) {
                 eprintln!("[tray] couldn't update the tooltip: {e}");
             }
         }
     });
+}
+
+/// "my-domain", or the quiet line, then the phone's battery if it shows.
+fn tooltip_text(quiet: bool, battery: Option<&str>) -> String {
+    let base = if quiet { TOOLTIP_QUIET } else { "my-domain" };
+    match battery {
+        Some(b) => format!("{base} \u{b7} {b}"),
+        None => base.to_string(),
+    }
 }
 
 /// Bring the main window forward.
@@ -727,6 +751,20 @@ mod tests {
         assert_eq!(
             locate_label("I2405", Some(&off)),
             ("Locate I2405 (off on the phone)".into(), false)
+        );
+    }
+
+    #[test]
+    fn tray_tooltips() {
+        assert_eq!(tooltip_text(false, None), "my-domain");
+        assert_eq!(tooltip_text(true, None), TOOLTIP_QUIET);
+        assert_eq!(
+            tooltip_text(false, Some("Pixel: 82%, charging")),
+            "my-domain \u{b7} Pixel: 82%, charging"
+        );
+        assert_eq!(
+            tooltip_text(true, Some("Pixel: 9%, low")),
+            format!("{TOOLTIP_QUIET} \u{b7} Pixel: 9%, low")
         );
     }
 

@@ -278,6 +278,10 @@ export const commands = {
 	 *  devices on its network.
 	 */
 	wakeDevice: (nodeId: string) => typedError<WakeReport, string>(__TAURI_INVOKE("wake_device", { nodeId })),
+	/**  The menu-bar battery setting, and your phones to pick from. */
+	trayBatterySetting: () => __TAURI_INVOKE<TrayBatterySetting>("tray_battery_setting"),
+	/**  Change the menu-bar battery setting; the tray follows at once. */
+	setTrayBattery: (on: boolean, badge: boolean, phone: string) => __TAURI_INVOKE<void>("set_tray_battery", { on, badge, phone }),
 	/**
 	 *  "Lock this computer when my phone goes away": on or off, how long to
 	 *  wait, and whether this computer can lock at all.
@@ -2436,6 +2440,23 @@ export type TransferState =
 export type TransportKind = "punch" | "webrtc" | "quic" | "relay" | 
 /**  Bluetooth LE, carried by the platform (`engine::ble`). */
 "ble";
+
+/**  What Settings shows. */
+export type TrayBatterySetting = {
+	on: boolean,
+	/**  The red dot when it's low. */
+	badge: boolean,
+	/**  The chosen phone ("" for whichever was heard from last). */
+	phone: string,
+	/**  Your phones. */
+	phones: TrayPhone[],
+};
+
+/**  A phone the setting can pick. */
+export type TrayPhone = {
+	node: string,
+	name: string,
+};
 
 /**  What starts an automation. */
 export type Trigger = Trigger_Serialize | Trigger_Deserialize;

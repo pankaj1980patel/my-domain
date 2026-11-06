@@ -320,6 +320,7 @@ export const hi: Partial<Messages> = {
   "schedule.preset.torchOff": "फ़्लैशलाइट बंद करें",
   "schedule.preset.awakeOff": "इसे जगाए रखना बंद करें",
   "schedule.preset.media": "मीडिया चलाएँ या रोकें",
+  "schedule.preset.wake": "इसे स्लीप से जगाएँ",
   "schedule.day.mon": "सोम",
   "schedule.day.tue": "मंगल",
   "schedule.day.wed": "बुध",
@@ -806,6 +807,7 @@ export const hi: Partial<Messages> = {
   "shortcuts.action.phoneAudio": "फ़ोन का ऑडियो यहाँ चलाना शुरू करें या रोकें",
   "shortcuts.action.mute": "किसी डिवाइस को म्यूट या अनम्यूट करें",
   "shortcuts.action.media": "किसी डिवाइस पर चलाएँ / रोकें",
+  "shortcuts.action.wake": "किसी कंप्यूटर को स्लीप से जगाएँ",
   "shortcuts.action.automation": "कोई ऑटोमेशन चलाएँ",
   "shortcuts.does.sendClipboardPhone": "मैंने जो कॉपी किया है, उसे मेरे फ़ोन पर भेजें",
   "shortcuts.does.sendClipboard": "मैंने जो कॉपी किया है, उसे {name} पर भेजें",
@@ -818,6 +820,7 @@ export const hi: Partial<Messages> = {
   "shortcuts.does.phoneAudio": "{name} की आवाज़ यहाँ चलाएँ, या रोकें",
   "shortcuts.does.mute": "{name} को म्यूट या अनम्यूट करें",
   "shortcuts.does.media": "{name} पर चलाएँ / रोकें",
+  "shortcuts.does.wake": "{name} को जगाएँ",
   "shortcuts.does.automation": "ऑटोमेशन “{what}” चलाएँ",
   "settings.deviceKey": "डिवाइस कुंजी",
   "settings.deviceKeyHint": "आपके सभी डिवाइस पर एक ही कुंजी होनी चाहिए। इसे यहाँ बदलने का मतलब है इसे हर डिवाइस पर बदलना।",
@@ -1271,6 +1274,14 @@ export const hi: Partial<Messages> = {
   "settings.quickPanel": "मेन्यू-बार आइकन पर क्लिक करने पर क्विक पैनल खोलें",
   "settings.quickPanelHint":
     "my-domain आइकन पर क्लिक करने से एक छोटा पैनल खुलता है, जिसमें आपके डिवाइस, आख़िरी क्लिप और फ़ाइलें, और खोज होती है। मेन्यू के लिए राइट-क्लिक करें। बंद होने पर: क्लिक से मेन्यू दिखता है। Linux पर हमेशा मेन्यू दिखता है; उसमें “Quick panel” चुनें।",
+  "trayBattery.switch": "मेन्यू बार में मेरे फ़ोन की बैटरी दिखाएँ",
+  "trayBattery.hint":
+    "Mac और Linux पर my-domain आइकन के बगल में (चार्ज होते समय ⚡); Windows पर आइकन के टूलटिप में। फ़ोन के आधे घंटे तक डिस्कनेक्ट रहने पर यह हट जाती है।",
+  "trayBattery.phone": "फ़ोन",
+  "trayBattery.anyPhone": "जिससे आख़िरी बार सुना",
+  "trayBattery.noPhone": "अभी कोई फ़ोन नहीं: my-domain वाला आपका Android फ़ोन कनेक्ट होते ही यह दिखेगी।",
+  "trayBattery.badge": "बैटरी कम होने पर आइकन पर लाल बिंदु लगाएँ",
+  "trayBattery.badgeHint": "20% या उससे कम, और चार्ज न हो रहा हो।",
   // Check connection
   "conn.title": "कनेक्शन",
   "conn.hint": "देखें कि यह कंप्यूटर {name} तक कैसे पहुँचता है, और यह धीमा या पहुँच से बाहर क्यों हो सकता है।",

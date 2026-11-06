@@ -612,8 +612,10 @@ pub fn list_automations(state: State<Automations>) -> Vec<Automation> {
 #[specta::specta]
 pub fn add_automation(
     automation: NewAutomation,
+    app: AppHandle,
     state: State<Automations>,
 ) -> Result<Automation, CoreError> {
+    crate::schedule::check_target(&app, &automation.node, &automation.action)?;
     state.add(automation)
 }
 

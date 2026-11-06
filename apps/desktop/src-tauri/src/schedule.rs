@@ -335,12 +335,16 @@ enum Route {
     Here,
     /// Another device: ring it.
     Ring,
+    /// Another computer: wake it from sleep (Wake-on-LAN, from here).
+    Wake,
     /// Another device: send it the action.
     Send,
 }
 
 fn route(node: &str, action: &str, me: &str) -> Route {
-    if node == me {
+    if action == WAKE {
+        Route::Wake
+    } else if node == me {
         Route::Here
     } else if action == "ring" {
         Route::Ring
@@ -387,7 +391,43 @@ pub(crate) fn run_action(
             Ok("here".into())
         }
         Route::Ring => engine.ring(node),
+        Route::Wake => {
+            check_wake(node, &engine.identity().node_id, engine.can_wake(node))?;
+            // A few UDP sends and queued messages: never blocks.
+            engine.wake_device(node).map(|_| "woken".into())
+        }
         Route::Send => engine.run_action(node, action, args),
+    }
+}
+
+/// The "wake" action: run here (it's this computer that sends the magic
+/// packet), never sent to the computer itself, which is asleep.
+const WAKE: &str = "wake";
+
+/// A new schedule's or automation's target, when it wakes one: checked as
+/// it's added, so a "wake" never goes to this computer or a phone.
+pub(crate) fn check_target(app: &AppHandle, node: &str, action: &str) -> Result<(), CoreError> {
+    if action != WAKE {
+        return Ok(());
+    }
+    let engine = app
+        .try_state::<Eng>()
+        .ok_or_else(|| CoreError::Other("not started yet".into()))?;
+    check_wake(node, &engine.identity().node_id, engine.can_wake(node))
+}
+
+/// Whether `node` can be woken by a "wake" action: another computer (not
+/// this one, `me`), that said it may be woken (`can_wake`).
+pub(crate) fn check_wake(node: &str, me: &str, can_wake: bool) -> Result<(), CoreError> {
+    let bad = |why: &str| Err(CoreError::InvalidInput(why.to_string()));
+    if node.trim().is_empty() {
+        bad("choose a computer to wake")
+    } else if node == me {
+        bad("this computer can\u{2019}t wake itself")
+    } else if !can_wake {
+        bad("that device hasn\u{2019}t said it can be woken: turn on \u{201c}Let my other devices wake this computer\u{201d} on it")
+    } else {
+        Ok(())
     }
 }
 
@@ -404,6 +444,11 @@ fn tell(app: &AppHandle, s: &Schedule, result: &Result<String, CoreError>) {
             app,
             &format!("Scheduled: {what}"),
             &format!("{device} isn\u{2019}t reachable right now. It\u{2019}ll happen once it is."),
+        ),
+        Ok(via) if via == "woken" => crate::notify::post(
+            app,
+            &format!("Scheduled: {what}"),
+            &format!("Sent {device} a wake-up at {}.", s.time),
         ),
         Ok(_) => crate::notify::post(
             app,
@@ -443,7 +488,12 @@ pub fn list_schedules(state: State<Schedules>) -> Vec<Schedule> {
 /// Schedule an action on a device.
 #[tauri::command]
 #[specta::specta]
-pub fn add_schedule(schedule: NewSchedule, state: State<Schedules>) -> Result<Schedule, CoreError> {
+pub fn add_schedule(
+    schedule: NewSchedule,
+    app: AppHandle,
+    state: State<Schedules>,
+) -> Result<Schedule, CoreError> {
+    check_target(&app, &schedule.node, &schedule.action)?;
     state.add(schedule)
 }
 
@@ -688,6 +738,26 @@ mod tests {
         assert_eq!(route("me", "ring", "me"), Route::Here);
         assert_eq!(route("phone", "ring", "me"), Route::Ring);
         assert_eq!(route("phone", "lock", "me"), Route::Send);
+        // Waking goes from here, never to the sleeping computer itself.
+        assert_eq!(route("office", "wake", "me"), Route::Wake);
+        assert_eq!(route("me", "wake", "me"), Route::Wake);
+    }
+
+    #[test]
+    fn wake_checks_its_target() {
+        assert!(check_wake("office", "me", true).is_ok());
+        // Not this computer, not one that never said it can be woken
+        // (a phone, or the switch off), and not nothing.
+        assert!(check_wake("me", "me", true).is_err());
+        assert!(check_wake("phone", "me", false).is_err());
+        assert!(check_wake("", "me", true).is_err());
+        assert!(check_wake("  ", "me", true).is_err());
+        // A schedule with it is otherwise checked like any other.
+        let mut s = sched("08:55", &WEEKDAYS);
+        s.node = "office".into();
+        s.action = "wake".into();
+        s.args = "{}".into();
+        assert!(checked(s).is_ok());
     }
 
     #[test]

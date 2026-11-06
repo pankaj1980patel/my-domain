@@ -31,6 +31,7 @@ const ACTIONS: { id: string; needs: Needs; label: Key }[] = [
   { id: "phone_audio", needs: "device", label: "shortcuts.action.phoneAudio" },
   { id: "mute", needs: "device", label: "shortcuts.action.mute" },
   { id: "media", needs: "device", label: "shortcuts.action.media" },
+  { id: "wake", needs: "device", label: "shortcuts.action.wake" },
   { id: "automation", needs: "automation", label: "shortcuts.action.automation" },
 ];
 
@@ -46,6 +47,7 @@ const DOES: Record<string, Key> = {
   phone_audio: "shortcuts.does.phoneAudio",
   mute: "shortcuts.does.mute",
   media: "shortcuts.does.media",
+  wake: "shortcuts.does.wake",
   automation: "shortcuts.does.automation",
 };
 

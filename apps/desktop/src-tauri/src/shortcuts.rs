@@ -72,6 +72,7 @@ pub const ACTIONS: &[(&str, Needs)] = &[
     ("phone_audio", Needs::Device),
     ("mute", Needs::Device),
     ("media", Needs::Device),
+    ("wake", Needs::Device),
     ("automation", Needs::Automation),
 ];
 
@@ -919,6 +920,12 @@ fn run(app: &AppHandle, b: &Binding) {
             &name(),
             crate::schedule::run_action(app, node, "media", r#"{"key":"play_pause"}"#),
         ),
+        "wake" => sent(
+            app,
+            &format!("Wake {}", name()),
+            &name(),
+            crate::schedule::run_action(app, node, "wake", ""),
+        ),
         "mute" => {
             let muted = app
                 .try_state::<Shortcuts>()
@@ -1012,6 +1019,7 @@ fn describe(app: &AppHandle, b: &Binding) -> String {
         "phone_audio" => format!("Play {}\u{2019}s audio here", name()),
         "mute" => format!("Mute or unmute {}", name()),
         "media" => format!("Play / pause on {}", name()),
+        "wake" => format!("Wake {}", name()),
         "automation" => {
             let label = app
                 .try_state::<crate::automations::Automations>()

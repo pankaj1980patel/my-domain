@@ -53,6 +53,7 @@ mod sync_folders;
 mod sysinfo;
 mod transfers;
 mod tray;
+mod tray_battery;
 mod webhooks;
 mod wifi_share;
 mod wol;
@@ -344,6 +345,7 @@ impl EventSink for TauriSink {
                     computer_audio::on_disconnected(&self.app, node_id);
                 }
                 tray::refresh(&self.app);
+                tray_battery::update(&self.app);
                 automations::on_link(&self.app);
                 quiet::on_link(&self.app);
             }
@@ -360,6 +362,7 @@ impl EventSink for TauriSink {
                 shortcut::saw_status(&self.app, from, status);
                 shortcuts::on_status(&self.app, from, status);
                 tray::on_status(&self.app, from, status);
+                tray_battery::on_status(&self.app, from, status);
             }
             CoreEvent::Ring { from } => {
                 let (app, from) = (self.app.clone(), from.clone());
@@ -1582,6 +1585,8 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         wol::set_wake_setting,
         wol::can_wake,
         wol::wake_device,
+        tray_battery::tray_battery_setting,
+        tray_battery::set_tray_battery,
         away_lock::away_lock,
         away_lock::set_away_lock,
         shortcuts::list_shortcuts,
@@ -1748,6 +1753,7 @@ pub fn run() {
             app.manage(calls::CallsPrefs::load(&handle));
             app.manage(computer_notifs::ComputerNotifs::load(&handle));
             app.manage(quick_panel::QuickPanelPref::load(&handle));
+            app.manage(tray_battery::TrayBatteryPref::load(&handle));
             app.manage(settings_backup::Pending::default());
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
@@ -1822,6 +1828,7 @@ pub fn run() {
             if let Err(e) = tray::init(&handle) {
                 eprintln!("[tray] couldn't create the tray icon: {e}");
             }
+            tray_battery::spawn(handle.clone());
             Ok(())
         })
         // Closing the window hides it to the tray; the tray's "Quit" exits.

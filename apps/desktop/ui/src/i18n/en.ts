@@ -318,6 +318,7 @@ export const en = {
   "schedule.preset.torchOff": "Turn off the flashlight",
   "schedule.preset.awakeOff": "Stop keeping it awake",
   "schedule.preset.media": "Play or pause media",
+  "schedule.preset.wake": "Wake it from sleep",
   "schedule.day.mon": "Mon",
   "schedule.day.tue": "Tue",
   "schedule.day.wed": "Wed",
@@ -804,6 +805,7 @@ export const en = {
   "shortcuts.action.phoneAudio": "Start or stop playing a phone's audio here",
   "shortcuts.action.mute": "Mute or unmute a device",
   "shortcuts.action.media": "Play / pause on a device",
+  "shortcuts.action.wake": "Wake a computer from sleep",
   "shortcuts.action.automation": "Run an automation",
   "shortcuts.does.sendClipboardPhone": "Send what I copied to my phone",
   "shortcuts.does.sendClipboard": "Send what I copied to {name}",
@@ -816,6 +818,7 @@ export const en = {
   "shortcuts.does.phoneAudio": "Play {name}'s audio here, or stop",
   "shortcuts.does.mute": "Mute or unmute {name}",
   "shortcuts.does.media": "Play / pause on {name}",
+  "shortcuts.does.wake": "Wake {name}",
   "shortcuts.does.automation": "Run the automation “{what}”",
   "settings.deviceKey": "Device key",
   "settings.deviceKeyHint": "All your devices must use the same key. Changing it here means changing it on every device.",
@@ -1350,6 +1353,14 @@ export const en = {
   "settings.quickPanel": "Open the quick panel when clicking the menu-bar icon",
   "settings.quickPanelHint":
     "A click on the my-domain icon opens a small panel with your devices, the last clips and files, and search. Right-click for the menu. Off: a click shows the menu. On Linux the menu always shows; choose “Quick panel” in it.",
+  "trayBattery.switch": "Show my phone’s battery in the menu bar",
+  "trayBattery.hint":
+    "Next to the my-domain icon on a Mac and on Linux (⚡ while it charges); in the icon’s tooltip on Windows. It goes away once the phone has been disconnected for half an hour.",
+  "trayBattery.phone": "Phone",
+  "trayBattery.anyPhone": "The one heard from last",
+  "trayBattery.noPhone": "No phone yet: it shows once your Android phone with my-domain connects.",
+  "trayBattery.badge": "Put a red dot on the icon when it’s low",
+  "trayBattery.badgeHint": "At 20% or less and not charging.",
 
   // Wake a sleeping computer (Wake-on-LAN)
   "wake.button": "Wake it",

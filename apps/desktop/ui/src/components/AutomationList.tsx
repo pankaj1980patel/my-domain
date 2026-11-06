@@ -7,7 +7,8 @@
 import { createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { commands, type Automation_Serialize as Automation } from "../bindings";
 import { peerName, state, unwrap } from "../lib/core";
-import { DEVICE_PRESETS, LOCAL_PRESETS, NOTIFY_PRESET, offeredPresets, type Preset } from "../lib/presets";
+import { DEVICE_PRESETS, LOCAL_PRESETS, NOTIFY_PRESET, offeredPresets, withWake, type Preset } from "../lib/presets";
+import { createCanWake } from "../lib/canWake";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
@@ -54,10 +55,12 @@ export function AutomationList(props: {
   const kinds = (): [string, Key][] => (watched() === props.me ? [["wakes", "automation.kind.wakes"]] : KINDS);
   const chosenKind = () => kinds().find(([k]) => k === kind())?.[0] ?? kinds()[0][0];
   const where = () => target() || props.me;
+  // Another computer that may be woken: "Wake it from sleep" too.
+  const canWake = createCanWake(() => (where() === props.me ? "" : where()));
   const presets = (): Preset[] =>
     where() === props.me
       ? [...offeredPresets(LOCAL_PRESETS, props.localActions), NOTIFY_PRESET]
-      : offeredPresets(DEVICE_PRESETS, state.status[where()]?.actions);
+      : offeredPresets(withWake(DEVICE_PRESETS, canWake()), state.status[where()]?.actions);
   const chosen = () => presets().find((p) => p.id === preset()) ?? presets()[0];
 
   const name = (node: string) =>

@@ -23,6 +23,7 @@ import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { SyncSetting } from "../components/SyncSetting";
 import { WakeSetting } from "../components/WakeSetting";
+import { TrayBatterySetting } from "../components/TrayBatterySetting";
 import { SettingsBackup } from "../components/SettingsBackup";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { AddDevice } from "../components/AddDevice";
@@ -188,6 +189,7 @@ export default function Settings(props: { onDeveloper: () => void }) {
           <input type="checkbox" role="switch" checked={quickPanel()} onChange={(e) => toggleQuickPanel(e.currentTarget.checked)} />
         </label>
         <p class="muted small">{t("settings.quickPanelHint")}</p>
+        <TrayBatterySetting />
         <label class="switch-row">
           <span>{t("settings.remoteInput")}</span>
           <input type="checkbox" role="switch" checked={remoteInput()} onChange={(e) => toggleRemoteInput(e.currentTarget.checked)} />

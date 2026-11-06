@@ -57,6 +57,8 @@ pub const KV_SECTIONS: [KvSection; 6] = [
             "notifications",
             "follow_dnd",
             "quick_panel",
+            "tray_battery",
+            "tray_battery_badge",
             "away_lock",
             "away_lock_minutes",
             "away_lock_phones",

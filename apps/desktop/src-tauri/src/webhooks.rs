@@ -704,6 +704,10 @@ impl Backend for AppBackend {
             }
             let mut actions = vec!["ring".to_string()];
             actions.extend(known.get(&p.node_id).cloned().unwrap_or_default());
+            // A computer that may be woken: this one sends the wake-up.
+            if engine.can_wake(&p.node_id) && !actions.iter().any(|a| a == "wake") {
+                actions.push("wake".to_string());
+            }
             out.push(DeviceInfo {
                 name: crate::notify::nice_name(&p.name),
                 connected: live.contains(&p.node_id),
