@@ -42,11 +42,13 @@ jobs:
       # The desktop's FCM receiver (fcm_receiver_rs -> ece -> openssl) needs
       # OpenSSL; Windows has none, so take it from the runner's vcpkg.
       - run: vcpkg install openssl:x64-windows-static-md
-      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
       # libopus (mdcore's Opus audio) is built from source by cmake: with
       # the MSVC environment set, it builds whichever generator cmake picks
       # (Ninja when it's on PATH needs cl.exe there too).
       - uses: ilammy/msvc-dev-cmd@v1
+      # After msvc-dev-cmd: it points VCPKG_ROOT at Visual Studio's own
+      # vcpkg, which has no OpenSSL.
+      - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy -p my-domain -p md-hfp -p md-geo -p md-notify --all-targets --locked
       # The desktop app's test binary needs the app manifest (Common Controls
