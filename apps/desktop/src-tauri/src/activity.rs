@@ -942,6 +942,7 @@ mod tests {
             link: None,
             host: None,
             stage: None,
+            ..TransferEntry::new("", "", "", false, 0.0)
         }
     }
 

@@ -357,6 +357,7 @@ impl<P: Platform> Engine<P> {
             config.print,
             config.remote_download,
             config.notif_rich,
+            config.transfer_batches,
         ));
         let installed_apps = Arc::new(Mutex::new(String::from("[]")));
         let subs: Subs = Arc::new(Mutex::new(HashMap::new()));

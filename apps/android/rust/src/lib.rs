@@ -1365,6 +1365,33 @@ impl MdEngine {
         self.inner.cancel_file(&id);
     }
 
+    /// Send several files and folders (paths) as one batch: one row, its
+    /// files inside (`transfer_batch` events, and `file_*` events with
+    /// `batch` set). Returns how many files go.
+    pub fn send_batch(&self, node_id: String, paths: Vec<String>) -> MdResult<u32> {
+        let b = self.inner.send_batch(&node_id, &paths)?;
+        Ok(u32::try_from(b.count).unwrap_or(u32::MAX))
+    }
+
+    /// Pause (`paused`) or resume a transfer or a batch, either way (a
+    /// `file_paused` or `transfer_batch` event follows). Receiving, only
+    /// from a device that knows how (`transfer_batches_supported`).
+    pub fn pause_file(&self, id: String, paused: bool) -> MdResult<()> {
+        Ok(self.inner.pause_file(&id, paused)?)
+    }
+
+    /// Send a failed transfer again: a batch's files that didn't go, a
+    /// file sent from here, or a link asked of a device. Returns the id to
+    /// follow (the same for a batch).
+    pub fn retry_file(&self, id: String) -> MdResult<String> {
+        Ok(self.inner.retry_file(&id)?)
+    }
+
+    /// `node_id`'s transfers to here can be paused from here.
+    pub fn transfer_batches_supported(&self, node_id: String) -> bool {
+        self.inner.transfer_batches_supported(&node_id)
+    }
+
     // --- synced folders (mdcore features::folder_sync) ---
 
     /// Every synced folder here, invitations included.

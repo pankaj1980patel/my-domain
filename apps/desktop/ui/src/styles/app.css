@@ -1303,6 +1303,26 @@ input[type="checkbox"][role="switch"]:checked::after {
   font-size: 1.25rem;
   color: var(--text);
 }
+/* Files dragged over a device card: that one lights up. */
+[data-drop-node].drop-target {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+.drop-pick {
+  pointer-events: auto;
+}
+.drop-pick-list {
+  list-style: none;
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+  width: 100%;
+}
+.drop-pick-list button {
+  width: 100%;
+  justify-content: flex-start;
+}
 
 /* --- device info (battery, storage, memory, processor, uptime) ---------------- */
 
@@ -2288,6 +2308,28 @@ input[type="checkbox"][role="switch"]:checked::after {
 }
 .xfer-resumed {
   font-style: italic;
+}
+/* A batch's files, opened under its row. */
+.xfer-files {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-2) 0 0 var(--s-6);
+  display: grid;
+  gap: var(--s-1);
+  max-height: 260px;
+  overflow-y: auto;
+  border-top: 1px dashed var(--border);
+}
+.xfer-files li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  min-width: 0;
+  font-size: 0.9rem;
+}
+.xfer-files .xfer-name {
+  font-weight: 400;
+  min-width: 0;
 }
 
 /* --- Calls on this computer: a standing problem (Linux: another program has

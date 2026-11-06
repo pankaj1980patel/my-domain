@@ -32,13 +32,33 @@ data class TransferRecord(
     /** A link downloaded on a device ("Download on…"): its host. The
      *  other device asked ([incoming]) or downloads it. */
     val link: String? = null,
+    /** One file of a batch: the batch's id (its row has [kind]). */
+    val batch: String? = null,
+    /** A batch (several files sent together): "folder" or "files", with
+     *  how many files, how many are in and how many failed. */
+    val kind: String? = null,
+    val count: Int = 0,
+    val filesDone: Int = 0,
+    val filesFailed: Int = 0,
+    /** The user paused it (here or on the other device). */
+    val paused: Boolean = false,
 ) {
     val finished: Boolean get() = state != TransferState.Active
     val fraction: Float get() = if (total > 0) (done.toFloat() / total).coerceIn(0f, 1f) else 0f
 
-    /** Seconds left at the current speed; null when not known. */
+    /** Seconds left at the current speed; null when not known (or paused). */
     fun secondsLeft(): Long? =
-        if (rate > 0 && total > done) Math.round((total - done) / rate) else null
+        if (!paused && rate > 0 && total > done) Math.round((total - done) / rate) else null
+
+    /** The speed now: 0 when paused or nothing moved for [STALE_MS]. */
+    fun rateAt(now: Long): Double = if (paused || movedAt == 0L || now - movedAt > STALE_MS) 0.0 else rate
+
+    val isBatch: Boolean get() = kind != null
+
+    companion object {
+        /** No bytes for this long: the speed isn't shown. */
+        const val STALE_MS = 5_000L
+    }
 }
 
 /**
@@ -80,25 +100,61 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
         return true
     }
 
-    /** A transfer moved on. Late progress for one that ended is ignored. */
-    fun progress(id: String, node: String, name: String, done: Long, total: Long, incoming: Boolean, resumed: Boolean, now: Long) {
+    /** A transfer moved on. Late progress for one that ended is ignored.
+     *  [batch]: it's one file of that batch. */
+    fun progress(id: String, node: String, name: String, done: Long, total: Long, incoming: Boolean, resumed: Boolean, now: Long, batch: String? = null) {
         upsert(id, { TransferRecord(id, node, name, incoming, started = now) }) { t ->
             if (t.finished) return@upsert null
-            var rate = t.rate
-            if (t.movedAt in 1 until now && done > t.done) {
-                val inst = (done - t.done) * 1000.0 / (now - t.movedAt)
-                rate = if (rate <= 0) inst else rate * 0.7 + inst * 0.3
-            }
+            val (rate, movedAt) = smooth(t, done, now)
             t.copy(
                 done = done,
                 total = total,
                 resumedFrom = t.resumedFrom ?: if (resumed) done else null,
                 rate = rate,
-                movedAt = if (done != t.done || t.movedAt == 0L) now else t.movedAt,
+                movedAt = movedAt,
                 via = wifiDirect[node] ?: t.via,
+                batch = batch ?: t.batch,
             )
         }
     }
+
+    /** A batch moved on or changed state ([state]: "active", "paused",
+     *  "done", "failed" or "cancelled"). Whether what's saved changed. */
+    fun batch(
+        id: String, node: String, name: String, incoming: Boolean, kind: String, count: Int,
+        filesDone: Int, filesFailed: Int, done: Long, total: Long, state: String, error: String?, now: Long,
+    ): Boolean {
+        var ended = false
+        upsert(id, { TransferRecord(id, node, name, incoming, started = now) }) { t ->
+            val (rate, movedAt) = smooth(t, done, now)
+            val next = when (state) {
+                "done" -> TransferState.Done
+                "failed", "cancelled" -> TransferState.Failed
+                else -> TransferState.Active
+            }
+            ended = next != t.state
+            t.copy(
+                kind = kind, count = count, filesDone = filesDone, filesFailed = filesFailed,
+                done = done, total = total, rate = rate, movedAt = movedAt,
+                paused = state == "paused",
+                state = next,
+                reason = if (next == TransferState.Failed) (error ?: if (state == "cancelled") "cancelled" else t.reason) else null,
+                ended = if (next == TransferState.Active) null else if (ended) now else t.ended,
+            )
+        }
+        if (ended) trim()
+        return ended
+    }
+
+    /** The user paused or resumed [id]. */
+    fun paused(id: String, paused: Boolean): Boolean =
+        upsert(id, { return false }) { t -> if (t.paused == paused) null else t.copy(paused = paused) }
+
+    /** Rows of their own (a batch's files show inside it). */
+    val rows: List<TransferRecord> get() = list.filter { it.batch == null }
+
+    /** The files of batch [id]. */
+    fun filesOf(id: String): List<TransferRecord> = items.filter { it.batch == id }
 
     /** Transfers with [node] go over a side route now ([active], [via]),
      *  or no longer do. Those under way say so from now on (and keep saying
@@ -165,10 +221,18 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
     fun clearFinished(): Boolean = items.removeAll { it.finished }
 
     private fun trim() {
-        val finished = items.filter { it.finished }
-        if (finished.size <= MAX_FINISHED) return
-        val drop = finished.sortedByDescending { it.ended ?: it.started }.drop(MAX_FINISHED).map { it.id }.toHashSet()
-        items.removeAll { it.id in drop }
+        // Only rows of their own count: a big folder doesn't push the rest out.
+        val finished = items.filter { it.finished && it.batch == null }
+        if (finished.size > MAX_FINISHED) {
+            val drop = finished.sortedByDescending { it.ended ?: it.started }.drop(MAX_FINISHED).map { it.id }.toHashSet()
+            items.removeAll { it.id in drop || it.batch in drop }
+        }
+        // A finished batch keeps its failed files and the newest others.
+        val extra = items.filter { it.finished && it.batch != null }.groupBy { it.batch }.values.flatMap { files ->
+            files.sortedWith(compareBy<TransferRecord> { it.state != TransferState.Failed }.thenByDescending { it.ended ?: it.started })
+                .drop(MAX_BATCH_FILES)
+        }.map { it.id }.toHashSet()
+        if (extra.isNotEmpty()) items.removeAll { it.id in extra }
     }
 
     /** What the screen shows: under way first (newest first), then the
@@ -183,6 +247,21 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
     companion object {
         /** The most finished transfers kept. */
         const val MAX_FINISHED = 100
+        /** The most files of one finished batch kept. */
+        const val MAX_BATCH_FILES = 200
+
+        /** Speed smoothed over the moves seen (each new one weighs 0.3),
+         *  and when [TransferRecord.done] last moved. */
+        fun smooth(t: TransferRecord, done: Long, now: Long): Pair<Double, Long> {
+            var rate = t.rate
+            if (done < t.done) rate = 0.0 // started over
+            else if (t.movedAt in 1 until now && done > t.done) {
+                val inst = (done - t.done) * 1000.0 / (now - t.movedAt)
+                rate = if (rate <= 0) inst else rate * 0.7 + inst * 0.3
+            }
+            val movedAt = if (done != t.done || t.movedAt == 0L) now else t.movedAt
+            return rate to movedAt
+        }
 
         /** [TransferRecord.via] for one that went over Wi-Fi Direct. */
         const val VIA_WIFI_DIRECT = "wifi_direct"
@@ -210,6 +289,11 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                         "ended" to t.ended,
                         "via" to t.via,
                         "link" to t.link,
+                        "batch" to t.batch,
+                        "kind" to t.kind,
+                        "count" to t.count,
+                        "files_done" to t.filesDone,
+                        "files_failed" to t.filesFailed,
                     )
                 },
             ),
@@ -245,6 +329,11 @@ class TransferBook(saved: List<TransferRecord> = emptyList()) {
                     ended = (o["ended"] as? Number)?.toLong(),
                     via = o["via"] as? String,
                     link = o["link"] as? String,
+                    batch = o["batch"] as? String,
+                    kind = o["kind"] as? String,
+                    count = (o["count"] as? Number)?.toInt() ?: 0,
+                    filesDone = (o["files_done"] as? Number)?.toInt() ?: 0,
+                    filesFailed = (o["files_failed"] as? Number)?.toInt() ?: 0,
                 )
             }.distinctBy { it.id }
         }

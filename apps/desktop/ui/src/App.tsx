@@ -10,6 +10,7 @@ import { toast, Toasts } from "./components/ui";
 import CommandPalette, { type Place } from "./components/CommandPalette";
 import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
+import DropAnywhere from "./components/DropAnywhere";
 import { DownloadAsk, DownloadOnPicker } from "./components/DownloadOn";
 import { initRemoteDownloads } from "./lib/remoteDownload";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
@@ -391,6 +392,7 @@ export default function App() {
         />
         <CallOverlay />
         <SendToPicker />
+        <DropAnywhere enabled={() => view().name !== "device"} />
         <DownloadOnPicker />
         <DownloadAsk />
         <HotspotAsk />

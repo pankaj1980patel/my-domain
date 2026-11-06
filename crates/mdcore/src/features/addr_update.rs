@@ -59,6 +59,7 @@ pub fn announce<P: Platform>(ctx: &NetCtx<P>, peers: Option<&[String]>) {
         super::print::extend_status(ctx, &mut msg);
         super::remote_download::extend_status(ctx, &mut msg);
         super::notif_rich::extend_status(ctx, &mut msg);
+        super::batches::extend_status(ctx, &mut msg);
         if ctx.config.wake_relay {
             msg[super::wake::FLAG] = 1.into();
         }
@@ -126,6 +127,7 @@ impl<P: Platform> ControlHandler<P> for AddrUpdateHandler {
         );
         super::print::remember(ctx, &from, &msg.json(super::print::FLAG));
         super::remote_download::remember(ctx, &from, &msg.json(super::remote_download::FLAG));
+        super::batches::remember(ctx, &from, &msg.json(super::batches::FLAG));
         super::wake::remember_caps(ctx, &from, &msg.json(super::wake::FLAG));
         if changed {
             let list = ctx.peers.lock().values().cloned().collect();

@@ -106,6 +106,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::remote_download::extend_status(ctx, &mut status);
                 // Whether it knows rich notifications.
                 super::notif_rich::extend_status(ctx, &mut status);
+                // Whether it groups, pauses and re-checks transfers.
+                super::batches::extend_status(ctx, &mut status);
                 // Whether it sends wake-ups for the others (and may be woken).
                 super::wake::extend_status(ctx, &mut status);
                 let playing = super::media::current(ctx);
@@ -151,6 +153,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 );
                 super::print::remember(ctx, &from, &status[super::print::FLAG]);
                 super::remote_download::remember(ctx, &from, &status[super::remote_download::FLAG]);
+                super::batches::remember(ctx, &from, &status[super::batches::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             "ring" => ctx.sink.emit(CoreEvent::Ring { from }),

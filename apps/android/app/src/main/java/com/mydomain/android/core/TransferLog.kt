@@ -56,10 +56,33 @@ object TransferLog {
 
     // --- from the core's events (main thread, via Core.apply) -----------------
 
-    fun progress(id: String, node: String, name: String, done: Long, total: Long, incoming: Boolean, resumed: Boolean) {
-        book.progress(id, node, name, done, total, incoming, resumed, System.currentTimeMillis())
+    fun progress(id: String, node: String, name: String, done: Long, total: Long, incoming: Boolean, resumed: Boolean, batch: String? = null) {
+        book.progress(id, node, name, done, total, incoming, resumed, System.currentTimeMillis(), batch)
         changed(save = false)
     }
+
+    /** A batch (a folder, or files sent together) moved on: its `item`. */
+    fun batch(item: org.json.JSONObject) {
+        val ended = book.batch(
+            id = item.optString("id"), node = item.optString("node_id"), name = item.optString("name"),
+            incoming = item.optBoolean("incoming"), kind = item.optString("kind", "files"),
+            count = item.optInt("count"), filesDone = item.optInt("files_done"), filesFailed = item.optInt("files_failed"),
+            done = item.optLong("done"), total = item.optLong("total"), state = item.optString("state"),
+            error = if (item.isNull("error")) null else item.optString("error"),
+            now = System.currentTimeMillis(),
+        )
+        changed(save = ended)
+    }
+
+    fun paused(id: String, paused: Boolean) {
+        if (book.paused(id, paused)) changed(save = false)
+    }
+
+    /** Transfer [id] is one file of a batch. */
+    fun inBatch(id: String): Boolean = book.get(id)?.batch != null
+
+    /** The files of batch [id] (main thread). */
+    fun filesOf(id: String): List<TransferRecord> = book.filesOf(id)
 
     /** Transfers with [node] went over to Wi-Fi Direct or the phone's
      *  hotspot ([via]), or back. */

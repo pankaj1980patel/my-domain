@@ -126,4 +126,81 @@ class TransferBookTest {
         b.progress("hs", "mac", "d.mov", 1, 100, false, false, 4)
         assertEquals("hotspot", b.get("hs")?.via)
     }
+
+    @Test
+    fun speedIsSmoothedAndGivesTimeLeft() {
+        val b = TransferBook()
+        b.progress("x", "p", "a", 0, 10_000, false, false, 1000)
+        b.progress("x", "p", "a", 1000, 10_000, false, false, 2000) // 1000 B/s
+        assertEquals(1000.0, b.get("x")!!.rate, 1e-9)
+        b.progress("x", "p", "a", 4000, 10_000, false, false, 3000) // 3000 B/s weighed 0.3
+        val e = b.get("x")!!
+        assertEquals(1600.0, e.rate, 1e-9)
+        assertEquals(4L, e.secondsLeft()) // 6000 / 1600 = 3.75
+        assertEquals(1600.0, e.rateAt(3000 + TransferRecord.STALE_MS), 1e-9)
+        assertEquals(0.0, e.rateAt(3001 + TransferRecord.STALE_MS), 1e-9)
+        // Paused: no speed, no time left.
+        assertTrue(b.paused("x", true))
+        assertFalse(b.paused("x", true))
+        assertNull(b.get("x")!!.secondsLeft())
+        assertEquals(0.0, b.get("x")!!.rateAt(3000), 1e-9)
+        // Started over from less: the old speed goes.
+        b.paused("x", false)
+        b.progress("x", "p", "a", 100, 10_000, false, false, 9000)
+        assertEquals(0.0, b.get("x")!!.rate, 1e-9)
+    }
+
+    private fun batch(b: TransferBook, state: String, done: Long, filesDone: Int = 1, now: Long = 1): Boolean =
+        b.batch("b1", "p", "Trip", true, "folder", 3, filesDone, 0, done, 300, state, null, now)
+
+    @Test
+    fun aBatchIsOneRowWithItsFiles() {
+        val b = TransferBook()
+        assertFalse(batch(b, "active", 0))
+        b.progress("f1", "p", "a.jpg", 50, 100, true, false, 2, batch = "b1")
+        b.progress("other", "q", "x.zip", 5, 10, true, false, 3)
+        assertEquals(listOf("other", "b1"), b.rows.map { it.id })
+        assertEquals(listOf("f1"), b.filesOf("b1").map { it.id })
+        val row = b.get("b1")!!
+        assertTrue(row.isBatch)
+        assertEquals(3, row.count)
+        assertFalse(batch(b, "paused", 100, now = 4))
+        assertTrue(b.get("b1")!!.paused)
+        assertTrue(batch(b, "done", 300, 3, now = 5))
+        assertEquals(TransferState.Done, b.get("b1")!!.state)
+        assertEquals(5L, b.get("b1")!!.ended)
+        // Sent again after failing: under way once more.
+        assertTrue(b.batch("b1", "p", "Trip", true, "folder", 3, 2, 1, 200, 300, "failed", "the device wasn't reachable", 6))
+        assertEquals("the device wasn't reachable", b.get("b1")!!.reason)
+        assertTrue(batch(b, "active", 200, now = 7))
+        assertEquals(TransferState.Active, b.get("b1")!!.state)
+        assertNull(b.get("b1")!!.ended)
+    }
+
+    @Test
+    fun aBigBatchDoesNotPushOutOtherTransfers() {
+        val b = TransferBook()
+        finish(b, 1)
+        batch(b, "active", 0)
+        for (i in 0 until 500) {
+            b.progress("f$i", "p", "x", 1, 1, true, false, 2, batch = "b1")
+            b.received("f$i", "p", "x", 1, 3L + i)
+        }
+        batch(b, "done", 300, 3, now = 600)
+        assertTrue(b.get("t1") != null)
+        assertEquals(TransferBook.MAX_BATCH_FILES, b.filesOf("b1").size)
+    }
+
+    @Test
+    fun batchFieldsAreSavedAndRead() {
+        val b = TransferBook()
+        batch(b, "done", 300, 3)
+        b.progress("f1", "p", "a.jpg", 1, 1, true, false, 2, batch = "b1")
+        b.received("f1", "p", "a.jpg", 1, 3)
+        val back = TransferBook.decode(TransferBook.encode(b.saved()))
+        val row = back.first { it.id == "b1" }
+        assertEquals("folder", row.kind)
+        assertEquals(3, row.count)
+        assertEquals("b1", back.first { it.id == "f1" }.batch)
+    }
 }

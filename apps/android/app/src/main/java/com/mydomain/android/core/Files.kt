@@ -86,12 +86,25 @@ object OutgoingFiles {
         runCatching { file.parentFile?.deleteRecursively() }
     }
 
-    /** Copies left over from an earlier process (its transfers died with it). */
+    /** Copies left over from an earlier process. The core carries on the
+     *  transfers it was sending when the app stopped (for a day) from these
+     *  copies, so only those older than that go (a day is how long the core
+     *  keeps trying). */
     fun clearAll(ctx: Context) {
-        runCatching { root(ctx).deleteRecursively() }
+        val now = System.currentTimeMillis()
+        fun sweep(dir: File) {
+            dir.listFiles()?.forEach {
+                if (it.name == "folders" && it.isDirectory) sweep(it)
+                else if (now - it.lastModified() > KEEP_MS) runCatching { it.deleteRecursively() }
+            }
+        }
+        sweep(root(ctx))
     }
 
-    private fun displayName(ctx: Context, uri: Uri): String? = runCatching {
+    /** How long a copy is kept for a transfer that may carry on. */
+    private const val KEEP_MS = 24L * 60 * 60 * 1000
+
+    internal fun displayName(ctx: Context, uri: Uri): String? = runCatching {
         ctx.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
             if (c.moveToFirst()) c.getString(0) else null
         }
@@ -202,6 +215,31 @@ object OutgoingFolders {
             throw e
         }
         return File(base, top)
+    }
+
+    /**
+     * Copy several picked files ([uris]) into one new folder in the cache,
+     * to send as one batch; returns the copies (one that can't be read is
+     * left out). [track] / [discard] take any of them's folder. Blocking (IO).
+     */
+    fun stageFiles(ctx: Context, uris: List<Uri>): List<File> {
+        sweepOld(ctx)
+        val dir = File(File(root(ctx), java.util.UUID.randomUUID().toString()), "files").apply { mkdirs() }
+        val out = ArrayList<File>()
+        try {
+            for (u in uris) {
+                val name = OutgoingFiles.safeName(OutgoingFiles.displayName(ctx, u) ?: u.lastPathSegment ?: "file")
+                val input = runCatching { ctx.contentResolver.openInputStream(u) }.getOrNull() ?: continue
+                val f = unique(dir, name)
+                input.use { s -> f.outputStream().use { o -> s.copyTo(o, 256 * 1024) } }
+                out.add(f)
+            }
+        } catch (e: Exception) {
+            dir.parentFile?.deleteRecursively()
+            throw e
+        }
+        if (out.isEmpty()) dir.parentFile?.deleteRecursively()
+        return out
     }
 
     /** The copy [folder] (from [stage]) is being sent. */

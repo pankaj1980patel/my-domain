@@ -535,6 +535,59 @@ impl RemoteDownloadItem {
     }
 }
 
+/// Several files sent together, as one (`features::batches`): a folder
+/// with everything in it, or files picked at once. `Engine::transfer_batches`
+/// and the `TransferBatch` event whenever it moves on. Its files are
+/// transfers of their own (`File*` events, with `batch` set to `id`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatchItem {
+    pub id: String,
+    /// The other device.
+    pub node_id: String,
+    /// To this device.
+    pub incoming: bool,
+    /// The folder's name, or the first file's name.
+    pub name: String,
+    /// "folder" or "files".
+    pub kind: String,
+    /// Files in it.
+    pub count: u64,
+    /// Files saved there so far, and those that failed.
+    pub files_done: u64,
+    pub files_failed: u64,
+    /// Bytes confirmed so far, of `total`.
+    pub done: u64,
+    pub total: u64,
+    /// "active", "paused", then "done", "failed" (some files didn't go)
+    /// or "cancelled".
+    pub state: String,
+    /// Why it stopped (for the user).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    /// Received folder: where it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Unix ms.
+    pub started_at: u64,
+}
+
+impl BatchItem {
+    /// It ended (done, failed or cancelled).
+    pub fn finished(&self) -> bool {
+        matches!(self.state.as_str(), "done" | "failed" | "cancelled")
+    }
+}
+
+/// What `Engine::send_batch` started.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BatchStart {
+    /// The batch's id (`Engine::cancel_file`, `pause_file` and
+    /// `retry_file` take it too).
+    pub id: String,
+    /// Files in it.
+    pub count: u64,
+}
+
 /// What this device does when another of yours asks it to download a link
 /// (`features::remote_download`).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

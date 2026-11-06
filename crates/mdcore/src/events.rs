@@ -160,7 +160,22 @@ pub enum CoreEvent {
         incoming: bool,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         resumed: bool,
+        /// One file of a batch (`TransferBatch` with this id): shown
+        /// inside it rather than on its own row.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        batch: Option<String>,
     },
+    /// The user paused (or resumed) a transfer, here or on the other
+    /// device. A paused one waits, keeping what it has, until resumed.
+    FilePaused {
+        id: String,
+        node_id: String,
+        incoming: bool,
+        paused: bool,
+    },
+    /// A batch of files (a folder, or files sent together) moved on or
+    /// changed state (`features::batches`).
+    TransferBatch { item: crate::model::BatchItem },
     /// A file arrived and was saved at `path`.
     FileReceived {
         id: String,
@@ -563,6 +578,8 @@ impl CoreEvent {
             CoreEvent::FileReceived { .. } => "file-received",
             CoreEvent::FileSent { .. } => "file-sent",
             CoreEvent::FileFailed { .. } => "file-failed",
+            CoreEvent::FilePaused { .. } => "file-paused",
+            CoreEvent::TransferBatch { .. } => "transfer-batch",
             CoreEvent::FolderListing { .. } => "folder-listing",
             CoreEvent::TextShared { .. } => "text-shared",
             CoreEvent::NowPlaying { .. } => "now-playing",

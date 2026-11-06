@@ -117,7 +117,7 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
   return (
     // The name is the card's button (Tab, Enter and Space reach it); a click
     // anywhere else on the card opens it too.
-    <article class="device-card" onClick={props.onOpen}>
+    <article class="device-card" data-drop-node={props.peer.node_id} onClick={props.onOpen}>
       <DeviceAvatar node={props.peer.node_id} />
       <div class="device-main">
         <h2 class="device-card-name">

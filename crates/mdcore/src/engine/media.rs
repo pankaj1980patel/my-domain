@@ -87,6 +87,7 @@ impl<P: Platform> Engine<P> {
             total: 0,
             incoming: true,
             resumed: false,
+            batch: None,
         });
         Ok(id)
     }

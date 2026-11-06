@@ -564,9 +564,43 @@ impl EventSink for TauriSink {
                 total,
                 incoming,
                 resumed,
+                batch,
             } => transfers::on_progress(
-                &self.app, id, node_id, name, *done, *total, *incoming, *resumed,
+                &self.app,
+                id,
+                node_id,
+                name,
+                *done,
+                *total,
+                *incoming,
+                *resumed,
+                batch.as_deref(),
             ),
+            CoreEvent::FilePaused { id, paused, .. } => {
+                transfers::on_paused(&self.app, id, *paused);
+            }
+            // A folder or several files: one notice when they're all in.
+            CoreEvent::TransferBatch { item } => {
+                let ended_here = item.incoming && item.state == "done";
+                let new = transfers::get_state(&self.app, &item.id);
+                transfers::on_batch(&self.app, item);
+                if ended_here && new.as_deref() != Some("done") {
+                    let (app, item) = (self.app.clone(), item.clone());
+                    std::thread::spawn(move || {
+                        let device = notify::device_name(&app, &item.node_id);
+                        let what = if item.kind == "folder" {
+                            format!("the folder {}", item.name)
+                        } else {
+                            format!("{} files", item.count)
+                        };
+                        notify::post_if_away(
+                            &app,
+                            "my-domain",
+                            &format!("Saved {what} from {device}"),
+                        );
+                    });
+                }
+            }
             CoreEvent::FileSent { id, node_id, name } => {
                 transfers::on_sent(&self.app, id, node_id, name);
             }
@@ -586,7 +620,8 @@ impl EventSink for TauriSink {
                 reason,
             } => transfers::on_failed(&self.app, id, node_id, name, *incoming, reason),
             // Photo backups and synced folders' files arrive by themselves,
-            // often many: no notice each.
+            // often many: no notice each; nor a batch's files (the batch
+            // has one).
             CoreEvent::FileReceived {
                 id,
                 from,
@@ -595,7 +630,7 @@ impl EventSink for TauriSink {
                 size,
                 sync,
                 ..
-            } if *sync || is_backup(path) => {
+            } if *sync || is_backup(path) || transfers::in_batch(&self.app, id) => {
                 transfers::on_received(&self.app, id, from, name, path, *size);
             }
             // A picture copied on another device: on this clipboard too.
@@ -1741,6 +1776,9 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         send_folder,
         cancel_file,
         transfers::transfer_list,
+        transfers::transfer_pause,
+        transfers::transfer_retry,
+        transfers::send_batch,
         transfers::transfer_clear_finished,
         transfers::transfer_reveal,
         send_text,

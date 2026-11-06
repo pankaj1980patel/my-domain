@@ -650,7 +650,27 @@ object Core {
                 TransferLog.progress(
                     o.optString("id"), node, o.optString("name"), o.optLong("done"), o.optLong("total"),
                     o.optBoolean("incoming"), o.optBoolean("resumed"),
+                    if (o.isNull("batch")) null else o.optString("batch").ifEmpty { null },
                 )
+            }
+            // Paused or resumed, here or on the other device.
+            "file_paused" -> TransferLog.paused(o.optString("id"), o.optBoolean("paused"))
+            // A folder or several files sent together: one row, and one
+            // line in the activity once they're all in.
+            "transfer_batch" -> {
+                val item = o.optJSONObject("item") ?: return
+                val id = item.optString("id")
+                val before = TransferLog.list.firstOrNull { it.id == id }?.state
+                TransferLog.batch(item)
+                if (item.optString("state") == "done" && before != TransferState.Done && item.optBoolean("incoming")) {
+                    val from = item.optString("node_id")
+                    val text = if (item.optString("kind") == "folder") {
+                        str(R.string.act_batch_saved_folder, item.optString("name"), peerName(from))
+                    } else {
+                        str(R.string.act_batch_saved_files, item.optInt("count"), peerName(from))
+                    }
+                    addActivity(text, Tone.Ok)
+                }
             }
             // Transfers with a device went over to Wi-Fi Direct or the
             // phone's hotspot (or back).
@@ -662,8 +682,11 @@ object Core {
                 updateTransfer(o.optString("id"), { Transfer(it, from, name, true) }) {
                     it.copy(state = TransferState.Done, done = o.optLong("size"), total = o.optLong("size"))
                 }
-                // A synced folder's files come by themselves, often many.
-                if (!o.optBoolean("sync")) addActivity(str(R.string.act_file_saved, name, peerName(from)), Tone.Ok)
+                // A synced folder's files come by themselves, often many; a
+                // batch's are told about with the batch.
+                if (!o.optBoolean("sync") && !TransferLog.inBatch(o.optString("id"))) {
+                    addActivity(str(R.string.act_file_saved, name, peerName(from)), Tone.Ok)
+                }
             }
             "file_sent" -> {
                 val name = o.optString("name")
@@ -671,7 +694,7 @@ object Core {
                 updateTransfer(o.optString("id"), { Transfer(it, node, name, false) }) {
                     it.copy(state = TransferState.Done, done = it.total)
                 }
-                addActivity(str(R.string.act_file_sent, name, peerName(node)), Tone.Ok)
+                if (!TransferLog.inBatch(o.optString("id"))) addActivity(str(R.string.act_file_sent, name, peerName(node)), Tone.Ok)
             }
             "file_failed" -> {
                 val name = o.optString("name")
@@ -901,16 +924,54 @@ object Core {
      *  for sending keeps going when the user navigates away). */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
-    /** Send [uris] to [node] one after another, off the screen's lifetime.
-     *  [onError] gets the first failure (each file is tried). */
+    /** Send [uris] to [node], off the screen's lifetime: one on its own,
+     *  several as one batch (one row in Transfers, the files inside).
+     *  [onError] gets the first failure. */
     fun sendFiles(node: String, uris: List<Uri>, onDone: () -> Unit = {}, onError: (Throwable) -> Unit = {}) {
         appScope.launch {
-            var failed: Throwable? = null
-            for (u in uris) {
-                try { sendFile(node, u) } catch (e: Exception) { if (failed == null) failed = e }
+            try {
+                if (uris.size == 1) sendFile(node, uris[0]) else sendBatch(node, uris)
+            } catch (e: Exception) {
+                onError(e)
             }
-            failed?.let(onError)
             onDone()
+        }
+    }
+
+    /** Send several picked files as one batch: copied to the cache first
+     *  (into one folder, which goes once nothing is being sent from it,
+     *  like a folder's copy), then handed to the core. How many go. */
+    suspend fun sendBatch(node: String, uris: List<Uri>): Int {
+        val files = withContext(Dispatchers.IO) { OutgoingFolders.stageFiles(app, uris) }
+        val dir = files.firstOrNull()?.parentFile ?: throw java.io.IOException(str(R.string.batch_nothing))
+        val n = try {
+            call { it.sendBatch(node, files.map { f -> f.path }) }
+        } catch (e: Exception) {
+            OutgoingFolders.discard(dir)
+            throw e
+        }
+        OutgoingFolders.track(dir)
+        return n.toInt()
+    }
+
+    /** Pause ([paused]) or resume a transfer or a batch, either way. */
+    suspend fun pauseFile(id: String, paused: Boolean) {
+        call { it.pauseFile(id, paused) }
+        onMain { TransferLog.paused(id, paused) }
+    }
+
+    /** Send a failed transfer again; the id to follow. */
+    suspend fun retryFile(id: String): String = call { it.retryFile(id) }
+
+    /** [pauseFile] / [retryFile] from a click handler; [onError] gets why
+     *  it couldn't (on the main thread). */
+    fun pauseFileAsync(id: String, paused: Boolean, onError: (Throwable) -> Unit = {}) {
+        appScope.launch { try { pauseFile(id, paused) } catch (e: Exception) { onError(e) } }
+    }
+
+    fun retryFileAsync(id: String, onDone: () -> Unit = {}, onError: (Throwable) -> Unit = {}) {
+        appScope.launch {
+            try { retryFile(id); onDone() } catch (e: Exception) { onError(e) }
         }
     }
 

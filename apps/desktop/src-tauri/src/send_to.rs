@@ -475,16 +475,33 @@ pub fn send_paths(
     state: State<SendTo>,
 ) -> SendOutcome {
     let mut out = SendOutcome::default();
-    for path in &paths {
-        let it = item(path);
-        let sent = if it.folder {
-            engine.send_folder(&node_id, path)
-        } else {
-            engine.send_file(&node_id, path).map(|_| 1)
-        };
-        match sent {
-            Ok(n) => out.files += n,
-            Err(e) => out.failed.push(format!("{}: {e}", it.name)),
+    // Several, or a folder: one batch (one row, its files inside). Those
+    // that can't be read are left out of it and said so.
+    let readable: Vec<String> = paths
+        .iter()
+        .filter(|p| {
+            let ok = std::path::Path::new(p).exists();
+            if !ok {
+                out.failed
+                    .push(format!("{}: it isn't there any more", item(p).name));
+            }
+            ok
+        })
+        .cloned()
+        .collect();
+    let batch = readable.len() > 1 || readable.iter().any(|p| item(p).folder);
+    if batch {
+        match engine.send_batch(&node_id, &readable) {
+            Ok(b) => out.files += b.count as u32,
+            Err(e) => out.failed.push(e.to_string()),
+        }
+    } else if let Some(path) = readable.first() {
+        match engine.send_file(&node_id, path) {
+            Ok(id) => {
+                crate::transfers::on_sending(&app, &id, &node_id, path);
+                out.files += 1;
+            }
+            Err(e) => out.failed.push(format!("{}: {e}", item(path).name)),
         }
     }
     if out.files > 0 {

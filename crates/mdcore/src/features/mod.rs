@@ -14,6 +14,7 @@ pub mod audio_codec;
 pub mod audio_jitter;
 pub mod audio_share;
 pub mod backup;
+pub mod batches;
 pub mod battery;
 pub mod browse;
 pub mod call_history;
@@ -154,7 +155,8 @@ impl<P: Platform> ControlRegistry<P> {
     /// (`CoreConfig::kvm`), and the `insert_*` messages
     /// (`CoreConfig::insert_capture`), and the `print_*` messages
     /// (`CoreConfig::print`), and the `dl_*` messages
-    /// (`CoreConfig::remote_download`).
+    /// (`CoreConfig::remote_download`), and `file_pause` / `batch_end`
+    /// (`CoreConfig::transfer_batches`).
     #[allow(clippy::too_many_arguments)]
     pub fn with_defaults(
         has_clipboard: bool,
@@ -174,6 +176,7 @@ impl<P: Platform> ControlRegistry<P> {
         print: bool,
         remote_download: bool,
         notif_rich: bool,
+        transfer_batches: bool,
     ) -> Self {
         let mut r = ControlRegistry {
             handlers: HashMap::new(),
@@ -247,6 +250,9 @@ impl<P: Platform> ControlRegistry<P> {
         }
         if notif_rich {
             r.register(Arc::new(notif_rich::NotifRichHandler));
+        }
+        if transfer_batches {
+            r.register(Arc::new(batches::BatchesHandler));
         }
         r
     }

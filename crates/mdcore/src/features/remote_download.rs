@@ -28,9 +28,12 @@
 //! Only devices that said `remote_download: 1` (status and `addr_update`)
 //! are sent a `dl_request`: an older app would show it as chat.
 //!
-//! Nothing is kept across a restart: a download under way then is lost
-//! (its partial file is swept with the transfers' ones), and the asker's
-//! row fails once it hears nothing for `STALE`.
+//! Downloads not yet ended are kept in the platform's store (both sides,
+//! at each change of state), so they survive a restart: the downloading
+//! device checks, asks or queues them again, and one that was downloading
+//! carries on from its partial file with `Range` (it says where it is
+//! again); the asker keeps waiting for news (`STALE` from the restart).
+//! A failed or cancelled one asked from here can be asked again (`retry`).
 
 use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
@@ -56,6 +59,7 @@ pub const FLAG: &str = "remote_download";
 const VERSION: u64 = 1;
 const CAPS_PREFIX: &str = "remote_download_caps:";
 const SETTINGS_KEY: &str = "remote_download_settings";
+const JOBS_KEY: &str = "remote_download_jobs";
 
 /// How long the downloading device waits for its user to answer.
 pub const ASK_FOR: Duration = Duration::from_secs(10 * 60);
@@ -92,6 +96,10 @@ pub struct RemoteDownloads {
     queue: Mutex<VecDeque<String>>,
     running: Mutex<bool>,
     caps: Mutex<HashMap<String, u64>>,
+    /// The last run's downloads were taken back.
+    restored: AtomicBool,
+    /// What was last written to the store.
+    saved: Mutex<String>,
 }
 
 fn now_ms() -> u64 {
@@ -249,15 +257,121 @@ fn transfer_event(item: &RemoteDownloadItem) -> CoreEvent {
             total: item.size.max(item.done),
             incoming: here,
             resumed: false,
+            batch: None,
         },
     }
 }
 
-/// Its state changed: say so here (the item, then as a transfer).
+/// Its state changed: say so here (the item, then as a transfer), and
+/// keep the ones not ended for after a restart.
 fn emit<P: Platform>(ctx: &NetCtx<P>, item: &RemoteDownloadItem) {
+    save_jobs(ctx);
     ctx.sink
         .emit(CoreEvent::RemoteDownload { item: item.clone() });
     ctx.sink.emit(transfer_event(item));
+}
+
+fn save_jobs<P: Platform>(ctx: &NetCtx<P>) {
+    if !state(ctx).restored.load(Ordering::Relaxed) {
+        // Not over what the last run left before it's taken back.
+        return;
+    }
+    let mut items: Vec<RemoteDownloadItem> = state(ctx)
+        .jobs
+        .lock()
+        .values()
+        .filter(|j| !j.item.finished())
+        .map(|j| j.item.clone())
+        .collect();
+    items.sort_by(|a, b| a.id.cmp(&b.id));
+    let json = serde_json::to_string(&items).unwrap_or_default();
+    let mut last = state(ctx).saved.lock();
+    if *last != json {
+        ctx.platform.kv_set(JOBS_KEY, &json);
+        *last = json;
+    }
+}
+
+/// On the core's timer: once the downloads folder is known, take back the
+/// downloads the last run hadn't finished.
+pub fn on_timer<P: Platform>(ctx: &NetCtx<P>) {
+    if !ctx.config.remote_download
+        || state(ctx).restored.load(Ordering::Relaxed)
+        || ctx.files.download_dir.lock().is_none()
+    {
+        return;
+    }
+    if state(ctx).restored.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let saved: Vec<RemoteDownloadItem> = ctx
+        .platform
+        .kv_get(JOBS_KEY)
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    let mut queued = false;
+    for mut item in saved {
+        if item.finished() || !super::files::is_transfer_id(&item.id) || knows(ctx, &item.id) {
+            continue;
+        }
+        let cancel = Arc::new(AtomicBool::new(false));
+        let again = item.here
+            && matches!(item.state.as_str(), "checking" | "asking")
+            && url::Url::parse(&item.url).is_ok();
+        if item.here && !again {
+            // It was queued or downloading: in the queue again, carrying
+            // on from its partial file.
+            item.state = "queued".into();
+        }
+        item.updated_at = now_ms();
+        state(ctx).jobs.lock().insert(
+            item.id.clone(),
+            Job {
+                item: item.clone(),
+                cancel: cancel.clone(),
+                answer: None,
+                heard: Instant::now(),
+            },
+        );
+        emit(ctx, &item);
+        if !item.here {
+            watch(ctx, &item.id);
+            continue;
+        }
+        report(ctx, &item, true);
+        if again {
+            if let Ok(url) = url::Url::parse(&item.url) {
+                let (ctx, id) = (ctx.clone(), item.id.clone());
+                std::thread::spawn(move || prepare(&ctx, &id, &url, &cancel));
+            }
+        } else {
+            state(ctx).queue.lock().push_back(item.id.clone());
+            queued = true;
+        }
+    }
+    save_jobs(ctx);
+    if queued {
+        pump(ctx);
+    }
+}
+
+/// Ask again for a download asked from here that failed or was cancelled
+/// (same device, same link). `Ok(None)` if `id` isn't a download.
+pub fn retry<P: Platform>(ctx: &NetCtx<P>, id: &str) -> crate::Result<Option<String>> {
+    let Some(it) = item(ctx, id) else {
+        return Ok(None);
+    };
+    if it.here {
+        return Err(CoreError::InvalidInput(
+            "ask for it again on the other device".into(),
+        ));
+    }
+    if !it.finished() || it.state == "done" {
+        return Err(CoreError::InvalidInput(
+            "that download hasn't failed".into(),
+        ));
+    }
+    request(ctx, &it.node_id, &it.url).map(|n| Some(n.id))
 }
 
 /// Forget the oldest finished ones past `KEEP_FINISHED`.
@@ -395,8 +509,13 @@ pub fn request<P: Platform>(
         "name": item.name,
     });
     crate::engine::send_reliably(ctx, node, &msg.to_string());
-    // Heard nothing for a long while: it's gone.
-    let (ctx2, id2) = (ctx.clone(), id);
+    watch(ctx, &id);
+    Ok(item)
+}
+
+/// The asker: heard nothing about `id` for a long while: it's gone.
+fn watch<P: Platform>(ctx: &NetCtx<P>, id: &str) {
+    let (ctx2, id2) = (ctx.clone(), id.to_string());
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(5));
         let quiet = match state(&ctx2).jobs.lock().get(&id2) {
@@ -414,7 +533,6 @@ pub fn request<P: Platform>(
             return;
         }
     });
-    Ok(item)
 }
 
 /// The downloading device said where it is.

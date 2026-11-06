@@ -222,6 +222,55 @@ impl<P: Platform> Engine<P> {
         crate::features::folders::sending(&self.ctx) as u32
     }
 
+    /// Send several files and folders as one batch (one row, with each
+    /// file inside it; folders are recreated under the device's downloads).
+    /// See `features::batches`.
+    pub fn send_batch(
+        &self,
+        node_id: &str,
+        paths: &[String],
+    ) -> crate::Result<crate::model::BatchStart> {
+        if !self.ctx.peers.lock().contains_key(node_id) {
+            return Err(CoreError::PeerNotFound);
+        }
+        let paths: Vec<std::path::PathBuf> = paths.iter().map(Into::into).collect();
+        crate::features::batches::start(&self.ctx, node_id, &paths)
+    }
+
+    /// `node_id` knows batches and pausing (`features::batches`): its
+    /// transfers to here can be paused from here.
+    pub fn transfer_batches_supported(&self, node_id: &str) -> bool {
+        crate::features::batches::supports(&self.ctx, node_id)
+    }
+
+    /// Batches going either way, and the last ones that ended.
+    pub fn transfer_batches(&self) -> Vec<crate::model::BatchItem> {
+        crate::features::batches::list(&self.ctx)
+    }
+
+    /// Pause (`paused`) or resume a transfer or a batch, either way. A
+    /// paused transfer keeps what it has and waits, across restarts too.
+    /// Receiving, only from a device that knows how (else an error).
+    pub fn pause_file(&self, id: &str, paused: bool) -> crate::Result<()> {
+        crate::features::files::set_paused(&self.ctx, id, paused, None)
+    }
+
+    /// Send a failed transfer again: a batch's files that didn't go (same
+    /// id), a file sent from here, or a link asked of a device. Returns the
+    /// id to follow (new, except for a batch).
+    pub fn retry_file(&self, id: &str) -> crate::Result<String> {
+        crate::features::files::retry(&self.ctx, id)
+    }
+
+    /// Tests only: damage the next `n` file chunks this device sends.
+    #[doc(hidden)]
+    pub fn test_corrupt_file_chunks(&self, n: u32) {
+        self.ctx
+            .files
+            .corrupt_chunks
+            .store(n, std::sync::atomic::Ordering::Relaxed);
+    }
+
     /// Stop a transfer (either way); the other device is told.
     pub fn cancel_file(&self, id: &str) {
         // A link downloaded on a device (either way) is a transfer too.
@@ -329,6 +378,7 @@ impl<P: Platform> Engine<P> {
             total: 0,
             incoming: true,
             resumed: false,
+            batch: None,
         });
         Ok(id)
     }

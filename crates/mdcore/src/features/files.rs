@@ -38,6 +38,19 @@
 //! `PrintJob` instead of `FileReceived`; it's never resumed after the
 //! sender restarts.
 //!
+//! Several files sent together (a folder, or files picked at once) are a
+//! batch (`features::batches`): `"batch": {...}` in each offer, so both
+//! sides show them as one.
+//!
+//! A file whose SHA-256 doesn't match once all of it is in is asked for
+//! again from the start (an accept at offset 0), up to `HASH_RETRIES`
+//! times, before it fails as damaged. Any sender handles that accept.
+//!
+//! The user may pause a transfer (`set_paused`): the sender stops and
+//! doesn't offer it again until it's resumed (kept across restarts); a
+//! receiver asks its sender to (`file_pause`, see `features::batches`, only
+//! to a device that knows it).
+//!
 //! Your own devices are trusted, so offers are accepted without asking
 //! (Phase 4's grants add an `ask`).
 //!
@@ -99,6 +112,10 @@ const PROGRESS_EVERY: Duration = Duration::from_millis(250);
 pub(crate) const PARTIAL_DIR: &str = ".mydomain-partial";
 /// Why a transfer whose file changed under it ends.
 const CHANGED: &str = "the file changed since it was offered";
+/// A file that arrived damaged is asked for again this many times.
+pub const HASH_RETRIES: u32 = 2;
+/// Failed outgoing transfers remembered, to send again (`retry`).
+const FAILED_KEPT: usize = 64;
 
 struct Outgoing {
     node: String,
@@ -136,6 +153,10 @@ struct Outgoing {
     persist: bool,
     /// It carried on from a partial file at least once.
     resumed: bool,
+    /// The user paused it: no sender runs and it isn't offered again.
+    user_paused: bool,
+    /// The batch it's part of.
+    batch: Option<String>,
 }
 
 struct Incoming {
@@ -159,6 +180,20 @@ struct Incoming {
     resumed: bool,
     /// A synced folder's file: the pair it belongs to.
     sync: Option<String>,
+    /// Paused (the sender was asked to stop): not dropped as idle.
+    paused: bool,
+    /// Times it was asked for again after arriving damaged.
+    retries: u32,
+    /// The batch it's part of.
+    batch: Option<String>,
+}
+
+/// A failed outgoing transfer, to send again.
+struct FailedOut {
+    id: String,
+    node: String,
+    path: PathBuf,
+    extra: Option<serde_json::Value>,
 }
 
 /// Transfers in progress, both ways.
@@ -178,8 +213,15 @@ pub struct Files {
     /// Folders other devices may browse and download from (see
     /// `features::browse`): (name, path). Empty = nothing is shared.
     pub shared: Mutex<Vec<(String, PathBuf)>>,
-    /// Folders being sent, file by file (see `features::folders`).
-    pub(crate) folders: Mutex<Vec<super::folders::FolderSend>>,
+    /// Batches both ways (see `features::batches`).
+    pub(crate) batches: super::batches::Batches,
+    /// Outgoing transfers that failed lately (not a batch's: it keeps its
+    /// own), for `retry`.
+    failed_out: Mutex<std::collections::VecDeque<FailedOut>>,
+    /// The partial files from before a restart were shown again.
+    inc_restored: std::sync::atomic::AtomicBool,
+    /// Tests only: the next this many chunks sent are damaged.
+    pub(crate) corrupt_chunks: std::sync::atomic::AtomicU32,
     /// The outgoing transfers were read back from the platform's store.
     out_restored: std::sync::atomic::AtomicBool,
     /// What was last written there (to skip writing the same again).
@@ -209,16 +251,28 @@ struct SavedOutgoing {
     started: bool,
     #[serde(default)]
     extra: Option<serde_json::Value>,
+    #[serde(default)]
+    paused: bool,
 }
 
 /// What the receiver keeps next to a partial file (`<id>.json`): the offer
 /// it belongs to.
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct PartMeta {
     from: String,
     name: String,
     size: u64,
     sha256: String,
+    /// The batch it's part of (to show it in its row after a restart).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    batch: Option<String>,
+}
+
+impl PartMeta {
+    /// The same file from the same device.
+    fn same(&self, o: &PartMeta) -> bool {
+        self.from == o.from && self.name == o.name && self.size == o.size && self.sha256 == o.sha256
+    }
 }
 
 /// Where `Files`' outgoing transfers are kept between runs.
@@ -470,10 +524,7 @@ fn offer_msg(me: &str, id: &str, t: &Outgoing) -> serde_json::Value {
 /// only other transfers outlive a restart here.
 fn persists(extra: Option<&serde_json::Value>) -> bool {
     extra.is_none_or(|e| {
-        e.get("folder").is_none()
-            && e.get("backup").is_none()
-            && e.get("sync").is_none()
-            && e.get("print").is_none()
+        e.get("backup").is_none() && e.get("sync").is_none() && e.get("print").is_none()
     })
 }
 
@@ -499,6 +550,7 @@ fn save_outgoing<P: Platform>(ctx: &NetCtx<P>) {
             created: t.created,
             started: t.started,
             extra: t.extra.clone(),
+            paused: t.user_paused,
         })
         .collect();
     saved.sort_by(|a, b| a.id.cmp(&b.id));
@@ -518,6 +570,8 @@ fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
     if ctx.files.out_restored.swap(true, Ordering::Relaxed) {
         return;
     }
+    // Batches first: taking back their files may end some.
+    super::batches::restore(ctx);
     let saved: Vec<SavedOutgoing> = ctx
         .platform
         .kv_get(OUTGOING_KEY)
@@ -537,10 +591,12 @@ fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
             None
         };
         if let Some(why) = why {
+            remember_failed(ctx, &s.id, &s.node, &s.path, s.extra.as_ref());
             failed(ctx, &s.id, &s.node, &s.name, false, why);
             send_cancel(ctx, &s.node, &s.id);
             continue;
         }
+        let batch = batch_in(s.extra.as_ref());
         let t = Outgoing {
             node: s.node.clone(),
             path: s.path,
@@ -552,7 +608,7 @@ fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
             started: s.started,
             // Offered again at once: started ones by `resume_paused`, the
             // others just below.
-            offered_at: (!s.started).then(Instant::now),
+            offered_at: (!s.started && !s.paused).then(Instant::now),
             backoff: FIRST_BACKOFF,
             progress_at: None,
             last_progress: Instant::now(),
@@ -564,8 +620,10 @@ fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
             created: s.created,
             persist: true,
             resumed: false,
+            user_paused: s.paused,
+            batch: batch.clone(),
         };
-        let offer = (!s.started).then(|| offer_msg(&me, &s.id, &t));
+        let offer = (!s.started && !s.paused).then(|| offer_msg(&me, &s.id, &t));
         ctx.files.out.lock().insert(s.id.clone(), t);
         ctx.sink.emit(CoreEvent::FileProgress {
             id: s.id.clone(),
@@ -575,10 +633,130 @@ fn restore_outgoing<P: Platform>(ctx: &NetCtx<P>) {
             total: s.size,
             incoming: false,
             resumed: false,
+            batch,
         });
+        if s.paused {
+            ctx.sink.emit(CoreEvent::FilePaused {
+                id: s.id.clone(),
+                node_id: s.node.clone(),
+                incoming: false,
+                paused: true,
+            });
+        }
         if let Some(offer) = offer {
             crate::engine::send_reliably(ctx, &s.node, &offer.to_string());
         }
+    }
+    super::batches::restored_files(ctx);
+}
+
+/// The batch id in an offer's extra fields.
+fn batch_in(extra: Option<&serde_json::Value>) -> Option<String> {
+    extra
+        .and_then(|e| e.get("batch"))
+        .and_then(|b| b.get("id"))
+        .and_then(|i| i.as_str())
+        .map(str::to_string)
+}
+
+/// Keep a failed outgoing transfer (not a batch's) to send again.
+fn remember_failed<P: Platform>(
+    ctx: &NetCtx<P>,
+    id: &str,
+    node: &str,
+    path: &Path,
+    extra: Option<&serde_json::Value>,
+) {
+    if batch_in(extra).is_some() || !persists(extra) {
+        return;
+    }
+    let mut f = ctx.files.failed_out.lock();
+    f.retain(|x| x.id != id);
+    if f.len() >= FAILED_KEPT {
+        f.pop_front();
+    }
+    f.push_back(FailedOut {
+        id: id.to_string(),
+        node: node.to_string(),
+        path: path.to_path_buf(),
+        extra: extra.cloned(),
+    });
+}
+
+/// Send a failed transfer again: a batch's files that didn't go (same
+/// batch id), a file sent from here (a new transfer id), or a link a
+/// device was asked to download. Returns the id to follow.
+pub fn retry<P: Platform>(ctx: &NetCtx<P>, id: &str) -> crate::Result<String> {
+    if super::batches::retry(ctx, id)? {
+        return Ok(id.to_string());
+    }
+    if let Some(new) = super::remote_download::retry(ctx, id)? {
+        return Ok(new);
+    }
+    let f = {
+        let mut list = ctx.files.failed_out.lock();
+        let at = list.iter().position(|f| f.id == id);
+        at.and_then(|i| list.remove(i))
+    };
+    let Some(f) = f else {
+        return Err(crate::error::CoreError::InvalidInput(
+            "that transfer can't be sent again from here".into(),
+        ));
+    };
+    start_with_extra(
+        ctx,
+        &f.node,
+        &f.path,
+        &crate::transport::outbox::new_id(),
+        f.extra,
+    )
+}
+
+/// Once the downloads folder is known: the partial files of transfers from
+/// before a restart show again as waiting (their senders offer them
+/// again, and they carry on).
+fn restore_incoming<P: Platform>(ctx: &NetCtx<P>) {
+    use std::sync::atomic::Ordering;
+    let Some(dir) = ctx.files.download_dir.lock().clone() else {
+        return;
+    };
+    if ctx.files.inc_restored.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir.join(PARTIAL_DIR)) else {
+        return;
+    };
+    for e in entries.flatten() {
+        let path = e.path();
+        if path.extension().is_none_or(|x| x != "json") {
+            continue;
+        }
+        let id = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if !is_transfer_id(&id) || ctx.files.inc.lock().contains_key(&id) {
+            continue;
+        }
+        let Some(note) = std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| serde_json::from_str::<PartMeta>(&s).ok())
+        else {
+            continue;
+        };
+        let done = std::fs::metadata(path.with_extension("part"))
+            .map(|m| m.len())
+            .unwrap_or(0);
+        ctx.sink.emit(CoreEvent::FileProgress {
+            id,
+            node_id: note.from,
+            name: note.name,
+            done: done.min(note.size),
+            total: note.size,
+            incoming: true,
+            resumed: done > 0,
+            batch: note.batch,
+        });
     }
 }
 
@@ -649,6 +827,21 @@ fn sweep_partials<P: Platform>(ctx: &NetCtx<P>) {
             .and_then(|m| m.elapsed().ok())
             .is_some_and(|age| age >= INCOMING_IDLE);
         if old {
+            if path.extension().is_some_and(|x| x == "json") {
+                if let Some(note) = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|s| serde_json::from_str::<PartMeta>(&s).ok())
+                {
+                    failed(
+                        ctx,
+                        &id,
+                        &note.from,
+                        &note.name,
+                        true,
+                        "the device wasn't reachable",
+                    );
+                }
+            }
             let _ = std::fs::remove_file(&path);
         }
     }
@@ -695,6 +888,7 @@ pub fn start_with_extra<P: Platform>(
     let name = safe_name(&path.file_name().unwrap_or_default().to_string_lossy());
     let size = meta.len();
     let mtime = mtime_of(&meta);
+    let batch = batch_in(extra.as_ref());
     ctx.sink.emit(CoreEvent::FileProgress {
         id: id.clone(),
         node_id: node.to_string(),
@@ -703,6 +897,7 @@ pub fn start_with_extra<P: Platform>(
         total: size,
         incoming: false,
         resumed: false,
+        batch: batch.clone(),
     });
     let (ctx, node, path, id2) = (
         ctx.clone(),
@@ -739,6 +934,8 @@ pub fn start_with_extra<P: Platform>(
             created: now_secs(),
             persist,
             resumed: false,
+            user_paused: false,
+            batch,
         };
         let msg = offer_msg(&me(&ctx), &id2, &t);
         ctx.files.out.lock().insert(id2.clone(), t);
@@ -781,6 +978,7 @@ fn failed<P: Platform>(
     super::folder_sync::transfer_ended(ctx, id, Some(why), incoming);
     if incoming {
         super::insert_capture::transfer_failed(ctx, id);
+        super::batches::incoming_ended(ctx, id, false);
     }
 }
 
@@ -837,6 +1035,10 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
         {
             let mut out = files.out.lock();
             let Some(t) = out.get_mut(&id) else { return };
+            if t.user_paused {
+                t.running = false;
+                return;
+            }
             if t.acked >= size {
                 // All there; `file_done` finishes it. If that got lost, the
                 // re-offer is answered from the receiver's memory.
@@ -878,10 +1080,24 @@ fn run_sender<P: Platform>(ctx: NetCtx<P>, id: String, from: u64) {
             // Shorter than when it was offered, or unreadable now.
             _ => return give_up(&ctx, &id, "the file couldn't be read"),
         };
+        let damage = files
+            .corrupt_chunks
+            .fetch_update(
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+                |n| n.checked_sub(1),
+            )
+            .is_ok();
+        if damage {
+            buf[0] ^= 0xff;
+        }
         let msg = json!({
             "type": "file_chunk", "from": me(&ctx), "id": id, "off": pos,
             "data": base64::engine::general_purpose::STANDARD.encode(&buf[..n]),
         });
+        if damage {
+            buf[0] ^= 0xff;
+        }
         if send(&ctx, &node, &msg).is_err() {
             if let Some(t) = files.out.lock().get_mut(&id) {
                 pause(t); // no link
@@ -899,6 +1115,7 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
     };
     ctx.files.acked.notify_all();
     save_outgoing(ctx);
+    remember_failed(ctx, id, &t.node, &t.path, t.extra.as_ref());
     failed(ctx, id, &t.node, &t.name, false, why);
     // Even with no link now: the receiver drops its partial file.
     send_cancel(ctx, &t.node, id);
@@ -910,6 +1127,7 @@ fn give_up<P: Platform>(ctx: &NetCtx<P>, id: &str, why: &str) {
 /// push.
 pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     restore_outgoing(ctx);
+    restore_incoming(ctx);
     let me = me(ctx);
     let mut offers = Vec::new();
     let mut expired = Vec::new();
@@ -921,13 +1139,15 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
             let stale = !t.started
                 && t.offered_at
                     .is_some_and(|at| at.elapsed() >= NEVER_ACCEPTED);
+            let stale = stale && !t.user_paused;
             if stale {
                 expired.push((id.clone(), t.node.clone(), t.name.clone()));
+                remember_failed(ctx, id, &t.node, &t.path, t.extra.as_ref());
             }
             !stale
         });
         for (id, t) in out.iter_mut() {
-            if t.running || !t.started {
+            if t.running || !t.started || t.user_paused {
                 continue;
             }
             // With no link, each try may wake the device by push: back off.
@@ -959,7 +1179,11 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
         .out
         .lock()
         .iter()
-        .filter(|(_, t)| !t.running && t.paused_since.is_some_and(|p| p.elapsed() >= RESUME_FOR))
+        .filter(|(_, t)| {
+            !t.running
+                && !t.user_paused
+                && t.paused_since.is_some_and(|p| p.elapsed() >= RESUME_FOR)
+        })
         .map(|(id, _)| id.clone())
         .collect();
     for id in stuck {
@@ -973,7 +1197,7 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
         let mut inc = ctx.files.inc.lock();
         let ids: Vec<String> = inc
             .iter()
-            .filter(|(_, t)| t.last_seen.elapsed() >= INCOMING_IDLE)
+            .filter(|(_, t)| !t.paused && t.last_seen.elapsed() >= INCOMING_IDLE)
             .map(|(id, _)| id.clone())
             .collect();
         ids.iter().filter_map(|id| inc.remove(id)).collect()
@@ -988,10 +1212,104 @@ pub fn resume_paused<P: Platform>(ctx: &NetCtx<P>) {
     for (node, msg) in offers {
         crate::engine::send_reliably(ctx, &node, &msg.to_string());
     }
+    // A link that got better carries more of a batch at once.
+    super::batches::pump(ctx);
+}
+
+/// Pause (or resume) transfer `id`, either way; a batch's id pauses the
+/// whole batch. `by_peer`: the other device asked (it isn't told back).
+/// A receiver can only pause a sender that knows how.
+pub fn set_paused<P: Platform>(
+    ctx: &NetCtx<P>,
+    id: &str,
+    paused: bool,
+    by_peer: Option<&str>,
+) -> crate::Result<()> {
+    use crate::error::CoreError;
+    if by_peer.is_none() && super::batches::pause(ctx, id, paused, None)? {
+        return Ok(());
+    }
+    let me = me(ctx);
+    let out = {
+        let mut out = ctx.files.out.lock();
+        match out.get_mut(id) {
+            Some(t) if by_peer.is_some_and(|p| p != t.node) => return Ok(()),
+            Some(t) => {
+                let changed = t.user_paused != paused;
+                t.user_paused = paused;
+                let offer = (!paused && changed).then(|| {
+                    t.offered_at = Some(Instant::now());
+                    t.backoff = FIRST_BACKOFF;
+                    t.paused_since = None;
+                    offer_msg(&me, id, t)
+                });
+                Some((t.node.clone(), changed, offer, t.batch.clone()))
+            }
+            None => None,
+        }
+    };
+    if let Some((node, changed, offer, batch)) = out {
+        ctx.files.acked.notify_all();
+        save_outgoing(ctx);
+        if changed {
+            ctx.sink.emit(CoreEvent::FilePaused {
+                id: id.to_string(),
+                node_id: node.clone(),
+                incoming: false,
+                paused,
+            });
+        }
+        // A batch's file is told about with its batch.
+        if by_peer.is_none() && batch.is_none() && super::batches::supports(ctx, &node) {
+            let msg = json!({ "type": "file_pause", "from": me, "id": id, "paused": paused });
+            crate::engine::send_reliably(ctx, &node, &msg.to_string());
+        }
+        // Resumed: offered again, and the receiver says where it stopped.
+        if let Some(offer) = offer {
+            crate::engine::send_reliably(ctx, &node, &offer.to_string());
+        }
+        return Ok(());
+    }
+    let from = {
+        let inc = ctx.files.inc.lock();
+        match inc.get(id) {
+            Some(t) if by_peer.is_some_and(|p| p != t.from) => return Ok(()),
+            Some(t) => t.from.clone(),
+            None if by_peer.is_some() => return Ok(()),
+            None => return Err(CoreError::InvalidInput("that transfer isn't going".into())),
+        }
+    };
+    if by_peer.is_none() {
+        if !super::batches::supports(ctx, &from) {
+            return Err(CoreError::InvalidInput(
+                "that device can't pause transfers yet (update my-domain on it)".into(),
+            ));
+        }
+        let msg = json!({ "type": "file_pause", "from": me, "id": id, "paused": paused });
+        crate::engine::send_reliably(ctx, &from, &msg.to_string());
+    }
+    let changed = ctx.files.inc.lock().get_mut(id).is_some_and(|t| {
+        let c = t.paused != paused;
+        t.paused = paused;
+        t.last_seen = Instant::now();
+        c
+    });
+    if changed {
+        ctx.sink.emit(CoreEvent::FilePaused {
+            id: id.to_string(),
+            node_id: from,
+            incoming: true,
+            paused,
+        });
+    }
+    Ok(())
 }
 
 /// Stop a transfer, either way, and tell the other side.
 pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
+    if super::batches::cancel(ctx, id, None) {
+        return;
+    }
     let outgoing = ctx.files.out.lock().remove(id);
     let incoming = match outgoing {
         Some(_) => None,
@@ -999,6 +1317,7 @@ pub fn cancel<P: Platform>(ctx: &NetCtx<P>, id: &str) {
     };
     let peer = if let Some(t) = outgoing {
         save_outgoing(ctx);
+        remember_failed(ctx, id, &t.node, &t.path, t.extra.as_ref());
         failed(ctx, id, &t.node, &t.name, false, "cancelled");
         Some(t.node)
     } else if let Some(t) = incoming {
@@ -1104,6 +1423,12 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         }
         (dir, dest)
     };
+    // One of several files sent together.
+    let batch = if msg.json("batch").is_object() {
+        super::batches::incoming_offer(ctx, from, &id, size, &msg.json("batch"), &dir)
+    } else {
+        None
+    };
 
     let legacy = ctx
         .files
@@ -1114,6 +1439,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         name: name.clone(),
         size,
         sha256: sha.clone(),
+        batch: batch.clone(),
     };
     // Already going: the same file carries on where it is; a different
     // one under this id starts over (from another device: ignored).
@@ -1160,7 +1486,7 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             && std::fs::read_to_string(&note)
                 .ok()
                 .and_then(|s| serde_json::from_str::<PartMeta>(&s).ok())
-                .is_some_and(|m| m == meta);
+                .is_some_and(|m| m.same(&meta));
         let mut hasher = Sha256::new();
         let mut len = 0u64;
         if same {
@@ -1206,6 +1532,9 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
                     last_seen: Instant::now(),
                     resumed: len > 0,
                     sync,
+                    paused: false,
+                    retries: 0,
+                    batch: batch.clone(),
                 },
             );
             (len, len > 0)
@@ -1219,7 +1548,9 @@ fn on_offer<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         total: size,
         incoming: true,
         resumed,
+        batch,
     });
+    super::batches::progress(ctx, &id, offset, true);
     if legacy {
         // As a device from before resuming answers: no offset.
         reply(json!({ "type": "file_accept", "from": me(ctx), "id": id }));
@@ -1271,7 +1602,8 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
         t.len += data.len() as u64;
     }
     // Ack what we have; a gap makes the sender resend from there.
-    let (len, size, name, resumed) = (t.len, t.size, t.name.clone(), t.resumed);
+    let (len, size, name, resumed, batch) =
+        (t.len, t.size, t.name.clone(), t.resumed, t.batch.clone());
     let show = t
         .progress_at
         .is_none_or(|at| at.elapsed() >= PROGRESS_EVERY)
@@ -1294,7 +1626,9 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
             total: size,
             incoming: true,
             resumed,
+            batch,
         });
+        super::batches::progress(ctx, &id, len, true);
     }
     if len == size {
         finish(ctx, &id);
@@ -1304,12 +1638,47 @@ fn on_chunk<P: Platform>(ctx: &NetCtx<P>, msg: &ControlMsg, from: &str) {
 /// All bytes are in: check the hash, move the file into place, tell both
 /// sides.
 fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
-    let Some(t) = ctx.files.inc.lock().remove(id) else {
+    let Some(mut t) = ctx.files.inc.lock().remove(id) else {
         return;
     };
     let _ = t.file.sync_all();
+    let ok = hex(&t.hasher.clone().finalize()) == t.sha;
+    // Damaged on the way: ask for it again from the start (any sender
+    // takes an accept at 0), a couple of times.
+    let legacy = ctx
+        .files
+        .legacy_receiver
+        .load(std::sync::atomic::Ordering::Relaxed);
+    if !ok
+        && ctx.config.transfer_batches
+        && !legacy
+        && t.retries < HASH_RETRIES
+        && t.file.set_len(0).is_ok()
+    {
+        t.retries += 1;
+        t.len = 0;
+        t.hasher = Sha256::new();
+        t.last_seen = Instant::now();
+        let (from, name, size, batch) = (t.from.clone(), t.name.clone(), t.size, t.batch.clone());
+        ctx.files.inc.lock().insert(id.to_string(), t);
+        ctx.sink.emit(CoreEvent::FileProgress {
+            id: id.to_string(),
+            node_id: from.clone(),
+            name,
+            done: 0,
+            total: size,
+            incoming: true,
+            resumed: false,
+            batch,
+        });
+        let _ = send(
+            ctx,
+            &from,
+            &json!({ "type": "file_accept", "from": me(ctx), "id": id, "offset": 0 }),
+        );
+        return;
+    }
     drop(t.file);
-    let ok = hex(&t.hasher.finalize()) == t.sha;
     let dest = if ok && std::fs::create_dir_all(&t.dest).is_ok() {
         move_into(&t.part, &t.dest, &t.name)
     } else {
@@ -1353,6 +1722,7 @@ fn finish<P: Platform>(ctx: &NetCtx<P>, id: &str) {
                 clipboard: t.clipboard,
                 sync: false,
             });
+            super::batches::incoming_ended(ctx, id, true);
         }
         let _ = send(
             ctx,
@@ -1421,18 +1791,21 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     total: t.size,
                     incoming: false,
                     resumed: t.resumed,
+                    batch: t.batch.clone(),
                 };
                 let left = t.size - t.acked;
-                if !t.running && t.acked < t.size {
+                if !t.running && !t.user_paused && t.acked < t.size {
                     t.running = true;
                     let (ctx, id, at) = (ctx.clone(), id.clone(), t.acked);
                     std::thread::spawn(move || run_sender(ctx, id, at));
                 }
+                let acked = t.acked;
                 drop(out);
                 if first {
                     save_outgoing(ctx);
                 }
                 ctx.sink.emit(ev);
+                super::batches::progress(ctx, &id, acked, false);
                 // A big one, not over the local network: Wi-Fi Direct may
                 // carry it faster.
                 super::wifi_direct::transfer_started(ctx, &from, left);
@@ -1472,9 +1845,12 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                         total: t.size,
                         incoming: false,
                         resumed: t.resumed,
+                        batch: t.batch.clone(),
                     };
+                    let acked = t.acked;
                     drop(out);
                     ctx.sink.emit(ev);
+                    super::batches::progress(ctx, &id, acked, false);
                 }
             }
             "file_done" => {
@@ -1496,10 +1872,15 @@ impl<P: Platform> ControlHandler<P> for FilesHandler {
                     super::folders::outgoing_ended(ctx, &id, None);
                     super::folder_sync::transfer_ended(ctx, &id, None, false);
                 } else {
+                    remember_failed(ctx, &id, &from, &t.path, t.extra.as_ref());
                     failed(ctx, &id, &from, &t.name, false, &msg.str("error"));
                 }
             }
             "file_cancel" => {
+                // A whole batch.
+                if super::batches::cancel(ctx, &id, Some(&from)) {
+                    return;
+                }
                 let gone_out = {
                     let mut out = files.out.lock();
                     match out.get(&id) {

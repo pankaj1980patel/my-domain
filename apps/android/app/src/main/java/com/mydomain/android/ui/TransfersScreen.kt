@@ -65,13 +65,18 @@ private const val STALE_MS = 5_000L
 /**
  * Transfers (pushed from the Activity tab): every file going to or coming
  * from your devices. Those under way first (progress, speed, time left,
- * Cancel), then the newest finished or failed ones (Open, Send again),
- * kept across restarts by [TransferLog]. [found]: a transfer a search
+ * Pause / Resume, Cancel), then the newest finished or failed ones (Open,
+ * Retry, Send again), kept across restarts by [TransferLog]. Several files
+ * sent together (a folder, or files shared at once) are one row with the
+ * overall progress; its files open underneath. [found]: a transfer a search
  * opened, scrolled to and marked.
  */
 @Composable
 fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: String? = null) {
-    val list = TransferLog.list
+    val all = TransferLog.list
+    // A batch's files show inside it.
+    val list = all.filter { it.batch == null }
+    val filesOf = { id: String -> all.filter { it.batch == id } }
     val active = list.filter { !it.finished }
     val finished = list.filter { it.finished }
     val listState = rememberLazyListState()
@@ -111,11 +116,11 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: S
         }
         if (active.isNotEmpty()) {
             item { Section(stringResource(R.string.transfers_active)) }
-            items(active, key = { "a-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { ActiveRow(it, now) } }
+            items(active, key = { "a-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { ActiveRow(it, now, filesOf(it.id)) } }
         }
         if (finished.isNotEmpty()) {
             item { Section(stringResource(R.string.transfers_recent)) }
-            items(finished, key = { "f-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { FinishedRow(it, now, onOpenDevice) } }
+            items(finished, key = { "f-" + it.id }) { Box(Modifier.foundMark(it.id == found)) { FinishedRow(it, now, onOpenDevice, filesOf(it.id)) } }
         }
     }
 }
@@ -139,12 +144,15 @@ private fun Head(t: TransferRecord, action: @Composable () -> Unit) {
             Modifier.size(28.dp).background(T.surface2, CircleShape).clearAndSetSemantics { contentDescription = dir },
             contentAlignment = Alignment.Center,
         ) {
-            Text(if (t.incoming) "↓" else "↑", color = T.text, style = MaterialTheme.typography.bodyMedium)
+            Text(if (t.kind == "folder") "▤" else if (t.incoming) "↓" else "↑", color = T.text, style = MaterialTheme.typography.bodyMedium)
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
+            val name = if (t.isBatch && t.kind != "folder" && t.count > 1) {
+                t.name + " · " + stringResource(R.string.transfer_batch_files, t.count)
+            } else t.name
             Text(
-                t.name, style = MaterialTheme.typography.bodyMedium, color = T.text,
+                name, style = MaterialTheme.typography.bodyMedium, color = T.text,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val link = t.link
@@ -168,11 +176,44 @@ private fun duration(secs: Long): String {
     return stringResource(R.string.transfers_hours, m / 60, m % 60)
 }
 
+/** A batch's files, opened under its row. */
 @Composable
-private fun ActiveRow(t: TransferRecord, now: Long) {
+private fun BatchFiles(files: List<TransferRecord>) {
     val ctx = LocalContext.current
+    Column(Modifier.fillMaxWidth().padding(start = 40.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        files.take(TransferBook.MAX_BATCH_FILES).forEach { f ->
+            Row(Modifier.semantics(mergeDescendants = true) {}) {
+                Text(
+                    f.name, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium,
+                    color = if (f.state == TransferState.Failed) T.danger else T.text2,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(Modifier.width(8.dp))
+                Muted(
+                    when (f.state) {
+                        TransferState.Done -> Formatter.formatShortFileSize(ctx, f.total)
+                        TransferState.Failed -> f.reason ?: ""
+                        TransferState.Active -> "${(f.fraction * 100).toInt()}%"
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Show files / Hide files, for a batch with files. */
+@Composable
+private fun FilesToggle(open: Boolean, onToggle: () -> Unit) {
+    GhostButton(stringResource(if (open) R.string.transfer_hide_files else R.string.transfer_show_files), onToggle, small = true)
+}
+
+@Composable
+private fun ActiveRow(t: TransferRecord, now: Long, files: List<TransferRecord> = emptyList()) {
+    val ctx = LocalContext.current
+    val toast = LocalToast.current
     val size = { n: Long -> Formatter.formatShortFileSize(ctx, n) }
-    val moving = t.rate > 0 && now - t.movedAt <= STALE_MS
+    val moving = !t.paused && t.rate > 0 && now - t.movedAt <= STALE_MS
+    var open by remember { mutableStateOf(false) }
     val dlLine = if (t.link != null) dlActiveLine(t.id) else null
     val parts = buildList {
         // A link download that isn't moving yet says why (asking, queued...).
@@ -183,7 +224,9 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
         } else if (t.total == 0L) {
             add(stringResource(R.string.transfers_waiting, Core.peerName(t.node)))
         } else {
+            if (t.isBatch) add(stringResource(R.string.transfer_batch_progress, t.filesDone, t.count))
             add(stringResource(R.string.transfers_progress, size(t.done), size(t.total)))
+            if (t.paused) add(stringResource(R.string.transfer_paused))
             if (moving) {
                 add(stringResource(R.string.transfers_speed, size(Math.round(t.rate))))
                 t.secondsLeft()?.let { add(stringResource(R.string.transfers_eta, duration(it))) }
@@ -192,7 +235,17 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
     }
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Head(t) {
-            GhostButton(stringResource(R.string.cancel), { Core.cancelFileAsync(t.id) }, small = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (t.isBatch && files.isNotEmpty()) FilesToggle(open) { open = !open }
+                if (t.link == null) {
+                    GhostButton(
+                        stringResource(if (t.paused) R.string.transfer_resume else R.string.transfer_pause),
+                        { Core.pauseFileAsync(t.id, !t.paused) { toast(friendlyError(it)) } },
+                        small = true,
+                    )
+                }
+                GhostButton(stringResource(R.string.cancel), { Core.cancelFileAsync(t.id) }, small = true)
+            }
         }
         LinearProgressIndicator(
             progress = { t.fraction },
@@ -208,6 +261,7 @@ private fun ActiveRow(t: TransferRecord, now: Long) {
             }
             t.via?.let { Muted(" · " + stringResource(viaRes(it))) }
         }
+        if (open) BatchFiles(files)
     }
     HorizontalDivider(color = T.border)
 }
@@ -223,16 +277,19 @@ private fun readable(ctx: Context, uri: String): Boolean = runCatching {
 }.getOrDefault(false)
 
 @Composable
-private fun FinishedRow(t: TransferRecord, now: Long, onOpenDevice: (String) -> Unit) {
+private fun FinishedRow(t: TransferRecord, now: Long, onOpenDevice: (String) -> Unit, files: List<TransferRecord> = emptyList()) {
     val ctx = LocalContext.current
     val toast = LocalToast.current
     val size = Formatter.formatShortFileSize(ctx, t.total)
     // [now] ticks, so "2 min ago" keeps up.
     val whenText = timeAgo(t.ended ?: t.started, now)
     val via = t.via?.let { " · " + stringResource(viaRes(it)) } ?: ""
+    val counted = if (t.isBatch) stringResource(R.string.transfer_batch_files, t.count) + " · " else ""
+    val failedFiles = if (t.isBatch && t.filesFailed > 0) stringResource(R.string.transfer_batch_failed, t.filesFailed) + " · " else ""
     val line = when {
         t.state == TransferState.Done ->
-            stringResource(if (t.incoming) R.string.transfers_done_saved else R.string.transfers_done_sent, size, whenText) + via
+            counted + stringResource(if (t.incoming) R.string.transfers_done_saved else R.string.transfers_done_sent, size, whenText) + via
+        t.isBatch && t.reason != "cancelled" -> failedFiles + stringResource(R.string.transfers_failed, t.reason ?: "", whenText)
         t.reason == "cancelled" -> stringResource(R.string.transfers_cancelled, whenText)
         else -> stringResource(R.string.transfers_failed, t.reason ?: "", whenText)
     }
@@ -246,9 +303,24 @@ private fun FinishedRow(t: TransferRecord, now: Long, onOpenDevice: (String) -> 
         value = source != null && withContext(Dispatchers.IO) { readable(ctx, source) }
     }
     var sending by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
+    val retrying = stringResource(R.string.transfer_retrying, t.name)
     Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Head(t) {
+            if (t.isBatch && files.isNotEmpty()) FilesToggle(open) { open = !open }
             when {
+                // Sent (or asked for) from here and failed: the core sends
+                // it again (a batch's files that didn't go, a file, a link).
+                !t.incoming && t.state == TransferState.Failed && (t.isBatch || t.link != null || !canResend) ->
+                    SoftButton(stringResource(R.string.transfer_retry), {
+                        if (sending) return@SoftButton
+                        sending = true
+                        Core.retryFileAsync(
+                            t.id,
+                            onDone = { sending = false; toast(retrying) },
+                            onError = { sending = false; toast(friendlyError(it)) },
+                        )
+                    }, enabled = !sending)
                 t.incoming && t.state == TransferState.Done && t.uri != null ->
                     GhostButton(stringResource(R.string.file_open), {
                         if (!FileActions.open(ctx, t.uri, t.mime)) toast(noApp)
@@ -272,6 +344,7 @@ private fun FinishedRow(t: TransferRecord, now: Long, onOpenDevice: (String) -> 
             line, style = MaterialTheme.typography.labelMedium,
             color = if (t.state == TransferState.Failed && t.reason != "cancelled") T.danger else T.text2,
         )
+        if (open) BatchFiles(files)
     }
     HorizontalDivider(color = T.border)
 }

@@ -1,47 +1,31 @@
 // Files dragged from Finder / Explorer onto a device's page: an overlay
 // while they're over the window, and each dropped file is sent to that
-// device (it shows up in the Files tile like any other transfer). A dropped
-// folder goes whole: every file inside, recreated there as a folder.
+// device (it shows up in the Files tile like any other transfer). Several
+// files, or a folder (every file inside, recreated there as a folder), go
+// as one batch.
 
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 // Portal: the overlay lives on <body>, clear of the tiles' blur layers.
 import { Portal } from "solid-js/web";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
-import { peerName, sendFile, sendFolder } from "../../lib/core";
+import { peerName, sendPaths } from "../../lib/core";
 import { friendlyError } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t, tn } from "../../i18n";
-
-/** The core refuses anything that isn't a plain file with this (a folder
- *  is then sent as one). */
-const isNotAFile = (e: unknown) => String(e instanceof Error ? e.message : e).includes("not a file");
 
 export default function DropToSend(props: { node: string }) {
   const [over, setOver] = createSignal(false);
   const name = () => peerName(props.node);
 
-  /** Send each path, a folder with everything in it; counts the files. */
+  /** One file on its own; several, or a folder with everything in it, as
+   *  one batch (one row in Transfers). */
   const sendAll = async (paths: string[]) => {
-    let sent = 0;
-    let failed: unknown = null;
-    for (const p of paths) {
-      try {
-        await sendFile(props.node, p);
-        sent++;
-      } catch (e) {
-        if (!isNotAFile(e)) {
-          failed ??= e;
-          continue;
-        }
-        try {
-          sent += await sendFolder(props.node, p);
-        } catch (e2) {
-          failed ??= e2;
-        }
-      }
+    try {
+      const sent = await sendPaths(props.node, paths);
+      if (sent) toast(tn("files.started", sent, { name: name() }), "ok");
+    } catch (e) {
+      toast(friendlyError(e), "error");
     }
-    if (sent) toast(tn("files.started", sent, { name: name() }), "ok");
-    if (failed) toast(friendlyError(failed), "error");
   };
 
   // Listens only while the device page is shown. The listener arrives

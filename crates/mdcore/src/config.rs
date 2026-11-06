@@ -277,6 +277,13 @@ pub struct CoreConfig {
     /// icon messages. On by default; off behaves like an app from before
     /// (tests use it to play an older peer).
     pub notif_rich: bool,
+    /// Batches, pausing and checked retries for file transfers
+    /// (`features::batches`): this end says `xfer` in its status and
+    /// `addr_update`, groups a folder's or several files' transfers into
+    /// one, understands `file_pause` and `batch_end`, and asks again for a
+    /// file that arrived damaged. On by default; off behaves like an app
+    /// from before (tests use it to play an older peer).
+    pub transfer_batches: bool,
     /// The smallest transfer (bytes still to send) that tries Wi-Fi Direct.
     pub wifi_direct_min: u64,
     /// How long setting Wi-Fi Direct up may take before the transfer just
@@ -345,6 +352,7 @@ impl Default for CoreConfig {
             print: true,
             remote_download: true,
             notif_rich: true,
+            transfer_batches: true,
             wifi_direct_min: crate::features::wifi_direct::MIN_SIZE,
             wifi_direct_setup: crate::features::wifi_direct::SETUP_TIMEOUT,
             wifi_direct_on_lan: false,

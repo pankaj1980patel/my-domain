@@ -5,19 +5,23 @@ platforms: desktop, android
 ---
 ## Send a file or a folder
 
-- **On the computer:** drop files or folders onto a device's page, use **Send a file** / **Send a folder** on it, or the tray menu.
+- **On the computer:** drop files or folders onto a device's page or its card, or anywhere in the window (with several devices it asks which one), use **Send a file** / **Send a folder** on a device's page, or the tray menu.
 - **On the phone:** use **Send a file** or **Send a folder** on a computer's page, or share from any app with Android's share sheet. On Android 10 and later each of your devices appears there by name, so a share goes straight to it.
 - **From the computer's file manager:** turn it on in Settings → **Send from the file manager**, then right-click files or folders (Finder: Services → Send with my-domain; Windows: Send to; Linux: Open with, Dolphin or Files' Scripts menu). You pick the device in my-domain.
 
-A folder goes file by file with its subfolders. Hidden files and links inside it are skipped.
+A folder arrives as a folder, with its subfolders, under the other device's downloads. Hidden files and links inside it are skipped, and names that would put a file anywhere else are refused.
+
+A folder, or several files sent at once, shows as **one row** in Transfers: how many files have arrived, the overall progress, speed and time left. **Show files** lists each file inside. Over a direct link up to three of its files go side by side; over the internet relay, one at a time so the rest of your traffic keeps flowing.
+
+Each file is checked when it arrives. If it was damaged on the way, it's sent again by itself (twice at most) before it counts as failed.
 
 ## Resume
 
-If the link drops, or an app restarts, an unfinished transfer carries on from where it stopped instead of starting over: within 24 hours, and only if the file hasn't changed in the meantime.
+If the link drops, or an app restarts (either one), an unfinished transfer carries on by itself from where it stopped once both are back and linked, instead of starting over: within 24 hours, and only if the file hasn't changed in the meantime. A folder or batch carries on with the files it hadn't sent yet, and a link being downloaded on a device (**Download on…**) carries on too.
 
 ## Transfers
 
-**Transfers** (in the computer's sidebar, and on the phone's Activity tab) lists everything going in and out: progress, speed, time left and **Cancel**. Finished ones stay in the list (the newest 100) with **Open**, **Show in folder** and **Send again**.
+**Transfers** (in the computer's sidebar, and on the phone's Activity tab) lists everything going in and out: progress, speed (smoothed, so it doesn't jump around), time left, **Pause** / **Resume** and **Cancel**. A paused transfer keeps what has arrived and waits, even across restarts, until you resume it, on either device (pausing from the receiving side needs an up-to-date my-domain on the sender). Finished ones stay in the list (the newest 100) with **Open**, **Show in folder** and **Send again**; one sent from this device that failed has **Retry** (for a folder or batch, only the files that didn't go are sent again).
 
 ## Big files nearby: Wi-Fi Direct and the phone's hotspot
 

@@ -8,7 +8,7 @@ import { createSignal } from "solid-js";
 import { createStore, produce, reconcile } from "solid-js/store";
 import { listen } from "@tauri-apps/api/event";
 import { commands, type ChatRecord_Serialize, type ClipPage_Serialize, type ComputerAudioStatus_Serialize, type DeviceLabel_Serialize, type HistoryPage_Serialize, type Identity_Serialize, type NotifGroup_Serialize, type NotifPrefs, type Peer_Serialize, type Quality, type SyncPairView_Serialize, type TransportKind } from "../bindings";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 import { startRing, stopRing } from "./ring";
 import { onSpeedEvent, type SpeedRun } from "./diag";
 import { friendlyError, niceName } from "./words";
@@ -246,7 +246,38 @@ export type Transfer = {
   movedAt?: number;
   /** It carried on from a partial file: the bytes it resumed at. */
   resumedFrom?: number;
+  /** One file of a batch (a folder, or files sent together). */
+  batch?: string;
+  /** The user paused it (here or on the other device). */
+  paused?: boolean;
 };
+
+/** A batch as the core's `transfer-batch` event carries it (mdcore
+ *  `model::BatchItem`). */
+export type BatchItem = {
+  id: string;
+  node_id: string;
+  incoming: boolean;
+  /** The folder's name, or the first file's. */
+  name: string;
+  /** "folder" or "files". */
+  kind: string;
+  count: number;
+  files_done: number;
+  files_failed: number;
+  done: number;
+  total: number;
+  /** "active", "paused", "done", "failed" or "cancelled". */
+  state: string;
+  error?: string;
+  /** A received folder: where it is. */
+  path?: string;
+  started_at: number;
+};
+
+/** Several files sent together, as the core reports them
+ *  (`transfer-batch`), with the speed measured here. */
+export type Batch = BatchItem & { rate?: number; movedAt?: number };
 
 /** Raw event log for the Developer screen. */
 export type DevEvent = { ts: number; name: string; payload: unknown };
@@ -276,6 +307,7 @@ type State = {
   quietPhones: string[];
   /** transfer id -> file transfer (both ways) */
   transfers: Record<string, Transfer>;
+  batches: Record<string, Batch>;
   /** node_id -> how transfers with it go now ("wifi_direct", "hotspot");
    *  absent or "": over the link. */
   wifiDirect: Record<string, string>;
@@ -314,6 +346,7 @@ export const [state, setState] = createStore<State>({
   ringing: null,
   quietPhones: [],
   transfers: {},
+  batches: {},
   wifiDirect: {},
   labels: {},
   screenOffers: {},
@@ -578,24 +611,19 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
     ),
     // Files. A transfer may be first seen by any of these (a fast progress
     // event can beat sendFile's reply), so each one creates it if missing.
-    on<{ id: string; node_id: string; name: string; done: number; total: number; incoming: boolean; resumed?: boolean }>(
+    on<{ id: string; node_id: string; name: string; done: number; total: number; incoming: boolean; resumed?: boolean; batch?: string }>(
       "file-progress",
-      ({ id, node_id, name, done, total, incoming, resumed }) => {
+      ({ id, node_id, name, done, total, incoming, resumed, batch }) => {
         const cur = state.transfers[id];
         if (cur && (cur.state === "sent" || cur.state === "saved" || cur.state === "failed")) return;
         // Speed: smoothed over the moves seen (not counting a resumed start).
-        const at = now();
-        let rate = cur?.rate;
-        if (cur?.movedAt && done > cur.done && at > cur.movedAt) {
-          const inst = ((done - cur.done) * 1000) / (at - cur.movedAt);
-          rate = rate === undefined ? inst : rate * 0.7 + inst * 0.3;
-        }
-        const movedAt = !cur || done !== cur.done ? at : (cur.movedAt ?? at);
+        const { rate, movedAt } = smooth(cur, done);
         const resumedFrom = cur?.resumedFrom ?? (resumed ? done : undefined);
         setState("transfers", id, {
           rate,
           movedAt,
           resumedFrom,
+          batch: batch ?? cur?.batch,
           id,
           node: node_id,
           name,
@@ -607,11 +635,37 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         });
       },
     ),
+    // Paused or resumed, here or on the other device.
+    on<{ id: string; paused: boolean }>("file-paused", ({ id, paused }) => {
+      if (state.transfers[id]) setState("transfers", id, "paused", paused);
+    }),
+    // A folder or several files moved on: one row, one notice at the end.
+    on<{ item: BatchItem }>("transfer-batch", ({ item }) => {
+      const cur = state.batches[item.id];
+      const { rate, movedAt } = smooth(cur, item.done);
+      setState("batches", item.id, { ...item, rate, movedAt });
+      const ended = item.state === "done" && cur?.state !== "done";
+      if (ended && item.incoming && !secondary) {
+        const device = peerName(item.node_id);
+        const text =
+          item.kind === "folder"
+            ? t("batch.savedFolder", { name: item.name, device })
+            : tn("batch.savedFiles", item.count, { device });
+        addActivity({ icon: "", tone: "ok", node: item.node_id, text });
+        toast(text, "ok", item.path ? { label: t("files.show"), run: () => void revealFile(item.path!).catch(() => {}) } : undefined);
+      }
+    }),
     // Transfers with a device moved to Wi-Fi Direct (or back).
     on<{ node_id: string; active: boolean; via: string }>("wifi-direct-changed", ({ node_id, active, via }) =>
       setState("wifiDirect", node_id, active ? via : ""),
     ),
     on<{ id: string; from: string; name: string; path: string; size: number }>("file-received", ({ id, from, name, path, size }) => {
+      // A batch's file: its batch says so once, when they're all in.
+      const batch = state.transfers[id]?.batch;
+      if (batch) {
+        setState("transfers", id, { done: size, total: size, state: "saved", path });
+        return;
+      }
       setState("transfers", id, {
         id,
         node: from,
@@ -1087,6 +1141,52 @@ export async function sendFile(node: string, path: string): Promise<string> {
     setState("transfers", id, { id, node, name, done: 0, total: 0, incoming: false, state: "waiting", ts: now() });
   }
   return id;
+}
+
+/** Speed in bytes a second, smoothed over the moves seen, and when `done`
+ *  last moved. */
+function smooth(cur: { done: number; rate?: number; movedAt?: number } | undefined, done: number) {
+  const at = now();
+  let rate = cur?.rate;
+  if (cur?.movedAt && done > cur.done && at > cur.movedAt) {
+    const inst = ((done - cur.done) * 1000) / (at - cur.movedAt);
+    rate = rate === undefined ? inst : rate * 0.7 + inst * 0.3;
+  }
+  const movedAt = !cur || done !== cur.done ? at : (cur.movedAt ?? at);
+  return { rate, movedAt };
+}
+
+/** Send several files and folders as one batch: one row, its files
+ *  inside. Returns how many files go. */
+export async function sendBatch(node: string, paths: string[]): Promise<number> {
+  const b = await unwrap(commands.sendBatch(node, paths));
+  return b.count;
+}
+
+/** Send what was dropped or picked: one file on its own, anything more
+ *  (or a folder) as a batch. How many files go. */
+export async function sendPaths(node: string, paths: string[]): Promise<number> {
+  if (paths.length === 1) {
+    try {
+      await sendFile(node, paths[0]);
+      return 1;
+    } catch (e) {
+      // A folder: it goes whole, as a batch.
+      if (!String(e instanceof Error ? e.message : e).includes("not a file")) throw e;
+    }
+  }
+  return sendBatch(node, paths);
+}
+
+/** Pause or resume a transfer or a batch, either way. */
+export async function pauseTransfer(id: string, paused: boolean) {
+  await unwrap(commands.transferPause(id, paused));
+  if (state.transfers[id]) setState("transfers", id, "paused", paused);
+}
+
+/** Send a failed transfer again; the id to follow. */
+export async function retryTransfer(id: string): Promise<string> {
+  return unwrap(commands.transferRetry(id));
 }
 
 /** Send a whole folder (a path on this computer); the device recreates it

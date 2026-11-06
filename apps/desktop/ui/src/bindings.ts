@@ -175,6 +175,18 @@ export const commands = {
 	cancelFile: (id: string) => __TAURI_INVOKE<void>("cancel_file", { id }),
 	/**  Every transfer: those under way first, then the newest finished ones. */
 	transferList: () => __TAURI_INVOKE<TransferEntry_Serialize[]>("transfer_list"),
+	/**  Pause (`paused`) or resume a transfer or a batch, either way. */
+	transferPause: (id: string, paused: boolean) => typedError<null, string>(__TAURI_INVOKE("transfer_pause", { id, paused })),
+	/**
+	 *  Send a failed transfer again (a batch's files that didn't go, a file
+	 *  sent from here, a link asked of a device). Returns the id to follow.
+	 */
+	transferRetry: (id: string) => typedError<string, string>(__TAURI_INVOKE("transfer_retry", { id })),
+	/**
+	 *  Send several files and folders to a device as one batch. Returns the
+	 *  batch's id and how many files it holds.
+	 */
+	sendBatch: (nodeId: string, paths: string[]) => typedError<BatchStarted, string>(__TAURI_INVOKE("send_batch", { nodeId, paths })),
 	/**  Forget the finished and failed transfers. */
 	transferClearFinished: () => __TAURI_INVOKE<void>("transfer_clear_finished"),
 	/**
@@ -1160,6 +1172,12 @@ export type AwayLock = {
 	minutes: number,
 	/**  This computer can lock its screen at all (else the row is hidden). */
 	can_lock: boolean,
+};
+
+/**  What `send_batch` started. */
+export type BatchStarted = {
+	id: string,
+	count: number,
 };
 
 /**
@@ -3870,6 +3888,22 @@ export type TransferEntry_Deserialize = {
 	 *  or "downloading".
 	 */
 	stage?: string | null,
+	/**  A file of a batch: the batch's id (its row has `kind`). */
+	batch?: string | null,
+	/**
+	 *  A batch: "folder" or "files"; with how many files, how many are
+	 *  in and how many failed.
+	 */
+	kind?: string | null,
+	count?: number,
+	files_done?: number,
+	files_failed?: number,
+	/**  The user paused it (here or on the other device). */
+	paused?: boolean,
+	/**  Bytes a second, smoothed (0 while not known or not moving). */
+	rate?: number | null,
+	/**  Seconds left at that speed. */
+	eta?: number | null,
 };
 
 /**  One transfer, either way. */
@@ -3912,6 +3946,22 @@ export type TransferEntry_Serialize = {
 	 *  or "downloading".
 	 */
 	stage: string | null,
+	/**  A file of a batch: the batch's id (its row has `kind`). */
+	batch: string | null,
+	/**
+	 *  A batch: "folder" or "files"; with how many files, how many are
+	 *  in and how many failed.
+	 */
+	kind: string | null,
+	count: number,
+	files_done: number,
+	files_failed: number,
+	/**  The user paused it (here or on the other device). */
+	paused: boolean,
+	/**  Bytes a second, smoothed (0 while not known or not moving). */
+	rate: number | null,
+	/**  Seconds left at that speed. */
+	eta: number | null,
 };
 
 /**  Where a transfer is. */
