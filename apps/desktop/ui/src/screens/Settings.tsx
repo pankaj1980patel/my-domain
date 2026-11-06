@@ -18,6 +18,7 @@ import { AutomationList } from "../components/AutomationList";
 import { LOCAL_PRESETS } from "../lib/presets";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { WebhookSetting } from "../components/WebhookSetting";
+import { BrowserExtensionSetting } from "../components/BrowserExtensionSetting";
 import { CallsSetting } from "../components/CallsSetting";
 import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
@@ -348,6 +349,8 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
       </article>
 
       <WebhookSetting />
+
+      <BrowserExtensionSetting />
 
       <article class="tile" id="settings-key">
         <h2>{t("settings.deviceKey")}</h2>

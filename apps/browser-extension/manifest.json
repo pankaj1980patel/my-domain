@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extName__",
+  "short_name": "my-domain",
+  "description": "__MSG_extDescription__",
+  "version": "0.1.0",
+  "default_locale": "en",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2FUbtXyNWfBSuDI3mG3aIot1G9jIAx88SUmWLqIkA1pquUs4YkCa9kCU6i3jwYQGptpALZaIYLcT26GG7gHKiN/9tOzkgw84IqL7IzGNqjN7FPVPLoJMGLxBmOd09x4gZ8b/8oaToN6I7ThOS+vZzOXME8AbglvaElfMjBiWRRBqSdJaObVNvuGXnAr10M3xDbLexwLCTY8Iz29aKEpGyjGSjjyjhN4ji91X4igMFggk1atp73Ezd21fQsPJ8rT/+Bff1Lh66YKdwTYbWk5OhlSPLOToojXycY4jpuPXN2ddUwomh0cAoJ/sYZI1IYkwF3b7P7tDWoX8RTpJq4rXEQIDAQAB",
+  "icons": {
+    "16": "icons/16x16.png",
+    "32": "icons/32x32.png",
+    "48": "icons/48x48.png",
+    "128": "icons/128x128.png"
+  },
+  "action": {
+    "default_title": "__MSG_extName__",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/16x16.png",
+      "32": "icons/32x32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"],
+    "type": "module"
+  },
+  "permissions": ["contextMenus", "nativeMessaging", "notifications", "activeTab", "scripting", "storage", "alarms"],
+  "optional_host_permissions": ["<all_urls>"],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "my-domain@landiscover.app",
+      "strict_min_version": "128.0"
+    }
+  }
+}

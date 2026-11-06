@@ -235,6 +235,17 @@ pub fn nickname(app: &AppHandle, node: &str) -> Option<String> {
         .clone()
 }
 
+/// The icon you picked for `node` here, if any.
+pub fn icon(app: &AppHandle, node: &str) -> Option<String> {
+    app.try_state::<DeviceLabels>()?
+        .map
+        .lock()
+        .ok()?
+        .get(node)?
+        .icon
+        .clone()
+}
+
 /// The name to show for a device whose own name is `own`.
 pub fn display_name(app: &AppHandle, node: &str, own: &str) -> String {
     match app.try_state::<DeviceLabels>() {

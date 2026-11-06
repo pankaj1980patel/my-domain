@@ -1,0 +1,110 @@
+{
+  "extName": {
+    "message": "my-domain"
+  },
+  "extDescription": {
+    "message": "my-domain से पेज, लिंक, टेक्स्ट और तस्वीरें अपने फ़ोन और कंप्यूटर पर भेजें।"
+  },
+  "menuSendPage": {
+    "message": "पेज भेजें"
+  },
+  "menuSendLink": {
+    "message": "लिंक भेजें"
+  },
+  "menuSendText": {
+    "message": "चुना हुआ टेक्स्ट भेजें"
+  },
+  "menuSendImage": {
+    "message": "तस्वीर भेजें"
+  },
+  "menuDownloadOn": {
+    "message": "इस पर डाउनलोड करें"
+  },
+  "menuOpenOn": {
+    "message": "इस पर खोलें"
+  },
+  "menuReadLater": {
+    "message": "बाद में पढ़ें"
+  },
+  "menuNoDevices": {
+    "message": "अभी कोई डिवाइस नहीं: my-domain खोलें"
+  },
+  "deviceOffline": {
+    "message": "$1 (ऑफ़लाइन)"
+  },
+  "errAppNotRunning": {
+    "message": "इस कंप्यूटर पर my-domain नहीं चल रहा है। उसे खोलकर फिर से कोशिश करें।"
+  },
+  "errHostMissing": {
+    "message": "यह ब्राउज़र अभी my-domain तक नहीं पहुँच सकता। my-domain ऐप में सेटिंग > ब्राउज़र एक्सटेंशन खोलें और इंस्टॉल करें पर क्लिक करें।"
+  },
+  "errUnknownDevice": {
+    "message": "वह डिवाइस अब आपका नहीं है।"
+  },
+  "errNoRemoteDownload": {
+    "message": "वह डिवाइस लिंक डाउनलोड नहीं करता। उसका ऐप अपडेट करें।"
+  },
+  "errTooBig": {
+    "message": "यह ब्राउज़र से भेजने के लिए बहुत बड़ा है (ज़्यादा से ज़्यादा 25 MB)।"
+  },
+  "errBadUrl": {
+    "message": "सिर्फ़ http और https लिंक भेजे जा सकते हैं।"
+  },
+  "errBadRequest": {
+    "message": "भेजने के लिए कुछ नहीं है।"
+  },
+  "errFailed": {
+    "message": "भेजा नहीं जा सका।"
+  },
+  "failedTitle": {
+    "message": "my-domain: नहीं भेजा गया"
+  },
+  "doneSent": {
+    "message": "$1 को भेजा गया"
+  },
+  "doneOpen": {
+    "message": "$1 पर खुल रहा है"
+  },
+  "doneDownload": {
+    "message": "$1 इसे डाउनलोड कर रहा है"
+  },
+  "doneReadLater": {
+    "message": "बाद में पढ़ें में सहेजा गया"
+  },
+  "doneImageLink": {
+    "message": "तस्वीर नहीं मिल सकी, इसलिए उसका लिंक $1 को भेजा गया"
+  },
+  "refresh": {
+    "message": "रीफ़्रेश करें"
+  },
+  "popupReadLater": {
+    "message": "बाद में पढ़ें"
+  },
+  "popupDevices": {
+    "message": "आपके डिवाइस"
+  },
+  "popupNoDevices": {
+    "message": "अभी कोई डिवाइस नहीं। उन्हें my-domain ऐप में जोड़ें।"
+  },
+  "popupSend": {
+    "message": "पेज भेजें"
+  },
+  "popupOpen": {
+    "message": "वहाँ खोलें"
+  },
+  "popupDownload": {
+    "message": "वहाँ डाउनलोड करें"
+  },
+  "popupAllowImages": {
+    "message": "किसी भी साइट से तस्वीरें भेजने दें"
+  },
+  "working": {
+    "message": "काम हो रहा है…"
+  },
+  "online": {
+    "message": "ऑनलाइन"
+  },
+  "offline": {
+    "message": "ऑफ़लाइन"
+  }
+}

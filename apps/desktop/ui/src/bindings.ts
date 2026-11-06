@@ -875,6 +875,14 @@ export const commands = {
 	updateLater: () => __TAURI_INVOKE<void>("update_later"),
 	/**  "Install updates automatically". */
 	setUpdateAuto: (on: boolean) => __TAURI_INVOKE<UpdateStatus_Serialize>("set_update_auto", { on }),
+	browserExtensionStatus: () => __TAURI_INVOKE<BrowserExtension_Serialize>("browser_extension_status"),
+	/**
+	 *  Let the browsers on this computer start my-domain for the extension:
+	 *  the unpacked extension's id plus `chrome_ids` (published ones).
+	 */
+	browserExtensionInstall: (chromeIds: string[]) => typedError<BrowserExtension_Serialize, string>(__TAURI_INVOKE("browser_extension_install", { chromeIds })),
+	/**  Take the manifests away again (every browser). */
+	browserExtensionRemove: () => typedError<BrowserExtension_Serialize, string>(__TAURI_INVOKE("browser_extension_remove")),
 };
 
 /* Types */
@@ -1356,6 +1364,46 @@ export type Binding_Serialize = {
 	/**  "CmdOrCtrl+Shift+Y". */
 	keys: string,
 	enabled: boolean,
+};
+
+/**  Settings > Browser extension. */
+export type BrowserExtension = BrowserExtension_Serialize | BrowserExtension_Deserialize;
+
+/**  Settings > Browser extension. */
+export type BrowserExtension_Deserialize = {
+	browsers: BrowserHost[],
+	/**  Published extension ids allowed besides the unpacked one. */
+	chrome_ids: string[],
+	dev_chrome_id: string,
+	firefox_id: string,
+	/**  The app answers the extension. */
+	listening: boolean,
+	error?: string | null,
+};
+
+/**  Settings > Browser extension. */
+export type BrowserExtension_Serialize = {
+	browsers: BrowserHost[],
+	/**  Published extension ids allowed besides the unpacked one. */
+	chrome_ids: string[],
+	dev_chrome_id: string,
+	firefox_id: string,
+	/**  The app answers the extension. */
+	listening: boolean,
+	error: string | null,
+};
+
+/**  One browser's line in Settings. */
+export type BrowserHost = {
+	id: string,
+	name: string,
+	/**
+	 *  The browser seems to be on this computer (always true on Windows,
+	 *  where it isn't looked for).
+	 */
+	found: boolean,
+	/**  Its manifest is in place. */
+	installed: boolean,
 };
 
 /**  A paired phone that can take this computer as its hands-free. */

@@ -32,6 +32,7 @@ mod device;
 mod device_kind;
 mod device_labels;
 mod diagnostics;
+mod ext_bridge;
 mod fcm;
 mod health;
 mod hotspot;
@@ -2009,7 +2010,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         updates::update_check,
         updates::update_install,
         updates::update_later,
-        updates::set_update_auto
+        updates::set_update_auto,
+        ext_bridge::browser_extension_status,
+        ext_bridge::browser_extension_install,
+        ext_bridge::browser_extension_remove
     ])
 }
 
@@ -2023,6 +2027,11 @@ fn export_bindings(commands: &tauri_specta::Builder<tauri::Wry>) -> Result<(), S
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Started by a browser for the extension (`ext_bridge`): no window, just
+    // pass its messages to the running app, then exit.
+    if ext_bridge::host_requested(std::env::args_os()) {
+        std::process::exit(ext_bridge::run_host());
+    }
     let commands = specta_builder();
     // Debug builds keep the UI's TypeScript bindings current.
     #[cfg(debug_assertions)]
@@ -2082,6 +2091,7 @@ pub fn run() {
             app.manage(tray_battery::TrayBatteryPref::load(&handle));
             app.manage(settings_backup::Pending::default());
             app.manage(updates::Updates::load(&handle));
+            app.manage(ext_bridge::ExtBridge::load(&handle));
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {
@@ -2174,6 +2184,8 @@ pub fn run() {
             tray_battery::spawn(handle.clone());
             // Look for a new version 30 s from now, then every 6 h.
             updates::spawn(handle.clone());
+            // The browser extension's host reaches the app here.
+            ext_bridge::spawn(handle.clone());
             Ok(())
         })
         // Closing the window hides it to the tray; the tray's "Quit" exits.

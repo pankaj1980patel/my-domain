@@ -1723,6 +1723,24 @@ input[type="checkbox"][role="switch"]:checked::after {
   margin: 0;
 }
 
+/* --- browser extension (components/BrowserExtensionSetting.tsx) --- */
+
+.browser-hosts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.browser-hosts li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.browser-hosts .ok {
+  color: var(--success);
+}
+
 /* --- webhooks (components/WebhookSetting.tsx, in Settings) --- */
 
 .webhook-port input {

@@ -1,0 +1,110 @@
+{
+  "extName": {
+    "message": "my-domain"
+  },
+  "extDescription": {
+    "message": "Send pages, links, text and pictures to your phone and computers with my-domain."
+  },
+  "menuSendPage": {
+    "message": "Send page to"
+  },
+  "menuSendLink": {
+    "message": "Send link to"
+  },
+  "menuSendText": {
+    "message": "Send selected text to"
+  },
+  "menuSendImage": {
+    "message": "Send image to"
+  },
+  "menuDownloadOn": {
+    "message": "Download on"
+  },
+  "menuOpenOn": {
+    "message": "Open on"
+  },
+  "menuReadLater": {
+    "message": "Read later"
+  },
+  "menuNoDevices": {
+    "message": "No devices yet: open my-domain"
+  },
+  "deviceOffline": {
+    "message": "$1 (offline)"
+  },
+  "errAppNotRunning": {
+    "message": "my-domain isn't running on this computer. Open it and try again."
+  },
+  "errHostMissing": {
+    "message": "This browser can't reach my-domain yet. In the my-domain app, open Settings > Browser extension and click Install."
+  },
+  "errUnknownDevice": {
+    "message": "That device isn't one of yours any more."
+  },
+  "errNoRemoteDownload": {
+    "message": "That device doesn't download links. Update its app."
+  },
+  "errTooBig": {
+    "message": "That's too big to send from the browser (25 MB at most)."
+  },
+  "errBadUrl": {
+    "message": "Only http and https links can be sent."
+  },
+  "errBadRequest": {
+    "message": "There's nothing to send."
+  },
+  "errFailed": {
+    "message": "Couldn't send it."
+  },
+  "failedTitle": {
+    "message": "my-domain: not sent"
+  },
+  "doneSent": {
+    "message": "Sent to $1"
+  },
+  "doneOpen": {
+    "message": "Opening on $1"
+  },
+  "doneDownload": {
+    "message": "$1 is downloading it"
+  },
+  "doneReadLater": {
+    "message": "Saved to Read later"
+  },
+  "doneImageLink": {
+    "message": "Couldn't fetch the picture, so its link went to $1"
+  },
+  "refresh": {
+    "message": "Refresh"
+  },
+  "popupReadLater": {
+    "message": "Read later"
+  },
+  "popupDevices": {
+    "message": "Your devices"
+  },
+  "popupNoDevices": {
+    "message": "No devices yet. Add them in the my-domain app."
+  },
+  "popupSend": {
+    "message": "Send page"
+  },
+  "popupOpen": {
+    "message": "Open there"
+  },
+  "popupDownload": {
+    "message": "Download there"
+  },
+  "popupAllowImages": {
+    "message": "Allow sending pictures from any site"
+  },
+  "working": {
+    "message": "Working…"
+  },
+  "online": {
+    "message": "Online"
+  },
+  "offline": {
+    "message": "Offline"
+  }
+}

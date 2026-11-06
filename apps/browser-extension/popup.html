@@ -1,0 +1,29 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>my-domain</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <img src="icons/32x32.png" alt="" width="24" height="24" />
+      <h1 data-i18n="extName"></h1>
+      <button id="refresh" class="ghost" data-i18n-title="refresh" aria-label="Refresh">&#x21bb;</button>
+    </header>
+    <section id="page">
+      <p id="page-title" class="muted"></p>
+      <button id="read-later" class="primary" data-i18n="popupReadLater"></button>
+    </section>
+    <section>
+      <h2 data-i18n="popupDevices"></h2>
+      <p id="status" class="muted" role="status"></p>
+      <ul id="devices"></ul>
+    </section>
+    <footer>
+      <button id="allow-images" class="ghost" data-i18n="popupAllowImages" hidden></button>
+    </footer>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

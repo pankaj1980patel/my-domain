@@ -180,7 +180,7 @@ fn same(a: &[u8], b: &[u8]) -> bool {
 
 /// The app's config dir, as Tauri works it out (`dirs::config_dir()` +
 /// identifier), without Tauri: the handoff runs before it starts.
-fn config_dir() -> Option<PathBuf> {
+pub(crate) fn config_dir() -> Option<PathBuf> {
     let base = if cfg!(target_os = "macos") {
         std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
     } else if cfg!(windows) {
