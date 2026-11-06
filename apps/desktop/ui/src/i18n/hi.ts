@@ -538,6 +538,8 @@ export const hi: Partial<Messages> = {
   "info.dnd": "परेशान न करें",
   "info.dndOn": "चालू",
   "info.dndOff": "बंद",
+  "info.saving": "बैटरी बचा रहा है",
+  "info.savingHint": "{name} बैटरी बचा रहा है: इसका फ़ोल्डर सिंक और फ़ोटो बैकअप चार्ज होने या Battery Saver बंद होने तक रुके हैं।",
   "info.upMinutes": { one: "{count} मिनट", other: "{count} मिनट" },
   "info.upHours": "{h} घं {m} मि",
   "info.upDays": { one: "{count} दिन, {h} घं", other: "{count} दिन, {h} घं" },

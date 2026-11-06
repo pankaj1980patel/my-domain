@@ -21,6 +21,13 @@ export default function InfoTile(props: { node: string }) {
       <article class="tile">
         <h2>{t("info.title")}</h2>
         <p class="muted small">{t("info.hint", { name: peerName(props.node) })}</p>
+        {/* A phone holding back heavy work (folder sync, photo backup). */}
+        <Show when={state.status[props.node]?.saving}>
+          <p class="pill" title={t("info.savingHint", { name: peerName(props.node) })}>
+            <span class="dot" aria-hidden="true" />
+            {t("info.saving")}
+          </p>
+        </Show>
         <dl class="info-rows">
           {/* By place, not by object: a new status updates the rows in
               place, so the battery graph isn't rebuilt each time. */}

@@ -1,6 +1,6 @@
 ---
 title: Battery and device info
-keywords: battery, charge, charging, alert, low battery, storage, memory, ram, cpu, uptime, graph, history, device info, this device
+keywords: battery, save battery, battery saver, doze, mobile data, metered, charge, charging, alert, low battery, storage, memory, ram, cpu, uptime, graph, history, device info, this device
 platforms: desktop, android
 ---
 ## This device card
@@ -14,6 +14,14 @@ The last 24 hours of battery for each of your other devices, with charging shade
 ## Battery alerts
 
 Your devices can tell the others once when the battery drops below a level (15% unless you change it) and when it has charged to 80%, 90% or 100%. Turn them on or off in Settings.
+
+## Save battery (phone)
+
+So my-domain doesn't drain your phone, heavy background work waits while the battery is low (15% or below and not charging, unless you change it), Battery Saver is on or the phone is resting (Doze). What waits: synced folders (no new rounds; "Sync now" still works) and the photo backup. It carries on by itself when the phone is charged or Battery Saver is off. The Home screen says so while it lasts, and your computers show "Saving battery" on the phone's page.
+
+Messages, ringing and Find my phone, lost mode, notification mirroring, call controls and reminders never wait.
+
+In Settings, Save battery is Automatic, Always or Off, and says what is paused right now and why. On mobile data (or a metered hotspot), synced files over 10 MB and the photo backup wait for Wi-Fi unless you turn on "Use mobile data for big transfers". That rule is about data, so it applies even when Save battery is Off.
 
 ## Other device controls
 

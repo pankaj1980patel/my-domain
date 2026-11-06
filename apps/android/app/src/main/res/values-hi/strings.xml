@@ -1106,4 +1106,27 @@
     <string name="conn_speed_failed">स्पीड जाँच रुक गई: %1$s</string>
     <string name="conn_speed_cancelled">स्पीड जाँच रद्द की गई।</string>
     <string name="a11y_speed_progress">स्पीड जाँच की प्रगति</string>
+    <!-- Save battery (PowerSaver / PowerPolicy) -->
+    <string name="save_battery_title">बैटरी बचाएँ</string>
+    <string name="save_battery_hint">ताकि my-domain आपके फ़ोन की बैटरी न खाए: बैटरी कम होने, Battery Saver चालू होने या फ़ोन के आराम करने पर भारी बैकग्राउंड काम रुक जाता है। मैसेज, घंटी, खोया-फ़ोन मोड, सूचनाएँ, कॉल कंट्रोल और रिमाइंडर कभी नहीं रुकते।</string>
+    <string name="save_battery_mode_auto">अपने-आप</string>
+    <string name="save_battery_mode_always">हमेशा</string>
+    <string name="save_battery_mode_off">बंद</string>
+    <string name="save_battery_threshold">कम बैटरी यानी इतनी या इससे कम</string>
+    <string name="save_battery_mobile_data">बड़े ट्रांसफ़र के लिए मोबाइल डेटा इस्तेमाल करें</string>
+    <string name="save_battery_mobile_data_hint">बंद होने पर, मोबाइल डेटा (या मीटर्ड हॉटस्पॉट) पर 10 MB से बड़ी सिंक फ़ाइलें और फ़ोटो बैकअप Wi-Fi का इंतज़ार करते हैं।</string>
+    <string name="save_battery_status_none">अभी कुछ भी रुका नहीं है।</string>
+    <string name="save_battery_status">अभी रुका है: %1$s। वजह: %2$s।</string>
+    <string name="save_battery_paused_folder_sync">फ़ोल्डर सिंक</string>
+    <string name="save_battery_paused_big_files">10 MB से बड़ी सिंक फ़ाइलें</string>
+    <string name="save_battery_paused_backup">फ़ोटो बैकअप</string>
+    <string name="save_battery_paused_clip_pictures">क्लिपबोर्ड की तस्वीरें अपने-आप भेजना</string>
+    <string name="save_battery_paused_auto_restarts">फ़ोन ऑडियो या स्क्रीन शेयरिंग अपने-आप फिर शुरू करना</string>
+    <string name="save_battery_why_always">बैटरी बचाएँ “हमेशा” पर है</string>
+    <string name="save_battery_why_saver">Battery Saver चालू है</string>
+    <string name="save_battery_why_low">बैटरी %1$d%% या इससे कम है</string>
+    <string name="save_battery_why_idle">फ़ोन आराम कर रहा है (Doze)</string>
+    <string name="save_battery_why_metered">मोबाइल डेटा या मीटर्ड नेटवर्क पर</string>
+    <string name="home_saving_battery">बैटरी बच रही है: फ़ोल्डर सिंक और फ़ोटो बैकअप रुके हैं</string>
+    <string name="backup_status_battery">बैटरी बचाने तक रुका है। %1$d बाकी हैं।</string>
 </resources>

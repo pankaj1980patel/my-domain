@@ -137,6 +137,10 @@ private val SETTINGS_SECTIONS = listOf(
         ),
     ),
     SettingsSection("sync", R.string.sync_title, listOf(R.string.sync_hint)),
+    SettingsSection(
+        "battery", R.string.save_battery_title,
+        listOf(R.string.save_battery_hint, R.string.save_battery_mobile_data, R.string.save_battery_mobile_data_hint),
+    ),
     SettingsSection("touchpad", R.string.touchpad_title, listOf(R.string.settings_touchpad_secure_hint)),
     SettingsSection("location", R.string.location_title, listOf(R.string.location_hint)),
     SettingsSection("helper", R.string.helper_title, listOf(R.string.helper_hint)),

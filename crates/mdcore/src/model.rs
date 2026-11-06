@@ -476,9 +476,9 @@ pub struct BackupStatus {
     pub queued: u32,
     /// Sent so far, all time.
     pub sent: u32,
-    /// What it waits for: "off", "target", "wifi", "charging", "retry"
-    /// (the last try failed; tries again soon), or "" (sending, or all
-    /// done).
+    /// What it waits for: "off", "target", "battery" (held back by the
+    /// phone's battery saver), "wifi", "charging", "retry" (the last try
+    /// failed; tries again soon), or "" (sending, or all done).
     pub waiting_for: String,
     /// The file going now, with bytes confirmed of its size.
     pub current: Option<String>,

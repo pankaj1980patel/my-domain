@@ -97,6 +97,9 @@ class NetService : Service() {
         // Labels given on this phone before they were shared.
         Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
         PhotoBackup.start(this)
+        // Save battery: heavy background work waits while the battery is low,
+        // Battery Saver is on or the phone dozes (and big transfers on mobile data).
+        PowerSaver.start(this) { serviceScope.launch { pushStatus() } }
         // Started by a push with no UI showing: background until it appears.
         Core.engine()?.setBackground(!Core.visible)
         Core.reload()
@@ -160,6 +163,7 @@ class NetService : Service() {
             else -> null
         }
         PhotoBackup.setCharging(charging)
+        PowerSaver.onBattery(pct, charging)
         pushStatus()
     }
 
@@ -222,6 +226,8 @@ class NetService : Service() {
         batteryHealth?.let { o.put("battery_health", it) }
         wifiStatus()?.let { o.put("wifi", it) }
         bluetoothOn()?.let { o.put("bluetooth", it) }
+        // Heavy background work waits to save battery (the computer shows it).
+        if (PowerSaver.current.saving) o.put("saving", true)
         ram()?.let { o.put("ram", it) }
         // When it started (fixed, so it doesn't make every push different);
         // the core turns it into `uptime_s` when it answers. No `cpu`: apps
@@ -529,6 +535,7 @@ class NetService : Service() {
         batteryReceiver?.let { runCatching { unregisterReceiver(it) } }
         BleLink.stop()
         PhotoBackup.stop()
+        PowerSaver.stop()
         DndWatch.stop(this)
         PhoneAutomations.stop(this)
         LostMode.unwatchScreen(this)

@@ -21,7 +21,7 @@ import java.util.Locale
  *  - a ContentObserver on the photos and videos notices new ones, and a
  *    scan hands everything added since the backup was turned on to the
  *    core (it skips what it already sent or has waiting);
- *  - the conditions (unmetered Wi-Fi, charging) go to the core whenever
+ *  - the conditions (unmetered Wi-Fi or mobile data allowed, charging) go to the core whenever
  *    they change, so it starts, pauses and resumes by itself.
  * No WorkManager: the service is already running, and the core's file
  * push resumes after a pause or a restart.
@@ -86,10 +86,15 @@ object PhotoBackup {
         return local && caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
     }
 
-    private fun pushConditions() {
+    /** Tell the core the conditions. The network is fine on unmetered
+     *  Wi-Fi, or on any network when Save battery's "Use mobile data for
+     *  big transfers" is on ([PowerSaver]; it also holds the backup back
+     *  while saving battery, in the core). */
+    fun pushConditions() {
         val c = app ?: return
         val engine = Core.engine() ?: return
-        runCatching { engine.backupConditions(unmetered(c), charging) }
+        val network = unmetered(c) || PowerSaver.backupNetworkOk()
+        runCatching { engine.backupConditions(network, charging) }
     }
 
     fun scanSoon() {

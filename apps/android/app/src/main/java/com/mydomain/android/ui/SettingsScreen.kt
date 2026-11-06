@@ -279,6 +279,7 @@ private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
     return when (b.waitingFor) {
         "wifi" -> stringResource(R.string.backup_status_wifi, waiting)
         "charging" -> stringResource(R.string.backup_status_charging, waiting)
+        "battery" -> stringResource(R.string.backup_status_battery, waiting)
         "retry" -> stringResource(R.string.backup_status_retry, b.lastError.orEmpty())
         else -> b.current?.let { name ->
             val pct = if (b.total > 0u) (b.done.toLong() * 100 / b.total.toLong()).toInt() else 0
@@ -350,6 +351,7 @@ fun SettingsScreen(
 
         Box(Modifier.foundMark(focus == "photos")) { PhotosTile() }
         Box(Modifier.foundMark(focus == "sync")) { SyncFoldersTile() }
+        Box(Modifier.foundMark(focus == "battery")) { SaveBatteryTile() }
         Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
         Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }

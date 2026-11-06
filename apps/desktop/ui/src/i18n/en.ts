@@ -536,6 +536,8 @@ export const en = {
   "info.dnd": "Do Not Disturb",
   "info.dndOn": "On",
   "info.dndOff": "Off",
+  "info.saving": "Saving battery",
+  "info.savingHint": "{name} is saving battery: its folder sync and photo backup wait until it’s charged or Battery Saver is off.",
   "info.upMinutes": { one: "{count} minute", other: "{count} minutes" },
   "info.upHours": "{h} h {m} min",
   "info.upDays": { one: "{count} day, {h} h", other: "{count} days, {h} h" },

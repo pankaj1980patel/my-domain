@@ -196,6 +196,35 @@ fn charging_only_waits_for_the_charger() {
     }
 }
 
+#[test]
+fn the_battery_saver_holds_the_backup_back() {
+    let pc = TestNode::start("backup-saver-pc");
+    let phone = TestNode::start("backup-saver-phone");
+    TestNode::pair(&pc, &phone);
+    let (src, dst) = (temp_dir("saver-src"), temp_dir("saver-dst"));
+    pc.engine.set_download_dir(dst.to_str().unwrap());
+    phone
+        .engine
+        .backup_configure(true, &pc.node_id(), false)
+        .unwrap();
+    let a = src.join("IMG_1.jpg");
+    std::fs::write(&a, b"photo").unwrap();
+    phone.engine.backup_enqueue(vec![item("s1", &a)]);
+    // Saving battery (and a 10 MB cap for metered networks): nothing goes,
+    // and the state says why, even on Wi-Fi.
+    phone.engine.set_power_policy(false, 10 << 20);
+    phone.engine.backup_conditions(true, true);
+    assert_eq!(phone.engine.backup_state().waiting_for, "battery");
+    std::thread::sleep(Duration::from_millis(500));
+    assert_eq!(phone.engine.backup_state().sent, 0);
+    // Let go: it goes.
+    phone.engine.set_power_policy(true, 0);
+    state_until(&phone, "sent", |s| s.sent == 1);
+    for d in [&src, &dst] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+}
+
 /// Wi-Fi goes away in the middle of a big video: the transfer stops, and
 /// when Wi-Fi is back it carries on from where the computer got to.
 #[test]

@@ -249,7 +249,8 @@ pub struct BackupInfo {
     pub since: u64,
     pub queued: u32,
     pub sent: u32,
-    /// "off", "target", "wifi", "charging", "retry", or "" (sending / done).
+    /// "off", "target", "battery", "wifi", "charging", "retry", or ""
+    /// (sending / done).
     pub waiting_for: String,
     pub current: Option<String>,
     pub done: u64,
@@ -653,6 +654,13 @@ impl MdEngine {
     /// demand, and pushes still arrive).
     pub fn set_background(&self, background: bool) {
         self.inner.set_background(background);
+    }
+
+    /// The phone's battery saver: `heavy_allowed` false holds back synced
+    /// folder rounds and the photo backup; `metered_cap` (bytes, 0 = none)
+    /// keeps bigger synced files waiting while on a metered network.
+    pub fn set_power_policy(&self, heavy_allowed: bool, metered_cap: u64) {
+        self.inner.set_power_policy(heavy_allowed, metered_cap);
     }
 
     pub fn scan_lan(&self) {

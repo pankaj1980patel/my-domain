@@ -106,6 +106,13 @@
 //! good and forgets its state, never the files. Received files arrive in
 //! `<folder>/.mydomain-sync/` first (same disk, so the final move is a
 //! rename) and get the sender's modification time.
+//!
+//! **Saving battery** (`set_power`, from the phone's battery saver): while
+//! heavy work is held back, no round starts by itself, the other side's
+//! rounds aren't answered and its `sync_get`s aren't served (it asks again
+//! later); "Sync now" still works. On a metered network the host may set a
+//! size cap: bigger files are neither asked for nor sent until it's lifted
+//! (they stay waiting, never dropped). A file half way finishes.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -1165,6 +1172,27 @@ pub struct FolderSync {
     shown: Mutex<Option<Vec<SyncPair>>>,
     /// 0 = not read yet.
     max_size: AtomicU64,
+    /// Heavy work is held back to save battery (`set_power`).
+    held: AtomicBool,
+    /// On a metered network: files bigger than this (bytes) wait; 0 = no cap.
+    metered_cap: AtomicU64,
+}
+
+/// Hold back rounds (`held`) and cap file sizes on a metered network
+/// (`metered_cap` bytes, 0 = none). Set by the host's battery saver.
+pub fn set_power<P: Platform>(ctx: &NetCtx<P>, held: bool, metered_cap: u64) {
+    let s = &ctx.extras.sync;
+    s.held.store(held, Ordering::Relaxed);
+    s.metered_cap.store(metered_cap, Ordering::Relaxed);
+}
+
+fn held<P: Platform>(ctx: &NetCtx<P>) -> bool {
+    ctx.extras.sync.held.load(Ordering::Relaxed)
+}
+
+/// A file of `size` bytes waits under the metered cap `cap` (0 = none).
+fn over_cap(size: u64, cap: u64) -> bool {
+    cap != 0 && size > cap
 }
 
 fn load<P: Platform>(ctx: &NetCtx<P>) {
@@ -1606,8 +1634,9 @@ pub fn on_timer<P: Platform>(ctx: &NetCtx<P>) {
     load(ctx);
     let every = ctx.config.sync_every;
     let cfgs: Vec<PairCfg> = ctx.extras.sync.pairs.lock().values().cloned().collect();
+    let held = held(ctx);
     for c in cfgs {
-        if c.phase != Phase::Active || c.paused {
+        if c.phase != Phase::Active || c.paused || held {
             continue;
         }
         let due = {
@@ -1781,8 +1810,12 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
             }
             keep
         });
+        let cap = ctx.extras.sync.metered_cap.load(Ordering::Relaxed);
         for (target, mut w) in wanted {
             match idx.pulls.get_mut(&target) {
+                // Too big for a metered network: waits (and is asked for
+                // as soon as the cap is lifted: `at` isn't moved).
+                Some(p) if over_cap(p.s, cap) => {}
                 Some(p) => {
                     if now.saturating_sub(p.at) >= PULL_RETRY {
                         p.at = now;
@@ -1791,8 +1824,10 @@ fn round<P: Platform>(ctx: &NetCtx<P>, id: &str, remote: Option<(BTreeMap<String
                 }
                 None => {
                     w.id = crate::transport::outbox::new_id();
-                    w.at = now;
-                    gets.push((w.src.clone(), w.sha.clone(), w.id.clone()));
+                    if !over_cap(w.s, cap) {
+                        w.at = now;
+                        gets.push((w.src.clone(), w.sha.clone(), w.id.clone()));
+                    }
                     idx.pulls.insert(target, w);
                 }
             }
@@ -2255,7 +2290,7 @@ fn parse_manifest(files: &Value) -> Option<Vec<(String, Remote)>> {
 }
 
 fn on_manifest<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
-    if c.phase != Phase::Active || c.paused {
+    if c.phase != Phase::Active || c.paused || held(ctx) {
         return;
     }
     let round = msg.str("round");
@@ -2302,9 +2337,10 @@ fn on_manifest<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
 }
 
 fn on_get<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
-    if c.phase != Phase::Active || c.paused || !c.mode.gives() {
+    if c.phase != Phase::Active || c.paused || !c.mode.gives() || held(ctx) {
         return;
     }
+    let cap = ctx.extras.sync.metered_cap.load(Ordering::Relaxed);
     let Some(files) = msg.json("files").as_array().cloned() else {
         return;
     };
@@ -2344,6 +2380,11 @@ fn on_get<P: Platform>(ctx: &NetCtx<P>, c: &PairCfg, msg: &ControlMsg) {
                     });
                 if !ok {
                     nope.push(tid.to_string());
+                    continue;
+                }
+                // Too big for a metered network: no answer, so the other
+                // side asks again later (a "nope" would end it).
+                if idx.entries.get(&key).is_some_and(|e| over_cap(e.s, cap)) {
                     continue;
                 }
                 let extra = json!({ "sync": { "pair": c.id } });
@@ -2550,6 +2591,13 @@ mod tests {
             m,
             how,
         }
+    }
+
+    #[test]
+    fn only_files_over_the_metered_cap_wait() {
+        assert!(!over_cap(u64::MAX, 0), "no cap: nothing waits");
+        assert!(!over_cap(10 << 20, 10 << 20));
+        assert!(over_cap((10 << 20) + 1, 10 << 20));
     }
 
     #[test]

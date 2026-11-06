@@ -304,7 +304,12 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onOpen = openFound,
                     onBack = { search = false },
                 )
-                tab == Tab.Devices -> HomeScreen(onOpen = { deviceFocus = null; device = it }, onSetup = { setup = true }, onSearch = { search = true })
+                tab == Tab.Devices -> HomeScreen(
+                    onOpen = { deviceFocus = null; device = it },
+                    onSetup = { setup = true },
+                    onSearch = { search = true },
+                    onBattery = { settingsFocus = "battery"; tab = Tab.Settings },
+                )
                 tab == Tab.Notes -> NotesScreen(
                     onHelp = { openHelp("notes") },
                     openNote = foundNote,

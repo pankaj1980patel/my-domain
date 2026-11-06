@@ -469,6 +469,17 @@ impl<P: Platform> Engine<P> {
         self.ctx.background.store(background, Ordering::Relaxed);
     }
 
+    /// The host's battery saver. `heavy_allowed` false holds back the heavy
+    /// background work: synced-folder rounds (started here or by the other
+    /// side; "Sync now" still works) and the photo backup (it waits for
+    /// "battery"). `metered_cap` (bytes, 0 = none): on a metered network,
+    /// synced files bigger than this wait. Messages, rings, notifications
+    /// and everything the user starts are never held back.
+    pub fn set_power_policy(&self, heavy_allowed: bool, metered_cap: u64) {
+        crate::features::folder_sync::set_power(&self.ctx, !heavy_allowed, metered_cap);
+        crate::features::backup::set_saving(&self.ctx, !heavy_allowed);
+    }
+
     pub fn is_shut_down(&self) -> bool {
         self.ctx.shutdown.load(Ordering::Relaxed)
     }

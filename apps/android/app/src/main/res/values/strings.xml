@@ -1108,4 +1108,27 @@
     <string name="conn_speed_failed">The speed test stopped: %1$s</string>
     <string name="conn_speed_cancelled">Speed test cancelled.</string>
     <string name="a11y_speed_progress">Speed test progress</string>
+    <!-- Save battery (PowerSaver / PowerPolicy) -->
+    <string name="save_battery_title">Save battery</string>
+    <string name="save_battery_hint">So my-domain doesn’t drain your phone: heavy background work waits while the battery is low, Battery Saver is on or the phone is resting. Messages, ringing, lost mode, notifications, call controls and reminders never wait.</string>
+    <string name="save_battery_mode_auto">Automatic</string>
+    <string name="save_battery_mode_always">Always</string>
+    <string name="save_battery_mode_off">Off</string>
+    <string name="save_battery_threshold">Low battery means at or below</string>
+    <string name="save_battery_mobile_data">Use mobile data for big transfers</string>
+    <string name="save_battery_mobile_data_hint">When off, on mobile data (or a metered hotspot) synced files over 10 MB and the photo backup wait for Wi-Fi.</string>
+    <string name="save_battery_status_none">Nothing is paused right now.</string>
+    <string name="save_battery_status">Paused now: %1$s. Why: %2$s.</string>
+    <string name="save_battery_paused_folder_sync">folder sync</string>
+    <string name="save_battery_paused_big_files">synced files over 10 MB</string>
+    <string name="save_battery_paused_backup">photo backup</string>
+    <string name="save_battery_paused_clip_pictures">sending clipboard pictures by themselves</string>
+    <string name="save_battery_paused_auto_restarts">restarting phone audio or screen sharing by themselves</string>
+    <string name="save_battery_why_always">Save battery is set to Always</string>
+    <string name="save_battery_why_saver">Battery Saver is on</string>
+    <string name="save_battery_why_low">the battery is at %1$d%% or below</string>
+    <string name="save_battery_why_idle">the phone is resting (Doze)</string>
+    <string name="save_battery_why_metered">on mobile data or a metered network</string>
+    <string name="home_saving_battery">Saving battery: folder sync and photo backup are paused</string>
+    <string name="backup_status_battery">Waiting while saving battery. %1$d waiting.</string>
 </resources>

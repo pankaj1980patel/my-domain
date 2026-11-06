@@ -13,8 +13,9 @@
 //!   it gets the photos it doesn't have yet (the host scans again from
 //!   `since`, and the core keeps only what this computer lacks); choose the
 //!   old one again and nothing it already has goes twice.
-//! - Only while allowed: enabled, a computer chosen, unmetered Wi-Fi, and
-//!   charging if the user asked for that. When that stops mid-file, the
+//! - Only while allowed: enabled, a computer chosen, not held back by the
+//!   phone's battery saver (`set_saving`), unmetered Wi-Fi (or a network
+//!   the host says is fine), and charging if the user asked for that. When that stops mid-file, the
 //!   transfer is dropped quietly (`files::forget`); the computer keeps its
 //!   partial file and the same transfer id resumes it later.
 //! - Transfer ids come from (computer, item, attempt), so a file resumes
@@ -138,6 +139,8 @@ struct State {
     queue: VecDeque<BackupItem>,
     unmetered: bool,
     charging: bool,
+    /// Held back to save battery (the host's battery saver).
+    saving: bool,
     current: Option<Current>,
     tries: HashMap<String, u32>,
     retry_at: Option<Instant>,
@@ -159,6 +162,8 @@ impl State {
             "off"
         } else if s.target.is_empty() {
             "target"
+        } else if self.saving {
+            "battery"
         } else if !self.unmetered {
             "wifi"
         } else if s.charging_only && !self.charging {
@@ -377,6 +382,21 @@ pub fn conditions<P: Platform>(ctx: &NetCtx<P>, unmetered: bool, charging: bool)
         let mut st = ctx.extras.backup.state.lock();
         st.unmetered = unmetered;
         st.charging = charging;
+    }
+    tick(ctx);
+    announce(ctx);
+}
+
+/// The phone's battery saver holds the backup back (`true`) or lets it go.
+/// A file going stops (it resumes later under the same id).
+pub fn set_saving<P: Platform>(ctx: &NetCtx<P>, saving: bool) {
+    load(ctx);
+    {
+        let mut st = ctx.extras.backup.state.lock();
+        if st.saving == saving {
+            return;
+        }
+        st.saving = saving;
     }
     tick(ctx);
     announce(ctx);
@@ -673,6 +693,10 @@ mod tests {
         st.settings.target = "laptop".into();
         assert_eq!(st.waiting_for(), "wifi");
         st.unmetered = true;
+        assert!(st.allowed());
+        st.saving = true;
+        assert_eq!(st.waiting_for(), "battery");
+        st.saving = false;
         assert!(st.allowed());
         st.settings.charging_only = true;
         assert_eq!(st.waiting_for(), "charging");

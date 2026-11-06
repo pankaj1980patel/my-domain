@@ -125,6 +125,8 @@ export type DeviceStatus = {
   lost?: boolean;
   /** It's on Do Not Disturb (phones; absent: it didn't say). */
   dnd?: boolean;
+  /** A phone saving battery: its folder sync and photo backup wait. */
+  saving?: boolean;
   /** Where it last said it was (after a Locate). */
   location?: { lat: number; lon: number; acc: number; at: number };
   /** How many folders it lets you browse (absent: it can't be browsed). */
@@ -555,6 +557,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         location: locationOf(status?.location),
         lost: status?.lost === true,
         dnd: typeof status?.dnd === "boolean" ? status.dnd : undefined,
+        saving: status?.saving === true,
         brightness: typeof status?.brightness === "number" ? Math.round(status.brightness) : undefined,
         autoBrightness: typeof status?.auto_brightness === "boolean" ? status.auto_brightness : undefined,
         screenTimeoutS: typeof status?.screen_timeout_s === "number" ? Math.round(status.screen_timeout_s) : undefined,
