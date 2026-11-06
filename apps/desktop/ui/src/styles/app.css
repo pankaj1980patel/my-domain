@@ -3626,3 +3626,45 @@ html.qp-window body {
   margin: 0;
   color: var(--warning);
 }
+
+/* --- Settings backup and restore (SettingsBackup.tsx) --- */
+.backup-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.backup-preview {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.backup-preview h3 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+}
+.backup-sections {
+  list-style: none;
+  margin: 8px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.backup-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+.backup-section input {
+  margin-top: 3px;
+}
+.backup-keys,
+.backup-section .backup-warn {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.backup-warn {
+  color: var(--warning);
+}
+.backup-result {
+  margin-top: 12px;
+}

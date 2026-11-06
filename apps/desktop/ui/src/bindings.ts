@@ -584,6 +584,24 @@ export const commands = {
 	speedTest: (nodeId: string, bytes: number) => typedError<string, string>(__TAURI_INVOKE("speed_test", { nodeId, bytes })),
 	/**  Stop a running speed test. */
 	cancelSpeedTest: (id: string) => __TAURI_INVOKE<boolean>("cancel_speed_test", { id }),
+	/**
+	 *  Save a backup of this app's settings where the user picks. `appearance`
+	 *  is the UI's theme and language. The path, or `None` when the dialog was
+	 *  closed.
+	 */
+	settingsBackupSave: (appearance: Appearance_Deserialize) => typedError<string | null, string>(__TAURI_INVOKE("settings_backup_save", { appearance })),
+	/**
+	 *  Pick a backup file and check it: what restoring it would change, or
+	 *  `None` when the dialog was closed. `appearance` is the UI's now.
+	 */
+	settingsRestoreOpen: (appearance: Appearance_Deserialize) => typedError<RestorePreview_Serialize | null, string>(__TAURI_INVOKE("settings_restore_open", { appearance })),
+	/**
+	 *  Restore `sections` (ids) of the backup `settings_restore_open` checked.
+	 *  The theme and language are the UI's to apply.
+	 */
+	settingsRestoreApply: (sections: string[]) => typedError<RestoreResult, string>(__TAURI_INVOKE("settings_restore_apply", { sections })),
+	/**  Restart the app (after a restore). */
+	restartApp: () => __TAURI_INVOKE<void>("restart_app"),
 };
 
 /* Types */
@@ -614,6 +632,21 @@ export type Addresses_Serialize = {
 	public: string | null,
 	/**  What its NAT does to outgoing traffic ("easy", "symmetric", "unknown"). */
 	nat: NatKind,
+};
+
+/**  The theme and language: kept by the UI (localStorage), passed in. */
+export type Appearance = Appearance_Serialize | Appearance_Deserialize;
+
+/**  The theme and language: kept by the UI (localStorage), passed in. */
+export type Appearance_Deserialize = {
+	theme?: string | null,
+	language?: string | null,
+};
+
+/**  The theme and language: kept by the UI (localStorage), passed in. */
+export type Appearance_Serialize = {
+	theme?: string,
+	language?: string,
 };
 
 /**  One thing that happened while connecting to a device. */
@@ -1814,6 +1847,38 @@ export type RelayInfo_Serialize = {
 	error: string | null,
 };
 
+/**  A checked backup, ready to restore. */
+export type RestorePreview = RestorePreview_Serialize | RestorePreview_Deserialize;
+
+/**  A checked backup, ready to restore. */
+export type RestorePreview_Deserialize = {
+	platform: string,
+	/**  Unix seconds. */
+	created_at: number | null,
+	sections: SectionPreview[],
+	/**  The theme and language it holds, for the UI to apply. */
+	appearance?: Appearance_Deserialize | null,
+};
+
+/**  A checked backup, ready to restore. */
+export type RestorePreview_Serialize = {
+	platform: string,
+	/**  Unix seconds. */
+	created_at: number | null,
+	sections: SectionPreview[],
+	/**  The theme and language it holds, for the UI to apply. */
+	appearance: Appearance_Serialize | null,
+};
+
+/**  What a restore did. */
+export type RestoreResult = {
+	applied: string[],
+	/**  What couldn't be done, for people. */
+	failed: string[],
+	/**  Some of it takes effect only after the app restarts. */
+	restart: boolean,
+};
+
 /**  Round trips measured with pings, in milliseconds. */
 export type RttStats = RttStats_Serialize | RttStats_Deserialize;
 
@@ -2021,6 +2086,25 @@ export type SearchResults_Deserialize = {
 /**  Every kind that had a match, in `KINDS` order. */
 export type SearchResults_Serialize = {
 	groups: SearchGroup_Serialize[],
+};
+
+/**  What one section of a restore would do. */
+export type SectionPreview = {
+	/**  One of `SECTION_IDS`. */
+	id: string,
+	/**  It differs from what's here now. */
+	changed: boolean,
+	/**
+	 *  The settings that would change (named sections), or the synced
+	 *  folders that would be added.
+	 */
+	keys: string[],
+	/**  How many things the backup holds there. */
+	items: number,
+	/**  Devices it names that aren't yours here (their names). */
+	unknown_devices: string[],
+	/**  Ticked to start with: nothing unknown in it. */
+	on: boolean,
 };
 
 /**  One thing to send. */

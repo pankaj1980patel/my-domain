@@ -23,6 +23,7 @@ import { ComputerNotifsSetting } from "../components/ComputerNotifsSetting";
 import { FileManagerSetting } from "../components/FileManagerSetting";
 import { SyncSetting } from "../components/SyncSetting";
 import { WakeSetting } from "../components/WakeSetting";
+import { SettingsBackup } from "../components/SettingsBackup";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -385,6 +386,8 @@ export default function Settings(props: { onDeveloper: () => void }) {
         </label>
         <p class="muted small">{t("settings.languageHint")}</p>
       </article>
+
+      <SettingsBackup />
 
       {/* A button (no look of one), so the 7 taps work from the keyboard too. */}
       <button type="button" class="version muted small" onClick={tapVersion}>

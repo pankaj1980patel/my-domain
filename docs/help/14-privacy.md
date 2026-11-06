@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent
+keywords: privacy, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -26,3 +26,13 @@ It can't read what you send: it never has your device key. Messages are not stor
 ## What stays on each device
 
 Clipboard history, notification history, transfer history and battery history are kept on the device that shows them, not on the server. You can clear or turn each off in Settings.
+
+## Backing up your settings
+
+**Settings → Back up settings** saves this app's settings to a file you choose, and **Restore settings…** brings them back after a reinstall or on a new computer or phone. Before anything changes you see what each part would change, and pick which parts to restore. Parts that name devices that aren't linked on this device yet start unticked.
+
+What the backup holds: your preferences and switches, theme, automations, scheduled actions, commands, keyboard shortcuts, webhook on/off and port, device names and icons, page layouts, sharing switches, battery alerts and which folders are synced with which device (not the files in them).
+
+What it never holds: your password, device key or any encryption key, your sign-in, the webhook token or the automation-apps key, push-notification credentials, or the content of any message, notification, clipboard item or note. The file isn't encrypted, so keep it somewhere you trust all the same: it lists your devices' names and your folder paths.
+
+A backup from a computer restores on a computer, one from the phone on the phone. Most restored settings take effect when the app restarts; it offers to restart.

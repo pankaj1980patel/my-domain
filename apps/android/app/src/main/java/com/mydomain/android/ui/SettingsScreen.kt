@@ -381,6 +381,8 @@ fun SettingsScreen(
             }
         }
 
+        SettingsBackupTile(Modifier.foundMark(focus == "backup"))
+
         Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {
             Muted(stringResource(R.string.settings_appearance_hint))
             ThemePicker(prefs)

@@ -66,7 +66,7 @@ pub struct PageLayoutView {
 
 /// The file: per kind, and per device.
 #[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
-struct Saved {
+pub(crate) struct Saved {
     #[serde(default)]
     kinds: BTreeMap<String, PageLayout>,
     #[serde(default)]

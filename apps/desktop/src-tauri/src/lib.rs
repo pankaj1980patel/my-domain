@@ -45,6 +45,7 @@ mod schedule;
 mod screen_share;
 mod search;
 mod send_to;
+mod settings_backup;
 mod shortcut;
 mod shortcuts;
 mod sync_folders;
@@ -1610,7 +1611,11 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         quick_panel::quick_panel_clips,
         diagnostics::diagnose,
         diagnostics::speed_test,
-        diagnostics::cancel_speed_test
+        diagnostics::cancel_speed_test,
+        settings_backup::settings_backup_save,
+        settings_backup::settings_restore_open,
+        settings_backup::settings_restore_apply,
+        settings_backup::restart_app
     ])
 }
 
@@ -1668,6 +1673,7 @@ pub fn run() {
             app.manage(calls::CallsPrefs::load(&handle));
             app.manage(computer_notifs::ComputerNotifs::load(&handle));
             app.manage(quick_panel::QuickPanelPref::load(&handle));
+            app.manage(settings_backup::Pending::default());
             let fcm_token: Arc<std::sync::Mutex<Option<String>>> =
                 Arc::new(std::sync::Mutex::new(None));
             let platform = DesktopPlatform {

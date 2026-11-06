@@ -69,15 +69,21 @@ export function setLanguage(code: string) {
   if (typeof document !== "undefined") document.documentElement.lang = lang;
 }
 
-/** Remember a Settings choice and reload the window so every screen
- *  (including strings built once at start-up) uses it. */
-export function setLanguagePref(pref: LangPref) {
+/** Remember a choice for the next start, without switching now (a restored
+ *  settings backup: the window reloads or the app restarts after). */
+export function saveLanguagePref(pref: LangPref) {
   try {
     if (pref === "system") localStorage.removeItem(STORAGE_KEY);
-    else localStorage.setItem(STORAGE_KEY, pref);
+    else if (pref in catalogues) localStorage.setItem(STORAGE_KEY, pref);
   } catch {
     /* storage blocked: the choice lasts until the window reloads */
   }
+}
+
+/** Remember a Settings choice and reload the window so every screen
+ *  (including strings built once at start-up) uses it. */
+export function setLanguagePref(pref: LangPref) {
+  saveLanguagePref(pref);
   setLanguage(pref === "system" ? systemLanguage() : pref);
   location.reload();
 }
