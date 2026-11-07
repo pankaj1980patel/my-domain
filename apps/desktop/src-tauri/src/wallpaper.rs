@@ -144,7 +144,16 @@ fn readable(path: &Path) -> Option<Vec<u8>> {
     // bigger than needed, finished below like any other.
     let out = std::env::temp_dir().join(format!("my-domain-wallpaper-{}.jpg", std::process::id()));
     let ok = std::process::Command::new("sips")
-        .args(["-s", "format", "jpeg", "-s", "formatOptions", "90", "-Z", "640"])
+        .args([
+            "-s",
+            "format",
+            "jpeg",
+            "-s",
+            "formatOptions",
+            "90",
+            "-Z",
+            "640",
+        ])
         .arg(path)
         .arg("--out")
         .arg(&out)
@@ -270,7 +279,10 @@ fn candidates(_app: &AppHandle) -> Vec<PathBuf> {
 #[cfg(all(unix, not(target_os = "macos")))]
 fn candidates(_app: &AppHandle) -> Vec<PathBuf> {
     let run = |args: &[&str]| -> Option<String> {
-        let o = std::process::Command::new("gsettings").args(args).output().ok()?;
+        let o = std::process::Command::new("gsettings")
+            .args(args)
+            .output()
+            .ok()?;
         o.status
             .success()
             .then(|| String::from_utf8_lossy(&o.stdout).into_owned())
@@ -430,7 +442,10 @@ mod tests {
             Some(PathBuf::from("/home/p/x.png"))
         );
         assert_eq!(parse_gsettings_uri("''"), None);
-        assert_eq!(parse_gsettings_uri("'file:///usr/share/backgrounds/slides.xml'"), None);
+        assert_eq!(
+            parse_gsettings_uri("'file:///usr/share/backgrounds/slides.xml'"),
+            None
+        );
         assert_eq!(percent_decode("a%2"), "a%2");
         assert_eq!(percent_decode("%e2%82%ac"), "€");
     }

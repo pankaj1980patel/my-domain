@@ -39,8 +39,10 @@ fn looks(a: &TestNode) -> usize {
 #[test]
 fn a_look_arrives_with_the_status_then_only_on_change() {
     let (a, b) = pair("wallpaper");
-    b.engine
-        .set_wallpaper(vec!["#112233".into(), "#AABBCC".into()], Some(JPEG.to_vec()));
+    b.engine.set_wallpaper(
+        vec!["#112233".into(), "#AABBCC".into()],
+        Some(JPEG.to_vec()),
+    );
     let own = b.engine.own_wallpaper().unwrap();
 
     a.engine.request_status(&b.node_id()).unwrap();
@@ -63,8 +65,10 @@ fn a_look_arrives_with_the_status_then_only_on_change() {
     assert_eq!(status["wallpaper"], own.hash.as_str());
     std::thread::sleep(Duration::from_millis(400));
     assert_eq!(looks(&a), 1);
-    b.engine
-        .set_wallpaper(vec!["#112233".into(), "#aabbcc".into()], Some(JPEG.to_vec()));
+    b.engine.set_wallpaper(
+        vec!["#112233".into(), "#aabbcc".into()],
+        Some(JPEG.to_vec()),
+    );
     std::thread::sleep(Duration::from_millis(400));
     assert_eq!(looks(&a), 1);
 
@@ -73,9 +77,9 @@ fn a_look_arrives_with_the_status_then_only_on_change() {
     let got = a
         .sink
         .wait_until(WAIT, |e| match e {
-            CoreEvent::Wallpaper { wallpaper: Some(w), .. } if w.colors == ["#445566"] => {
-                Some(w.clone())
-            }
+            CoreEvent::Wallpaper {
+                wallpaper: Some(w), ..
+            } if w.colors == ["#445566"] => Some(w.clone()),
             _ => None,
         })
         .expect("no new look");
@@ -85,7 +89,9 @@ fn a_look_arrives_with_the_status_then_only_on_change() {
     b.engine.clear_wallpaper();
     a.sink
         .wait_until(WAIT, |e| match e {
-            CoreEvent::Wallpaper { wallpaper: None, .. } => Some(()),
+            CoreEvent::Wallpaper {
+                wallpaper: None, ..
+            } => Some(()),
             _ => None,
         })
         .expect("not forgotten");

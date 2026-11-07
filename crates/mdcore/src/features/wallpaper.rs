@@ -100,7 +100,10 @@ pub fn hash_of(colors: &[String], image: Option<&[u8]>) -> String {
     if let Some(img) = image {
         h.update(img);
     }
-    h.finalize()[..8].iter().map(|b| format!("{b:02x}")).collect()
+    h.finalize()[..8]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 fn is_hash(h: &str) -> bool {
@@ -169,9 +172,7 @@ fn message(me: &str, w: Option<&Wallpaper>) -> String {
         m["h"] = w.hash.clone().into();
         m["colors"] = w.colors.clone().into();
         if let Some(img) = image_bytes(w) {
-            m["image"] = base64::engine::general_purpose::STANDARD
-                .encode(img)
-                .into();
+            m["image"] = base64::engine::general_purpose::STANDARD.encode(img).into();
         }
     }
     m.to_string()
@@ -211,9 +212,7 @@ pub fn dominant_colors(rgb: &[u8], n: usize) -> Vec<String> {
     // Most first; ties by colour so the answer doesn't depend on the map.
     ranked.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
     let far = |a: [u8; 3], b: [u8; 3]| {
-        let d: i32 = (0..3)
-            .map(|c| (a[c] as i32 - b[c] as i32).pow(2))
-            .sum();
+        let d: i32 = (0..3).map(|c| (a[c] as i32 - b[c] as i32).pow(2)).sum();
         d > 56 * 56
     };
     let mut picked: Vec<[u8; 3]> = Vec::new();
@@ -474,7 +473,11 @@ mod tests {
     fn a_look_round_trips_and_its_hash_is_checked() {
         let w = build(&["#0A0B0C".into(), "#ffffff".into()], Some(JPEG)).unwrap();
         assert_eq!(w.colors, vec!["#0a0b0c", "#ffffff"]);
-        assert!(w.image.as_deref().unwrap().starts_with("data:image/jpeg;base64,"));
+        assert!(w
+            .image
+            .as_deref()
+            .unwrap()
+            .starts_with("data:image/jpeg;base64,"));
         assert!(is_hash(&w.hash));
         let m: Value = serde_json::from_str(&message("me", Some(&w))).unwrap();
         assert_eq!(m["type"], "wallpaper");
