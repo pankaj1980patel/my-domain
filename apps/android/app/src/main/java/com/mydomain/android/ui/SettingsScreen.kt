@@ -480,7 +480,14 @@ private enum class SettingsGroup(
     ;
 
     companion object {
-        fun of(id: String?): SettingsGroup? = id?.let { i -> entries.firstOrNull { i in it.ids } }
+        /** The group a tile id is in, or `group:<name>` (debug screenshots). */
+        fun of(id: String?): SettingsGroup? = id?.let { i ->
+            if (i.startsWith("group:")) {
+                entries.firstOrNull { it.name.equals(i.removePrefix("group:"), ignoreCase = true) }
+            } else {
+                entries.firstOrNull { i in it.ids }
+            }
+        }
     }
 }
 

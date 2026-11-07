@@ -287,7 +287,7 @@ class MainActivity : ComponentActivity() {
      * Debug builds only: `--ez md_sample true` shows [SampleData]'s made-up
      * devices (in memory, nothing saved; the real ones come back on a
      * launch without it), `--es md_screen <name>` (with `md_device`,
-     * `md_topic`, `md_query`) opens that screen ([DebugScreens]). True when
+     * `md_topic`, `md_query`, `md_tab`) opens that screen ([DebugScreens]). True when
      * sample mode is on (no permission prompts or service start then).
      */
     private fun debugLaunch(intent: Intent?): Boolean {
@@ -297,7 +297,8 @@ class MainActivity : ComponentActivity() {
             device = intent.getStringExtra("md_device"),
             topic = intent.getStringExtra("md_topic"),
             query = intent.getStringExtra("md_query"),
-        )
+            tab = intent.getStringExtra("md_tab") ?: intent.getStringExtra("md_group"),
+        )?.copy(id = System.nanoTime())
         val sample = intent.getBooleanExtra("md_sample", false)
         if (sample) {
             Core.startSample(signedIn = screen?.screen != DebugScreen.SIGN_IN)
@@ -305,7 +306,9 @@ class MainActivity : ComponentActivity() {
             Core.endSample()
             deleteSharedPreferences(SAMPLE_PREFS)
         }
-        if (screen != null) Core.showScreen = screen
+        // Kept (not consumed) until the next launch: a shell made after this
+        // one (a new activity, a recreated composition) still opens it once.
+        Core.showScreen = screen
         when (intent.getStringExtra("md_theme")) {
             "light" -> ThemeStore.preview(ThemeId.Light)
             "dark" -> ThemeStore.preview(ThemeId.CosmicBlue)

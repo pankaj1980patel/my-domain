@@ -29,6 +29,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -235,15 +239,23 @@ private fun linkLabel(how: String?, rttMs: Int?): String {
     return LinksMapPlan.latency(rttMs)?.let { "$words · $it" } ?: words
 }
 
+/** A line's label on the picture: how, then the latency under it (narrow
+ *  enough to sit between two devices). */
+@Composable
+private fun mapLabel(how: String?, rttMs: Int?): String {
+    val words = stringResource(howRes(how))
+    return LinksMapPlan.latency(rttMs)?.let { "$words\n$it" } ?: words
+}
+
 @Composable
 private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Unit) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val me = stringResource(R.string.map_you)
     val names = map.devices.associate { it.nodeId to Core.peerName(it.nodeId) }
-    val labels = map.devices.associate { it.nodeId to linkLabel(it.link?.how, it.link?.rttMs) }
+    val labels = map.devices.associate { it.nodeId to mapLabel(it.link?.how, it.link?.rttMs) }
     val others = LinksMapPlan.drawable(map)
-    val otherLabels = others.associate { "${it.a}|${it.b}" to linkLabel(it.how, it.rttMs) }
+    val otherLabels = others.associate { "${it.a}|${it.b}" to mapLabel(it.how, it.rttMs) }
     val image = stringResource(R.string.map_image)
     val labelBg = T.surface2
     val nodeBg = T.surface2
@@ -255,7 +267,8 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
     val tones = Tone.entries.associateWith { toneColor(it) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val w = with(density) { maxWidth.toPx() }
-        val h = w * 0.75f
+        // Tall enough that the lines up and down leave room for their labels.
+        val h = w * 0.9f
         val c = Pt(w / 2, h / 2)
         val spots = LinksMapPlan.ring(map.devices.size, w, h)
         val at = map.devices.mapIndexed { i, d -> d.nodeId to spots[i] }.toMap()
@@ -294,24 +307,46 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
             fun effect(how: String?) = LinksMapPlan.dash(how)?.let { d ->
                 PathEffect.dashPathEffect(floatArrayOf(d[0].dp.toPx(), d[1].dp.toPx()))
             }
-            val style = TextStyle(fontSize = 11.sp, color = text)
-            fun label(s: String, x: Float, y: Float, color: Color) {
+            val style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp, color = text, textAlign = TextAlign.Center)
+            val pad = 6.dp.toPx()
+            // What a label mustn't cover: the devices, their names and the
+            // labels already placed.
+            val nameStyle = TextStyle(fontSize = 12.sp, color = text2)
+            val taken = mutableListOf<Rect>()
+            fun nameRect(x: Float, y: Float, rad: Float, name: String): Rect {
+                val n = measurer.measure(name, nameStyle, maxLines = 1, overflow = TextOverflow.Ellipsis, constraints = androidx.compose.ui.unit.Constraints(maxWidth = (rad * 6).toInt()))
+                return Rect(x - n.size.width / 2f, y + rad + 4.dp.toPx(), x + n.size.width / 2f, y + rad + 4.dp.toPx() + n.size.height)
+            }
+            for (d in map.devices) {
+                val s = at[d.nodeId] ?: continue
+                taken += Rect(s.x - r, s.y - r, s.x + r, s.y + r)
+                taken += nameRect(s.x, s.y, r, names[d.nodeId].orEmpty())
+            }
+            taken += Rect(c.x - r * 1.3f, c.y - r * 1.3f, c.x + r * 1.3f, c.y + r * 1.3f)
+            taken += nameRect(c.x, c.y, r * 1.3f, me)
+            /** Where the label goes: the first of [spots] where it covers
+             *  nothing, else null (not drawn: the list below has it). */
+            fun place(s: String, spots: List<Offset>): Pair<Offset, androidx.compose.ui.text.TextLayoutResult>? {
                 val m = measurer.measure(s, style)
-                val pad = 6.dp.toPx()
-                drawRoundRect(
-                    labelBg,
-                    topLeft = Offset(x - m.size.width / 2f - pad, y - m.size.height / 2f - 2),
-                    size = androidx.compose.ui.geometry.Size(m.size.width + 2 * pad, m.size.height + 4f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(m.size.height.toFloat()),
-                )
-                drawRoundRect(
-                    color,
-                    topLeft = Offset(x - m.size.width / 2f - pad, y - m.size.height / 2f - 2),
-                    size = androidx.compose.ui.geometry.Size(m.size.width + 2 * pad, m.size.height + 4f),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(m.size.height.toFloat()),
-                    style = Stroke(1.dp.toPx()),
-                )
-                drawText(m, topLeft = Offset(x - m.size.width / 2f, y - m.size.height / 2f))
+                val hw = m.size.width / 2f + pad
+                val hh = m.size.height / 2f + 2
+                for (o in spots) {
+                    val box = Rect(o.x - hw, o.y - hh, o.x + hw, o.y + hh)
+                    if (box.left < 0 || box.right > size.width || box.top < 0 || box.bottom > size.height) continue
+                    if (taken.any { it.overlaps(box) }) continue
+                    taken += box
+                    return o to m
+                }
+                return null
+            }
+            fun label(placed: Pair<Offset, androidx.compose.ui.text.TextLayoutResult>, color: Color) {
+                val (o, m) = placed
+                val tl = Offset(o.x - m.size.width / 2f - pad, o.y - m.size.height / 2f - 2)
+                val sz = androidx.compose.ui.geometry.Size(m.size.width + 2 * pad, m.size.height + 4f)
+                val corner = androidx.compose.ui.geometry.CornerRadius(8.dp.toPx())
+                drawRoundRect(labelBg, topLeft = tl, size = sz, cornerRadius = corner)
+                drawRoundRect(color, topLeft = tl, size = sz, cornerRadius = corner, style = Stroke(1.dp.toPx()))
+                drawText(m, topLeft = Offset(o.x - m.size.width / 2f, o.y - m.size.height / 2f))
             }
             // This phone's lines.
             for (d in map.devices) {
@@ -333,19 +368,22 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
                 val thick = if (pick == PickedOther(o.a, o.b)) stroke * 1.6f else stroke
                 drawPath(path, tones.getValue(LinksMapPlan.tone(o.how)), style = Stroke(thick, cap = StrokeCap.Round, pathEffect = effect(o.how)))
             }
-            // Labels over the lines.
+            // Labels over the lines: this phone's first (along the line,
+            // where there's room), then the others' (where there's room).
             for (d in map.devices) {
                 val s = at[d.nodeId] ?: continue
-                label(labels[d.nodeId].orEmpty(), c.x + (s.x - c.x) * 0.56f, c.y + (s.y - c.y) * 0.56f, tones.getValue(LinksMapPlan.tone(d.link?.how)))
+                val spots = listOf(0.5f, 0.42f, 0.58f, 0.34f, 0.66f).map { t -> Offset(c.x + (s.x - c.x) * t, c.y + (s.y - c.y) * t) }
+                place(labels[d.nodeId].orEmpty(), spots)?.let { label(it, tones.getValue(LinksMapPlan.tone(d.link?.how))) }
             }
             for (o in others) {
                 val a = at[o.a] ?: continue
                 val b = at[o.b] ?: continue
-                val (_, l) = LinksMapPlan.bow(a, b, c)
-                label(otherLabels["${o.a}|${o.b}"].orEmpty(), l.x, l.y, tones.getValue(LinksMapPlan.tone(o.how)))
+                val (ctrl, l) = LinksMapPlan.bow(a, b, c)
+                val pts = curve(a, ctrl, b)
+                val spots = listOf(Offset(l.x, l.y)) + listOf(8, 12, 6, 14).map { Offset(pts[it].x, pts[it].y) }
+                place(otherLabels["${o.a}|${o.b}"].orEmpty(), spots)?.let { label(it, tones.getValue(LinksMapPlan.tone(o.how))) }
             }
             // The devices, then this phone.
-            val nameStyle = TextStyle(fontSize = 12.sp, color = text2)
             fun node(x: Float, y: Float, rad: Float, name: String, icon: String, ring: Color, dashed: Boolean, bold: Boolean) {
                 drawCircle(nodeBg, rad, Offset(x, y))
                 drawCircle(
@@ -399,9 +437,10 @@ private fun curve(a: Pt, ctrl: Pt, b: Pt, steps: Int = 20): List<Pt> = (0..steps
     Pt(u * u * a.x + 2 * u * t * ctrl.x + t * t * b.x, u * u * a.y + 2 * u * t * ctrl.y + t * t * b.y)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Legend() {
-    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         for ((tone, how) in listOf(Tone.LAN to "lan", Tone.DIRECT to "direct", Tone.RELAY to "relay", Tone.BLE to "ble", Tone.NONE to null)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.size(10.dp).background(toneColor(tone), CircleShape))

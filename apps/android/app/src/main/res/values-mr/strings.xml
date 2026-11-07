@@ -2021,9 +2021,7 @@
     <string name="home_recent">अलीकडील घडामोडी</string>
     <string name="home_view_all">सर्व पाहा</string>
     <string name="home_health">डिव्हाइसचे आरोग्य</string>
-    <string name="home_health_good">उत्तम</string>
-    <string name="home_health_look">एकदा पाहा</string>
-    <string name="home_health_bad">लक्ष द्या</string>
+    <string name="home_health_good">सर्व ठीक आहे</string>
     <string name="more_files">फाइल आणि ट्रान्सफर</string>
     <string name="more_files_sub">फाइल पाठवा, पाहा आणि सिंक करा</string>
     <string name="more_messages">संदेश आणि सूचना</string>

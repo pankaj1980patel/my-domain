@@ -337,9 +337,13 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     }
 
     // Debug builds: a screen asked for from adb (md_screen; screenshots).
+    // Each request once per shell (by its id), so a shell made after the
+    // launch (a new activity's) still gets it, and a rotation doesn't redo it.
+    var shownScreen by rememberSaveable { mutableStateOf(0L) }
     LaunchedEffect(Core.showScreen) {
         val want = Core.showScreen ?: return@LaunchedEffect
-        Core.showScreen = null
+        if (want.id == shownScreen) return@LaunchedEffect
+        shownScreen = want.id
         closeAll()
         tab = Tab.Home
         when (want.screen) {
@@ -348,13 +352,18 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             DebugScreen.MORE -> tab = Tab.More
             DebugScreen.NOTES -> openNotes(null)
             DebugScreen.ACTIVITY -> tab = Tab.Activity
-            DebugScreen.SETTINGS -> openSettings(null)
-            DebugScreen.DEVICE -> openDevice(want.device ?: "", null)
+            DebugScreen.SETTINGS -> openSettings(want.tab?.let { "group:$it" })
+            DebugScreen.DEVICE -> openDevice(want.device ?: "", "tab:" + (want.tab ?: DeviceTab.Overview.key))
             DebugScreen.DEVELOPER -> developer = true
             DebugScreen.AUTOMATIONS -> automations = true
             DebugScreen.TRANSFERS -> openTransfers(null)
-            DebugScreen.FILES -> { filesTab = FilesTab.Files; filesHub = true }
-            DebugScreen.MESSAGES -> openMessages(MessagesTab.Chats)
+            DebugScreen.FILES -> {
+                filesTab = FilesTab.entries.firstOrNull { it.key == want.tab } ?: FilesTab.Files
+                filesHub = true
+            }
+            DebugScreen.MESSAGES -> openMessages(
+                if (want.tab == "notifications") MessagesTab.Notifications else MessagesTab.Chats,
+            )
             DebugScreen.SETUP_PHONE -> setup = true
             DebugScreen.TIMERS -> timers = true
             DebugScreen.READ_LATER -> readLater = true

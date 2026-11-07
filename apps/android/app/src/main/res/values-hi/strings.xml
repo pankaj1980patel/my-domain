@@ -2018,9 +2018,7 @@
     <string name="home_recent">हाल की गतिविधि</string>
     <string name="home_view_all">सब देखें</string>
     <string name="home_health">डिवाइस की हेल्थ</string>
-    <string name="home_health_good">बढ़िया</string>
-    <string name="home_health_look">एक बार देख लें</string>
-    <string name="home_health_bad">ध्यान चाहिए</string>
+    <string name="home_health_good">सब ठीक है</string>
     <string name="more_files">फ़ाइलें और ट्रांसफ़र</string>
     <string name="more_files_sub">फ़ाइलें भेजें, देखें और सिंक करें</string>
     <string name="more_messages">मैसेज और सूचनाएं</string>

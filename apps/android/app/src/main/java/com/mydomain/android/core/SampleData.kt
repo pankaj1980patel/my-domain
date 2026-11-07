@@ -1,5 +1,9 @@
 package com.mydomain.android.core
 
+import com.mydomain.android.ffi.NoteItem
+import com.mydomain.android.ffi.ReadLaterEntry
+import com.mydomain.android.ffi.TimerItem
+
 /**
  * Made-up devices and what they said, for screenshots in debug builds
  * (`--ez md_sample true`, [DebugScreens]): never the user's data. Core
@@ -141,5 +145,49 @@ object SampleData {
         ActivityItem(2, now - 40 * MIN, "Home Mac mini: The video export finished", Tone.Info),
         ActivityItem(3, now - 3 * HOUR, "Saved Boarding pass.pdf from Pankaj’s MacBook Pro", Tone.Ok),
         ActivityItem(4, now - 5 * HOUR, "Couldn’t send Invoice-October.xlsx to Office PC", Tone.Error),
+    )
+
+    /** The health check's report: one device worth a look. */
+    fun healthChecks(): List<HealthPlan.Check> = listOf(
+        HealthPlan.Check("link", "warn", "asleep", nodeId = OFFICE, name = "Office PC", fix = "connect"),
+        HealthPlan.Check("server", "ok", "ok"),
+        HealthPlan.Check("push", "ok", "working"),
+        HealthPlan.Check("disk", "ok", "ok", detail = "48213"),
+        HealthPlan.Check("link", "ok", "direct", nodeId = MACBOOK, name = "Pankaj’s MacBook Pro", detail = "lan"),
+        HealthPlan.Check("link", "ok", "direct", nodeId = MINI, name = "Home Mac mini", detail = "lan"),
+        HealthPlan.Check("link", "info", "relay", nodeId = LAB, name = "Lab laptop"),
+    )
+
+    /** How the sample devices are linked (the links map). */
+    fun linksMap(): LinksMapInfo = LinksMapInfo(
+        nodeId = ME,
+        name = MY_NAME,
+        devices = listOf(
+            MapDeviceInfo(MINI, "Home Mac mini", MapLinkInfo("lan", "quic", "192.168.1.10:47103", "local", 4, 0.0, 5400, 1), sharesLinks = true, verified = true),
+            MapDeviceInfo(LAB, "Lab laptop", MapLinkInfo("relay", "quic", null, null, 86, 0.4, 1800, 2), sharesLinks = true),
+            MapDeviceInfo(OFFICE, "Office PC", null, reason = "asleep", lastSeenAgoS = 6 * 3600),
+            MapDeviceInfo(MACBOOK, "Pankaj’s MacBook Pro", MapLinkInfo("lan", "quic", "192.168.1.24:47103", "local", 3, 0.0, 1200, 1), sharesLinks = true, verified = true),
+        ),
+        others = listOf(
+            OtherLinkInfo(MACBOOK, MINI, "lan", 2, MACBOOK, 30),
+            OtherLinkInfo(MINI, LAB, "relay", 74, MINI, 45),
+        ),
+    )
+
+    fun notes(now: Long): List<NoteItem> = listOf(
+        NoteItem("n1", "Groceries", "[ ] Oat milk\n[x] Coffee beans\n[ ] Basil\n[ ] Lemons", true, true, null, now - 3 * HOUR, now - 20 * MIN, MACBOOK, "Pankaj’s MacBook Pro", null, null, false),
+        NoteItem("n2", "Trip to Lisbon", "Flight lands 10:40. Hotel near Alfama, check-in from 14:00.", false, false, "blue", now - 30 * HOUR, now - 2 * HOUR, ME, MY_NAME, null, now + 26 * HOUR, false),
+        NoteItem("n3", "Wi-Fi for guests", "Network: Guest-5G\nAsk at the door for the code.", false, false, null, now - 72 * HOUR, now - 50 * HOUR, MINI, "Home Mac mini", null, null, false),
+    )
+
+    fun timers(now: Long): List<TimerItem> = listOf(
+        TimerItem("tm1", "Pasta", 10 * MIN, "running", now + 7 * MIN, 0, listOf(MACBOOK), now - 3 * MIN, now - 3 * MIN, MACBOOK, "Pankaj’s MacBook Pro"),
+        TimerItem("tm2", "Laundry", 45 * MIN, "paused", 0, 28 * MIN, listOf(MINI), now - 17 * MIN, now - 2 * MIN, MINI, "Home Mac mini"),
+    )
+
+    fun readLater(now: Long): List<ReadLaterEntry> = listOf(
+        ReadLaterEntry("r1", "https://example.com/talks/local-first-software", "Local-first software", "example.com", false, now - 2 * HOUR, "Home Mac mini", now - 2 * HOUR),
+        ReadLaterEntry("r2", "https://example.org/guides/quic", "A gentle guide to QUIC", "example.org", false, now - 26 * HOUR, MY_NAME, now - 26 * HOUR),
+        ReadLaterEntry("r3", "https://example.net/recipes/focaccia", "Overnight focaccia", "example.net", true, now - 80 * HOUR, "Pankaj’s MacBook Pro", now - 70 * HOUR),
     )
 }

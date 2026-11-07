@@ -40,6 +40,20 @@ class DebugScreensTest {
         assertEquals(ScreenRequest(DebugScreen.SEARCH), DebugScreens.parse("search", query = " "))
     }
 
+    @Test fun tabsAreKeptForTheScreensThatHaveThem() {
+        assertEquals("remote", DebugScreens.parse("device", device = "n1", tab = "Control")?.tab)
+        assertEquals("comm", DebugScreens.parse("device", device = "n1", tab = "messages")?.tab)
+        assertEquals("transfers", DebugScreens.parse("files", tab = "transfers")?.tab)
+        assertEquals("notifications", DebugScreens.parse("messages", tab = "notifications")?.tab)
+        assertEquals("appearance", DebugScreens.parse("settings", tab = "appearance")?.tab)
+        assertNull(DebugScreens.parse("device", device = "n1", tab = "nowhere")?.tab)
+        assertNull(DebugScreens.parse("home", tab = "files")?.tab)
+    }
+
+    @Test fun anIdDoesNotChangeWhatIsAskedFor() {
+        assertEquals(ScreenRequest(DebugScreen.HOME, id = 1), ScreenRequest(DebugScreen.HOME, id = 2))
+    }
+
     @Test fun sampleDevicesAreClearlyMadeUp() {
         val nodes = SampleData.devices.map { it.node } + SampleData.ME
         assertTrue(nodes.all { it.startsWith(SampleData.PREFIX) })

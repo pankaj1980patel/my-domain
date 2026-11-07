@@ -219,17 +219,19 @@ private fun HeroCard(node: String, onOpen: () -> Unit, onRename: () -> Unit) {
     }
 }
 
-/** The health check as a card: all good, worth a look, or needs fixing. */
+/** The health check as a card: "Device health" over the result (all good,
+ *  worth a look, or how many problems need fixing; "Checking…" while it
+ *  runs). */
 @Composable
 private fun HealthCard(onOpen: () -> Unit) {
     val checks = Health.checks
     val bad = Health.bad
     val warn = checks.count { it.level == "warn" }
-    val (h, title, body) = when {
-        checks.isEmpty() -> Triple(Hue.Muted, stringResource(R.string.home_health), stringResource(R.string.health_running))
-        bad > 0 -> Triple(Hue.Red, stringResource(R.string.home_health_bad), pluralStringResource(R.plurals.health_needs_fixing, bad, bad))
-        warn > 0 -> Triple(Hue.Amber, stringResource(R.string.home_health_look), pluralStringResource(R.plurals.health_worth_look, warn, warn))
-        else -> Triple(Hue.Green, stringResource(R.string.home_health_good), stringResource(R.string.health_all_good))
+    val (h, title) = when {
+        checks.isEmpty() -> Hue.Muted to stringResource(R.string.health_running)
+        bad > 0 -> Hue.Red to pluralStringResource(R.plurals.health_needs_fixing, bad, bad)
+        warn > 0 -> Hue.Amber to pluralStringResource(R.plurals.health_worth_look, warn, warn)
+        else -> Hue.Green to stringResource(R.string.home_health_good)
     }
     SoftCard(onClick = onOpen) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -237,8 +239,10 @@ private fun HealthCard(onOpen: () -> Unit) {
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(stringResource(R.string.home_health), style = MaterialTheme.typography.labelLarge, color = T.text2)
-                Text(title, style = MaterialTheme.typography.titleLarge, color = hue(h), fontWeight = FontWeight.Bold)
-                Muted(body)
+                Text(
+                    title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
+                    color = if (checks.isEmpty()) T.text2 else hue(h),
+                )
             }
             Chevron()
         }

@@ -2021,9 +2021,7 @@
     <string name="home_recent">તાજેતરની પ્રવૃત્તિ</string>
     <string name="home_view_all">બધું જુઓ</string>
     <string name="home_health">ડિવાઇસની હેલ્થ</string>
-    <string name="home_health_good">ઉત્તમ</string>
-    <string name="home_health_look">એક વાર જુઓ</string>
-    <string name="home_health_bad">ધ્યાન આપો</string>
+    <string name="home_health_good">બધું બરાબર છે</string>
     <string name="more_files">ફાઇલો અને ટ્રાન્સફર</string>
     <string name="more_files_sub">ફાઇલો મોકલો, જુઓ અને સિંક કરો</string>
     <string name="more_messages">મેસેજ અને સૂચનાઓ</string>

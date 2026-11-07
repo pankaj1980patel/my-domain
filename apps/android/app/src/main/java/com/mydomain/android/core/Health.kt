@@ -84,6 +84,13 @@ object Health {
         return HealthPlan.factsJson(HealthPlan.facts(rows), disk?.first, disk?.second)
     }
 
+    /** Sample mode (debug screenshots): this report instead; empty when it
+     *  ends (the real one runs again). */
+    fun sample(list: List<HealthPlan.Check>) {
+        checks = list
+        ranAt = if (list.isEmpty()) 0L else System.currentTimeMillis()
+    }
+
     /** Run the check (`server`: ask the server too, a few seconds). */
     suspend fun run(ctx: Context, server: Boolean = true) {
         if (Core.engine() == null) return

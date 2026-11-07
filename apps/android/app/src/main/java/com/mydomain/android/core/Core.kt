@@ -346,10 +346,16 @@ object Core {
         screens.clear()
         listings.clear()
         syncPairs.clear()
-        // Read from the engine (none now): whatever was shown before goes.
+        // Read from the engine (none now): whatever was shown before goes,
+        // and the sample's own show instead.
         Notes.byId.clear()
+        SampleData.notes(now).forEach { Notes.byId[it.id] = it }
         Timers.byId.clear()
+        SampleData.timers(now).forEach { Timers.byId[it.id] = it }
         ReadLater.byId.clear()
+        SampleData.readLater(now).forEach { ReadLater.byId[it.id] = it }
+        Health.sample(SampleData.healthChecks())
+        LinksMap.sample(SampleData.linksMap())
     }
 
     /** Back to the user's own devices after sample mode (main thread). */
@@ -371,6 +377,8 @@ object Core {
         syncPairs.clear()
         DeviceKinds.kinds.clear()
         Wallpapers.looks.clear()
+        Health.sample(emptyList())
+        LinksMap.sample(null)
         // Read everything again (Notes, Timers and Read later too).
         Thread {
             engine()?.let { DeviceKinds.load(it); Wallpapers.load(it) }

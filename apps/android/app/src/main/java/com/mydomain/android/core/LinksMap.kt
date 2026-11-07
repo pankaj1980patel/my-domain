@@ -28,6 +28,12 @@ object LinksMap {
         changes++
     }
 
+    /** Sample mode (debug screenshots): this map instead; null when it
+     *  ends (read again from the engine). */
+    fun sample(map: LinksMapInfo?) {
+        info = map
+    }
+
     /** Read the map again (off the main thread). */
     suspend fun load() {
         val ble = bluetoothState(Core.app)

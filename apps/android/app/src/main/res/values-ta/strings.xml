@@ -2021,9 +2021,7 @@
     <string name="home_recent">சமீபத்திய செயல்பாடு</string>
     <string name="home_view_all">அனைத்தையும் பார்</string>
     <string name="home_health">சாதன நலம்</string>
-    <string name="home_health_good">சிறப்பு</string>
-    <string name="home_health_look">ஒருமுறை பார்க்கவும்</string>
-    <string name="home_health_bad">கவனம் தேவை</string>
+    <string name="home_health_good">எல்லாம் சரி</string>
     <string name="more_files">கோப்புகளும் பரிமாற்றங்களும்</string>
     <string name="more_files_sub">கோப்புகளை அனுப்பு, உலாவு, ஒத்திசை</string>
     <string name="more_messages">செய்திகளும் அறிவிப்புகளும்</string>
