@@ -6778,7 +6778,10 @@ html.kvm-window body {
 }
 .this-device-icon {
   background: none;
-  width: 44px;
+  flex: none;
+  width: 60px;
+  height: 44px;
+  overflow: hidden;
 }
 .home-row {
   grid-template-columns: 84px minmax(170px, 1fr) auto auto;

@@ -408,7 +408,7 @@ export default function App() {
             {/* This computer: its name, and a way to its settings. */}
             <button class="this-device" onClick={() => goPlace("settings", "settings-device")}>
               <span class="this-device-icon">
-                <DeviceArt icon={state.ownIcon} size={40} />
+                <DeviceArt icon={state.ownIcon} size={36} />
               </span>
               <span class="this-device-text">
                 <strong>{niceName(state.me?.name ?? "")}</strong>
