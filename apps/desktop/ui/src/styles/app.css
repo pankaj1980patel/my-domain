@@ -1871,7 +1871,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   overflow: hidden;
   animation: rise var(--normal) var(--ease);
 }
-.palette-input {
+.palette .palette-input {
   width: 100%;
   padding: var(--s-4) var(--s-5);
   background: transparent;
@@ -1881,9 +1881,13 @@ input[type="checkbox"][role="switch"]:checked::after {
   color: var(--text);
   font-size: var(--text-lg);
 }
-.palette-input:focus,
-.palette-input:focus-visible {
+/* Beats the general input:focus ring: the panel itself is the frame, the
+   field is flush with its top, divided from the list by one hairline. */
+.palette .palette-input:focus,
+.palette .palette-input:focus-visible {
   outline: none;
+  border-color: transparent;
+  border-bottom-color: var(--border);
   box-shadow: none;
 }
 
