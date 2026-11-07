@@ -217,7 +217,7 @@ export default function Notes(props: { request?: NoteRequest }) {
             when={open()}
             keyed
             fallback={
-              <Empty icon="✎" title={t("notes.pickTitle")}>
+              <Empty icon="notes" title={t("notes.pickTitle")}>
                 <p class="muted">{t("notes.pickBody")}</p>
               </Empty>
             }

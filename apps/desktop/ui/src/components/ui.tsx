@@ -6,6 +6,8 @@ import { DeviceAvatar } from "./DeviceLabel";
 import { linkLabel, linkState, qualityLabel, type LinkState } from "../lib/words";
 import type { Quality } from "../bindings";
 import { t, tn } from "../i18n";
+import { Icon, type IconName } from "./Icon";
+import { quickRing, quickSendClipboard, quickSendFile } from "../lib/quickActions";
 
 /** Wraps a control that may be unavailable: greyed out, with [reason] as
  *  the hover tooltip (a disabled button shows none on its own in WebKit). */
@@ -88,7 +90,7 @@ export function StatusPill(props: { node: string }) {
   const q = () => (s() === "direct" || s() === "relay" ? state.quality[props.node] : undefined);
   return (
     <span class={`pill pill-${s()}`}>
-      <span class="dot" aria-hidden="true" />
+      <Icon name={`link-${s()}` as IconName} size={15} class="pill-icon" />
       {linkLabel(s())}
       <Show when={q() && q() !== "unknown"}>
         <SignalBars quality={q()!} />
@@ -112,59 +114,88 @@ export function SignalBars(props: { quality: Quality }) {
 // --- device card ----------------------------------------------------------------
 
 export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: () => void }) {
-  const s = () => linkStateOf(props.peer.node_id);
-  const unread = () => state.messages.filter((m) => m.node === props.peer.node_id && m.dir === "in").length;
+  const node = () => props.peer.node_id;
+  const s = () => linkStateOf(node());
+  const unread = () => state.messages.filter((m) => m.node === node() && m.dir === "in").length;
+  const name = () => peerName(node());
+  /** A quick action's button: it runs here, without opening the page. */
+  const quick = (icon: IconName, label: string, full: string, run: () => unknown) => (
+    <button
+      type="button"
+      class="quick-btn"
+      aria-label={full}
+      title={full}
+      onClick={(e) => {
+        e.stopPropagation();
+        run();
+      }}
+    >
+      <Icon name={icon} />
+      <span>{label}</span>
+    </button>
+  );
   return (
     // The name is the card's button (Tab, Enter and Space reach it); a click
     // anywhere else on the card opens it too.
-    <article class="device-card" data-drop-node={props.peer.node_id} onClick={props.onOpen}>
-      <DeviceAvatar node={props.peer.node_id} />
-      <div class="device-main">
-        <h2 class="device-card-name">
+    <article class="device-card" data-drop-node={node()} onClick={props.onOpen}>
+      <div class="device-card-top">
+        <DeviceAvatar node={node()} />
+        <div class="device-main">
+          <h2 class="device-card-name">
+            <button
+              type="button"
+              class="device-open"
+              aria-describedby={`device-card-state-${node()}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onOpen();
+              }}
+            >
+              {name()}
+            </button>
+          </h2>
+          <span class="device-card-state" id={`device-card-state-${node()}`}>
+            <StatusPill node={node()} />
+            <Show when={unread() > 0}>
+              <span class="sr-only">, {tn("device.unread", unread())}</span>
+            </Show>
+          </span>
+        </div>
+        <Show when={unread() > 0}>
+          <span class="badge" aria-hidden="true">
+            {unread()}
+          </span>
+        </Show>
+        <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
           <button
-            type="button"
-            class="device-open"
-            aria-describedby={`device-card-state-${props.peer.node_id}`}
+            class="btn btn-soft btn-sm"
             onClick={(e) => {
               e.stopPropagation();
-              props.onOpen();
+              props.onConnect();
             }}
           >
-            {peerName(props.peer.node_id)}
+            {t("device.connect")}
           </button>
-        </h2>
-        <span class="device-card-state" id={`device-card-state-${props.peer.node_id}`}>
-          <StatusPill node={props.peer.node_id} />
-          <Show when={unread() > 0}>
-            <span class="sr-only">, {tn("device.unread", unread())}</span>
-          </Show>
-        </span>
+        </Show>
       </div>
-      <Show when={unread() > 0}>
-        <span class="badge" aria-hidden="true">
-          {unread()}
-        </span>
-      </Show>
-      <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
-        <button
-          class="btn btn-soft btn-sm"
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onConnect();
-          }}
-        >
-          {t("device.connect")}
-        </button>
-      </Show>
+      {/* One click, no page: what's done most (each queues for a device
+          that isn't reachable now). */}
+      <div class="device-quick" role="group" aria-label={t("quick.label", { name: name() })}>
+        {quick("send-file", t("quick.file"), t("palette.sendFile", { name: name() }), () => quickSendFile(node()))}
+        {quick("send-clip", t("quick.clipboard"), t("palette.sendClipboard", { name: name() }), () =>
+          quickSendClipboard(node()),
+        )}
+        {quick("ring", t("control.ring"), t("palette.ring", { name: name() }), () => quickRing(node()))}
+      </div>
     </article>
   );
 }
 
-export function Empty(props: { icon: string; title: string; children?: JSX.Element }) {
+export function Empty(props: { icon: IconName; title: string; children?: JSX.Element }) {
   return (
     <div class="empty">
-      <div class="empty-icon" aria-hidden="true">
-        {props.icon}
+      <div class="empty-icon">
+        <Icon name={props.icon} size={44} />
       </div>
       <h2 class="empty-title">{props.title}</h2>
 

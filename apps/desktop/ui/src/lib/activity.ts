@@ -5,6 +5,7 @@
 import type { ActivityItem_Serialize as ActivityItem } from "../bindings";
 import { t, type Key } from "../i18n";
 import { humanSize } from "./words";
+import type { IconName } from "../components/Icon";
 
 export const ACTIVITY_KINDS = ["files", "clipboard", "messages", "calls", "notifications", "connections", "other"] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
@@ -19,23 +20,24 @@ export const ACTIVITY_KIND_LABEL: Record<ActivityKind, Key> = {
   other: "activity.kind.other",
 };
 
-const ICON: Record<string, string> = {
-  files: "📄",
-  clipboard: "📋",
-  messages: "💬",
-  calls: "📞",
-  notifications: "🔔",
-  connections: "🔗",
-  other: "•",
+const ICON: Record<string, IconName> = {
+  files: "files",
+  clipboard: "clipboard",
+  messages: "chat",
+  calls: "phone",
+  notifications: "notifications",
+  connections: "connect",
+  other: "info",
 };
 
-export function activityIcon(a: ActivityItem): string {
-  if (a.action === "note") return "📝";
-  if (a.action === "timer") return "⏱";
-  if (a.action === "read_later") return "🔖";
-  if (a.action === "key_changed") return "⚠";
-  if (a.action === "printed" || a.action === "print_failed") return "🖨";
-  return ICON[a.kind] ?? "•";
+/** A row's icon (components/Icon.tsx): by what happened, else its kind. */
+export function activityIcon(a: ActivityItem): IconName {
+  if (a.action === "note") return "notes";
+  if (a.action === "timer") return "timers";
+  if (a.action === "read_later") return "readLater";
+  if (a.action === "key_changed") return "alert";
+  if (a.action === "printed" || a.action === "print_failed") return "printer";
+  return ICON[a.kind] ?? "info";
 }
 
 /** A timer's length, from ms: "5 min", "1 h 30 min", "45 s". */

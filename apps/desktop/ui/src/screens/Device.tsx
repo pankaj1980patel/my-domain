@@ -56,7 +56,11 @@ import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
 import KeyChangeBanner from "../components/KeyChangeBanner";
 import { deviceProblems } from "../lib/health";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
-import { t, tn } from "../i18n";
+import { t, tn, type Key } from "../i18n";
+import { MenuButton, type MenuItem } from "../components/Menu";
+import { Tabs, panelProps } from "../components/Tabs";
+import { Icon, type IconName } from "../components/Icon";
+import { needsLink, quickGetClipboard, quickRing, quickSendClipboard, quickSendFile } from "../lib/quickActions";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
@@ -79,34 +83,83 @@ import ConnectionTile from "./device/ConnectionTile";
 import { NearbyBadge } from "../components/NearbyBadge";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
-import VerifyDevice from "../components/VerifyDevice";
-import { RemoveDeviceButton } from "../components/RemovedDevices";
+import { useVerify, VerifiedBadge } from "../components/VerifyDevice";
+import { isVerified } from "../lib/verify";
+import { RemoveDeviceConfirm } from "../components/RemovedDevices";
 import { PermissionsTile } from "../components/PeerPermissions";
+
+/** The page's tabs, in order. A tile lives in one (its `tab`); Overview
+ *  also shows the most-used ones (OVERVIEW). A tab with nothing this device
+ *  offers isn't shown. */
+const TAB_IDS = ["overview", "messages", "files", "notifications", "media", "control", "settings"] as const;
+type DeviceTab = (typeof TAB_IDS)[number];
+const TAB_ICON: Record<DeviceTab, IconName> = {
+  overview: "overview",
+  messages: "chat",
+  files: "files",
+  notifications: "notifications",
+  media: "media",
+  control: "control",
+  settings: "settings",
+};
+const TAB_LABEL: Record<DeviceTab, Key> = {
+  overview: "device.tab.overview",
+  messages: "chat.title",
+  files: "files.title",
+  notifications: "notifications.title",
+  media: "device.tab.media",
+  control: "device.tab.control",
+  settings: "nav.settings",
+};
+/** On Overview too: what it says about itself, and what's done most. */
+const OVERVIEW = ["info", "now-playing", "files"];
+
+/** The tab last open on each device's page (this computer only). */
+const TAB_STORE = "md.deviceTab.";
+function savedTab(node: string): DeviceTab | null {
+  try {
+    const v = localStorage.getItem(TAB_STORE + node);
+    return (TAB_IDS as readonly string[]).includes(v ?? "") ? (v as DeviceTab) : null;
+  } catch {
+    return null;
+  }
+}
+function saveTab(node: string, tab: DeviceTab) {
+  try {
+    localStorage.setItem(TAB_STORE + node, tab);
+  } catch {
+    /* no storage: it opens on Overview next time */
+  }
+}
 
 /** Every tile a device's page can show, in default order. A new tile is one
  *  entry here (its `id` is kept in saved layouts: never rename one); a saved
  *  layout that predates it shows it at this place. */
 const TILES: TileDef[] = [
-  { id: "chat", title: () => t("chat.title"), wide: true, render: (n) => <ChatTile node={n} /> },
-  { id: "notifications", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
-  { id: "notification-history", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
-  { id: "clipboard", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
-  { id: "clipboard-history", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
-  { id: "files", title: () => t("files.title"), render: (n) => <FilesTile node={n} /> },
-  { id: "browse", title: () => t("browse.title"), wide: true, render: (n) => <BrowseTile node={n} /> },
-  { id: "sync", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
-  { id: "control", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
-  { id: "info", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
-  { id: "connection", title: () => t("conn.title"), wide: true, render: (n) => <ConnectionTile node={n} /> },
-  { id: "schedules", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
+  { id: "chat", icon: "chat", tab: "messages", title: () => t("chat.title"), wide: true, render: (n) => <ChatTile node={n} /> },
+  { id: "notifications", icon: "notifications", tab: "notifications", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
+  { id: "notification-history", icon: "history", tab: "notifications", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
+  { id: "clipboard", icon: "clipboard", tab: "files", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
+  { id: "clipboard-history", icon: "history", tab: "files", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
+  { id: "files", icon: "files", tab: "files", title: () => t("files.title"), render: (n) => <FilesTile node={n} /> },
+  { id: "browse", icon: "folder-open", tab: "files", title: () => t("browse.title"), wide: true, render: (n) => <BrowseTile node={n} /> },
+  { id: "sync", icon: "folder-sync", tab: "files", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
+  { id: "control", icon: "locate", tab: "control", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
+  { id: "info", icon: "info", tab: "overview", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
+  { id: "connection", icon: "connect", tab: "settings", title: () => t("conn.title"), wide: true, render: (n) => <ConnectionTile node={n} /> },
+  { id: "schedules", icon: "calendar", tab: "control", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
   {
     id: "commands",
+    icon: "terminal",
+    tab: "control",
     title: () => t("run.title"),
     available: (n) => !!state.status[n]?.actions.includes("run"),
     render: (n) => <CommandsTile node={n} />,
   },
   {
     id: "screen",
+    icon: "screen",
+    tab: "control",
     title: (n) => (state.status[n]?.platform === "android" ? t("phoneScreen.title") : t("screen.title")),
     available: (n) => !!state.status[n]?.actions.includes("screen"),
     render: (n) => <ScreenTile node={n} />,
@@ -114,6 +167,8 @@ const TILES: TileDef[] = [
   {
     // A phone that can show its camera here (it says camera_view).
     id: "camera",
+    icon: "camera",
+    tab: "media",
     title: () => t("camera.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.cameraView && state.status[n]?.platform === "android",
@@ -123,6 +178,8 @@ const TILES: TileDef[] = [
     // Insert from phone: a photo or a scan taken on the phone, into
     // Downloads and the clipboard here (it says insert_capture).
     id: "insert",
+    icon: "scan",
+    tab: "media",
     title: () => t("insert.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.insertCapture && state.status[n]?.platform === "android",
@@ -132,12 +189,16 @@ const TILES: TileDef[] = [
     // What plays there, with play/pause, skip, seek and volume when its
     // app takes media commands (media_ctl); an older one just shows it.
     id: "now-playing",
+    icon: "music",
+    tab: "media",
     title: () => t("media.title"),
     available: (n) => !!state.status[n]?.mediaCtl || !!state.playing[n],
     render: (n) => <NowPlayingTile node={n} />,
   },
   {
     id: "phone-audio",
+    icon: "mic",
+    tab: "media",
     title: () => t("phoneAudio.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.audioSource && state.status[n]?.platform === "android",
@@ -146,6 +207,8 @@ const TILES: TileDef[] = [
   {
     // A phone that plays this computer's sound (it says audio_sink).
     id: "computer-audio",
+    icon: "speaker",
+    tab: "media",
     title: () => t("computerAudio.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.audioSink && state.status[n]?.platform === "android",
@@ -153,22 +216,31 @@ const TILES: TileDef[] = [
   },
   {
     id: "photos",
+    icon: "image",
+    tab: "media",
     title: () => t("photos.title"),
     wide: true,
     available: (n) => !!state.status[n]?.actions.includes("gallery"),
     render: (n) => <PhotosTile node={n} />,
   },
-  { id: "lost-mode", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
+  { id: "lost-mode", icon: "lock", tab: "control", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
   // What this device may do here: control this computer, see its screen,
   // take over its mouse and keyboard (all off until allowed).
-  { id: "permissions", title: () => t("perm.title"), render: (n) => <PermissionsTile node={n} /> },
-  { id: "notify", title: () => t("notify.title"), render: () => <NotifyTile /> },
-  { id: "apps", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
+  { id: "permissions", icon: "shield", tab: "settings", title: () => t("perm.title"), render: (n) => <PermissionsTile node={n} /> },
+  { id: "notify", icon: "send", tab: "notifications", title: () => t("notify.title"), render: () => <NotifyTile /> },
+  { id: "apps", icon: "apps", tab: "notifications", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
 ];
 
-export default function Device(props: { node: string; onBack: () => void; onHealth?: () => void }) {
+export default function Device(props: {
+  node: string;
+  /** Open at this tab (a search result, the map's Connection details). */
+  tab?: { id: string; tile?: string; at: number };
+  onBack: () => void;
+  onHealth?: () => void;
+}) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
   const s = () => linkStateOf(props.node);
+  const live = () => s() === "direct" || s() === "relay";
   const [editing, setEditing] = createSignal(false);
   // Another device's page: close the form.
   createEffect(on(() => props.node, () => setEditing(false), { defer: true }));
@@ -196,6 +268,87 @@ export default function Device(props: { node: string; onBack: () => void; onHeal
     if (!l) return kindTiles();
     return l.order.filter((id) => !l.hidden.includes(id)).flatMap((id) => byId.get(id) ?? []);
   });
+
+  // Tabs: the shown tiles, by tab ("Edit page" order and hiding still
+  // apply inside each). A tab with nothing the device offers is left out.
+  const inTab = (d: TileDef, tab: DeviceTab) => d.tab === tab || (tab === "overview" && OVERVIEW.includes(d.id));
+  const offered = (d: TileDef) => d.available?.(props.node) ?? true;
+  const tabs = createMemo(() =>
+    TAB_IDS.filter((tab) => tab === "overview" || shownTiles().some((d) => inTab(d, tab) && offered(d))),
+  );
+  const [tab, setTab] = createSignal<DeviceTab>(savedTab(props.node) ?? "overview");
+  createEffect(on(() => props.node, (node) => setTab(savedTab(node) ?? "overview"), { defer: true }));
+  // Asked to open at a tab: that one (when the device has it).
+  createEffect(
+    on(
+      () => props.tab,
+      (ask) => {
+        if (ask && (TAB_IDS as readonly string[]).includes(ask.id)) {
+          setTab(ask.id as DeviceTab);
+          if (ask.tile) setSub({ ...sub(), [ask.id]: ask.tile });
+        }
+      },
+    ),
+  );
+  // The tab shown: the chosen one, else Overview when it went away.
+  const current = () => (tabs().includes(tab()) ? tab() : "overview");
+  const choose = (id: string) => {
+    setTab(id as DeviceTab);
+    saveTab(props.node, id as DeviceTab);
+  };
+  const tabTiles = () => shownTiles().filter((d) => inTab(d, current()));
+  // A tab with more than two tiles shows one at a time, picked from a row
+  // of its tiles' names (Overview shows all of its few). Nothing is a long
+  // page.
+  const [sub, setSub] = createSignal<Partial<Record<string, string>>>({});
+  const offeredTiles = () => tabTiles().filter(offered);
+  const split = () => current() !== "overview" && offeredTiles().length > 2;
+  const subTile = () => {
+    const list = offeredTiles();
+    return list.find((d) => d.id === sub()[current()])?.id ?? list[0]?.id;
+  };
+  const unread = () => state.messages.filter((m) => m.node === props.node && m.dir === "in").length;
+  const moving = () =>
+    Object.values(state.transfers).filter(
+      (x) => x.node === props.node && (x.state === "waiting" || x.state === "sending" || x.state === "receiving"),
+    ).length;
+  const tabDefs = () =>
+    tabs().map((id) => ({
+      id,
+      label: t(TAB_LABEL[id]),
+      icon: TAB_ICON[id],
+      count: id === "messages" ? unread() : id === "files" ? moving() : undefined,
+    }));
+
+  // The "⋯" menu: less-used actions. Verify and Remove open their dialogs.
+  const verify = useVerify(() => props.node);
+  const [removing, setRemoving] = createSignal(false);
+  const menu = (): MenuItem[] => [
+    { icon: "edit", label: t("label.edit"), hint: t("label.editHint"), onSelect: () => setEditing((v) => !v) },
+    {
+      icon: "layout", label: arranging() ? t("layout.done") : t("layout.edit"),
+      hint: t("layout.editHint"),
+      onSelect: () => setArranging((v) => !v),
+    },
+    { icon: "verify", label: t("verify.button"), hint: t("verify.buttonHint"), onSelect: verify.show },
+    ...(live()
+      ? [
+          {
+            icon: "reconnect" as const, label: t("device.reconnect"),
+            hint: t("device.reconnectHint"),
+            onSelect: () => reconnect(props.node).catch((e) => toast(friendlyError(e), "error")),
+          },
+          {
+            icon: "disconnect" as const, label: t("device.disconnect"),
+            hint: t("device.disconnectHint"),
+            onSelect: () => disconnect(props.node).catch((e) => toast(friendlyError(e), "error")),
+          },
+        ]
+      : []),
+    { icon: "remove", label: t("removeDevice.button"), hint: t("removeDevice.hint"), danger: true, onSelect: () => setRemoving(true) },
+  ];
+  const mockMenu = import.meta.env.MODE === "mock" && new URLSearchParams(location.search).get("menu") === "1";
+
   // Ask for its battery whenever this page opens (answer: device-status-event).
   // Asked only over a live link (and again when one comes up): asking a
   // device that isn't connected would wake it by push just to show this.
@@ -230,62 +383,66 @@ export default function Device(props: { node: string; onBack: () => void; onHeal
             <div class="device-main">
               <div class="label-title">
                 <h1>{peerName(p().node_id)}</h1>
-                <button
-                  class="btn btn-ghost btn-sm"
-                  title={t("label.editHint")}
-                  aria-expanded={editing()}
-                  onClick={() => setEditing((v) => !v)}
-                >
-                  {t("label.edit")}
-                </button>
-                <button
-                  class="btn btn-ghost btn-sm"
-                  title={t("layout.editHint")}
-                  aria-pressed={arranging()}
-                  onClick={() => setArranging((v) => !v)}
-                >
-                  {arranging() ? t("layout.done") : t("layout.edit")}
-                </button>
-                <VerifyDevice node={props.node} />
-                <RemoveDeviceButton node={props.node} name={peerName(props.node)} onRemoved={props.onBack} />
+                <VerifiedBadge verified={isVerified(props.node)} />
               </div>
               <Show when={peerModel(p().node_id)}>
                 {(model) => <p class="muted small device-model">{model()}</p>}
               </Show>
-              <StatusPill node={props.node} />
-              <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
-                <p class="muted small">{progressLabel(state.progress[props.node])}</p>
-              </Show>
+              <div class="device-status-row">
+                <StatusPill node={props.node} />
+                <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
+                  <span class="muted small">{progressLabel(state.progress[props.node])}</span>
+                </Show>
+              </div>
               {/* Asleep? Wake it, if it said it may be woken. */}
               <WakeButton node={props.node} />
             </div>
-            <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
-              <button
-                class="btn btn-primary"
-                onClick={() => connect(props.node).catch((e) => toast(friendlyError(e), "error"))}
-              >
-                {t("device.connect")}
-              </button>
-            </Show>
-            <Show when={s() === "direct" || s() === "relay"}>
-              <div class="row">
+            <div class="device-head-side">
+              <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
                 <button
-                  class="btn btn-ghost btn-sm"
-                  title={t("device.reconnectHint")}
-                  onClick={() => reconnect(props.node).catch((e) => toast(friendlyError(e), "error"))}
+                  class="btn btn-primary btn-sm"
+                  onClick={() => connect(props.node).catch((e) => toast(friendlyError(e), "error"))}
                 >
-                  {t("device.reconnect")}
+                  <Icon name="connect" />
+                  {t("device.connect")}
                 </button>
-                <button
-                  class="btn btn-ghost btn-sm"
-                  title={t("device.disconnectHint")}
-                  onClick={() => disconnect(props.node).catch((e) => toast(friendlyError(e), "error"))}
-                >
-                  {t("device.disconnect")}
-                </button>
-              </div>
-            </Show>
+              </Show>
+              <MenuButton label={t("device.more", { name: peerName(props.node) })} items={menu()} startOpen={mockMenu}>
+                <Icon name="more" />
+              </MenuButton>
+            </div>
           </header>
+          {/* What's done most, one click each (they wait for a device that
+              isn't reachable; getting its clipboard needs it connected). */}
+          <div class="device-actions" role="group" aria-label={t("quick.label", { name: peerName(props.node) })}>
+            <button class="btn btn-soft btn-sm" onClick={() => quickSendFile(props.node)}>
+              <Icon name="send-file" />
+              {t("quick.sendFile")}
+            </button>
+            <button class="btn btn-soft btn-sm" onClick={() => quickSendClipboard(props.node)}>
+              <Icon name="send-clip" />
+              {t("quick.sendClipboard")}
+            </button>
+            <Gate reason={needsLink(props.node)}>
+              <button class="btn btn-soft btn-sm" disabled={!!needsLink(props.node)} onClick={() => quickGetClipboard(props.node)}>
+                <Icon name="get-clip" />
+                {t("quick.getClipboard")}
+              </button>
+            </Gate>
+            <button class="btn btn-soft btn-sm" onClick={() => quickRing(props.node)}>
+              <Icon name="ring" />
+              {t("control.ring")}
+            </button>
+          </div>
+          {verify.dialog()}
+          <Show when={removing()}>
+            <RemoveDeviceConfirm
+              node={props.node}
+              name={peerName(props.node)}
+              onClose={() => setRemoving(false)}
+              onRemoved={props.onBack}
+            />
+          </Show>
           <KeyChangeBanner node={props.node} />
           {/* The health check found something wrong with this device. */}
           <Show when={props.onHealth && deviceProblems(props.node).some((c) => c.level === "bad")}>
@@ -304,14 +461,55 @@ export default function Device(props: { node: string; onBack: () => void; onHeal
           <Show
             when={arranging()}
             fallback={
-              <div class="tiles">
-                <For each={shownTiles()}>
-                  {(d) => <Show when={d.available?.(props.node) ?? true}>{d.render(props.node)}</Show>}
-                </For>
-                <Show when={layout() && shownTiles().length === 0}>
-                  <p class="muted small">{t("layout.allHidden")}</p>
-                </Show>
-              </div>
+              <>
+                <Tabs
+                  label={t("device.tabsLabel", { name: peerName(props.node) })}
+                  idBase="device"
+                  tabs={tabDefs()}
+                  selected={current()}
+                  onSelect={choose}
+                />
+                <div class="tiles tab-panel" {...panelProps("device", current())}>
+                  <Show when={split()}>
+                    <ul class="sub-nav tile-wide" aria-label={t("device.tilesOf", { tab: t(TAB_LABEL[current()]) })}>
+                      <For each={offeredTiles()}>
+                        {(d) => (
+                          <li>
+                            <button
+                              type="button"
+                              class="sub-nav-item"
+                              classList={{ active: subTile() === d.id }}
+                              aria-current={subTile() === d.id ? "true" : undefined}
+                              onClick={() => setSub({ ...sub(), [current()]: d.id })}
+                            >
+                              <Icon name={d.icon} />
+                              {d.title(props.node)}
+                            </button>
+                          </li>
+                        )}
+                      </For>
+                    </ul>
+                  </Show>
+                  <For each={tabTiles()}>
+                    {(d) => (
+                      <Show when={offered(d)}>
+                        {/* The tile with its icon before its title. */}
+                        <div
+                          class="icon-slot"
+                          classList={{ "slot-wide": !!d.wide || split() }}
+                          hidden={split() && subTile() !== d.id}
+                        >
+                          <Icon name={d.icon} class="slot-icon" />
+                          {d.render(props.node)}
+                        </div>
+                      </Show>
+                    )}
+                  </For>
+                  <Show when={layout() && shownTiles().length === 0}>
+                    <p class="muted small">{t("layout.allHidden")}</p>
+                  </Show>
+                </div>
+              </>
             }
           >
             <ArrangePage
@@ -841,7 +1039,7 @@ function NotificationGroup(props: { g: NotifGroup }) {
   return (
     <li class="notif" classList={{ "notif-handled": !!newest()?.handled }}>
       <div class="row">
-        <Show when={props.g.icon} fallback={<span class="notif-icon" aria-hidden="true">🔔</span>}>
+        <Show when={props.g.icon} fallback={<span class="notif-icon"><Icon name="notifications" /></span>}>
           <img class="notif-icon" src={props.g.icon!} alt="" />
         </Show>
         <span class="small muted grow notif-app">{appName()}</span>

@@ -1,6 +1,7 @@
-// App shell: sign in first, then a sidebar with Devices / Notes / Timers / Read later / Activity /
-// Transfers / Search / Settings / Help. A device opens its detail page; the Developer screen
-// is hidden.
+// App shell: sign in first, then a sidebar: Devices / Activity / Transfers,
+// then Tools (Notes / Timers / Read later / Search), and Settings / Help with
+// the health check's pill at the bottom. A device opens its page (in tabs);
+// the Developer screen is hidden.
 
 import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
 import { dismissRing, onOpenDevice, onQuickOpen, peerName, resume, signOut, state } from "./lib/core";
@@ -41,16 +42,21 @@ import Setup from "./screens/Setup";
 import { badCount, loadSetup, watchHealth } from "./lib/health";
 import { readLater, unreadCount } from "./lib/readLater";
 import { setHelpOpener } from "./help/HelpLink";
-import { t, tn, type Key } from "./i18n";
+import { t, tn, type Key, type PluralKey } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
+import { Icon, type IconName } from "./components/Icon";
 import { HotspotAsk } from "./components/HotspotAsk";
 import { PrintAsk } from "./components/PrintAsk";
 import { PermissionAsk, PermissionNotice } from "./components/PeerPermissions";
 
+/** Open at this part (a device's tab, a Settings section); `at` makes the
+ *  same ask again count as new. */
+type Ask = { id: string; tile?: string; at: number };
+
 type View =
   | { name: "home" }
-  | { name: "device"; node: string }
+  | { name: "device"; node: string; tab?: Ask }
   | { name: "notes"; request?: NoteRequest }
   | { name: "timers" }
   | { name: "readLater" }
@@ -59,10 +65,13 @@ type View =
   | { name: "setup" }
   | { name: "activity" }
   | { name: "transfers" }
-  | { name: "settings" }
+  | { name: "settings"; section?: Ask }
   | { name: "developer" }
   | { name: "help"; topic?: string }
   | { name: "search"; query?: string };
+
+/** The places the sidebar opens with nothing more to say. */
+type SimplePlace = "home" | "activity" | "transfers" | "notes" | "timers" | "readLater" | "search" | "settings" | "help";
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -134,6 +143,8 @@ export default function App() {
   const goPlace = (place: Place, section?: string) => {
     // Help's "section" is a topic.
     if (place === "help") return go({ name: "help", topic: section });
+    // Settings opens the section's category and brings it into view itself.
+    if (place === "settings") return go({ name: "settings", section: section ? { id: section, at: Date.now() } : undefined });
     go({ name: place });
     if (!section) return;
     requestAnimationFrame(() =>
@@ -160,9 +171,12 @@ export default function App() {
     setSignedIn(true);
     loadSetup().then((s) => !s.finished && go({ name: "setup" }), () => {});
   };
+  /** A device's page, at one of its tabs. */
+  const openDevice = (node: string, tab?: string, tile?: string) =>
+    go({ name: "device", node, tab: tab ? { id: tab, tile, at: Date.now() } : undefined });
   // The map's "Connection details": the device's page, at its Connection tile.
   const openConnection = (node: string) => {
-    go({ name: "device", node });
+    openDevice(node, "settings", "connection");
     requestAnimationFrame(() =>
       requestAnimationFrame(() => document.querySelector(".conn-tile")?.scrollIntoView({ block: "start" })),
     );
@@ -188,7 +202,11 @@ export default function App() {
       case "notifications":
       case "folders":
         if (!f.node) return;
-        go({ name: "device", node: f.node });
+        // The tab that holds it: chat, clipboard history, notification
+        // history, the folder browser.
+        if (f.kind === "messages") openDevice(f.node, "messages", "chat");
+        else if (f.kind === "notifications") openDevice(f.node, "notifications", "notification-history");
+        else openDevice(f.node, "files", f.kind === "clipboard" ? "clipboard-history" : "browse");
         return revealFound({ kind: f.kind, id: f.id, node: f.node }, missing);
       case "transfers":
         go({ name: "transfers" });
@@ -234,6 +252,27 @@ export default function App() {
   const activeTransfers = () =>
     Object.values(state.transfers).filter((x) => x.state === "waiting" || x.state === "sending" || x.state === "receiving").length;
 
+  /** One place in the sidebar, with its count (and the count in words for
+   *  screen readers). */
+  const NavItem = (p: { place: SimplePlace; icon: IconName; label: Key; active: boolean; count?: number; countWords?: PluralKey }) => (
+    <li>
+      <button
+        class={`nav-item ${p.active ? "active" : ""}`}
+        aria-current={p.active ? "page" : undefined}
+        onClick={() => go({ name: p.place })}
+      >
+        <Icon name={p.icon} />
+        <span class="nav-label">{t(p.label)}</span>
+        <Show when={(p.count ?? 0) > 0}>
+          <span class="nav-count" aria-hidden="true">
+            {p.count}
+          </span>
+          <Show when={p.countWords}>{(k) => <span class="sr-only">, {tn(k(), p.count ?? 0)}</span>}</Show>
+        </Show>
+      </button>
+    </li>
+  );
+
   return (
     <>
       <Show when={signedIn() !== null}>
@@ -250,120 +289,22 @@ export default function App() {
                 <Tagline />
               </span>
             </div>
+            {/* Main places, then the tools under a small label; Settings,
+                Help and the health check's pill sit at the bottom. */}
             <ul class="nav-list">
-              <li>
-                <button
-                  class={`nav-item ${is("home") || is("linksMap") ? "active" : ""}`}
-                  aria-current={is("home") ? "page" : undefined}
-                  onClick={() => go({ name: "home" })}
-                >
-                  {t("nav.devices")}
-                  <Show when={connected() > 0}>
-                    <span class="nav-count" aria-hidden="true">
-                      {connected()}
-                    </span>
-                    <span class="sr-only">, {tn("a11y.devicesConnected", connected())}</span>
-                  </Show>
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("notes") ? "active" : ""}`}
-                  aria-current={is("notes") ? "page" : undefined}
-                  onClick={() => go({ name: "notes" })}
-                >
-                  {t("nav.notes")}
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("timers") ? "active" : ""}`}
-                  aria-current={is("timers") ? "page" : undefined}
-                  onClick={() => go({ name: "timers" })}
-                >
-                  {t("nav.timers")}
-                  <Show when={activeTimers() > 0}>
-                    <span class="nav-count" aria-hidden="true">
-                      {activeTimers()}
-                    </span>
-                    <span class="sr-only">, {tn("a11y.timersRunning", activeTimers())}</span>
-                  </Show>
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("readLater") ? "active" : ""}`}
-                  aria-current={is("readLater") ? "page" : undefined}
-                  onClick={() => go({ name: "readLater" })}
-                >
-                  {t("nav.readLater")}
-                  <Show when={unreadCount() > 0}>
-                    <span class="nav-count" aria-hidden="true">
-                      {unreadCount()}
-                    </span>
-                    <span class="sr-only">, {tn("a11y.unreadLinks", unreadCount())}</span>
-                  </Show>
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("activity") ? "active" : ""}`}
-                  aria-current={is("activity") ? "page" : undefined}
-                  onClick={() => go({ name: "activity" })}
-                >
-                  {t("nav.activity")}
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("transfers") ? "active" : ""}`}
-                  aria-current={is("transfers") ? "page" : undefined}
-                  onClick={() => go({ name: "transfers" })}
-                >
-                  {t("nav.transfers")}
-                  <Show when={activeTransfers() > 0}>
-                    <span class="nav-count" aria-hidden="true">
-                      {activeTransfers()}
-                    </span>
-                    <span class="sr-only">, {tn("a11y.transfersActive", activeTransfers())}</span>
-                  </Show>
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("search") ? "active" : ""}`}
-                  aria-current={is("search") ? "page" : undefined}
-                  onClick={() => go({ name: "search" })}
-                >
-                  {t("nav.search")}
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("settings") || is("developer") || is("health") || is("setup") ? "active" : ""}`}
-                  aria-current={is("settings") || is("developer") || is("health") || is("setup") ? "page" : undefined}
-                  onClick={() => go({ name: "settings" })}
-                >
-                  {t("nav.settings")}
-                </button>
-              </li>
-              <li>
-                <button
-                  class={`nav-item ${is("help") ? "active" : ""}`}
-                  aria-current={is("help") ? "page" : undefined}
-                  onClick={() => go({ name: "help" })}
-                >
-                  {t("nav.help")}
-                </button>
-              </li>
+              <NavItem place="home" icon="devices" label="nav.devices" active={is("home") || is("linksMap")} count={connected()} countWords="a11y.devicesConnected" />
+              <NavItem place="activity" icon="activity" label="nav.activity" active={is("activity")} />
+              <NavItem place="transfers" icon="transfers" label="nav.transfers" active={is("transfers")} count={activeTransfers()} countWords="a11y.transfersActive" />
             </ul>
-            {/* The health check found something red. */}
-            <Show when={badCount() > 0}>
-              <button class="health-badge small" onClick={() => go({ name: "health" })}>
-                <span class="health-badge-dot" aria-hidden="true" />
-                {t("health.badge")}
-              </button>
-            </Show>
+            <h2 class="nav-group" id="nav-tools">
+              {t("nav.tools")}
+            </h2>
+            <ul class="nav-list" aria-labelledby="nav-tools">
+              <NavItem place="notes" icon="notes" label="nav.notes" active={is("notes")} />
+              <NavItem place="timers" icon="timers" label="nav.timers" active={is("timers")} count={activeTimers()} countWords="a11y.timersRunning" />
+              <NavItem place="readLater" icon="readLater" label="nav.readLater" active={is("readLater")} count={unreadCount()} countWords="a11y.unreadLinks" />
+              <NavItem place="search" icon="search" label="nav.search" active={is("search")} />
+            </ul>
             {/* Pop-ups held while a phone is on Do Not Disturb. */}
             <Show when={state.quietPhones.length > 0}>
               <div class="quiet-badge small" role="status" title={t("quiet.hint")}>
@@ -389,7 +330,26 @@ export default function App() {
                 </button>
               </div>
             </Show>
-            <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
+            <div class="nav-bottom">
+              <ul class="nav-list">
+                <NavItem place="settings" icon="settings" label="nav.settings" active={is("settings") || is("developer") || is("health") || is("setup")} />
+                <NavItem place="help" icon="help" label="nav.help" active={is("help")} />
+              </ul>
+              {/* The health check found something red: the one place it shows. */}
+              <Show when={badCount() > 0}>
+                <button
+                  class="health-badge small"
+                  aria-current={is("health") ? "page" : undefined}
+                  title={t("health.homeBody", { n: badCount() })}
+                  onClick={() => go({ name: "health" })}
+                >
+                  <Icon name="alert" />
+                  <span class="health-badge-text">{t("health.badge")}</span>
+                  <span class="nav-count health-count">{badCount()}</span>
+                </button>
+              </Show>
+              <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
+            </div>
           </nav>
           <main class="content" id="main" tabIndex={-1} ref={main}>
             <UpdateBanner />
@@ -397,9 +357,8 @@ export default function App() {
             <Switch>
               <Match when={view().name === "home"}>
                 <Home
-                  onOpen={(node) => go({ name: "device", node })}
+                  onOpen={openDevice}
                   onMap={() => go({ name: "linksMap" })}
-                  onHealth={() => go({ name: "health" })}
                   onSetup={() => go({ name: "setup" })}
                 />
               </Match>
@@ -416,6 +375,7 @@ export default function App() {
                 {(v) => (
                   <Device
                     node={(v() as { node: string }).node}
+                    tab={(v() as { tab?: Ask }).tab}
                     onBack={() => go({ name: "home" })}
                     onHealth={() => go({ name: "health" })}
                   />
@@ -442,12 +402,15 @@ export default function App() {
               <Match when={view().name === "transfers"}>
                 <Transfers />
               </Match>
-              <Match when={view().name === "settings"}>
+              <Match when={view().name === "settings" && view()}>
+                {(v) => (
                 <Settings
+                  section={(v() as { section?: Ask }).section}
                   onDeveloper={() => go({ name: "developer" })}
                   onHealth={() => go({ name: "health" })}
                   onSetup={() => go({ name: "setup" })}
                 />
+                )}
               </Match>
               <Match when={view().name === "help" && view()}>
                 {(v) => <Help topic={(v() as { topic?: string }).topic} onTopic={(topic) => go({ name: "help", topic })} />}
@@ -505,7 +468,13 @@ function mockView(): View {
   const name = p.get("view") ?? "home";
   switch (name) {
     case "device":
-      return { name, node: p.get("device") ?? "" };
+      return {
+        name,
+        node: p.get("device") ?? "",
+        tab: p.get("tab") ? { id: p.get("tab")!, tile: p.get("tile") ?? undefined, at: 0 } : undefined,
+      };
+    case "settings":
+      return { name, section: p.get("section") ? { id: `settings-${p.get("section")}`, at: 0 } : undefined };
     case "help":
       return { name, topic: p.get("topic") ?? undefined };
     case "search":
@@ -519,7 +488,6 @@ function mockView(): View {
     case "setup":
     case "activity":
     case "transfers":
-    case "settings":
     case "developer":
       return { name };
     default:

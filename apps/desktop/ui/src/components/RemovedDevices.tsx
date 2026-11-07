@@ -36,13 +36,14 @@ export function RemoveDeviceButton(props: { node: string; name: string; onRemove
         {t("removeDevice.button")}
       </button>
       <Show when={asking()}>
-        <Confirm node={props.node} name={props.name} onClose={() => setAsking(false)} onRemoved={props.onRemoved} />
+        <RemoveDeviceConfirm node={props.node} name={props.name} onClose={() => setAsking(false)} onRemoved={props.onRemoved} />
       </Show>
     </>
   );
 }
 
-function Confirm(props: { node: string; name: string; onClose: () => void; onRemoved: () => void }) {
+/** "Remove device?", Cancel first (the device page's "⋯" menu opens it). */
+export function RemoveDeviceConfirm(props: { node: string; name: string; onClose: () => void; onRemoved: () => void }) {
   let dialog: HTMLDivElement | undefined;
   const restore = rememberFocus();
   const close = () => {

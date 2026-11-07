@@ -5,6 +5,7 @@
 
 import type { JSX } from "solid-js";
 import { state } from "./core";
+import type { IconName } from "../components/Icon";
 
 /** The two layouts kept: one for phones, one for computers. */
 export type PageKind = "phone" | "computer";
@@ -14,6 +15,10 @@ export type PageKind = "phone" | "computer";
 export type TileDef = {
   /** Kept in saved layouts: never rename one. */
   id: string;
+  /** Its icon, before its title (components/Icon.tsx). */
+  icon: IconName;
+  /** The device page's tab it lives in (screens/Device.tsx TAB_IDS). */
+  tab: string;
   /** Its name in "Edit page". */
   title: (node: string) => string;
   /** Spans the page's width (as its tile does). */

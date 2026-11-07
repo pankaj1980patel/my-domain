@@ -181,7 +181,7 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
   };
 
   return (
-    <section class="page search-page">
+    <section class="page page-fit search-page">
       <header class="page-head">
         <div>
           <h1>{t("search.title")}</h1>

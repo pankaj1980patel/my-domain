@@ -138,7 +138,7 @@ export default function ReadLater() {
       <Show
         when={list().length > 0}
         fallback={
-          <Empty icon="🔖" title={total() ? t("readLater.noneShown") : t("readLater.emptyTitle")}>
+          <Empty icon="readLater" title={total() ? t("readLater.noneShown") : t("readLater.emptyTitle")}>
             <p class="muted">
               {query()
                 ? t("readLater.noMatch", { query: query() })

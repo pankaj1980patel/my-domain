@@ -150,7 +150,7 @@ export default function Health(props: HealthNav) {
     return parts.join(" · ");
   };
   return (
-    <section class="page">
+    <section class="page page-fit health-page">
       <header class="page-head">
         <div>
           <h1>

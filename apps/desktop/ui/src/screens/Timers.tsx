@@ -253,7 +253,7 @@ export default function Timers() {
         when={list().length > 0}
         fallback={
           <Show when={timers.loaded}>
-            <Empty icon="⏱" title={t("timers.emptyTitle")}>
+            <Empty icon="timers" title={t("timers.emptyTitle")}>
               {t("timers.emptyBody")}
             </Empty>
           </Show>

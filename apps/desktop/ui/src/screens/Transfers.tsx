@@ -76,7 +76,7 @@ export default function Transfers() {
       .catch((e) => toast(friendlyError(e), "error"));
 
   return (
-    <section class="page">
+    <section class="page page-fit">
       <header class="page-head">
         <div>
           <h1>{t("transfers.title")}</h1>
@@ -88,10 +88,12 @@ export default function Transfers() {
           </button>
         </Show>
       </header>
+      {/* The lists scroll in their own panel; the page stays put. */}
+      <div class="page-scroll">
       <Show
         when={top().length > 0}
         fallback={
-          <Empty icon="" title={t("transfers.emptyTitle")}>
+          <Empty icon="transfers" title={t("transfers.emptyTitle")}>
             {t("transfers.emptyBody")}
           </Empty>
         }
@@ -109,6 +111,7 @@ export default function Transfers() {
           </ul>
         </Show>
       </Show>
+      </div>
     </section>
   );
 }

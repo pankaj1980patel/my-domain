@@ -36,38 +36,46 @@ export function OwnFingerprint() {
   );
 }
 
-/** The badge and the "Verify" button on a device's page. */
-export default function VerifyDevice(props: { node: string }) {
+/** "Verify" for a device's page: `show` opens the dialog (the page's "⋯"
+ *  menu calls it), `dialog` is where it draws. */
+export function useVerify(node: () => string) {
   const [info, setInfo] = createSignal<KeyVerification | null>(null);
   const [open, setOpen] = createSignal(false);
   createEffect(
-    on(
-      () => props.node,
-      (node) => {
-        setInfo(null);
-        loadVerification(node)
-          .then(setInfo)
-          .catch(() => {});
-      },
-    ),
+    on(node, (n) => {
+      setInfo(null);
+      setOpen(false);
+      loadVerification(n)
+        .then(setInfo)
+        .catch(() => {});
+    }),
   );
   const show = () =>
-    loadVerification(props.node)
+    loadVerification(node())
       .then((v) => {
         setInfo(v);
         if (v) setOpen(true);
-        else toast(t("verify.notYet", { name: peerName(props.node) }), "info");
+        else toast(t("verify.notYet", { name: peerName(node()) }), "info");
       })
       .catch((e) => toast(friendlyError(e), "error"));
+  const dialog = () => (
+    <Show when={open() && info()}>
+      {(v) => <VerifyDialog info={v()} onChange={setInfo} onClose={() => setOpen(false)} />}
+    </Show>
+  );
+  return { show, dialog };
+}
+
+/** The badge and the "Verify" button, side by side. */
+export default function VerifyDevice(props: { node: string }) {
+  const v = useVerify(() => props.node);
   return (
     <>
       <VerifiedBadge verified={isVerified(props.node)} />
-      <button class="btn btn-ghost btn-sm" title={t("verify.buttonHint")} onClick={show}>
+      <button class="btn btn-ghost btn-sm" title={t("verify.buttonHint")} onClick={v.show}>
         {t("verify.button")}
       </button>
-      <Show when={open() && info()}>
-        {(v) => <VerifyDialog info={v()} onChange={setInfo} onClose={() => setOpen(false)} />}
-      </Show>
+      {v.dialog()}
     </>
   );
 }

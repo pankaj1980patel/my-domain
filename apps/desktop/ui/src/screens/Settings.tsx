@@ -1,7 +1,10 @@
-// Account, this device, and preferences. Tap the version 7 times for the
-// Developer screen.
+// Settings in two columns: the categories (and a search box that looks
+// through all of them) on the left, the chosen category on the right; one
+// column under 720 px, the list first. Every section keeps its
+// `settings-<id>` element id (deep links open its category). Tap the
+// version 7 times (Advanced) for the Developer screen.
 
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, on, onMount, Show, type JSX } from "solid-js";
 import {
   commands,
   type AwayLock,
@@ -46,6 +49,33 @@ import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLan
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
 import { setupAct } from "../lib/health";
+import { fold, queryWords } from "../lib/search";
+import { SettingRow, SwitchRow } from "../components/SettingRow";
+import { Icon, type IconName } from "../components/Icon";
+
+/** The categories, in the list's order. */
+const CATEGORIES = [
+  { id: "general", label: "settings.cat.general", icon: "settings" },
+  { id: "account", label: "settings.cat.account", icon: "shield" },
+  { id: "devices", label: "settings.cat.devices", icon: "devices" },
+  { id: "clipboard", label: "settings.cat.clipboard", icon: "clipboard" },
+  { id: "notifications", label: "settings.cat.notifications", icon: "notifications" },
+  { id: "automation", label: "settings.cat.automation", icon: "workflow" },
+  { id: "appearance", label: "settings.cat.appearance", icon: "palette" },
+  { id: "advanced", label: "settings.cat.advanced", icon: "code" },
+] as const satisfies readonly { id: string; label: Key; icon: IconName }[];
+type CategoryId = (typeof CATEGORIES)[number]["id"];
+
+/** The category last open (this computer only). */
+const CATEGORY_STORE = "md.settingsCategory";
+function savedCategory(): CategoryId {
+  try {
+    const v = localStorage.getItem(CATEGORY_STORE);
+    return CATEGORIES.find((c) => c.id === v)?.id ?? "general";
+  } catch {
+    return "general";
+  }
+}
 
 
 /** Which OS's location permission the "find my computer" hint explains. */
@@ -56,7 +86,13 @@ const locationHintKey: Key = (() => {
   return "settings.shareLocationHintLinux";
 })();
 
-export default function Settings(props: { onDeveloper: () => void; onHealth: () => void; onSetup: () => void }) {
+export default function Settings(props: {
+  /** Open at this section's element id (`settings-<id>`). */
+  section?: { id: string; at: number };
+  onDeveloper: () => void;
+  onHealth: () => void;
+  onSetup: () => void;
+}) {
   const [taps, setTaps] = createSignal(0);
   const [newKey, setNewKey] = createSignal("");
   const [pass, setPass] = createSignal("");
@@ -143,293 +179,564 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
     }
   };
 
-  return (
-    <section class="page">
-      <header class="page-head">
-        <h1>{t("settings.title")}</h1>
-      </header>
+  // --- categories and search ------------------------------------------------
+  const [cat, setCat] = createSignal<CategoryId>(savedCategory());
+  const [query, setQuery] = createSignal("");
+  const [found, setFound] = createSignal<Record<string, number>>({});
+  const pick = (id: CategoryId) => {
+    setCat(id);
+    setQuery("");
+    try {
+      localStorage.setItem(CATEGORY_STORE, id);
+    } catch {
+      /* no storage: General next time */
+    }
+    // On one column the list sits above: bring the chosen section up.
+    requestAnimationFrame(() => {
+      if (body && body.getBoundingClientRect().top > window.innerHeight * 0.6) body.scrollIntoView({ block: "start" });
+    });
+  };
+  let body: HTMLDivElement | undefined;
+  // Search: every category shows; a tile stays when its words match.
+  // (Read from the page itself, so a setting added to any tile is found.)
+  const filter = () => {
+    if (!body) return;
+    const words = queryWords(query());
+    const counts: Record<string, number> = {};
+    for (const sec of Array.from(body.querySelectorAll<HTMLElement>(".settings-cat"))) {
+      const id = sec.dataset.cat ?? "";
+      const units = Array.from(sec.querySelectorAll<HTMLElement>(":scope > .settings-units > .set-sec"));
+      let n = 0;
+      for (const u of units) {
+        const hay = fold(`${u.textContent ?? ""} ${sec.dataset.label ?? ""}`);
+        const hit = words.every((w) => hay.includes(w));
+        u.classList.toggle("set-miss", words.length > 0 && !hit);
+        if (hit) n++;
+      }
+      counts[id] = words.length ? n : units.length;
+    }
+    setFound(counts);
+  };
+  createEffect(on([query, cat, () => languagePref()], () => requestAnimationFrame(filter)));
+  const searching = () => queryWords(query()).length > 0;
+  const shows = (id: CategoryId) => (searching() ? (found()[id] ?? 0) > 0 : cat() === id);
+  const nothing = () => searching() && CATEGORIES.every((c) => !found()[c.id]);
 
-      <article class="tile" id="settings-account">
-        <h2>{t("settings.account")}</h2>
-        <p>{tRich("settings.signedInAs", { name: <strong>{state.account.username || "…"}</strong> })}</p>
-        <div class="join-actions">
-          <AddDevice />
-          <button class="btn btn-ghost" onClick={signOut}>
-            {t("settings.signOut")}
-          </button>
-        </div>
-        <AccountSecurity />
-      </article>
+  // Opened at a section (the command palette, search, the health check):
+  // its category, then the section in view.
+  createEffect(
+    on(
+      () => props.section,
+      (ask) => {
+        if (!ask) return;
+        requestAnimationFrame(() => {
+          const el = document.getElementById(ask.id);
+          const home = el?.closest<HTMLElement>(".settings-cat")?.dataset.cat as CategoryId | undefined;
+          if (!el || !home) return;
+          setQuery("");
+          setCat(home);
+          const secId = el.closest<HTMLElement>(".set-sec")?.dataset.sec;
+          if (secId) pickSub(home, secId);
+          requestAnimationFrame(() => el.scrollIntoView({ block: "start" }));
+        });
+      },
+    ),
+  );
+  // Screenshot mode: ?sq= types into the search box.
+  if (import.meta.env.MODE === "mock") {
+    const sq = new URLSearchParams(location.search).get("sq");
+    if (sq) setQuery(sq);
+    const c = CATEGORIES.find((x) => x.id === new URLSearchParams(location.search).get("cat"));
+    if (c) setCat(c.id);
+  }
 
-      <RemovedDevicesSetting />
+  // Each category's sections: one shows at a time (the list above them
+  // picks it), so no category is a long page. Searching shows every match.
+  const [sub, setSub] = createSignal<Partial<Record<CategoryId, string>>>({});
+  const subOf = (c: CategoryId) => sub()[c] ?? SECTIONS[c][0].id;
+  const pickSub = (c: CategoryId, id: string) => setSub({ ...sub(), [c]: id });
 
-      <KeyRotationSetting />
-
-      <article class="tile" id="settings-health">
-        <h2>{t("health.settingsTile")}</h2>
-        <p class="muted small">{t("health.settingsHint")}</p>
-        <div class="row">
-          <button class="btn btn-soft" onClick={props.onHealth}>
-            {t("health.open")}
-          </button>
-          <button class="btn btn-ghost" onClick={() => setupAct("restart").then(props.onSetup, () => {})}>
-            {t("setup.again")}
-          </button>
-        </div>
-      </article>
-
-      <article class="tile" id="settings-device">
-        <h2>{t("settings.thisDevice")}</h2>
-        <p>{tRich("settings.seenAs", { name: <strong>{niceName(state.me?.name ?? "")}</strong> })}</p>
-        <OwnFingerprint />
-        <label class="switch-row">
-          <span>{t("settings.clipSync")}</span>
-          <input type="checkbox" role="switch" checked={state.clipSync} onChange={(e) => setClipSync(e.currentTarget.checked)} />
-        </label>
-        <label class="switch-row">
-          <span>{t("settings.clipHistory")}</span>
-          <input type="checkbox" role="switch" checked={clipHistory()} onChange={(e) => toggleClipHistory(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.clipHistoryHint")}</p>
-        <ClipPrivacySetting />
-        <OtpSetting />
-        <label class="switch-row">
-          <span>{t("settings.chatHistory")}</span>
-          <input type="checkbox" role="switch" checked={chatKeep()} onChange={(e) => setChatKeep(e.currentTarget.checked).catch(() => {})} />
-        </label>
-        <p class="muted small">{t("settings.chatHistoryHint")}</p>
-        <label class="switch-row">
-          <span>{t("settings.notifications")}</span>
-          <input type="checkbox" role="switch" checked={notifs()} onChange={(e) => toggleNotifs(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.notificationsHint")}</p>
-        <label class="switch-row">
-          <span>{t("settings.followDnd")}</span>
-          <input type="checkbox" role="switch" checked={followDnd()} onChange={(e) => toggleFollowDnd(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.followDndHint")}</p>
-        <label class="switch-row">
-          <span>{t("settings.quickPanel")}</span>
-          <input type="checkbox" role="switch" checked={quickPanel()} onChange={(e) => toggleQuickPanel(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.quickPanelHint")}</p>
-        <TrayBatterySetting />
-        <NearbySetting />
-        <WifiDirectSetting />
-        <PermissionsSummary />
-        <label class="switch-row">
-          <span>{t("settings.shareLabels")}</span>
-          <input type="checkbox" role="switch" checked={shareLabels()} onChange={(e) => toggleShareLabels(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.shareLabelsHint")}</p>
-        <Show when={canLocate()}>
-          <label class="switch-row">
-            <span>{t("settings.shareLocation")}</span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={shareLocation()}
-              onChange={(e) => toggleShareLocation(e.currentTarget.checked)}
+  type Sec = { id: string; icon: IconName; title: Key; body: () => JSX.Element };
+  const SECTIONS: Record<CategoryId, Sec[]> = {
+    general: [
+      {
+        id: "this-device",
+        icon: "monitor",
+        title: "settings.thisDevice",
+        body: () => (
+          <article class="tile" id="settings-device">
+            <h2>{t("settings.thisDevice")}</h2>
+            <p class="muted small">{tRich("settings.seenAs", { name: <strong>{niceName(state.me?.name ?? "")}</strong> })}</p>
+            <SwitchRow
+              icon="app-window"
+              label={t("settings.quickPanel")}
+              hint={t("settings.quickPanelHint")}
+              checked={quickPanel()}
+              onChange={toggleQuickPanel}
             />
-          </label>
-          <p class="muted small">
-            {t(locationHintKey)} <HelpLink topic="find" />
-          </p>
-        </Show>
-        <Show when={awayLock().can_lock}>
-          <label class="switch-row">
-            <span>{t("settings.awayLock")}</span>
-            <input
-              type="checkbox"
-              role="switch"
-              checked={awayLock().on}
-              onChange={(e) => changeAwayLock(e.currentTarget.checked, awayLock().minutes)}
+            <SwitchRow
+              icon="chat"
+              label={t("settings.chatHistory")}
+              hint={t("settings.chatHistoryHint")}
+              checked={chatKeep()}
+              onChange={(on) => setChatKeep(on).catch(() => {})}
             />
-          </label>
-          <Show when={awayLock().on}>
-            <label class="row small">
-              <span class="muted">{t("settings.awayLockAfter")}</span>
-              <select
-                aria-label={t("settings.awayLockAfter")}
-                onChange={(e) => changeAwayLock(true, Number(e.currentTarget.value))}
+            <TrayBatterySetting />
+          </article>
+        ),
+      },
+      { id: "shortcuts", icon: "keyboard", title: "shortcuts.title", body: () => <ShortcutSetting me={local()?.node} /> },
+      { id: "updates", icon: "download", title: "updates.title", body: () => <UpdatesSetting /> },
+      {
+        id: "health",
+        icon: "health",
+        title: "health.settingsTile",
+        body: () => (
+          <article class="tile" id="settings-health">
+            <h2>{t("health.settingsTile")}</h2>
+            <SettingRow icon="health" label={t("health.open")} hint={t("health.settingsHint")}>
+              <div class="row">
+                <button class="btn btn-ghost btn-sm" onClick={() => setupAct("restart").then(props.onSetup, () => {})}>
+                  {t("setup.again")}
+                </button>
+                <button class="btn btn-soft btn-sm" onClick={props.onHealth}>
+                  {t("health.open")}
+                </button>
+              </div>
+            </SettingRow>
+          </article>
+        ),
+      },
+    ],
+    account: [
+      {
+        id: "account",
+        icon: "user",
+        title: "settings.account",
+        body: () => (
+          <article class="tile" id="settings-account">
+            <h2>{t("settings.account")}</h2>
+            <p class="muted small">{tRich("settings.signedInAs", { name: <strong>{state.account.username || "…"}</strong> })}</p>
+            <div class="join-actions">
+              <AddDevice />
+              <button class="btn btn-ghost" onClick={signOut}>
+                {t("settings.signOut")}
+              </button>
+            </div>
+            <AccountSecurity />
+          </article>
+        ),
+      },
+      {
+        id: "security",
+        icon: "shield",
+        title: "settings.security",
+        body: () => (
+          <>
+            <article class="tile">
+              <h2>{t("settings.security")}</h2>
+              <OwnFingerprint />
+              <Show when={awayLock().can_lock}>
+                <SwitchRow
+                  icon="lock"
+                  label={t("settings.awayLock")}
+                  hint={t("settings.awayLockHint")}
+                  checked={awayLock().on}
+                  onChange={(on) => changeAwayLock(on, awayLock().minutes)}
+                />
+                <Show when={awayLock().on}>
+                  <SettingRow icon="timers" label={t("settings.awayLockAfter")}>
+                    <select
+                      aria-label={t("settings.awayLockAfter")}
+                      onChange={(e) => changeAwayLock(true, Number(e.currentTarget.value))}
+                    >
+                      <For each={[2, 5, 10]}>
+                        {(m) => (
+                          <option value={String(m)} selected={m === awayLock().minutes}>
+                            {t("settings.awayLockMinutes", { n: m })}
+                          </option>
+                        )}
+                      </For>
+                    </select>
+                  </SettingRow>
+                </Show>
+              </Show>
+            </article>
+            <KeyRotationSetting />
+          </>
+        ),
+      },
+      {
+        id: "key",
+        icon: "key",
+        title: "settings.deviceKey",
+        body: () => (
+          <article class="tile" id="settings-key">
+            <h2>{t("settings.deviceKey")}</h2>
+            <Show
+              when={showKey()}
+              fallback={
+                <SettingRow icon="key" label={t("settings.changeKey")} hint={t("settings.deviceKeyHint")}>
+                  <button class="btn btn-ghost btn-sm" ref={keyButton} onClick={openKey}>
+                    {t("settings.changeKey")}
+                  </button>
+                </SettingRow>
+              }
+            >
+              <p class="muted small">{t("settings.deviceKeyHint")}</p>
+              <form
+                class="stack"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  try {
+                    await unwrap(commands.updateEncryptionKey(newKey(), pass()));
+                    toast(t("settings.keyChanged"), "ok");
+                    closeKey();
+                    setNewKey("");
+                    setPass("");
+                  } catch (err) {
+                    toast(friendlyError(err), "error");
+                  }
+                }}
               >
-                <For each={[2, 5, 10]}>
-                  {(m) => (
-                    <option value={String(m)} selected={m === awayLock().minutes}>
-                      {t("settings.awayLockMinutes", { n: m })}
+                <input
+                  type="password"
+                  ref={keyInput}
+                  placeholder={t("settings.newKey")}
+                  aria-label={t("settings.newKey")}
+                  value={newKey()}
+                  onInput={(e) => setNewKey(e.currentTarget.value)}
+                />
+                <input
+                  type="password"
+                  placeholder={t("settings.yourPassword")}
+                  aria-label={t("settings.yourPassword")}
+                  autocomplete="current-password"
+                  value={pass()}
+                  onInput={(e) => setPass(e.currentTarget.value)}
+                />
+                <div class="row dialog-actions">
+                  <button class="btn btn-ghost" type="button" onClick={closeKey}>
+                    {t("settings.cancel")}
+                  </button>
+                  <button class="btn btn-primary" type="submit" disabled={!newKey() || !pass()}>
+                    {t("settings.save")}
+                  </button>
+                </div>
+              </form>
+            </Show>
+          </article>
+        ),
+      },
+    ],
+    devices: [
+      {
+        id: "sharing",
+        icon: "devices",
+        title: "settings.cat.devicesTile",
+        body: () => (
+          <article class="tile">
+            <h2>{t("settings.cat.devicesTile")}</h2>
+            <SwitchRow
+              icon="tags"
+              label={t("settings.shareLabels")}
+              hint={t("settings.shareLabelsHint")}
+              checked={shareLabels()}
+              onChange={toggleShareLabels}
+            />
+            <Show when={canLocate()}>
+              <SwitchRow
+                icon="locate"
+                label={t("settings.shareLocation")}
+                hint={
+                  <>
+                    {t(locationHintKey)} <HelpLink topic="find" />
+                  </>
+                }
+                checked={shareLocation()}
+                onChange={toggleShareLocation}
+              />
+            </Show>
+            <NearbySetting />
+            <WifiDirectSetting />
+          </article>
+        ),
+      },
+      {
+        id: "permissions",
+        icon: "verify",
+        title: "perm.summaryTitle",
+        body: () => (
+          <article class="tile">
+            <PermissionsSummary />
+          </article>
+        ),
+      },
+      { id: "wake", icon: "power", title: "wake.title", body: () => <WakeSetting /> },
+      { id: "kvm", icon: "mouse", title: "kvm.title", body: () => <KvmSetting /> },
+      { id: "removed", icon: "remove", title: "removedDevices.title", body: () => <RemovedDevicesSetting /> },
+    ],
+    clipboard: [
+      {
+        id: "clipboard",
+        icon: "clipboard",
+        title: "clipboard.title",
+        body: () => (
+          <article class="tile">
+            <h2>{t("clipboard.title")}</h2>
+            <SwitchRow icon="refresh" label={t("settings.clipSync")} checked={state.clipSync} onChange={setClipSync} />
+            <SwitchRow
+              icon="history"
+              label={t("settings.clipHistory")}
+              hint={t("settings.clipHistoryHint")}
+              checked={clipHistory()}
+              onChange={toggleClipHistory}
+            />
+            <ClipPrivacySetting />
+            <OtpSetting />
+          </article>
+        ),
+      },
+      { id: "file-manager", icon: "files", title: "sendTo.settingTitle", body: () => <FileManagerSetting /> },
+      { id: "sync", icon: "folder-sync", title: "sync.title", body: () => <SyncSetting /> },
+      { id: "downloads", icon: "download", title: "download.settingsTitle", body: () => <RemoteDownloadSetting /> },
+      { id: "insert", icon: "scan", title: "insert.settingsTitle", body: () => <InsertSetting /> },
+      { id: "print", icon: "printer", title: "print.title", body: () => <PrintSetting /> },
+    ],
+    notifications: [
+      {
+        id: "notifications",
+        icon: "notifications",
+        title: "notifications.title",
+        body: () => (
+          <article class="tile">
+            <h2>{t("notifications.title")}</h2>
+            <SwitchRow
+              icon="notifications"
+              label={t("settings.notifications")}
+              hint={t("settings.notificationsHint")}
+              checked={notifs()}
+              onChange={toggleNotifs}
+            />
+            <SwitchRow
+              icon="moon"
+              label={t("settings.followDnd")}
+              hint={t("settings.followDndHint")}
+              checked={followDnd()}
+              onChange={toggleFollowDnd}
+            />
+            <SwitchRow
+              icon="battery"
+              label={t("settings.batteryAlerts")}
+              hint={t("settings.batteryAlertsHint", { low: battery().low })}
+              checked={battery().enabled}
+              onChange={(on) => changeBattery({ enabled: on })}
+            />
+            <Show when={battery().enabled}>
+              <SettingRow icon="battery" label={t("settings.batteryCharged")}>
+                <select
+                  aria-label={t("settings.batteryCharged")}
+                  onChange={(e) => changeBattery({ charged: Number(e.currentTarget.value) })}
+                >
+                  <For each={[0, 80, 90, 100]}>
+                    {(pct) => (
+                      <option value={String(pct)} selected={pct === battery().charged}>
+                        {pct === 0 ? t("settings.batteryChargedOff") : t("settings.batteryChargedPct", { n: pct })}
+                      </option>
+                    )}
+                  </For>
+                </select>
+              </SettingRow>
+            </Show>
+          </article>
+        ),
+      },
+      { id: "computer-notifs", icon: "app-window", title: "computerNotifs.title", body: () => <ComputerNotifsSetting /> },
+      { id: "calls", icon: "phone", title: "calls.title", body: () => <CallsSetting /> },
+    ],
+    automation: [
+      {
+        id: "schedules",
+        icon: "calendar",
+        title: "schedule.local.title",
+        body: () => (
+          <article class="tile" id="settings-schedules">
+            <h2>{t("schedule.local.title")}</h2>
+            <p class="muted small">{t("schedule.local.hint")}</p>
+            <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
+              {(me) => (
+                <ScheduleList node={me().node} name={t("schedule.local.name")} presets={LOCAL_PRESETS} actions={me().actions} />
+              )}
+            </Show>
+          </article>
+        ),
+      },
+      {
+        id: "automations",
+        icon: "workflow",
+        title: "automation.title",
+        body: () => (
+          <article class="tile" id="settings-automations">
+            <h2>{t("automation.title")}</h2>
+            <p class="muted small">{t("automation.hint")}</p>
+            <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
+              {(me) => <AutomationList me={me().node} localActions={me().actions} />}
+            </Show>
+          </article>
+        ),
+      },
+      { id: "commands", icon: "terminal", title: "commands.title", body: () => <ShellCommandsSetting /> },
+      { id: "webhooks", icon: "webhook", title: "webhooks.title", body: () => <WebhookSetting /> },
+    ],
+    appearance: [
+      {
+        id: "appearance",
+        icon: "palette",
+        title: "settings.appearance",
+        body: () => (
+          <article class="tile" id="settings-appearance">
+            <h2>{t("settings.appearance")}</h2>
+            <p class="muted small">{t("settings.appearanceHint")}</p>
+            <ThemePicker />
+            <SettingRow icon="languages" label={t("settings.language")} hint={t("settings.languageHint")}>
+              <select aria-label={t("settings.language")} onChange={(e) => setLanguagePref(e.currentTarget.value as LangPref)}>
+                <option value="system" selected={languagePref() === "system"}>
+                  {t("settings.languageSystem", { name: LANGUAGES.find((l) => l.id === systemLanguage())!.name })}
+                </option>
+                <For each={LANGUAGES}>
+                  {(l) => (
+                    <option value={l.id} lang={l.id} selected={languagePref() === l.id}>
+                      {l.name}
                     </option>
                   )}
                 </For>
               </select>
-            </label>
-          </Show>
-          <p class="muted small">{t("settings.awayLockHint")}</p>
-        </Show>
-        <label class="switch-row">
-          <span>{t("settings.batteryAlerts")}</span>
-          <input
-            type="checkbox"
-            role="switch"
-            checked={battery().enabled}
-            onChange={(e) => changeBattery({ enabled: e.currentTarget.checked })}
-          />
-        </label>
-        <Show when={battery().enabled}>
-          <label class="row small">
-            <span class="muted">{t("settings.batteryCharged")}</span>
-            <select
-              aria-label={t("settings.batteryCharged")}
-              onChange={(e) => changeBattery({ charged: Number(e.currentTarget.value) })}
-            >
-              <For each={[0, 80, 90, 100]}>
-                {(pct) => (
-                  <option value={String(pct)} selected={pct === battery().charged}>
-                    {pct === 0 ? t("settings.batteryChargedOff") : t("settings.batteryChargedPct", { n: pct })}
-                  </option>
-                )}
-              </For>
-            </select>
-          </label>
-        </Show>
-        <p class="muted small">{t("settings.batteryAlertsHint", { low: battery().low })}</p>
-      </article>
-
-      <ShortcutSetting me={local()?.node} />
-
-      <CallsSetting />
-
-      <ComputerNotifsSetting />
-
-      <WakeSetting />
-
-      <FileManagerSetting />
-
-      <SyncSetting />
-
-      <RemoteDownloadSetting />
-
-      <ShellCommandsSetting />
-
-      <KvmSetting />
-
-      <InsertSetting />
-      <PrintSetting />
-
-      <article class="tile" id="settings-schedules">
-        <h2>{t("schedule.local.title")}</h2>
-        <p class="muted small">{t("schedule.local.hint")}</p>
-        <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
-          {(me) => (
-            <ScheduleList
-              node={me().node}
-              name={t("schedule.local.name")}
-              presets={LOCAL_PRESETS}
-              actions={me().actions}
-            />
-          )}
-        </Show>
-      </article>
-
-      <article class="tile" id="settings-automations">
-        <h2>{t("automation.title")}</h2>
-        <p class="muted small">{t("automation.hint")}</p>
-        <Show when={local()} fallback={<p class="muted small">{t("schedule.local.loading")}</p>}>
-          {(me) => <AutomationList me={me().node} localActions={me().actions} />}
-        </Show>
-      </article>
-
-      <WebhookSetting />
-
-      <BrowserExtensionSetting />
-
-      <article class="tile" id="settings-key">
-        <h2>{t("settings.deviceKey")}</h2>
-        <p class="muted small">{t("settings.deviceKeyHint")}</p>
-        <Show
-          when={showKey()}
-          fallback={
-            <button class="btn btn-ghost" ref={keyButton} onClick={openKey}>
-              {t("settings.changeKey")}
+            </SettingRow>
+          </article>
+        ),
+      },
+    ],
+    advanced: [
+      { id: "browser-extension", icon: "puzzle", title: "browserExt.title", body: () => <BrowserExtensionSetting /> },
+      { id: "backup", icon: "archive", title: "backup.title", body: () => <SettingsBackup /> },
+      {
+        id: "about",
+        icon: "info",
+        title: "settings.about",
+        body: () => (
+          <article class="tile settings-version">
+            <h2>{t("settings.about")}</h2>
+            {/* A button (no look of one), so the 7 taps work from the keyboard too. */}
+            <button type="button" class="version muted small" onClick={tapVersion}>
+              {t("settings.version", { version: updateStatus()?.current ?? "" })}
             </button>
-          }
-        >
-          <form
-            class="stack"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              try {
-                await unwrap(commands.updateEncryptionKey(newKey(), pass()));
-                toast(t("settings.keyChanged"), "ok");
-                closeKey();
-                setNewKey("");
-                setPass("");
-              } catch (err) {
-                toast(friendlyError(err), "error");
-              }
-            }}
-          >
-            <input
-              type="password"
-              ref={keyInput}
-              placeholder={t("settings.newKey")}
-              aria-label={t("settings.newKey")}
-              value={newKey()}
-              onInput={(e) => setNewKey(e.currentTarget.value)}
-            />
-            <input
-              type="password"
-              placeholder={t("settings.yourPassword")}
-              aria-label={t("settings.yourPassword")}
-              autocomplete="current-password"
-              value={pass()}
-              onInput={(e) => setPass(e.currentTarget.value)}
-            />
-            <div class="row">
-              <button class="btn btn-primary" type="submit" disabled={!newKey() || !pass()}>
-                {t("settings.save")}
-              </button>
-              <button class="btn btn-ghost" type="button" onClick={closeKey}>
-                {t("settings.cancel")}
-              </button>
-            </div>
-          </form>
-        </Show>
-      </article>
+          </article>
+        ),
+      },
+    ],
+  };
 
-      <UpdatesSetting />
-
-      <article class="tile" id="settings-appearance">
-        <h2>{t("settings.appearance")}</h2>
-        <p class="muted small">{t("settings.appearanceHint")}</p>
-        <ThemePicker />
-        <label class="row small language-row">
-          <span>{t("settings.language")}</span>
-          <select
-            aria-label={t("settings.language")}
-            onChange={(e) => setLanguagePref(e.currentTarget.value as LangPref)}
-          >
-            <option value="system" selected={languagePref() === "system"}>
-              {t("settings.languageSystem", { name: LANGUAGES.find((l) => l.id === systemLanguage())!.name })}
-            </option>
-            <For each={LANGUAGES}>
-              {(l) => (
-                <option value={l.id} lang={l.id} selected={languagePref() === l.id}>
-                  {l.name}
-                </option>
+  /** One category: its title, the list of its sections, and each section
+   *  (an icon before its tile's title). */
+  const Category = (p: { id: CategoryId }) => {
+    const c = CATEGORIES.find((x) => x.id === p.id)!;
+    const label = () => t(c.label);
+    const secs = SECTIONS[p.id];
+    return (
+      <section
+        class="settings-cat"
+        data-cat={p.id}
+        data-label={label()}
+        hidden={!shows(p.id)}
+        aria-labelledby={`settings-cat-${p.id}`}
+      >
+        <h2 class="settings-cat-title" id={`settings-cat-${p.id}`}>
+          <Icon name={c.icon} />
+          {label()}
+        </h2>
+        <Show when={secs.length > 1 && !searching()}>
+          <ul class="sub-nav" aria-label={t("settings.sectionsOf", { name: label() })}>
+            <For each={secs}>
+              {(x) => (
+                <li>
+                  <button
+                    type="button"
+                    class="sub-nav-item"
+                    classList={{ active: subOf(p.id) === x.id }}
+                    aria-current={subOf(p.id) === x.id ? "true" : undefined}
+                    onClick={() => pickSub(p.id, x.id)}
+                  >
+                    <Icon name={x.icon} />
+                    {t(x.title)}
+                  </button>
+                </li>
               )}
             </For>
-          </select>
-        </label>
-        <p class="muted small">{t("settings.languageHint")}</p>
-      </article>
+          </ul>
+        </Show>
+        <div class="settings-units">
+          <For each={secs}>
+            {(x) => (
+              <div class="set-sec icon-slot" data-sec={x.id} hidden={!searching() && subOf(p.id) !== x.id}>
+                <Icon name={x.icon} class="slot-icon" />
+                {x.body()}
+              </div>
+            )}
+          </For>
+        </div>
+      </section>
+    );
+  };
 
-      <SettingsBackup />
+  return (
+    <section class="page page-wide">
+      <header class="page-head">
+        <h1>{t("settings.title")}</h1>
+      </header>
 
-      {/* A button (no look of one), so the 7 taps work from the keyboard too. */}
-      <button type="button" class="version muted small" onClick={tapVersion}>
-        {t("settings.version", { version: updateStatus()?.current ?? "" })}
-      </button>
+      <div class="settings-layout">
+        <nav class="settings-nav" aria-label={t("settings.categories")}>
+          <input
+            type="search"
+            class="settings-search"
+            placeholder={t("settings.searchPlaceholder")}
+            aria-label={t("settings.searchPlaceholder")}
+            value={query()}
+            onInput={(e) => setQuery(e.currentTarget.value)}
+            onKeyDown={(e) => e.key === "Escape" && query() && (e.preventDefault(), setQuery(""))}
+          />
+          <ul class="settings-cats">
+            <For each={CATEGORIES}>
+              {(c) => (
+                <li>
+                  <button
+                    type="button"
+                    class="nav-item settings-cat-btn"
+                    classList={{ active: !searching() && cat() === c.id, dim: searching() && !found()[c.id] }}
+                    aria-current={!searching() && cat() === c.id ? "true" : undefined}
+                    onClick={() => pick(c.id)}
+                  >
+                    <Icon name={c.icon} />
+                    <span class="nav-label">{t(c.label)}</span>
+                    <Show when={searching() && found()[c.id]}>
+                      <span class="nav-count">{found()[c.id]}</span>
+                    </Show>
+                  </button>
+                </li>
+              )}
+            </For>
+          </ul>
+        </nav>
 
+        <div class="settings-body" ref={body}>
+          <Show when={nothing()}>
+            <p class="muted settings-none" role="status">
+              {t("settings.noMatch", { query: query().trim() })}
+            </p>
+          </Show>
+          <For each={CATEGORIES}>{(c) => <Category id={c.id} />}</For>
+        </div>
+      </div>
     </section>
   );
 }

@@ -22,6 +22,7 @@
 //                     call, ring, addDevice, sendTo
 //   section=<id>      scroll Settings' #settings-<id> into view
 //   scroll=<px>       scroll the page down this far
+//   width=<px>        lay the page out this narrow (under Chrome's 500 px)
 //   theme=light|dark, lang=en|hi|…
 
 import defaults from "./mockDefaults.json";
@@ -1057,6 +1058,16 @@ const ON_LISTEN: Record<string, () => void> = {
   "print-ask": () =>
     dialog() === "print" && emit("print-ask", { id: "p1", node_id: PIXEL, name: "Boarding pass.pdf", printer: "Office LaserJet", copies: 1 }),
   "ring-event": () => dialog() === "ring" && emit("ring-event", { from: PIXEL }),
+  // Home's "Recent": a few files and messages from this session.
+  "file-sent": () => {
+    if (new URLSearchParams(location.search).get("view") !== "home") return;
+    later(() => {
+      emit("file-received", { id: "r1", from: PIXEL, name: "IMG_2041.jpg", path: "/Users/you/Downloads/IMG_2041.jpg", size: 2_400_000 });
+      emit("message-received", { ok: true, node_id: PIXEL, text: "Leaving now, see you at 7", protocol: "quic" });
+      emit("file-sent", { id: "r2", node_id: MACBOOK, name: "Quarterly report.pdf" });
+      emit("message-received", { ok: true, node_id: LAB, text: "Build finished: all tests passed", protocol: "quic" });
+    }, 80);
+  },
 };
 const fired = new Set<string>();
 
@@ -1121,6 +1132,13 @@ export function installMock(params: URLSearchParams) {
   document.head.appendChild(still);
   // The quick panel's own window is 360 px wide (headless Chrome's window
   // can't be that narrow).
+  // ?width=<px>: the page laid out that narrow (headless Chrome's window
+  // can't go under 500 px); the screenshot is cropped to it.
+  const narrow = Number(params.get("width") ?? 0);
+  if (narrow) {
+    document.documentElement.style.width = `${narrow}px`;
+    document.documentElement.style.overflowX = "hidden";
+  }
   if (label === "quick-panel") {
     document.documentElement.style.width = "360px";
     document.documentElement.style.height = "540px";

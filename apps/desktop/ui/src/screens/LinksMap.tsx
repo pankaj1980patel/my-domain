@@ -15,6 +15,7 @@ import { HelpLink } from "../help/HelpLink";
 import KeyChangeBanner from "../components/KeyChangeBanner";
 import { VerifiedBadge } from "../components/VerifyDevice";
 import { t, type Key } from "../i18n";
+import { Tabs, panelProps } from "../components/Tabs";
 
 type Pick = { kind: "device"; node: string } | { kind: "edge"; id: string } | null;
 
@@ -81,6 +82,8 @@ function encryption(how: string): string {
 
 export default function LinksMap(props: { onDevice: (node: string) => void }) {
   const [pick, setPick] = createSignal<Pick>(null);
+  // The map and the list are two tabs, so the page fits the window.
+  const [view, setView] = createSignal<"map" | "list">("map");
   onMount(() => {
     const stop = watchMap();
     onCleanup(stop);
@@ -111,6 +114,17 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
             <Show when={v().map.devices.length === 0}>
               <p class="muted">{t("map.empty")}</p>
             </Show>
+            <Tabs
+              label={t("map.title")}
+              idBase="map"
+              tabs={[
+                { id: "map", label: t("map.tabMap"), icon: "map" },
+                { id: "list", label: t("map.listTitle"), icon: "apps" },
+              ]}
+              selected={view()}
+              onSelect={(id) => setView(id as "map" | "list")}
+            />
+            <div hidden={view() !== "map"} {...panelProps("map", "map")}>
             <div class="map-wrap">
               <div class="tile map-canvas">
                 <svg
@@ -213,7 +227,9 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                 )}
               </Show>
             </div>
+            </div>
 
+            <div hidden={view() !== "list"} {...panelProps("map", "list")}>
             <section class="tile map-list" aria-labelledby="map-list-title">
               <h2 id="map-list-title">{t("map.listTitle")}</h2>
               <ul class="stack">
@@ -264,6 +280,7 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
               </Show>
               <For each={notSharing()}>{(d) => <p class="muted small">{t("map.oldApp", { name: peerName(d.node_id) })}</p>}</For>
             </section>
+            </div>
           </>
         )}
       </Show>

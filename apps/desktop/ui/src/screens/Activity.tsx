@@ -23,6 +23,7 @@ import {
   type ActivityTarget,
 } from "../lib/activity";
 import { Empty, toast } from "../components/ui";
+import { Icon } from "../components/Icon";
 import { t } from "../i18n";
 
 const PAGE = 50;
@@ -136,7 +137,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
   const deviceOf = (a: ActivityItem) => (a.node ? peerName(a.node) : t("activity.someDevice"));
 
   return (
-    <section class="page activity-page">
+    <section class="page page-fit activity-page">
       <header class="page-head">
         <div>
           <h1>{t("activity.title")}</h1>
@@ -240,11 +241,13 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
       <p class="sr-only" role="status">
         {loading() ? "" : items().length === 0 && filtered() ? t("activity.noMatch") : ""}
       </p>
+      {/* The list scrolls in its own panel; the page stays put. */}
+      <div class="page-scroll">
       <Show
         when={items().length > 0}
         fallback={
           <Show when={!loading()}>
-            <Show when={filtered()} fallback={<Empty icon="" title={t("activity.emptyTitle")}>{t("activity.emptyBody")}</Empty>}>
+            <Show when={filtered()} fallback={<Empty icon="activity" title={t("activity.emptyTitle")}>{t("activity.emptyBody")}</Empty>}>
               <p class="muted search-hint">{t("activity.noMatch")}</p>
             </Show>
           </Show>
@@ -262,7 +265,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
                     return (
                       <li class="activity-item activity-row" classList={{ "tone-error": activityFailed(a) }}>
                         <span class="activity-glyph" aria-hidden="true">
-                          {activityIcon(a)}
+                          <Icon name={activityIcon(a)} />
                         </span>
                         <button class="activity-main" disabled={!target} onClick={() => open(a)}>
                           <span class="activity-text">{activityText(a, deviceOf(a))}</span>
@@ -295,6 +298,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
           </div>
         </Show>
       </Show>
+      </div>
     </section>
   );
 }

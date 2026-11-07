@@ -142,7 +142,7 @@ export default function Help(props: { topic?: string; onTopic: (id: string) => v
   );
 
   return (
-    <section class="page help-page">
+    <section class="page page-fit help-page">
       <header class="page-head">
         <div>
           <h1>{t("help.title")}</h1>
