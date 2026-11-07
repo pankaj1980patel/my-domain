@@ -1,0 +1,18 @@
+# Android screens shown on the website, in this order: file|Title|Optional alt text
+# Read by import-android.sh. Missing files are skipped with a warning. Video
+# lines (videos/name.mp4|Title|Caption) are optional: with none listed, every
+# videos/*.mp4 is imported.
+002-home-dark.png|Home|The my-domain Android home screen: greeting, a computer with its battery and storage, quick actions and device health, with sample data.
+005-devices-dark.png|Devices|The list of your devices on the phone, with which are online, with sample data.
+009-device-mac-dark.png|A computer’s page|A Mac’s page on the phone: status, chat, files and device tools, with sample data.
+011-device-mac-messages-dark.png|Messages|Chat with a computer from the phone, with sample data.
+013-device-mac-files-dark.png|Files|Send files and folders, browse the computer’s files and share the clipboard, with sample data.
+016-device-mac-control-dark.png|Remote control|Ring or find the computer, change its volume and keep it awake, from the phone, with sample data.
+019-device-mac-media-dark.png|Media|What’s playing on the computer, with controls, and phone audio sent to it, with sample data.
+008-more-dark.png|More|The More menu: files, messages, notes, timers, read later, automations, search and settings.
+033-notes-dark.png|Notes|Shared notes on the phone, with sample data.
+034-timers-dark.png|Timers|A shared timer running on the phone, with sample data.
+039-health-dark.png|Health check|The health check: each line says what my-domain needs and how to fix it, with sample data.
+060-settings-appearance-dark.png|Appearance|The five themes, from Cosmic Blue to Cosmic Light.
+067-home-light.png|Home, light theme|The home screen in the Cosmic Light theme, with sample data.
+001-sign-in-dark.png|Sign in|The sign-in screen with the galaxy logo and the tagline Your devices. Your domain.

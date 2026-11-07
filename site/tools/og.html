@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- Social preview source. Render at 1200x630 with headless Chrome, served from site/:
+     chrome --headless=new --window-size=1200,630 --screenshot=/tmp/og.png http://localhost:8000/tools/og.html
+     magick /tmp/og.png -strip -quality 86 assets/og.jpg -->
+<html lang="en"><head><meta charset="utf-8"><title>og</title>
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body { background-attachment: scroll; background-size: auto, auto, 1400px auto; }
+  .og { position: relative; height: 630px; display: grid; grid-template-columns: 1fr 520px; align-items: center; padding: 0 70px; gap: 30px; }
+  .og h1 { font-size: 78px; line-height: 1.02; letter-spacing: -0.035em; font-weight: 800; }
+  .og .wm { font-size: 26px; font-weight: 800; color: var(--text); margin: 22px 0 8px; }
+  .og .wm span { color: var(--accent); }
+  .og p.sub { margin-top: 22px; font-size: 24px; color: var(--text-2); }
+  .og img.logo { width: 120px; height: 120px; border-radius: 22%; box-shadow: var(--shadow-logo), 0 0 60px rgba(34,199,242,.2); }
+  .og .shot { position: relative; transform: perspective(1400px) rotateY(-14deg) rotateX(3deg); border-radius: 14px; overflow: hidden; border: 1px solid var(--border-strong); box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 80px rgba(34,199,242,.15); }
+  .og .shot img { width: 640px; max-width: none; }
+</style></head>
+<body>
+<div class="og">
+  <div>
+    <img class="logo" src="../assets/logo.webp" alt="">
+    <p class="wm">My-<span>Domain</span></p>
+    <h1>Your devices.<br><span class="gold">Your domain.</span></h1>
+    <p class="sub">Direct, end-to-end encrypted links between your own phone and computers.</p>
+  </div>
+  <div class="shot"><img src="../media/desktop/device-dark.webp" alt=""></div>
+</div>
+</body></html>
