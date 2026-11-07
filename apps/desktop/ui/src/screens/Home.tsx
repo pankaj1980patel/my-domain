@@ -1,10 +1,7 @@
-// Home, "All devices": the header with Add device; four counts (devices,
-// online, issues from the health check, direct links); a filter bar (all /
-// online / offline, type, sort, list or grid); the devices; then, in the
-// grid, recent activity and Quick actions for the chosen device, or in the
-// list a rail with the network's state, Quick actions and the last
-// security check. `onlyDevices` (the sidebar's "All devices") shows the
-// header, the filter bar and the devices alone.
+// "All devices": the header with Add device, a filter bar (all / online /
+// offline, type, sort, list or grid) and the devices, using the full width.
+// The counts, Quick actions and Recent activity live on Overview
+// (Dashboard.tsx), which also uses DeviceStats from here.
 
 import DeviceArt, { frameOf } from "../components/DeviceArt";
 import { createEffect, createMemo, createSignal, For, on, onMount, Show } from "solid-js";
@@ -14,7 +11,7 @@ import { connect, peerIcon, peerName, refreshDevices, state, type Peer } from ".
 import { friendlyError, humanSize, presenceLabel, presenceTone, routeOf, timeAgo } from "../lib/words";
 import { Empty, linkStateOf, RouteChip, toast } from "../components/ui";
 import { t, tn } from "../i18n";
-import { problemCount, ranAt, report } from "../lib/health";
+import { problemCount } from "../lib/health";
 import { isVerified } from "../lib/verify";
 import { loadMap, mapView, myEdge } from "../lib/linksMap";
 import { osName } from "../lib/deviceInfo";
@@ -23,10 +20,9 @@ import { quickRing, quickSendClipboard, quickSendFile } from "../lib/quickAction
 import { SetupCard } from "./Setup";
 import { Icon, IconChip, type IconName } from "../components/Icon";
 import { MenuButton, type MenuItem } from "../components/Menu";
-import { RecentActivity } from "../components/RecentActivity";
-import { QuickGrid } from "../components/QuickGrid";
 import { AddDevice } from "../components/AddDevice";
 import { rememberFocus, trapTab } from "../lib/a11y";
+import { PageHelp } from "../help/HelpLink";
 
 type Layout = "grid" | "list";
 type Filter = "all" | "online" | "offline";
@@ -46,27 +42,18 @@ function savedLayout(): Layout {
 type Open = (node: string, tab?: string, tile?: string) => void;
 
 export default function Home(props: {
-  onlyDevices?: boolean;
   onOpen: Open;
   onMap: () => void;
   onSetup: () => void;
-  onHealth: () => void;
-  onActivity: () => void;
 }) {
   const live = (node: string) => !!state.links[node];
   const online = () => state.peers.filter((p) => live(p.node_id)).length;
   const offline = () => state.peers.length - online();
-  const relayed = () => state.peers.filter((p) => state.links[p.node_id] === "relay").length;
-  const direct = () => online() - relayed();
 
   // Last seen and round trips, from the connections map (read once here).
   onMount(() => loadMap().catch(() => {}));
   const mapDevice = (node: string) => mapView()?.map.devices.find((d) => d.node_id === node);
   const lastSeen = (node: string) => mapDevice(node)?.last_seen_ago_s ?? null;
-  const latency = () => {
-    const rtts = (mapView()?.map.devices ?? []).map((d) => d.link?.rtt_ms).filter((x): x is number => x != null);
-    return rtts.length ? Math.round(rtts.reduce((a, b) => a + b, 0) / rtts.length) : null;
-  };
 
   // --- filter, type, sort, layout ---------------------------------------------
   const [filter, setFilter] = createSignal<Filter>("all");
@@ -95,15 +82,6 @@ export default function Home(props: {
       );
   });
 
-  // The device Quick actions are for: the first one shown until you pick.
-  const [chosen, setChosen] = createSignal<string | null>(null);
-  const target = () => {
-    const c = chosen();
-    if (c && state.peers.some((p) => p.node_id === c)) return c;
-    return devices()[0]?.node_id ?? state.peers[0]?.node_id ?? null;
-  };
-  const targetMenu = (): MenuItem[] =>
-    state.peers.map((p) => ({ icon: "devices" as const, label: peerName(p.node_id), onSelect: () => setChosen(p.node_id) }));
 
   const [adding, setAdding] = createSignal(false);
   const kindMenu = (): MenuItem[] => [
@@ -118,25 +96,9 @@ export default function Home(props: {
     { label: t("home.sortName"), onSelect: () => setSort("name") },
   ];
 
-  const quickHead = (node: string) => (
-    <div class="dash-head">
-      <Icon name="quick" tone="amber" />
-      <h2 id="home-quick">{t("dash.quick")}</h2>
-      <MenuButton
-        label={t("home.target", { name: peerName(node) })}
-        labelled
-        triggerClass="link small dash-more home-target"
-        items={targetMenu()}
-      >
-        {t("home.for", { name: peerName(node) })}
-        <Icon name="chevron-down" size={14} />
-      </MenuButton>
-    </div>
-  );
-  const rail = () => !props.onlyDevices && layout() === "list";
 
   return (
-    <section class="page page-fit home-page" classList={{ "home-wide": rail() }}>
+    <section class="page page-fit home-page">
       <header class="page-head home-head">
         <span class="head-tile" aria-hidden="true">
           <Icon name="devices" size={28} tone="cyan" />
@@ -146,17 +108,14 @@ export default function Home(props: {
           <p class="muted">{t("home.allSub")}</p>
         </div>
         <AddDeviceButton onAdd={() => setAdding(true)} onMap={props.onMap} />
+        <PageHelp topic="getting-started" />
       </header>
 
       {/* Setup not finished: carry on where it stopped. */}
       <SetupCard onOpen={props.onSetup} />
 
-      <div class="home-body" classList={{ "with-rail": rail() }}>
+      <div class="home-body">
         <div class="home-left">
-          <Show when={!props.onlyDevices && state.peers.length > 0}>
-            <DeviceStats onHealth={props.onHealth} />
-          </Show>
-
           {/* Which devices, in what order, as a list or a grid. */}
           <Show when={state.peers.length > 0}>
             <div class="home-filters" role="toolbar" aria-label={t("home.filters")}>
@@ -206,7 +165,7 @@ export default function Home(props: {
                     <div class="home-grid">
                       <For each={devices()}>
                         {(p) => (
-                          <HomeCard peer={p} chosen={!props.onlyDevices && target() === p.node_id} seen={lastSeen(p.node_id)} onOpen={props.onOpen} />
+                          <HomeCard peer={p} chosen={false} seen={lastSeen(p.node_id)} onOpen={props.onOpen} />
                         )}
                       </For>
                     </div>
@@ -215,7 +174,7 @@ export default function Home(props: {
                   <ul class="home-list">
                     <For each={devices()}>
                       {(p) => (
-                        <HomeRow peer={p} chosen={!props.onlyDevices && target() === p.node_id} seen={lastSeen(p.node_id)} onOpen={props.onOpen} />
+                        <HomeRow peer={p} chosen={false} seen={lastSeen(p.node_id)} onOpen={props.onOpen} />
                       )}
                     </For>
                   </ul>
@@ -224,57 +183,8 @@ export default function Home(props: {
             </Show>
           </div>
 
-          <Show when={!props.onlyDevices && layout() === "grid" && target()}>
-            {(node) => (
-              <div class="home-bottom">
-                <RecentActivity limit={3} onViewAll={props.onActivity} />
-                <section class="tile dash-card" aria-labelledby="home-quick">
-                  {quickHead(node())}
-                  <QuickGrid node={node()} onGo={(tab, tile) => props.onOpen(node(), tab, tile)} />
-                </section>
-              </div>
-            )}
-          </Show>
         </div>
 
-        <Show when={rail()}>
-          <aside class="home-rail">
-            <section class="tile dash-card" aria-labelledby="home-net">
-              <div class="dash-head">
-                <Icon name="wifi" tone="green" />
-                <h2 id="home-net">{t("home.netStatus")}</h2>
-              </div>
-              <p class={`home-net-word ${relayed() + offline() === 0 ? "tone-green" : "tone-amber"}`}>
-                <span class="hero-dot" aria-hidden="true" />
-                {relayed() + offline() === 0 ? t("home.netHealthy") : t("home.netMixed")}
-              </p>
-              <p class="muted small">{t("home.netSummary", { direct: direct(), relayed: relayed(), offline: offline() })}</p>
-              <Show when={latency() != null}>
-                <p class="small">
-                  <span class="muted">{t("home.latency")}</span> <strong>{latency()} ms</strong>
-                </p>
-              </Show>
-            </section>
-            <Show when={target()}>
-              {(node) => (
-                <section class="tile dash-card" aria-labelledby="home-quick">
-                  {quickHead(node())}
-                  <QuickGrid node={node()} vertical onGo={(tab, tile) => props.onOpen(node(), tab, tile)} />
-                </section>
-              )}
-            </Show>
-            <button class="tile dash-card home-protect" onClick={props.onHealth}>
-              <IconChip name={problemCount() > 0 ? "alert" : "verify"} tone={problemCount() > 0 ? "amber" : "green"} size={22} />
-              <span class="grow">
-                <strong>{problemCount() > 0 ? tn("dash.problems", problemCount()) : t("home.protected")}</strong>
-                <Show when={report() && ranAt()}>
-                  <span class="muted small">{t("home.lastCheck", { ago: timeAgo(ranAt()) })}</span>
-                </Show>
-              </span>
-              <Icon name="chevron-right" />
-            </button>
-          </aside>
-        </Show>
       </div>
 
       <Show when={adding()}>
@@ -308,19 +218,20 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
   /** Local network / Direct / Relay (only Relay is tinted). */
   const route = () => routeOf(s(), mapDeviceHow(node()));
   const when = () => (live() ? t("home.activeNow") : props.seen != null ? timeAgo(Date.now() - props.seen * 1000) : "");
-  type Act = { icon: IconName; label: string; run: () => unknown; off?: string; lead?: boolean };
+  /** `hidden`: it can't do this at all (not shown); `off`: not right now. */
+  type Act = { icon: IconName; label: string; run: () => unknown; off?: string; lead?: boolean; hidden?: boolean };
   const screen = (): Act => ({
     icon: "screen",
     label: t("quick.screen"),
     run: () => props.onOpen(node(), "remote", "screen"),
-    off: has("screen") ? undefined : t("quick.noScreen", { name: name() }),
+    hidden: !has("screen"),
   });
   const chat = (): Act => ({ icon: "chat", label: t("quick.chat"), run: () => props.onOpen(node(), "messages", "chat") });
   const call = (): Act => ({
     icon: "call",
     label: t("control.dial"),
     run: () => props.onOpen(node(), "remote", "control"),
-    off: has("dial") ? undefined : t("quick.noCall", { name: name() }),
+    hidden: !has("dial"),
   });
   /** The three that fit: a phone, a computer, or one that isn't connected. */
   const actions = (): Act[] => {
@@ -334,8 +245,8 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
             { icon: "connect", label: t("device.connect"), run: doConnect },
           ]
         : [{ icon: "connect", label: t("device.connect"), run: doConnect, lead: true }];
-    if (phone()) return [screen(), chat(), files];
-    return [screen(), { icon: "send-clip", label: t("quick.clipboard"), run: () => quickSendClipboard(node()) }, files];
+    if (phone()) return [screen(), chat(), files].filter((a) => !a.hidden);
+    return [screen(), { icon: "send-clip", label: t("quick.clipboard"), run: () => quickSendClipboard(node()) } as Act, files].filter((a) => !a.hidden);
   };
   const more = (): MenuItem[] => [
     { icon: "send-file", label: t("quick.sendFile"), onSelect: () => quickSendFile(node()) },
@@ -432,8 +343,7 @@ function HomeCard(props: { peer: Peer; chosen: boolean; seen: number | null; onO
  *  storage and memory; round actions. */
 function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOpen: Open }) {
   const d = useDevice(props);
-  const loc = () => d.st()?.location;
-  const icon = (a: { icon: IconName; label: string; run: () => unknown; off?: string }) => {
+  const icon = (a: { icon: IconName; label: string; run: () => unknown; off?: string; hidden?: boolean }) => {
     const off = () => a.off ?? (d.live() ? undefined : t("palette.offline", { name: d.name() }));
     return (
       <button class="round-btn" disabled={!!off()} aria-label={off() ? `${a.label}. ${off()}` : a.label} title={off() ?? a.label} onClick={() => a.run()}>
@@ -462,14 +372,6 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
             {[d.when() && (d.live() ? d.when() : t("home.lastSeen", { ago: d.when() })), osName(d.node())].filter(Boolean).join(" · ")}
           </span>
         </p>
-        <Show when={loc()}>
-          {(l) => (
-            <p class="muted small home-loc">
-              <Icon name="find" size={13} />
-              {`${l().lat.toFixed(2)}, ${l().lon.toFixed(2)}`}
-            </p>
-          )}
-        </Show>
       </div>
       <div class="home-stats-chips">
         <Show when={d.live()}>
@@ -477,9 +379,7 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
         </Show>
       </div>
       <div class="home-round">
-        {icon(d.screen())}
-        {icon(d.chat())}
-        {icon(d.call())}
+        <For each={[d.screen(), d.chat(), d.call()].filter((a) => !a.hidden)}>{(a) => icon(a)}</For>
         <MenuButton label={t("device.more", { name: d.name() })} triggerClass="round-btn" items={d.more()}>
           <Icon name="more" />
         </MenuButton>

@@ -174,6 +174,7 @@ export default function Overview(props: {
           </ul>
         </section>
 
+        <DeviceFacts node={props.node} />
       </aside>
     </div>
   );
@@ -212,10 +213,9 @@ function Stat(props: { pct: number; tone: Tone; icon: IconName; value: string; l
   );
 }
 
-/** What the device is (model, OS, address, where it said it was): the
- *  hero's facts. Only what's known. */
+/** What the device is (model, OS, address): the Overview's "Device info"
+ *  card. Only what's known; where it is shows under Remote control → Find. */
 export function DeviceFacts(props: { node: string }) {
-  const st = () => state.status[props.node];
   const peer = () => state.peers.find((p) => p.node_id === props.node);
   const info = (): [Key, string][] => {
     const rows: [Key, string][] = [];
@@ -225,13 +225,16 @@ export function DeviceFacts(props: { node: string }) {
     if (os) rows.push(["dash.os", os]);
     const ip = peer()?.ip;
     if (ip && ip !== "0.0.0.0") rows.push(["dash.ip", ip]);
-    const loc = st()?.location;
-    if (loc) rows.push(["dash.location", `${loc.lat.toFixed(3)}, ${loc.lon.toFixed(3)}`]);
     return rows;
   };
   return (
     <Show when={info().length}>
-      <dl class="dash-info hero-facts-list" aria-label={t("dash.info")}>
+      <section class="tile dash-card" aria-labelledby="dash-info-title">
+      <div class="dash-head">
+        <Icon name="info" tone="cyan" />
+        <h2 id="dash-info-title">{t("dash.info")}</h2>
+      </div>
+      <dl class="dash-info device-info-list">
         <For each={info()}>
           {([k, v]) => (
             <>
@@ -241,6 +244,7 @@ export function DeviceFacts(props: { node: string }) {
           )}
         </For>
       </dl>
+      </section>
     </Show>
   );
 }

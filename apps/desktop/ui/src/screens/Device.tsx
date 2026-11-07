@@ -63,7 +63,7 @@ import { MenuButton, type MenuItem } from "../components/Menu";
 import { Tabs, panelProps } from "../components/Tabs";
 import { Icon, type IconName, type Tone } from "../components/Icon";
 import { quickGetClipboard, quickRing, quickSendClipboard, quickSendFile, quickSendFolder } from "../lib/quickActions";
-import Overview, { DeviceFacts } from "./device/Overview";
+import Overview from "./device/Overview";
 import { osName } from "../lib/deviceInfo";
 import { howLabel } from "../lib/health";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
@@ -93,6 +93,7 @@ import { isVerified } from "../lib/verify";
 import { RemoveDeviceConfirm } from "../components/RemovedDevices";
 import { askConfirm } from "../components/Confirm";
 import { PermissionsTile } from "../components/PeerPermissions";
+import { CallDialPad } from "../components/CallsSetting";
 
 /** The page's tabs, in order. A tile lives in one (its `tab`); Overview is
  *  the device's dashboard (device/Overview.tsx). A tab with nothing this
@@ -143,11 +144,21 @@ const TILES: TileDef[] = [
   { id: "chat", icon: "chat", tab: "messages", title: () => t("chat.title"), wide: true, render: (n) => <ChatTile node={n} /> },
   { id: "notifications", icon: "notifications", tab: "messages", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
   { id: "notification-history", icon: "history", tab: "messages", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
-  { id: "clipboard", icon: "clipboard", tab: "files", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
-  { id: "clipboard-history", icon: "history", tab: "files", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
   { id: "files", icon: "files", tab: "files", title: () => t("files.title"), render: (n) => <FilesTile node={n} /> },
   { id: "browse", icon: "folder-open", tab: "files", title: () => t("browse.title"), wide: true, render: (n) => <BrowseTile node={n} /> },
+  {
+    id: "photos",
+    icon: "image",
+    tab: "files",
+    title: () => t("photos.title"),
+    wide: true,
+    available: (n) => !!state.status[n]?.actions.includes("gallery"),
+    render: (n) => <PhotosTile node={n} />,
+  },
   { id: "sync", icon: "folder-sync", tab: "files", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
+  // Clipboard last in Files (send files, browse, photos, synced folders first).
+  { id: "clipboard", icon: "clipboard", tab: "files", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
+  { id: "clipboard-history", icon: "history", tab: "files", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
   { id: "control", icon: "locate", tab: "remote", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
   { id: "info", icon: "info", tab: "tools", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
   { id: "connection", icon: "connect", tab: "settings", title: () => t("conn.title"), wide: true, render: (n) => <ConnectionTile node={n} /> },
@@ -217,15 +228,6 @@ const TILES: TileDef[] = [
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.audioSink && state.status[n]?.platform === "android",
     render: (n) => <ComputerAudioTile node={n} />,
-  },
-  {
-    id: "photos",
-    icon: "image",
-    tab: "files",
-    title: () => t("photos.title"),
-    wide: true,
-    available: (n) => !!state.status[n]?.actions.includes("gallery"),
-    render: (n) => <PhotosTile node={n} />,
   },
   { id: "lost-mode", icon: "lock", tab: "tools", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
   // What this device may do here: control this computer, see its screen,
@@ -447,13 +449,23 @@ export default function Device(props: {
           </button>
           {/* The hero: the device's picture, its name, how it's linked, a
               few facts; the link control, Quick actions and "more". */}
-          <header class="device-hero">
+          {/* Full on Overview; on every other tab one slim line: small
+              picture, name, status, Quick actions and "⋯". */}
+          <header class="device-hero" classList={{ "device-hero-slim": current() !== "overview" }}>
             {/* The device as it looks: its frame with its wallpaper. */}
             <div class="device-art">
               <DeviceArt
                 node={props.node}
                 icon={peerIcon(props.node)}
-                size={["laptop", "monitor"].includes(frameOf(peerIcon(props.node))) ? 104 : "large"}
+                size={
+                  current() !== "overview"
+                    ? ["laptop", "monitor"].includes(frameOf(peerIcon(props.node)))
+                      ? 30
+                      : 48
+                    : ["laptop", "monitor"].includes(frameOf(peerIcon(props.node)))
+                      ? 104
+                      : "large"
+                }
                 title={peerName(props.node)}
               />
             </div>
@@ -533,20 +545,19 @@ export default function Device(props: {
                   its Quick actions card), unless Wake leads. */}
               <Show when={current() !== "overview"}>
                 <MenuButton
-                  label={t("device.actions")}
+                  label={t("dash.quick")}
                   labelled
                   triggerClass={`btn hero-actions ${wakeLeads() ? "btn-soft" : "btn-primary"}`}
                   items={quickMenu()}
                 >
                   <Icon name="quick" />
-                  <span class="btn-label">{t("device.actions")}</span>
+                  <span class="btn-label">{t("dash.quick")}</span>
                   <Icon name="chevron-down" size={16} />
                 </MenuButton>
               </Show>
               <MenuButton label={t("device.more", { name: peerName(props.node) })} items={menu()} startOpen={mockMenu}>
                 <Icon name="more" />
               </MenuButton>
-              <DeviceFacts node={props.node} />
             </div>
           </header>
           {verify.dialog()}
@@ -1676,84 +1687,58 @@ function ControlTile(props: { node: string }) {
 
   const st = () => status();
   const has = (x: string) => !!st()?.actions.includes(x);
-  type Part = "find" | "sound" | "net";
-  const parts = (): { id: Part; icon: IconName; label: string }[] => [
-    { id: "find", icon: "find", label: t("control.part.find") },
-    ...(has("volume") || has("mute") || has("media") || has("ringer") || has("flashlight") || has("screen_settings") || has("key")
-      ? [{ id: "sound" as const, icon: "speaker" as const, label: t("control.part.sound") }]
-      : []),
-    ...(has("radio") || has("wifi") ? [{ id: "net" as const, icon: "wifi" as const, label: t("control.group.radios") }] : []),
-  ];
-  const [part, setPart] = createSignal<Part>("find");
+  const phone = () => pageKind(props.node) === "phone";
   return (
-    // Find & control as small cards, one job each.
-    <div class="control-groups-wrap tile-wide">
-      {/* In parts, so the tab fits the window: find and call, sound and
-          screen, Wi-Fi and radios. */}
-      <Show when={parts().length > 1}>
-        <div class="home-filters" role="group" aria-label={t("control.title")}>
-          <For each={parts()}>
-            {(x) => (
-              <button class="filter-chip" aria-pressed={part() === x.id} onClick={() => setPart(x.id)}>
-                <Icon name={x.icon} size={16} />
-                {x.label}
-              </button>
-            )}
-          </For>
-        </div>
-      </Show>
+    // Find & control: titled cards on one grid (no row of parts above
+    // them); the grid scrolls inside its panel when it's taller than the
+    // window.
     <div class="control-groups tile-wide">
-      <Show when={part() === "find"}>
-      <Group icon="find" tone="red" title={t("control.group.find")}>
+      <Group icon="find" tone="violet" title={has("dial") || phone() ? t("control.part.find") : t("control.group.find")}>
         <p class="muted small">{t("control.hint")}</p>
-        <button class="btn btn-soft btn-sm" disabled={busy()} onClick={ring}>
-          <Icon name="ring" />
-          {t("control.ring")}
-        </button>
+        <div class="row">
+          <button class="btn btn-soft btn-sm" disabled={busy()} onClick={ring}>
+            <Icon name="ring" />
+            {t("control.ring")}
+          </button>
+        </div>
         <Show when={has("locate") && st()}>{(x) => <LocateRow node={props.node} st={x()} />}</Show>
-      </Group>
-      </Show>
-      <Show when={part() === "sound"}>
-      <Show when={st() && (has("volume") || has("mute") || has("media") || has("ringer"))}>
-        <Group icon="speaker" tone="green" title={t("control.group.sound")}>
-          <SoundControls node={props.node} st={st()!} />
-        </Group>
-      </Show>
-      </Show>
-      <Show when={part() === "find"}>
-      <Show when={has("dial")}>
-        <Group icon="call" tone="green" title={t("control.dial")}>
+        <Show when={has("dial")}>
+          <h4 class="call-subhead">{t("control.dial")}</h4>
           <DialRow node={props.node} />
-        </Group>
-      </Show>
-      </Show>
-      <Show when={part() === "net"}>
-      <Show when={st() && has("radio")}>
-        <Group icon="bluetooth" tone="blue" title={t("control.group.radios")}>
-          <RadioRow node={props.node} st={st()!} />
-        </Group>
-      </Show>
-      <Show when={st() && has("wifi")}>
-        <Group icon="wifi" tone="blue" title={t("control.radio.wifi")}>
-          <WifiList node={props.node} st={st()!} />
-        </Group>
-      </Show>
-      </Show>
-      <Show when={part() === "sound"}>
-      <Show when={st() && (has("flashlight") || has("screen_settings"))}>
-        <Group icon="screen" tone="amber" title={t("control.group.display")}>
+        </Show>
+        <Show when={phone()}>
+          <CallDialPad name={name()} />
+        </Show>
+      </Group>
+      <Show when={st() && (has("volume") || has("mute") || has("media") || has("ringer") || has("flashlight") || has("screen_settings"))}>
+        <Group icon="speaker" tone="green" title={t("control.part.sound")}>
+          <Show when={has("volume") || has("mute") || has("media") || has("ringer")}>
+            <SoundControls node={props.node} st={st()!} />
+          </Show>
           <Show when={has("flashlight")}>
-            <button
-              class="btn btn-soft btn-sm"
-              onClick={() =>
-                runAction(props.node, "flashlight", { on: !st()!.torch }).catch((e) => toast(friendlyError(e), "error"))
-              }
-            >
-              {st()!.torch ? t("control.torchOff") : t("control.torchOn")}
-            </button>
+            <div class="row">
+              <button
+                class="btn btn-soft btn-sm"
+                onClick={() =>
+                  runAction(props.node, "flashlight", { on: !st()!.torch }).catch((e) => toast(friendlyError(e), "error"))
+                }
+              >
+                {st()!.torch ? t("control.torchOff") : t("control.torchOn")}
+              </button>
+            </div>
           </Show>
           <Show when={has("screen_settings")}>
             <ScreenSettingsRow node={props.node} st={st()!} />
+          </Show>
+        </Group>
+      </Show>
+      <Show when={st() && (has("radio") || has("wifi"))}>
+        <Group icon="wifi" tone="blue" title={t("control.group.radios")}>
+          <Show when={has("radio")}>
+            <RadioRow node={props.node} st={st()!} />
+          </Show>
+          <Show when={has("wifi")}>
+            <WifiList node={props.node} st={st()!} />
           </Show>
         </Group>
       </Show>
@@ -1764,8 +1749,6 @@ function ControlTile(props: { node: string }) {
           </Group>
         )}
       </Show>
-      </Show>
-      <Show when={part() === "find"}>
       <Group icon="connect" tone="cyan" title={t("control.openLink")}>
         <form class="stack" onSubmit={send}>
           <div class="composer">
@@ -1783,8 +1766,6 @@ function ControlTile(props: { node: string }) {
           </div>
         </form>
       </Group>
-      </Show>
-    </div>
     </div>
   );
 }
@@ -2130,12 +2111,15 @@ function LocateRow(props: { node: string; st: DeviceStatus }) {
       .then(() => toast(t("locate.asking")))
       .catch((e) => toast(friendlyError(e), "error"));
   return (
-    <div class="row">
-      <span class="small muted grow">
+    <div class="locate-row">
+      {/* Where it is: when and how close, on its own line; the coordinates
+          are behind Open map (its tooltip). */}
+      <p class="small muted">
         <Show when={loc()} fallback={t("locate.title")}>
-          {(l) => t("locate.where", { lat: l().lat.toFixed(5), lon: l().lon.toFixed(5), acc: Math.round(l().acc), ago: ago() })}
+          {(l) => t("locate.when", { ago: ago(), acc: Math.round(l().acc) })}
         </Show>
-      </span>
+      </p>
+      <div class="row">
       <Gate reason={off()}>
         <button class="btn btn-ghost btn-sm" disabled={!!off()} onClick={locate}>
           {t("locate.locate")}
@@ -2145,15 +2129,18 @@ function LocateRow(props: { node: string; st: DeviceStatus }) {
         {(l) => (
           <button
             class="btn btn-ghost btn-sm"
+            title={`${l().lat.toFixed(4)}, ${l().lon.toFixed(4)}`}
             onClick={async () => {
               const r = await commands.openMap(l().lat, l().lon);
               if (r.status === "error") toast(friendlyError(r.error), "error");
             }}
           >
+            <Icon name="map" size={16} />
             {t("locate.map")}
           </button>
         )}
       </Show>
+      </div>
     </div>
   );
 }

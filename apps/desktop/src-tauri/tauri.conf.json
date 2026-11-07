@@ -16,8 +16,8 @@
         "title": "my-domain",
         "width": 1100,
         "height": 740,
-        "minWidth": 420,
-        "minHeight": 520
+        "minWidth": 960,
+        "minHeight": 640
       }
     ],
     "security": {

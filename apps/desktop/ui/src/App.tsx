@@ -123,7 +123,13 @@ export default function App() {
   };
   const [view, setView] = createSignal<View>(import.meta.env.MODE === "mock" ? mockView() : { name: "overview" });
   let main: HTMLElement | undefined;
-  const go = (v: View) => setView(v);
+  // Narrow window (≤1100 px): the sidebar is an icon rail; this opens it as
+  // an overlay with the names (any place picked closes it).
+  const [railOpen, setRailOpen] = createSignal(false);
+  const go = (v: View) => {
+    setRailOpen(false);
+    setView(v);
+  };
   // A new screen: the window title names it, and focus moves to its content
   // when it was in the sidebar or got lost with the old screen (keyboard and
   // screen reader users land on the new page, not back at the top).
@@ -332,8 +338,27 @@ export default function App() {
           {t("a11y.skip")}
         </a>
         <div class="shell" classList={{ "shell-setup": view().name === "setup" }}>
+          <Show when={railOpen()}>
+            <div class="rail-backdrop" aria-hidden="true" onClick={() => setRailOpen(false)} />
+          </Show>
           {/* Hidden during first-run setup: nothing to wander off to. */}
-          <nav class="sidebar" aria-label={t("nav.label")} hidden={view().name === "setup"}>
+          <nav
+            class="sidebar"
+            classList={{ "rail-open": railOpen() }}
+            aria-label={t("nav.label")}
+            hidden={view().name === "setup"}
+            onKeyDown={(e) => e.key === "Escape" && railOpen() && setRailOpen(false)}
+          >
+            {/* Only on a narrow window: show or hide the names. */}
+            <button
+              class="rail-toggle"
+              aria-expanded={railOpen()}
+              aria-label={railOpen() ? t("nav.collapse") : t("nav.expand")}
+              title={railOpen() ? t("nav.collapse") : t("nav.expand")}
+              onClick={() => setRailOpen(!railOpen())}
+            >
+              <Icon name={railOpen() ? "close" : "list"} />
+            </button>
             <div class="brand">
               <img src={logoSrc()} alt="" />
               <span class="brand-text">
@@ -407,7 +432,11 @@ export default function App() {
               </div>
             </Show>
             {/* This computer: its name, and a way to its settings. */}
-            <button class="this-device" onClick={() => goPlace("settings", "settings-device")}>
+            <button
+              class="this-device"
+              title={`${niceName(state.me?.name ?? "")} · ${t("nav.thisComputer")}`}
+              onClick={() => goPlace("settings", "settings-device")}
+            >
               <span class="this-device-icon">
                 <DeviceArt icon={state.ownIcon} size={36} />
               </span>
@@ -457,17 +486,8 @@ export default function App() {
             <UpdateBanner />
             <KeyRotationBanner />
             <Switch>
-              <Match when={view().name === "home" && view()}>
-                {(v) => (
-                  <Home
-                    onlyDevices={!!(v() as { only?: boolean }).only}
-                    onOpen={openDevice}
-                    onMap={() => go({ name: "linksMap" })}
-                    onSetup={() => go({ name: "setup" })}
-                    onHealth={() => go({ name: "health" })}
-                    onActivity={() => go({ name: "activity" })}
-                  />
-                )}
+              <Match when={view().name === "home"}>
+                <Home onOpen={openDevice} onMap={() => go({ name: "linksMap" })} onSetup={() => go({ name: "setup" })} />
               </Match>
               <Match when={view().name === "overview"}>
                 <Dashboard

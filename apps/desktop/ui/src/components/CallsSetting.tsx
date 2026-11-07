@@ -1,6 +1,6 @@
 // "Calls on this computer" (calls.rs): off by default; pick a phone already
-// paired with this computer, connect, choose where answered audio goes, and
-// a dial pad. On macOS, Linux and Windows (call control only there: the
+// paired with this computer, connect, choose where answered audio goes. The
+// dial pad (CallDialPad) is on the phone's page, under Remote control. On macOS, Linux and Windows (call control only there: the
 // audio stays on the phone); elsewhere it says it isn't available. A
 // standing problem (Linux: another program has the hands-free role;
 // Windows: Phone Link's Calls has the phone) shows with what to do about it.
@@ -9,7 +9,7 @@ import { createSignal, For, onMount, Show } from "solid-js";
 import { commands, type CallDevice } from "../bindings";
 import { unwrap } from "../lib/core";
 import { callDo, callStatus, refreshCalls, setCallStatus, watchCalls, type AudioTarget } from "../lib/calls";
-import { friendlyError } from "../lib/words";
+import { friendlyError, niceName } from "../lib/words";
 import { CallAudioPicker } from "./CallAudioPicker";
 import { Keypad } from "./CallOverlay";
 import { toast } from "./ui";
@@ -20,7 +20,6 @@ import { Icon } from "./Icon";
 export function CallsSetting() {
   const [phones, setPhones] = createSignal<CallDevice[]>([]);
   const [loaded, setLoaded] = createSignal(false);
-  const [number, setNumber] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   const s = () => callStatus();
 
@@ -57,10 +56,6 @@ export function CallsSetting() {
     });
   const pick = (address: string) => run(async () => setCallStatus(await unwrap(commands.callsSetDevice(address || null))));
   const setAnswer = async (target: AudioTarget) => setCallStatus(await commands.callsSetAnswerAudio(target));
-  const dial = (e: Event) => {
-    e.preventDefault();
-    if (number().trim()) callDo(commands.callDial(number()));
-  };
   const mac = () => s()?.os === "macos";
   const deviceLabel = () => s()?.device_name ?? phones().find((p) => p.address === s()?.device)?.name ?? s()?.device ?? "";
 
@@ -140,30 +135,57 @@ export function CallsSetting() {
           <h3 class="call-subhead">{t("calls.answerAudio")}</h3>
           <Show when={s()}>{(st) => <CallAudioPicker id="settings-calls-answer" value={st().answer} onChange={setAnswer} />}</Show>
 
-          <h3 class="call-subhead">{t("calls.dialTitle")}</h3>
-          <Show when={s()?.connected} fallback={<p class="muted small">{t("calls.dialNeedsLink")}</p>}>
-            <form class="stack call-dial" onSubmit={dial}>
-              <input
-                type="tel"
-                inputmode="tel"
-                aria-label={t("calls.number")}
-                placeholder={t("calls.number")}
-                value={number()}
-                onInput={(e) => setNumber(e.currentTarget.value)}
-              />
-              <Keypad id="settings-calls-keypad" onKey={(k) => setNumber(number() + k)} />
-              <div class="row">
-                <button class="btn btn-primary" type="submit" disabled={!number().trim() || s()?.phase !== "idle"}>
-                  {t("calls.call")}
-                </button>
-                <button class="btn btn-ghost" type="button" disabled={s()?.phase !== "idle"} onClick={() => callDo(commands.callRedial())}>
-                  {t("calls.redial")}
-                </button>
-              </div>
-            </form>
-          </Show>
+          {/* The dial pad is a feature, not a setting: it's on the phone's
+              page (Remote control → Find & call). */}
+          <p class="muted small">{t("calls.dialMoved")}</p>
         </Show>
       </Show>
     </article>
+  );
+}
+
+/** Call from this computer through the phone (hands-free): a number, the
+ *  keypad, Call and Redial. On the phone's page, under Remote control →
+ *  Find & call, while calls on this computer are on and that phone is the
+ *  one linked for them. */
+export function CallDialPad(props: { name: string }) {
+  const [number, setNumber] = createSignal("");
+  onMount(() => {
+    watchCalls();
+    refreshCalls();
+  });
+  const s = () => callStatus();
+  const dial = (e: Event) => {
+    e.preventDefault();
+    if (number().trim()) callDo(commands.callDial(number()));
+  };
+  // Only for the phone the calls go through (by its Bluetooth name).
+  const mine = () => !!s()?.enabled && !!s()?.device && (!s()?.device_name || niceName(s()!.device_name!) === niceName(props.name));
+  return (
+    <Show when={mine()}>
+      <h4 class="call-subhead">{t("calls.dialTitle")}</h4>
+      <Show when={s()?.connected} fallback={<p class="muted small">{t("calls.dialNeedsLink")}</p>}>
+        <form class="stack call-dial" onSubmit={dial}>
+          <input
+            type="tel"
+            inputmode="tel"
+            aria-label={t("calls.number")}
+            placeholder={t("calls.number")}
+            value={number()}
+            onInput={(e) => setNumber(e.currentTarget.value)}
+          />
+          <Keypad id="device-calls-keypad" onKey={(k) => setNumber(number() + k)} />
+          <div class="row">
+            <button class="btn btn-soft" type="submit" disabled={!number().trim() || s()?.phase !== "idle"}>
+              <Icon name="call" size={16} />
+              {t("calls.call")}
+            </button>
+            <button class="btn btn-ghost" type="button" disabled={s()?.phase !== "idle"} onClick={() => callDo(commands.callRedial())}>
+              {t("calls.redial")}
+            </button>
+          </div>
+        </form>
+      </Show>
+    </Show>
   );
 }

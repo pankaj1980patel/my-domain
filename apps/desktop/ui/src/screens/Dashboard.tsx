@@ -18,6 +18,7 @@ import { QuickGrid } from "../components/QuickGrid";
 import DeviceArt from "../components/DeviceArt";
 import { AddDeviceButton, AddDialog, DeviceStats } from "./Home";
 import { SetupCard } from "./Setup";
+import { PageHelp } from "../help/HelpLink";
 
 const STRIP = 4;
 
@@ -83,6 +84,7 @@ export default function Dashboard(props: {
           <p class="muted">{t("dash.sub")}</p>
         </div>
         <AddDeviceButton onAdd={() => setAdding(true)} onMap={props.onMap} />
+        <PageHelp topic="getting-started" />
       </header>
 
       <SetupCard onOpen={props.onSetup} />

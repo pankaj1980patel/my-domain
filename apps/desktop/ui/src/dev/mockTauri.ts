@@ -904,7 +904,11 @@ const FIXTURES: Record<string, Handler> = {
   timer_devices: () => [ME, PIXEL, MACBOOK, LAB],
   read_later_list: () => READ_LATER,
   transfer_list: () => TRANSFERS,
-  activity_feed: () => ({ items: ACTIVITY, more: false, hidden: [], cleared_at: null }),
+  // Filtered by device like the core (a device's page shows only its own).
+  activity_feed: (a) => {
+    const node = (a.query as { node?: string | null } | undefined)?.node;
+    return { items: node ? ACTIVITY.filter((x) => x.node === node) : ACTIVITY, more: false, hidden: [], cleared_at: null };
+  },
   phone_notifications: (a) => (a.nodeId === PIXEL ? NOTIF_GROUPS : []),
   phone_notif_prefs: () => ({ private_mode: false, only_locked: false }),
   notification_history: (a) =>
