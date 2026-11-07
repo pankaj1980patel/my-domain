@@ -1,5 +1,13 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import android.content.Context
 import android.text.format.Formatter
 import androidx.compose.foundation.horizontalScroll
@@ -114,16 +122,12 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
         }
         item {
             val active = TransferLog.list.count { !it.finished }
-            Tile(onClick = onTransfers) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        if (active > 0) stringResource(R.string.transfers_open_active, active)
-                        else stringResource(R.string.transfers_open),
-                        Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = T.text,
-                    )
-                    Text("›", Modifier.clearAndSetSemantics {}, style = MaterialTheme.typography.titleMedium, color = T.text3)
-                }
-                Muted(stringResource(R.string.transfers_subtitle))
+            SoftCard(padding = PaddingValues(4.dp)) {
+                NavRow(
+                    R.drawable.ic_lucide_arrow_left_right, Hues.files,
+                    if (active > 0) stringResource(R.string.transfers_open_active, active) else stringResource(R.string.transfers_open),
+                    stringResource(R.string.transfers_subtitle), onClick = onTransfers,
+                )
             }
         }
         item {
@@ -190,7 +194,7 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
                     style = MaterialTheme.typography.titleSmall, color = T.text2,
                 )
             }
-            items(rows, key = { it.id }) { a -> ActivityRowView(ctx, a, onOpen) }
+            items(rows, key = { it.id }) { a -> ActivityRowView(ctx, a, onOpen, last = a === rows.last()) }
         }
         if (page.more) {
             item { GhostButton(stringResource(R.string.activity_load_more), { pages++ }, Modifier.fillMaxWidth()) }
@@ -242,49 +246,55 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
 /** Single-choice chips in a row that scrolls sideways. */
 @Composable
 private fun Chips(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    val colors = FilterChipDefaults.filterChipColors(
-        containerColor = T.surface2, labelColor = T.text2,
-        selectedContainerColor = T.accentBg, selectedLabelColor = T.accentFg,
-    )
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.forEach { (value, label) ->
-            val on = value == selected
-            FilterChip(
-                selected = on, onClick = { onSelect(value) }, label = { Text(label) }, colors = colors,
-                border = FilterChipDefaults.filterChipBorder(enabled = true, selected = on, borderColor = T.borderStrong, selectedBorderColor = T.accent),
-            )
-        }
-    }
+    Pills(options.map { (value, label) -> Pill(value, label, if (value.isEmpty()) null else kindIcon(value)) }, selected, onSelect)
 }
 
-/** One row: what happened, then the device, size, way and time. One
- *  TalkBack stop; tapping opens it where it lives. */
+/** One row: a coloured round icon on the timeline, what happened, then the
+ *  device, size, way and time. One TalkBack stop; tapping opens it where it
+ *  lives. [last]: no line below its icon. */
 @Composable
-private fun ActivityRowView(ctx: Context, a: ActivityRow, onOpen: (ActivityRow) -> Unit) {
+internal fun ActivityRowView(ctx: Context, a: ActivityRow, onOpen: (ActivityRow) -> Unit, last: Boolean = false) {
     val device = a.node?.let { Core.peerName(it) } ?: stringResource(R.string.activity_some_device)
     val meta = listOfNotNull(a.node?.let { Core.peerName(it) }) + activityMeta(ctx, a) +
         DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(a.ts))
     val failed = a.action.endsWith("_failed") || a.action == "key_changed"
-    Surface(onClick = { onOpen(a) }, color = T.surface, shape = MaterialTheme.shapes.small, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
-            Text(activityIcon(a), Modifier.width(28.dp).clearAndSetSemantics {}, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.width(8.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    activityText(ctx, a, device), style = MaterialTheme.typography.bodyMedium,
-                    color = if (failed) T.danger else T.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    a.node?.let {
-                        DeviceIcon(DeviceKinds.iconOf(it), 14.dp, T.text2)
-                        Spacer(Modifier.width(4.dp))
-                    }
-                    Muted(meta.joinToString(" · "))
+    val (icon, h) = activityIcon(a)
+    val line = T.border
+    Row(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(role = Role.Button) { onOpen(a) }
+            .height(IntrinsicSize.Min).padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(Modifier.width(40.dp).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
+            if (!last) Box(Modifier.padding(top = 40.dp).width(2.dp).fillMaxHeight().background(line))
+            Box(Modifier.padding(top = 6.dp)) { IconBubble(icon, if (failed) Hue.Red else h, 34.dp) }
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
+            Text(
+                activityText(ctx, a, device), style = MaterialTheme.typography.bodyMedium,
+                color = if (failed) T.danger else T.text, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                a.node?.let {
+                    DeviceIcon(DeviceKinds.iconOf(it), 14.dp, T.text2)
+                    Spacer(Modifier.width(4.dp))
                 }
+                Muted(meta.joinToString(" · "))
             }
         }
     }
-    HorizontalDivider(color = T.border)
+}
+
+/** A kind's icon (the filter chips). */
+private fun kindIcon(kind: String): Int = when (kind) {
+    "files" -> R.drawable.ic_lucide_file
+    "clipboard" -> R.drawable.ic_lucide_clipboard
+    "messages" -> R.drawable.ic_lucide_message_circle
+    "calls" -> R.drawable.ic_lucide_phone
+    "notifications" -> R.drawable.ic_lucide_bell
+    "connections" -> R.drawable.ic_lucide_link_2
+    else -> R.drawable.ic_lucide_activity
 }
 
 private fun kindLabel(kind: String): Int = when (kind) {
@@ -297,18 +307,20 @@ private fun kindLabel(kind: String): Int = when (kind) {
     else -> R.string.activity_kind_other
 }
 
-private fun activityIcon(a: ActivityRow): String = when {
-    a.action == "note" -> "📝"
-    a.action == "timer" -> "⏱"
-    a.action == "read_later" -> "🔖"
-    a.action == "key_changed" -> "⚠"
-    a.kind == "files" -> "📄"
-    a.kind == "clipboard" -> "📋"
-    a.kind == "messages" -> "💬"
-    a.kind == "calls" -> "📞"
-    a.kind == "notifications" -> "🔔"
-    a.kind == "connections" -> "🔗"
-    else -> "•"
+/** A row's icon and colour: files blue, messages violet, calls green,
+ *  alerts amber, problems red. */
+private fun activityIcon(a: ActivityRow): Pair<Int, Hue> = when {
+    a.action == "note" -> R.drawable.ic_lucide_sticky_note to Hue.Amber
+    a.action == "timer" -> R.drawable.ic_lucide_timer to Hue.Amber
+    a.action == "read_later" -> R.drawable.ic_lucide_bookmark to Hue.Cyan
+    a.action == "key_changed" -> R.drawable.ic_lucide_triangle_alert to Hue.Red
+    a.kind == "files" -> R.drawable.ic_lucide_file to Hues.files
+    a.kind == "clipboard" -> R.drawable.ic_lucide_clipboard to Hue.Violet
+    a.kind == "messages" -> R.drawable.ic_lucide_message_circle to Hues.messages
+    a.kind == "calls" -> R.drawable.ic_lucide_phone to Hues.calls
+    a.kind == "notifications" -> R.drawable.ic_lucide_bell to Hues.alerts
+    a.kind == "connections" -> R.drawable.ic_lucide_link_2 to Hue.Green
+    else -> R.drawable.ic_lucide_activity to Hue.Muted
 }
 
 /** A timer's length: "5 min", "1 h 30 min", "45 s". */
@@ -401,12 +413,20 @@ private fun dayLabel(ctx: Context, ts: Long): String {
     }
 }
 
-/** Home's way in to the timeline. */
+/** Home's Recent activity: the newest [n] rows, each opening where it lives. */
 @Composable
-fun ActivityHomeEntry(onOpen: () -> Unit) {
-    if (Core.peers.isEmpty()) return
-    Tile(onClick = onOpen) {
-        Text(stringResource(R.string.activity_entry), style = MaterialTheme.typography.titleMedium, color = T.text)
-        Muted(stringResource(R.string.activity_entry_body))
+fun RecentActivity(n: Int, onOpen: (ActivityRow) -> Unit) {
+    val ctx = LocalContext.current
+    val sources = listOf(
+        ActivityLog.version, ChatHistory.version, ClipLog.list, TransferLog.list,
+        Notes.byId.size, ReadLater.byId.size, Timers.byId.size, Core.peers,
+    )
+    val rows = remember(sources) { ActivityLog.page(ActivityQuery(limit = n)).items.take(n) }
+    if (rows.isEmpty()) {
+        Muted(stringResource(R.string.activity_empty_body), Modifier.padding(8.dp))
+        return
+    }
+    Column {
+        rows.forEach { a -> ActivityRowView(ctx, a, onOpen, last = a === rows.last()) }
     }
 }

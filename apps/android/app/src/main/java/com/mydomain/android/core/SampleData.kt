@@ -42,6 +42,13 @@ object SampleData {
         Device(OFFICE, "Office PC", "10.20.0.41", "registry", null, null, "asleep", DeviceKind("windows", "desktop", "OptiPlex 7010", "Dell", "win_desktop")),
     )
 
+    /** Wallpaper colours some devices shared (the others show the
+     *  built-in art). */
+    val wallpapers = mapOf(
+        MACBOOK to listOf("#1b3a8a", "#6d4bd8", "#f08a5d"),
+        LAB to listOf("#0f3d3e", "#1fa29a", "#a7e8bd"),
+    )
+
     private const val GB = 1024L * 1024 * 1024
     private const val MB = 1024L * 1024
     private const val MIN = 60_000L

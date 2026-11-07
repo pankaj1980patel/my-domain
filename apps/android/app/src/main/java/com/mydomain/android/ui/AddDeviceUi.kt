@@ -55,6 +55,14 @@ fun AddDevice() {
     }
 }
 
+/** The invite panel shown right away (the Devices screen's "Add device"
+ *  button); [onClose] when it's closed or the device joined. */
+@Composable
+fun AddDevicePanel(onClose: () -> Unit) {
+    var round by remember { mutableIntStateOf(1) }
+    InvitePanel(round, onNewCode = { round++ }, onClose = onClose)
+}
+
 @Composable
 private fun InvitePanel(round: Int, onNewCode: () -> Unit, onClose: () -> Unit) {
     val ctx = LocalContext.current

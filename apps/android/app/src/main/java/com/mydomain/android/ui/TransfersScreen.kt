@@ -72,7 +72,7 @@ private const val STALE_MS = 5_000L
  * opened, scrolled to and marked.
  */
 @Composable
-fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: String? = null) {
+fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: String? = null, embedded: Boolean = false) {
     val all = TransferLog.list
     // A batch's files show inside it.
     val list = all.filter { it.batch == null }
@@ -97,14 +97,19 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: S
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
         item {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                // In the Files hub ([embedded]) its bar and tabs say where you are.
+                if (!embedded) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                    }
                 }
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(R.string.transfers_title), Modifier.semantics { heading() },
-                        style = MaterialTheme.typography.headlineSmall, color = T.text,
-                    )
+                    if (!embedded) {
+                        Text(
+                            stringResource(R.string.transfers_title), Modifier.semantics { heading() },
+                            style = MaterialTheme.typography.headlineSmall, color = T.text,
+                        )
+                    }
                 }
                 if (finished.isNotEmpty()) {
                     GhostButton(stringResource(R.string.transfers_clear), { TransferLog.clearFinished() }, small = true)

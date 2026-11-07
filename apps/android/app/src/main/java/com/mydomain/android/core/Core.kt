@@ -325,6 +325,7 @@ object Core {
         }
         DeviceKinds.kinds.clear()
         SampleData.devices.forEach { DeviceKinds.kinds[it.node] = it.kind }
+        Wallpapers.sample(SampleData.wallpapers)
         deviceStatus.clear()
         deviceStatus.putAll(SampleData.statuses(now))
         nowPlaying.clear()
@@ -365,9 +366,10 @@ object Core {
         activity.clear()
         syncPairs.clear()
         DeviceKinds.kinds.clear()
+        Wallpapers.looks.clear()
         // Read everything again (Notes, Timers and Read later too).
         Thread {
-            engine()?.let { DeviceKinds.load(it) }
+            engine()?.let { DeviceKinds.load(it); Wallpapers.load(it) }
             reload()
         }.start()
     }
@@ -582,6 +584,14 @@ object Core {
             val bmp = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap() ?: return
             val from = o.optString("from")
             onMain { screens[from] = bmp }
+            return
+        }
+        // A device's wallpaper look: its picture decoded here, off the main
+        // thread, and kept out of the logs (a data: URL).
+        if (name == "wallpaper-changed") {
+            val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
+            val (node, look) = Wallpapers.parseEvent(o) ?: return
+            onMain { Wallpapers.set(node, look) }
             return
         }
         // Wi-Fi Direct / hotspot requests carry a passphrase: handled here,

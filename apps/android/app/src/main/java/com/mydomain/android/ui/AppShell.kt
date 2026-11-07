@@ -1,17 +1,15 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.core.ActivityRow
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.mutableLongStateOf
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.annotation.StringRes
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -33,7 +31,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
@@ -58,16 +55,18 @@ val LocalToast = staticCompositionLocalOf<(String) -> Unit> { {} }
  *  what the action does). */
 val LocalUndo = staticCompositionLocalOf<(String, String, () -> Unit) -> Unit> { { _, _, _ -> } }
 
-private enum class Tab(@StringRes val label: Int, val icon: ImageVector) {
-    Devices(R.string.tab_devices, Icons.Filled.Home),
-    Notes(R.string.tab_notes, Icons.Filled.Edit),
-    Activity(R.string.tab_activity, Icons.Filled.List),
-    Settings(R.string.tab_settings, Icons.Filled.Settings),
+private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
+    Home(R.string.tab_home, R.drawable.ic_lucide_house),
+    Devices(R.string.tab_devices, R.drawable.ic_lucide_monitor_smartphone),
+    Activity(R.string.tab_activity, R.drawable.ic_lucide_activity),
+    More(R.string.tab_more, R.drawable.ic_lucide_layout_grid),
 }
 
-/** Sign-in until ready; then tabs (Devices, Notes, Activity, Settings) plus the
- *  pushed Device, Developer, Automations, Transfers (from Activity), Set up
- *  this phone, Timers, Read later and Search (from Home) and Help screens. */
+/** Sign-in until ready; then the bottom navigation (Home, Devices,
+ *  Activity, More) under a top bar (logo, the bell, Settings), plus the
+ *  pushed screens: a device, Settings, Notes, Timers, Read later, Files &
+ *  transfers, Messages, Workspace, Automations, Search, the links map, the
+ *  health check, Set up this phone, Developer and Help. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -112,17 +111,33 @@ fun App(prefs: SharedPreferences) {
     }
 }
 
+/** What the top bar's bell counts: messages that came in since you last
+ *  opened Messages (this session only). */
+private object Attention {
+    var seenAt by mutableLongStateOf(0L)
+
+    val newMessages: Int
+        get() = Core.messages.count { it.incoming && it.ts > seenAt }
+}
+
 @Composable
 private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
-    var tab by rememberSaveable { mutableStateOf(Tab.Devices) }
+    var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var device by rememberSaveable { mutableStateOf<String?>(null) }
     var developer by rememberSaveable { mutableStateOf(false) }
     var automations by rememberSaveable { mutableStateOf(false) }
-    var transfers by rememberSaveable { mutableStateOf(false) }
     var setup by rememberSaveable { mutableStateOf(false) }
     var timers by rememberSaveable { mutableStateOf(false) }
     var readLater by rememberSaveable { mutableStateOf(false) }
     var linksMap by rememberSaveable { mutableStateOf(false) }
+    // Notes and Settings (tabs before the redesign), and More's hubs.
+    var notes by rememberSaveable { mutableStateOf(false) }
+    var settings by rememberSaveable { mutableStateOf(false) }
+    var filesHub by rememberSaveable { mutableStateOf(false) }
+    var filesTab by rememberSaveable { mutableStateOf(FilesTab.Files) }
+    var messages by rememberSaveable { mutableStateOf(false) }
+    var messagesTab by rememberSaveable { mutableStateOf(MessagesTab.Chats) }
+    var workspace by rememberSaveable { mutableStateOf(false) }
     // The health check and first-run setup (HealthScreen.kt).
     var health by rememberSaveable { mutableStateOf(false) }
     var onboarding by rememberSaveable { mutableStateOf(false) }
@@ -135,7 +150,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         help = true
     }
 
-    // Search (from Home): shown over the tabs; what a result opens is pushed
+    // Search (from More): shown over the tabs; what a result opens is pushed
     // over it, so Back comes back to the results as they were. The query,
     // the type chips and the open groups (kind names, comma-separated)
     // survive that and a rotation.
@@ -150,63 +165,83 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
     var foundNote by rememberSaveable { mutableStateOf<String?>(null) }
     var foundLink by rememberSaveable { mutableStateOf<String?>(null) }
-    // A result opened a Settings tile or a note (a tab, not a pushed
-    // screen): Back goes back to Search. And Help opened from Search closes
-    // in one Back.
-    var settingsFromSearch by rememberSaveable { mutableStateOf(false) }
-    var notesFromSearch by rememberSaveable { mutableStateOf(false) }
+    // Help opened from Search closes in one Back.
     var helpFromSearch by rememberSaveable { mutableStateOf(false) }
 
-    /** Leave Search and everything it opened (another way in took over). */
-    val leaveSearch = {
-        search = false
-        settingsFromSearch = false
-        notesFromSearch = false
-        helpFromSearch = false
-        settingsFocus = null
+    val openDevice = { node: String, focus: String? -> deviceFocus = focus; device = node }
+    val openTransfers = { found: String? ->
+        foundTransfer = found
+        filesTab = FilesTab.Transfers
+        filesHub = true
     }
+    val openSettings = { focus: String? -> settingsFocus = focus; settings = true }
+    val openNotes = { found: String? -> foundNote = found; notes = true }
     val openFound: (Findable) -> Unit = { f ->
         when (f.kind) {
-            FoundKind.DEVICES -> { deviceFocus = null; device = f.id }
-            FoundKind.MESSAGES -> f.node?.let { deviceFocus = "msg:" + f.id; device = it }
-            FoundKind.CLIPBOARD -> f.node?.let { deviceFocus = "clip:" + f.id; device = it }
-            FoundKind.TRANSFERS -> { foundTransfer = f.id; transfers = true }
+            FoundKind.DEVICES -> openDevice(f.id, null)
+            FoundKind.MESSAGES -> f.node?.let { openDevice(it, "msg:" + f.id) }
+            FoundKind.CLIPBOARD -> f.node?.let { openDevice(it, "clip:" + f.id) }
+            FoundKind.TRANSFERS -> openTransfers(f.id)
             FoundKind.AUTOMATIONS -> { foundAutomation = f.id; automations = true }
             FoundKind.HELP -> { helpFromSearch = true; openHelp(f.id) }
             FoundKind.READ_LATER -> { foundLink = f.id; readLater = true }
-            FoundKind.NOTES -> {
-                foundNote = f.id
-                notesFromSearch = true
-                search = false
-                tab = Tab.Notes
-            }
-            FoundKind.FOLDERS, FoundKind.AUTOMATION_APPS, FoundKind.SETTINGS -> {
-                settingsFocus = when (f.kind) {
+            FoundKind.NOTES -> openNotes(f.id)
+            FoundKind.FOLDERS, FoundKind.AUTOMATION_APPS, FoundKind.SETTINGS -> openSettings(
+                when (f.kind) {
                     FoundKind.FOLDERS -> "sync"
                     FoundKind.AUTOMATION_APPS -> "automation-apps"
                     else -> f.id
-                }
-                settingsFromSearch = true
-                search = false
-                tab = Tab.Settings
-            }
+                },
+            )
+        }
+    }
+    // An Activity row opens where it lives: the found-item ways Search uses.
+    val openActivity: (ActivityRow) -> Unit = { a ->
+        when {
+            a.kind == "files" -> openTransfers(a.target)
+            a.kind == "messages" && a.node != null -> openDevice(a.node!!, "msg:" + a.target)
+            a.kind == "clipboard" && a.node != null -> openDevice(a.node!!, "clip:" + a.target)
+            a.action == "note" -> openNotes(a.target)
+            a.action == "read_later" -> { foundLink = a.target; readLater = true }
+            a.action == "timer" -> timers = true
+            a.node != null -> openDevice(a.node!!, null)
         }
     }
     val closeDevice = { device = null; deviceFocus = null }
-    val closeTransfers = { transfers = false; foundTransfer = null }
+    val closeFiles = { filesHub = false; foundTransfer = null }
     val closeAutomations = { automations = false; foundAutomation = null }
     val closeHelp = { help = false; helpFromSearch = false }
     val closeReadLater = { readLater = false; foundLink = null }
-    val backToSearch = {
-        settingsFromSearch = false
-        notesFromSearch = false
-        settingsFocus = null
-        tab = Tab.Devices
-        search = true
+    val closeSettings = { settings = false; settingsFocus = null }
+    val closeNotes = { notes = false; foundNote = null }
+    val openMessages = { t: MessagesTab ->
+        messagesTab = t
+        messages = true
+        Attention.seenAt = System.currentTimeMillis()
+    }
+    /** Close every pushed screen (a notification or shortcut took over). */
+    val closeAll = {
+        closeDevice()
+        developer = false
+        closeAutomations()
+        setup = false
+        timers = false
+        closeReadLater()
+        linksMap = false
+        health = false
+        onboarding = false
+        closeHelp()
+        helpTopic = null
+        closeNotes()
+        closeSettings()
+        closeFiles()
+        messages = false
+        workspace = false
+        search = false
     }
 
     // The health check: with the server now and every 10 minutes, quickly
-    // every minute in between (the Home card and the Settings tab's badge);
+    // every minute in between (the Home card and the Settings badge);
     // every 5 and 30 minutes while saving battery, and not at all while the
     // app is off screen (PowerPolicy.healthStep).
     val ctx = LocalContext.current
@@ -234,9 +269,9 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
     val healthNav = HealthNav(
-        onDevice = { deviceFocus = null; device = it },
+        onDevice = { openDevice(it, null) },
         onMap = { linksMap = true },
-        onSettings = { health = false; onboarding = false; tab = Tab.Settings },
+        onSettings = { health = false; onboarding = false; openSettings(null) },
         onHelp = { openHelp(it) },
     )
 
@@ -252,18 +287,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A notification asked for Settings (e.g. to allow location sharing).
     LaunchedEffect(Core.showSettings) {
         if (Core.showSettings) {
-            device = null
-            developer = false
-            automations = false
-            transfers = false
-            setup = false
-            readLater = false
-            linksMap = false
-            health = false
-            onboarding = false
-            help = false
-            leaveSearch()
-            tab = Tab.Settings
+            closeAll()
+            openSettings(null)
             Core.showSettings = false
         }
     }
@@ -271,19 +296,9 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A launcher shortcut asked for one device's screen.
     LaunchedEffect(Core.showDevice) {
         Core.showDevice?.let { node ->
-            developer = false
-            automations = false
-            transfers = false
-            setup = false
-            readLater = false
-            linksMap = false
-            health = false
-            onboarding = false
-            help = false
-            leaveSearch()
-            tab = Tab.Devices
-            deviceFocus = null
-            device = node
+            closeAll()
+            tab = Tab.Home
+            openDevice(node, null)
             Core.showDevice = null
         }
     }
@@ -291,14 +306,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A timer's notification asked for Timers.
     LaunchedEffect(Core.showTimers) {
         if (Core.showTimers) {
-            device = null
-            developer = false
-            automations = false
-            transfers = false
-            setup = false
-            help = false
-            leaveSearch()
-            tab = Tab.Devices
+            closeAll()
             timers = true
             Core.showTimers = false
         }
@@ -307,19 +315,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A note reminder's notification asked for its note.
     LaunchedEffect(Core.showNote) {
         Core.showNote?.let { id ->
-            device = null
-            developer = false
-            automations = false
-            transfers = false
-            setup = false
-            readLater = false
-            linksMap = false
-            health = false
-            onboarding = false
-            help = false
-            leaveSearch()
-            foundNote = id
-            tab = Tab.Notes
+            closeAll()
+            openNotes(id)
             Core.showNote = null
         }
     }
@@ -328,30 +325,22 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     LaunchedEffect(Core.showScreen) {
         val want = Core.showScreen ?: return@LaunchedEffect
         Core.showScreen = null
-        device = null
-        deviceFocus = null
-        developer = false
-        automations = false
-        transfers = false
-        setup = false
-        timers = false
-        readLater = false
-        linksMap = false
-        health = false
-        onboarding = false
-        help = false
-        helpTopic = null
-        leaveSearch()
-        tab = Tab.Devices
+        closeAll()
+        tab = Tab.Home
         when (want.screen) {
             DebugScreen.HOME, DebugScreen.SIGN_IN -> Unit
-            DebugScreen.NOTES -> tab = Tab.Notes
+            DebugScreen.DEVICES -> tab = Tab.Devices
+            DebugScreen.MORE -> tab = Tab.More
+            DebugScreen.NOTES -> openNotes(null)
             DebugScreen.ACTIVITY -> tab = Tab.Activity
-            DebugScreen.SETTINGS -> tab = Tab.Settings
-            DebugScreen.DEVICE -> device = want.device
+            DebugScreen.SETTINGS -> openSettings(null)
+            DebugScreen.DEVICE -> openDevice(want.device ?: "", null)
             DebugScreen.DEVELOPER -> developer = true
             DebugScreen.AUTOMATIONS -> automations = true
-            DebugScreen.TRANSFERS -> transfers = true
+            DebugScreen.TRANSFERS -> openTransfers(null)
+            DebugScreen.FILES -> { filesTab = FilesTab.Files; filesHub = true }
+            DebugScreen.MESSAGES -> openMessages(MessagesTab.Chats)
+            DebugScreen.WORKSPACE -> workspace = true
             DebugScreen.SETUP_PHONE -> setup = true
             DebugScreen.TIMERS -> timers = true
             DebugScreen.READ_LATER -> readLater = true
@@ -366,51 +355,57 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         }
     }
 
-    val pushed = help || device != null || developer || automations || transfers || setup || timers || readLater || linksMap ||
-        health || onboarding || search
-    BackHandler(enabled = pushed || settingsFromSearch || notesFromSearch || tab != Tab.Devices) {
+    val pushed = help || device != null || developer || automations || setup || timers || readLater || linksMap ||
+        health || onboarding || notes || settings || filesHub || messages || workspace || search
+    BackHandler(enabled = pushed || tab != Tab.Home) {
         when {
             help && helpTopic != null && !helpFromSearch -> helpTopic = null
             help -> closeHelp()
             device != null -> closeDevice()
             developer -> developer = false
             automations -> closeAutomations()
-            transfers -> closeTransfers()
             setup -> setup = false
             timers -> timers = false
             readLater -> closeReadLater()
             linksMap -> linksMap = false
             onboarding -> onboarding = false
             health -> health = false
+            notes -> closeNotes()
+            settings -> closeSettings()
+            filesHub -> closeFiles()
+            messages -> messages = false
+            workspace -> workspace = false
             search -> search = false
-            settingsFromSearch && tab == Tab.Settings -> backToSearch()
-            notesFromSearch && tab == Tab.Notes -> backToSearch()
-            else -> tab = Tab.Devices
+            else -> tab = Tab.Home
         }
     }
 
     Scaffold(
         containerColor = Color.Transparent,
         snackbarHost = { SnackbarHost(snack) },
+        topBar = {
+            if (!pushed) {
+                TopBar(
+                    bellCount = Attention.newMessages,
+                    onBell = { openMessages(if (Attention.newMessages > 0) MessagesTab.Chats else MessagesTab.Notifications) },
+                    settingsDot = Health.bad > 0,
+                    onSettings = { openSettings(null) },
+                )
+            }
+        },
         bottomBar = {
             if (!pushed) {
                 NavigationBar(containerColor = T.bar, tonalElevation = 0.dp) {
                     Tab.entries.forEach { t ->
                         NavigationBarItem(
                             selected = tab == t,
-                            onClick = {
-                                // Picking a tab leaves what Search opened.
-                                settingsFromSearch = false
-                                notesFromSearch = false
-                                settingsFocus = null
-                                tab = t
-                            },
+                            onClick = { tab = t },
                             icon = {
-                                // Something red in the health check: a dot on Settings.
-                                if (t == Tab.Settings && Health.bad > 0) {
-                                    BadgedBox(badge = { Badge(containerColor = T.danger) }) { Icon(t.icon, contentDescription = null) }
+                                // Something red in the health check: a dot on More.
+                                if (t == Tab.More && Health.bad > 0) {
+                                    BadgedBox(badge = { Badge(containerColor = T.danger) }) { LIcon(t.icon, LocalContentColor.current, 24.dp) }
                                 } else {
-                                    Icon(t.icon, contentDescription = null)
+                                    LIcon(t.icon, LocalContentColor.current, 24.dp)
                                 }
                             },
                             label = { Text(stringResource(t.label)) },
@@ -442,14 +437,42 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                 linksMap -> LinksMapScreen(
                     onBack = { linksMap = false },
                     onHelp = { openHelp("troubleshooting") },
-                    onDevice = { deviceFocus = null; device = it },
+                    onDevice = { openDevice(it, null) },
                 )
                 onboarding -> OnboardingScreen(onClose = { onboarding = false }, nav = healthNav)
                 health -> HealthScreen(onBack = { health = false }, nav = healthNav)
-                transfers -> TransfersScreen(
-                    onBack = closeTransfers,
-                    onOpenDevice = { deviceFocus = null; device = it },
-                    found = foundTransfer,
+                notes -> NotesScreen(
+                    onHelp = { openHelp("notes") },
+                    openNote = foundNote,
+                    onOpened = { foundNote = null },
+                    onBack = closeNotes,
+                )
+                settings -> SettingsScreen(
+                    prefs,
+                    onDeveloper = { developer = true },
+                    onAutomations = { foundAutomation = null; automations = true },
+                    onSetup = { setup = true },
+                    onHelp = { openHelp(null) },
+                    onHealth = { health = true },
+                    onOnboarding = { onboarding = true },
+                    focus = settingsFocus,
+                    onBack = closeSettings,
+                )
+                filesHub -> FilesHubScreen(
+                    filesTab, { filesTab = it }, onBack = closeFiles,
+                    onOpenDevice = { n, f -> openDevice(n, f) },
+                    foundTransfer = foundTransfer,
+                )
+                messages -> MessagesHubScreen(
+                    messagesTab, { messagesTab = it }, onBack = { messages = false },
+                    onOpenDevice = { n, f -> openDevice(n, f) },
+                    onActivityRow = openActivity,
+                )
+                workspace -> WorkspaceScreen(
+                    onBack = { workspace = false },
+                    onNotes = { openNotes(null) },
+                    onTimers = { timers = true },
+                    onReadLater = { foundLink = null; readLater = true },
                 )
                 search -> SearchScreen(
                     query = searchQuery,
@@ -461,48 +484,38 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     onOpen = openFound,
                     onBack = { search = false },
                 )
-                tab == Tab.Devices -> HomeScreen(
-                    onOpen = { deviceFocus = null; device = it },
-                    onSetup = { setup = true },
-                    onSearch = { search = true },
-                    onBattery = { settingsFocus = "battery"; tab = Tab.Settings },
-                    onTimers = { timers = true },
-                    onReadLater = { foundLink = null; readLater = true },
-                    onLinksMap = { linksMap = true },
+                tab == Tab.Home -> HomeScreen(
+                    onOpen = { openDevice(it, null) },
+                    onOpenTab = { n, t -> openDevice(n, "tab:$t") },
+                    onRename = { openDevice(it, "edit") },
+                    onDevices = { tab = Tab.Devices },
+                    onBattery = { openSettings("battery") },
                     onActivity = { tab = Tab.Activity },
+                    onActivityRow = openActivity,
                     onHealth = { health = true },
                     onOnboarding = { onboarding = true },
                 )
-                tab == Tab.Notes -> NotesScreen(
-                    onHelp = { openHelp("notes") },
-                    openNote = foundNote,
-                    onOpened = { foundNote = null },
-                )
+                tab == Tab.Devices -> DevicesScreen(onOpen = { openDevice(it, null) })
                 tab == Tab.Activity -> ActivityScreen(
-                    onTransfers = { foundTransfer = null; transfers = true },
-                    onOpen = { a ->
-                        // A row opens where it lives: the found-item ways Search uses.
-                        when {
-                            a.kind == "files" -> { foundTransfer = a.target; transfers = true }
-                            a.kind == "messages" && a.node != null -> { deviceFocus = "msg:" + a.target; device = a.node }
-                            a.kind == "clipboard" && a.node != null -> { deviceFocus = "clip:" + a.target; device = a.node }
-                            a.action == "note" -> { foundNote = a.target; tab = Tab.Notes }
-                            a.action == "read_later" -> { foundLink = a.target; readLater = true }
-                            a.action == "timer" -> timers = true
-                            a.node != null -> { deviceFocus = null; device = a.node }
-                        }
-                    },
+                    onTransfers = { openTransfers(null) },
+                    onOpen = openActivity,
                 )
-                else -> SettingsScreen(
-                    prefs,
-                    onDeveloper = { developer = true },
-                    onAutomations = { foundAutomation = null; automations = true },
-                    onSetup = { setup = true },
-                    onHelp = { openHelp(null) },
-                    onHealth = { health = true },
-                    onOnboarding = { onboarding = true },
-                    focus = settingsFocus,
-                )
+                else -> MoreScreen { item ->
+                    when (item) {
+                        MoreItem.Files -> { filesTab = FilesTab.Files; filesHub = true }
+                        MoreItem.Messages -> openMessages(MessagesTab.Chats)
+                        MoreItem.Workspace -> workspace = true
+                        MoreItem.Notes -> openNotes(null)
+                        MoreItem.Timers -> timers = true
+                        MoreItem.ReadLater -> { foundLink = null; readLater = true }
+                        MoreItem.Automations -> { foundAutomation = null; automations = true }
+                        MoreItem.Search -> search = true
+                        MoreItem.Connections -> linksMap = true
+                        MoreItem.Health -> health = true
+                        MoreItem.Settings -> openSettings(null)
+                        MoreItem.Help -> openHelp(null)
+                    }
+                }
             }
         }
     }

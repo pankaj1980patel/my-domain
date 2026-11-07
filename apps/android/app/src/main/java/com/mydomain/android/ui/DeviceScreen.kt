@@ -1,5 +1,8 @@
 package com.mydomain.android.ui
 
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.heading
@@ -72,118 +75,322 @@ import com.mydomain.android.core.linkStateOf
 import com.mydomain.android.core.progressLabel
 import kotlinx.coroutines.launch
 
-/** One device: its status, then a tile per feature. [focus]: what a
- *  search result opened ("msg:<id>" a message, "clip:<id>" a clip), brought
- *  into view and marked. */
+/** The device page's tabs (pill tabs under the header). Each tile of the
+ *  old one long page lives on one ([TILE_TAB]); Overview has the grouped
+ *  action cards on top. */
+enum class DeviceTab(val key: String, val label: Int, val icon: Int) {
+    Overview("overview", R.string.dev_tab_overview, R.drawable.ic_lucide_layout_grid),
+    Communication("comm", R.string.dev_tab_comm, R.drawable.ic_lucide_message_circle),
+    Files("files", R.string.dev_tab_files, R.drawable.ic_lucide_folder),
+    Remote("remote", R.string.dev_tab_remote, R.drawable.ic_lucide_mouse_pointer_2),
+    Media("media", R.string.dev_tab_media, R.drawable.ic_lucide_music),
+    ;
+
+    companion object {
+        fun of(key: String?): DeviceTab? = entries.firstOrNull { it.key == key }
+    }
+}
+
+/** Which tab each tile is on (ids as in [deviceTiles]). */
+private val TILE_TAB = mapOf(
+    "chat" to DeviceTab.Communication,
+    "clipboard" to DeviceTab.Communication,
+    "clipboard-history" to DeviceTab.Communication,
+    "notify" to DeviceTab.Communication,
+    "computer-notifs" to DeviceTab.Communication,
+    "apps" to DeviceTab.Communication,
+    "files" to DeviceTab.Files,
+    "browse" to DeviceTab.Files,
+    "control" to DeviceTab.Remote,
+    "touchpad" to DeviceTab.Remote,
+    "screen-share" to DeviceTab.Remote,
+    "commands" to DeviceTab.Remote,
+    "now-playing" to DeviceTab.Media,
+    "phone-audio" to DeviceTab.Media,
+    "computer-audio" to DeviceTab.Media,
+    "info" to DeviceTab.Overview,
+    "connection" to DeviceTab.Overview,
+)
+
+private fun tabOf(id: String): DeviceTab = TILE_TAB[id] ?: DeviceTab.Overview
+
+/** One device: Back, its name and a menu; its art, status and when it was
+ *  last seen; pill tabs (Overview, Communication, Files, Remote control,
+ *  Media), Overview with grouped action cards. Every tile of the old page is
+ *  on one tab. [focus]: what a search result opened ("msg:<id>" a message,
+ *  "clip:<id>" a clip), brought into view and marked; "tab:<key>" opens
+ *  that tab. */
 @Composable
 fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHealth: () -> Unit = {}) {
     val peer = Core.peers.firstOrNull { it.nodeId == node }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
-    var editing by remember(node) { mutableStateOf(false) }
+    var editing by remember(node, focus) { mutableStateOf(focus == "edit") }
+    var menu by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val foundMessage = focus?.takeIf { it.startsWith("msg:") }?.removePrefix("msg:")?.toLongOrNull()
     val foundClip = focus?.takeIf { it.startsWith("clip:") }?.removePrefix("clip:")?.toLongOrNull()
-    // Scroll to the tile; the row in it brings itself into view (foundMark).
-    LaunchedEffect(node, focus) {
-        when {
-            foundMessage != null -> list.scrollToKey("chat")
-            foundClip != null -> list.scrollToKey("clipboard-history")
-        }
+    val startTab = when {
+        foundMessage != null || foundClip != null -> DeviceTab.Communication
+        else -> DeviceTab.of(focus?.removePrefix("tab:")) ?: DeviceTab.Overview
     }
-    // Arrange (a long press on a tile, or the button by its name): the
-    // screen's tiles in the saved order, for this kind of device or this
-    // device alone (PageLayoutStore).
+    var tabKey by rememberSaveable(node, focus) { mutableStateOf(startTab.key) }
+    val tab = DeviceTab.of(tabKey) ?: DeviceTab.Overview
+    // A tile to bring into view once its tab shows (a card's action, a search).
+    var scrollTo by remember(node, focus) {
+        mutableStateOf(
+            when {
+                foundMessage != null -> "chat"
+                foundClip != null -> "clipboard-history"
+                else -> null
+            },
+        )
+    }
+    val goTo = { t: DeviceTab, tile: String? -> tabKey = t.key; scrollTo = tile }
+    LaunchedEffect(tabKey, scrollTo) {
+        val k = scrollTo ?: return@LaunchedEffect
+        list.scrollToKey(k)
+        scrollTo = null
+    }
+    FollowLinksMap()
+    // Arrange (a long press on a tile, or the menu): the screen's tiles in
+    // the saved order, for this kind of device or this device alone
+    // (PageLayoutStore).
     var arranging by remember(node) { mutableStateOf(false) }
     var said by remember(node) { mutableStateOf("") }
     val kind = pageKind(node)
     val tiles = deviceTiles(node, Core.peerName(node), foundMessage, foundClip).filter { kind in it.kinds }
     val layout = PageLayoutStore.view(kind, node, tiles.map { it.id })
     val arrangeLabel = stringResource(R.string.layout_arrange)
+    val send = rememberFileSender { node }
+    val name = Core.peerName(node)
 
     Column(Modifier.fillMaxSize().imePadding()) {
-        Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
-            Text(stringResource(R.string.home_title), style = MaterialTheme.typography.bodyMedium, color = T.text2)
+        BackBar(if (peer == null) stringResource(R.string.home_title) else name, onBack) {
+            if (peer != null) {
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        LIcon(R.drawable.ic_lucide_ellipsis_vertical, T.text, 24.dp, stringResource(R.string.dev_menu, name))
+                    }
+                    DeviceMenu(node, menu, onDismiss = { menu = false }, onRename = { editing = true }, onArrange = {
+                        arranging = true
+                        said = ""
+                    }, onHealth = onHealth)
+                }
+            }
         }
         if (peer == null) {
             EmptyState(stringResource(R.string.device_not_found_title), stringResource(R.string.device_not_found_body))
             return
         }
         val s = linkStateOf(node)
-        // The nickname you gave it here, else its own name.
-        val name = Core.peerName(node)
+        val st = Core.deviceStatus[node]
+        // Tabs with nothing on them for this device are left out.
+        val shown = layout.shown.mapNotNull { id -> tiles.firstOrNull { it.id == id } }.filter { it.available }
+        val tabs = DeviceTab.entries.filter { t -> t == DeviceTab.Overview || shown.any { tabOf(it.id) == t } }
+        // A tab left with nothing (a tile hidden, the device changed): Overview.
+        val tab = if (tab in tabs) tab else DeviceTab.Overview
         LazyColumn(
             Modifier.fillMaxSize(),
             state = list,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item {
+            item(key = "hero") {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                    DeviceAvatar(node, 56.dp)
+                    ArtAvatar(node, 96.dp)
                     Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                name, style = MaterialTheme.typography.headlineSmall, color = T.text,
-                                maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false).semantics { heading() },
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            GhostButton(stringResource(R.string.label_edit), { editing = !editing }, small = true)
-                            Spacer(Modifier.width(6.dp))
-                            GhostButton(
-                                stringResource(if (arranging) R.string.layout_done else R.string.layout_arrange),
-                                { arranging = !arranging; said = "" },
-                                small = true,
-                            )
-                        }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            name, style = MaterialTheme.typography.headlineSmall, color = T.text,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.semantics { heading() },
+                        )
                         // What it is: "Apple MacBook Pro", "Samsung Galaxy S23".
                         DeviceKinds.describe(node).takeIf { it.isNotEmpty() }?.let { Muted(it) }
                         StatusPill(node)
+                        (viaText(node) ?: lastSeenText(node))?.let { Muted(it) }
                         if (s == LinkState.Connecting || s == LinkState.Failed) {
                             progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
                         }
-                        // Asleep? Wake it (Wake-on-LAN), if it said it may be woken.
-                        WakeIt(node)
                     }
+                    OnlinePill(s == LinkState.Direct || s == LinkState.Relay)
+                }
+            }
+            item(key = "hero-actions") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FactChips(node)
+                    // Asleep? Wake it (Wake-on-LAN), if it said it may be woken.
+                    WakeIt(node)
                     if (s == LinkState.Offline || s == LinkState.Failed) {
                         PrimaryButton(stringResource(R.string.connect), {
                             scope.launch { try { Core.connect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
-                        })
+                        }, Modifier.fillMaxWidth())
                     }
-                    // Connected: drop it, or drop it and connect afresh.
-                    if (s == LinkState.Direct || s == LinkState.Relay) {
-                        Column(horizontalAlignment = Alignment.End) {
-                            GhostButton(stringResource(R.string.reconnect), {
-                                scope.launch { try { Core.reconnect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
-                            }, small = true)
-                            GhostButton(stringResource(R.string.disconnect), {
-                                scope.launch { try { Core.disconnect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
-                            }, small = true)
-                        }
-                    }
+                }
+            }
+            if (!arranging) {
+                item(key = "tabs") {
+                    Pills(tabs.map { Pill(it, stringResource(it.label), it.icon) }, tab, { goTo(it, null) })
                 }
             }
             // Its security key changed: refused until you decide.
             item(key = "key-change") { KeyChangeBanner(node) }
             // The health check found something red about this device.
             item(key = "health") { HealthDeviceBanner(node, onHealth) }
-            // Compare security keys with it; "Verified" once you have.
-            item(key = "verify") { VerifyRow(node) }
-            // Remove it for good (asks first; "Allow again" in Settings).
-            item(key = "remove") { RemoveDeviceRow(node, Core.peerName(node), onBack) }
-            if (editing) item { DeviceLabelEditor(node) { editing = false } }
+            if (editing) item(key = "label") { DeviceLabelEditor(node) { editing = false } }
             if (arranging) {
                 arrangeItems(node, name, kind, tiles, layout, said, { said = it }) { arranging = false }
             } else {
-                val shown = layout.shown.mapNotNull { id -> tiles.firstOrNull { it.id == id } }.filter { it.available }
-                for (t in shown) item(key = t.id) {
+                if (tab == DeviceTab.Overview) {
+                    item(key = "cards") {
+                        OverviewCards(node, name, st, shown.map { it.id }.toSet(), send, goTo)
+                    }
+                }
+                val here = shown.filter { tabOf(it.id) == tab }
+                for (t in here) item(key = t.id) {
                     Box(Modifier.longPressToArrange(node, arrangeLabel) { arranging = true }) { t.content() }
                 }
                 if (layout.shown.isEmpty()) item { Muted(stringResource(R.string.layout_all_hidden)) }
+                if (tab == DeviceTab.Overview) {
+                    // Compare security keys with it; "Verified" once you have.
+                    item(key = "verify") { VerifyRow(node) }
+                    // Remove it for good (asks first; "Allow again" in Settings).
+                    item(key = "remove") { RemoveDeviceRow(node, name, onBack) }
+                }
             }
+        }
+    }
+}
+
+/** The ⋮ menu: rename, arrange, connect / reconnect / disconnect, and the
+ *  health check. */
+@Composable
+private fun DeviceMenu(
+    node: String,
+    open: Boolean,
+    onDismiss: () -> Unit,
+    onRename: () -> Unit,
+    onArrange: () -> Unit,
+    onHealth: () -> Unit,
+) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val s = linkStateOf(node)
+    val run = { block: suspend () -> Unit ->
+        onDismiss()
+        scope.launch { try { block() } catch (e: Exception) { toast(friendlyError(e)) } }
+        Unit
+    }
+    DropdownMenu(open, onDismissRequest = onDismiss, containerColor = T.bar) {
+        @Composable
+        fun Item(icon: Int, label: Int, onClick: () -> Unit) = DropdownMenuItem(
+            text = { Text(stringResource(label), color = T.text) },
+            leadingIcon = { LIcon(icon, T.text2, 20.dp) },
+            onClick = onClick,
+        )
+        Item(R.drawable.ic_lucide_pencil, R.string.dev_rename) { onDismiss(); onRename() }
+        Item(R.drawable.ic_lucide_layers, R.string.layout_arrange) { onDismiss(); onArrange() }
+        if (s == LinkState.Direct || s == LinkState.Relay) {
+            // Connected: drop it, or drop it and connect afresh.
+            Item(R.drawable.ic_lucide_refresh_cw, R.string.reconnect) { run { Core.reconnect(node) } }
+            Item(R.drawable.ic_lucide_power, R.string.disconnect) { run { Core.disconnect(node) } }
+        } else {
+            Item(R.drawable.ic_lucide_link_2, R.string.connect) { run { Core.connect(node) } }
+        }
+        Item(R.drawable.ic_lucide_shield_check, R.string.dev_health_check) { onDismiss(); onHealth() }
+    }
+}
+
+/** Overview's grouped cards: Messaging & notifications, Files & sharing,
+ *  Device tools (only what it can do), and Device info. Each tile acts, or
+ *  opens the tab with the full controls. [shown]: the tiles it offers now. */
+@Composable
+private fun OverviewCards(
+    node: String,
+    name: String,
+    st: DeviceStatus?,
+    shown: Set<String>,
+    send: FileSender,
+    goTo: (DeviceTab, String?) -> Unit,
+) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val ringing = stringResource(R.string.find_ringing, name)
+    val ringQueued = stringResource(R.string.find_ring_queued, name)
+    val asked = stringResource(R.string.clipboard_asked)
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val comm = buildList {
+            if ("chat" in shown) add(TileAction(R.drawable.ic_lucide_message_circle, stringResource(R.string.dev_act_chat), Hue.Violet) { goTo(DeviceTab.Communication, "chat") })
+            add(
+                TileAction(R.drawable.ic_lucide_clipboard, stringResource(R.string.dev_act_get_clipboard), Hue.Violet) {
+                    scope.launch { try { Core.pullClipboard(node); toast(asked) } catch (e: Exception) { toast(friendlyError(e)) } }
+                },
+            )
+            val notif = when {
+                "computer-notifs" in shown -> "computer-notifs"
+                "apps" in shown -> "apps"
+                "notify" in shown -> "notify"
+                else -> null
+            }
+            if (notif != null) add(TileAction(R.drawable.ic_lucide_bell, stringResource(R.string.dev_act_notifications), Hue.Amber) { goTo(DeviceTab.Communication, notif) })
+        }
+        GroupCard(
+            R.drawable.ic_lucide_message_circle, Hue.Violet, stringResource(R.string.dev_card_comm),
+            stringResource(R.string.dev_card_comm_sub), { goTo(DeviceTab.Communication, null) }, comm,
+        )
+        val files = buildList {
+            add(TileAction(R.drawable.ic_lucide_send, stringResource(R.string.dev_act_send), Hue.Blue, !send.busy) { send.files() })
+            add(TileAction(R.drawable.ic_lucide_folder_open, stringResource(R.string.dev_act_send_folder), Hue.Blue, !send.busy) { send.folder() })
+            if ("browse" in shown) add(TileAction(R.drawable.ic_lucide_folder, stringResource(R.string.dev_act_browse), Hue.Blue) { goTo(DeviceTab.Files, "browse") })
+        }
+        GroupCard(
+            R.drawable.ic_lucide_folder, Hue.Blue, stringResource(R.string.dev_card_files),
+            stringResource(R.string.dev_card_files_sub), { goTo(DeviceTab.Files, null) }, files,
+        )
+        val tools = buildList {
+            add(
+                TileAction(R.drawable.ic_lucide_bell_ring, stringResource(R.string.dev_act_ring), Hue.Amber) {
+                    scope.launch {
+                        try {
+                            val via = Core.ring(node)
+                            toast(if (via == "queued") ringQueued else ringing)
+                        } catch (e: Exception) { toast(friendlyError(e)) }
+                    }
+                },
+            )
+            if ("control" in shown) {
+                val canLocate = st != null && "locate" in st.actions
+                add(
+                    TileAction(
+                        if (canLocate) R.drawable.ic_lucide_map_pin else R.drawable.ic_lucide_sliders_horizontal,
+                        stringResource(if (canLocate) R.string.dev_act_find else R.string.dev_act_controls), Hue.Cyan,
+                    ) { goTo(DeviceTab.Remote, "control") },
+                )
+            }
+            if ("screen-share" in shown) add(TileAction(R.drawable.ic_lucide_screen_share, stringResource(R.string.dev_act_screen), Hue.Cyan) { goTo(DeviceTab.Remote, "screen-share") })
+            if ("touchpad" in shown) add(TileAction(R.drawable.ic_lucide_mouse_pointer_2, stringResource(R.string.touchpad_title), Hue.Cyan) { goTo(DeviceTab.Remote, "touchpad") })
+            if ("commands" in shown) add(TileAction(R.drawable.ic_lucide_terminal, stringResource(R.string.run_title), Hue.Cyan) { goTo(DeviceTab.Remote, "commands") })
+            if ("now-playing" in shown) add(TileAction(R.drawable.ic_lucide_music, stringResource(R.string.media_title), Hue.Violet) { goTo(DeviceTab.Media, "now-playing") })
+        }
+        GroupCard(
+            R.drawable.ic_lucide_wrench, Hue.Cyan, stringResource(R.string.dev_card_tools),
+            stringResource(R.string.dev_card_tools_sub), if ("control" in shown) ({ goTo(DeviceTab.Remote, null) }) else null, tools,
+        )
+        // Device info: what it is, its OS and address; the full numbers
+        // are in the tile below.
+        val facts = listOfNotNull(
+            osName(node),
+            DeviceKinds.kinds[node]?.model?.takeIf { it.isNotEmpty() },
+            Core.peers.firstOrNull { it.nodeId == node }?.ip?.takeIf { it.isNotEmpty() },
+        )
+        SoftCard(padding = PaddingValues(6.dp)) {
+            NavRow(
+                R.drawable.ic_lucide_info, Hue.Blue, stringResource(R.string.dev_card_info),
+                facts.joinToString(" · ").ifEmpty { null },
+                onClick = if ("info" in shown) ({ goTo(DeviceTab.Overview, "info") }) else null,
+                trailing = if ("info" in shown) ({ Chevron() }) else null,
+            )
         }
     }
 }
@@ -544,7 +751,7 @@ private fun ComputerNotifsTile(node: String, name: String, sharing: Boolean) {
 }
 
 @Composable
-private fun NotifyTile() {
+internal fun NotifyTile() {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var title by remember { mutableStateOf("") }

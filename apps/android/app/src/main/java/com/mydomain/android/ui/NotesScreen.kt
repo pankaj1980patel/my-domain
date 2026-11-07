@@ -98,7 +98,7 @@ private const val NEW = Notes.NEW
  * [onOpened] says it was, so the shell can forget it.
  */
 @Composable
-fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}) {
+fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}, onBack: (() -> Unit)? = null) {
     // The open note's id (NEW: a new one; null: the list). `opened` changes
     // only when you pick one, so a new note getting its id keeps the editor.
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -121,7 +121,7 @@ fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Un
     }
     val o = open
     if (o == null) {
-        NotesList(onOpen = { show(it) }, onNew = { show(null) }, onHelp = onHelp)
+        NotesList(onOpen = { show(it) }, onNew = { show(null) }, onHelp = onHelp, onBack = onBack)
     } else {
         key(opened) {
             NoteEditor(
@@ -135,7 +135,7 @@ fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Un
 }
 
 @Composable
-private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () -> Unit) {
+private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () -> Unit, onBack: (() -> Unit)? = null) {
     var query by rememberSaveable { mutableStateOf("") }
     var upcoming by rememberSaveable { mutableStateOf(false) }
     val all = Notes.sorted()
@@ -148,9 +148,21 @@ private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () ->
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            PageHead(stringResource(R.string.notes_title), stringResource(R.string.notes_subtitle)) {
-                IconButton(onClick = onHelp) {
-                    Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+            if (onBack != null) {
+                // Opened from More or Workspace: Back, the title and Help.
+                Column {
+                    BackBar(stringResource(R.string.notes_title), onBack) {
+                        IconButton(onClick = onHelp) {
+                            Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                        }
+                    }
+                    Muted(stringResource(R.string.notes_subtitle))
+                }
+            } else {
+                PageHead(stringResource(R.string.notes_title), stringResource(R.string.notes_subtitle)) {
+                    IconButton(onClick = onHelp) {
+                        Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                    }
                 }
             }
         }

@@ -80,8 +80,8 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import com.mydomain.android.ffi.PeerInfo
 
-/** A glass card with a hairline border: the one container style (kit card:
- *  18 dp corners). */
+/** A glass card: the one container style (kit card, 18 dp corners). Quiet
+ *  borders: told apart by its soft fill, no outline. */
 @Composable
 fun Tile(
     modifier: Modifier = Modifier,
@@ -105,7 +105,6 @@ fun Tile(
             modifier = modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
             color = T.surface,
-            border = BorderStroke(1.dp, T.border),
             content = body,
         )
     } else {
@@ -113,7 +112,6 @@ fun Tile(
             modifier = modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.medium,
             color = T.surface,
-            border = BorderStroke(1.dp, T.border),
             content = body,
         )
     }
@@ -186,7 +184,7 @@ fun PrimaryButton(
     }
 }
 
-/** Secondary action: deep fill with a hairline (kit .btn.secondary). */
+/** Secondary action: a deep fill, no outline (kit .btn.secondary, quiet). */
 @Composable
 fun SoftButton(
     text: String,
@@ -201,7 +199,6 @@ fun SoftButton(
     Button(
         onClick, modifier = modifier.heightIn(min = 44.dp).selectedState(selected), enabled = enabled, shape = MaterialTheme.shapes.small,
         colors = ButtonDefaults.buttonColors(containerColor = T.secondaryButton, contentColor = T.text),
-        border = BorderStroke(1.dp, T.secondaryButtonBorder),
         elevation = null, contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         if (deviceIcon != null) {
@@ -218,8 +215,9 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
         // A minimum, so large text still fits; Material keeps a 48 dp touch
         // target around it.
         onClick, modifier = modifier.heightIn(min = if (small) 36.dp else 44.dp), shape = MaterialTheme.shapes.small,
-        border = BorderStroke(1.dp, T.borderStrong),
-        colors = ButtonDefaults.outlinedButtonColors(contentColor = T.text),
+        // Quiet: a soft fill, no outline.
+        border = null,
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = T.surface2.copy(alpha = 0.55f), contentColor = T.text),
         contentPadding = PaddingValues(horizontal = if (small) 12.dp else 16.dp),
     ) { Text(text, style = if (small) MaterialTheme.typography.labelMedium else MaterialTheme.typography.labelLarge) }
 }

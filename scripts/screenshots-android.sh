@@ -98,7 +98,12 @@ scrolled() {
 
 all_screens() {
   shot sign-in --es md_screen signIn
-  shot home --es md_screen home
+  scrolled home 2 --es md_screen home
+  shot devices --es md_screen devices
+  shot more --es md_screen more
+  shot files --es md_screen files
+  shot messages --es md_screen messages
+  shot workspace --es md_screen workspace
   scrolled device-mac 5 --es md_screen device --es md_device sample-macbook
   scrolled device-mac-mini 3 --es md_screen device --es md_device sample-mac-mini
   scrolled device-linux 3 --es md_screen device --es md_device sample-lab-laptop

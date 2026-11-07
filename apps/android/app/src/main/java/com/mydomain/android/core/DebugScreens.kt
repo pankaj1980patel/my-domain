@@ -30,6 +30,11 @@ enum class DebugScreen(val key: String) {
     HELP("help"),
     SEARCH("search"),
     SIGN_IN("signIn"),
+    DEVICES("devices"),
+    MORE("more"),
+    FILES("files"),
+    MESSAGES("messages"),
+    WORKSPACE("workspace"),
 }
 
 /** A screen asked for from adb, with what it needs. */

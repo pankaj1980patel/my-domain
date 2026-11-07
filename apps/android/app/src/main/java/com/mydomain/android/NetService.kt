@@ -126,6 +126,8 @@ class NetService : Service() {
         // What kind of device this is (phone, tablet, foldable, TV; its
         // model): your other devices draw its icon from it.
         Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
+        // What your other devices shared as their wallpaper (DeviceArt).
+        Core.engine()?.let { e -> Thread { com.mydomain.android.core.Wallpapers.load(e) }.start() }
         // Its wallpaper look, for its tile on your computers (Settings:
         // "Share my wallpaper with my devices").
         PhoneWallpaper.start(this)

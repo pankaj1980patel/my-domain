@@ -205,3 +205,35 @@ fun ShareChooser() {
         },
     )
 }
+
+/** Send files or a folder to a device from anywhere (Home's quick action,
+ *  the device page's Files & sharing card): the same system pickers and
+ *  sending as [FilesTile]. [node] is read when a pick comes back. */
+class FileSender(val files: () -> Unit, val folder: () -> Unit, val busy: Boolean)
+
+@Composable
+fun rememberFileSender(node: () -> String?): FileSender {
+    val toast = LocalToast.current
+    var busy by remember { mutableStateOf(false) }
+    val preparingFolder = stringResource(R.string.folder_preparing)
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        val to = node() ?: return@rememberLauncherForActivityResult
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        busy = true
+        Core.sendFiles(to, uris, onDone = { busy = false }, onError = { toast(friendlyError(it)) })
+    }
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { tree ->
+        val to = node() ?: return@rememberLauncherForActivityResult
+        if (tree == null) return@rememberLauncherForActivityResult
+        busy = true
+        toast(preparingFolder)
+        Core.sendFolderAsync(
+            to, tree,
+            onProgress = { _, _ -> },
+            onSent = { n -> toast(Core.plural(R.plurals.folder_started, n, n, Core.peerName(to))) },
+            onError = { toast(friendlyError(it)) },
+            onDone = { busy = false },
+        )
+    }
+    return FileSender({ picker.launch(arrayOf("*/*")) }, { folderPicker.launch(null) }, busy)
+}

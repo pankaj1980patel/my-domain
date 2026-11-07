@@ -1,5 +1,11 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.core.Health
+import androidx.compose.material3.Badge
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.selection.selectableGroup
@@ -421,8 +427,63 @@ private fun backupLine(b: com.mydomain.android.ffi.BackupInfo): String {
     }
 }
 
-/** Account, this device, and preferences. Tap the version 7 times for the
- *  Developer screen. */
+/** A Settings group: its row on the first page, and the tiles (by the ids
+ *  Search uses) its own page shows. */
+private enum class SettingsGroup(
+    val icon: Int,
+    val hue: Hue,
+    val title: Int,
+    val sub: Int,
+    val ids: Set<String>,
+) {
+    Account(
+        R.drawable.ic_lucide_user, Hue.Violet, R.string.set_group_account, R.string.set_group_account_sub,
+        setOf("account", "sessions", "removed-devices", "key-rotation", "key"),
+    ),
+    Phone(
+        R.drawable.ic_lucide_smartphone, Hue.Blue, R.string.set_group_phone, R.string.set_group_phone_sub,
+        setOf("device", "wallpaper", "location", "camera", "nearby", "wifi-direct", "touchpad"),
+    ),
+    Files(
+        R.drawable.ic_lucide_folder, Hue.Blue, R.string.set_group_files, R.string.set_group_files_sub,
+        setOf("photos", "sync", "print", "remote-download"),
+    ),
+    Automation(
+        R.drawable.ic_lucide_zap, Hue.Amber, R.string.automations_title, R.string.set_group_automation_sub,
+        setOf("automations", "automation-apps"),
+    ),
+    Battery(
+        R.drawable.ic_lucide_battery_charging, Hue.Green, R.string.set_group_battery, R.string.set_group_battery_sub,
+        setOf("battery"),
+    ),
+    Helper(
+        R.drawable.ic_lucide_shield, Hue.Red, R.string.set_group_helper, R.string.set_group_helper_sub,
+        setOf("helper", "secure-mode", "shizuku"),
+    ),
+    Health(
+        R.drawable.ic_lucide_shield_check, Hue.Green, R.string.more_security_health, R.string.set_group_health_sub,
+        setOf("health", "setup"),
+    ),
+    Backup(
+        R.drawable.ic_lucide_history, Hue.Cyan, R.string.set_group_backup, R.string.set_group_backup_sub,
+        setOf("backup"),
+    ),
+    Appearance(
+        R.drawable.ic_lucide_palette, Hue.Violet, R.string.settings_appearance, R.string.set_group_appearance_sub,
+        setOf("appearance"),
+    ),
+    ;
+
+    companion object {
+        fun of(id: String?): SettingsGroup? = id?.let { i -> entries.firstOrNull { i in it.ids } }
+    }
+}
+
+/** Settings: who is signed in, then grouped rows, each opening its own page
+ *  of tiles (account, this phone, files, automations, battery, the phone
+ *  helper, health, backup, appearance), then Help and the version (tap it 7
+ *  times for the Developer screen). [focus]: the tile a search result
+ *  opened (Search's Settings ids): its group's page opens with it marked. */
 @Composable
 fun SettingsScreen(
     prefs: SharedPreferences,
@@ -433,135 +494,200 @@ fun SettingsScreen(
     onHealth: () -> Unit = {},
     onOnboarding: () -> Unit = {},
     focus: String? = null,
+    onBack: () -> Unit = {},
 ) {
-    // [focus]: the tile a search result opened (SearchScreen's Settings ids),
-    // marked and brought into view.
-    val toast = LocalToast.current
-    val scope = rememberCoroutineScope()
     var taps by remember { mutableIntStateOf(0) }
-    var changing by remember { mutableStateOf(false) }
-    var newKey by remember { mutableStateOf("") }
-    var pass by remember { mutableStateOf("") }
-    val keyChanged = stringResource(R.string.settings_key_changed)
     val unlocked = stringResource(R.string.settings_developer_unlocked)
+    val toast = LocalToast.current
+    var open by rememberSaveable(focus) { mutableStateOf(SettingsGroup.of(focus)?.name) }
+    val group = open?.let { n -> SettingsGroup.entries.firstOrNull { it.name == n } }
+    BackHandler(enabled = group != null) { open = null }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PageHead(stringResource(R.string.settings_title))
-
-        SetupSettingsTile(onSetup)
-
-        // The health check, and first-run setup again.
-        HealthSettingsTile(onHealth, onOnboarding)
-
-        Tile(Modifier.foundMark(focus == "help"), title = stringResource(R.string.help_title), onClick = onHelp) {
-            Muted(stringResource(R.string.help_settings_hint))
-        }
-
-        Tile(Modifier.foundMark(focus == "account"), title = stringResource(R.string.settings_account)) {
-            Text(
-                boldArg(R.string.settings_signed_in_as, Core.session?.username ?: prefs.getString("user", null) ?: "…"),
-                style = MaterialTheme.typography.bodyMedium, color = T.text,
-            )
-            AddDevice()
-            GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
-            // The account password (not the encryption passphrase) and
-            // signing out every device.
-            AccountSecurity()
-        }
-
-        // Every sign-in to the account, each but this phone's with "Sign out".
-        SessionsTile(Modifier.foundMark(focus == "sessions"))
-
-        // Devices removed for good, each with "Allow again".
-        RemovedDevicesTile(Modifier.foundMark(focus == "removed-devices"))
-
-        // Change the passphrase on all devices (and this phone missing one).
-        KeyRotationPrompt()
-        KeyRotationTile(Modifier.foundMark(focus == "key-rotation"))
-
-        Tile(Modifier.foundMark(focus == "device"), title = stringResource(R.string.settings_this_device)) {
-            Text(
-                boldArg(R.string.settings_seen_as, niceName(Core.me?.name ?: "")),
-                style = MaterialTheme.typography.bodyMedium, color = T.text,
-            )
-            OwnFingerprint()
-            ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
-            ChatHistorySwitch()
-            ClipHistorySwitch()
-            HideConcealedSwitch()
-            ShareCodesSwitch()
-            ShareLabelsSwitch()
-        }
-
-        Tile(Modifier.foundMark(focus == "automations"), title = stringResource(R.string.automations_title)) {
-            Muted(stringResource(R.string.automations_settings_hint))
-            SoftButton(stringResource(R.string.automations_open), onAutomations)
-        }
-
-        Box(Modifier.foundMark(focus == "automation-apps")) { AutomationAppsTile() }
-
-        Box(Modifier.foundMark(focus == "photos")) { PhotosTile() }
-        Box(Modifier.foundMark(focus == "sync")) { SyncFoldersTile() }
-        Box(Modifier.foundMark(focus == "battery")) { SaveBatteryTile() }
-        Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
-        Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
-        Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
-        Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
-        Box(Modifier.foundMark(focus == "wallpaper")) { WallpaperSettingsTile() }
-        Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
-        Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
-        Box(Modifier.foundMark(focus == "remote-download")) { RemoteDownloadSettingsTile() }
-        Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
-        Box(Modifier.foundMark(focus == "secure-mode")) { SecureModeTile() }
-        Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
-
-        Tile(Modifier.foundMark(focus == "key"), title = stringResource(R.string.settings_device_key)) {
-            Muted(stringResource(R.string.settings_key_hint))
-            if (!changing) {
-                GhostButton(stringResource(R.string.settings_change_key), { changing = true })
+    Column(Modifier.fillMaxSize()) {
+        BackBar(
+            stringResource(group?.title ?: R.string.settings_title),
+            onBack = { if (group != null) open = null else onBack() },
+        )
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (group != null) {
+                SettingsGroupPage(group, prefs, focus, onAutomations, onSetup, onHealth, onOnboarding)
             } else {
-                Field(newKey, { newKey = it }, stringResource(R.string.settings_new_key), password = true)
-                Field(pass, { pass = it }, stringResource(R.string.settings_your_password), password = true)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PrimaryButton(stringResource(R.string.save), {
-                        scope.launch {
-                            try {
-                                Core.call { it.updateEncryptionKey(newKey, pass) }
-                                toast(keyChanged)
-                                changing = false; newKey = ""; pass = ""
-                            } catch (e: Exception) {
-                                toast(friendlyError(e))
-                            }
+                // Who is signed in, at the top: opens Account & security.
+                SoftCard(onClick = { open = SettingsGroup.Account.name }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconBubble(R.drawable.ic_lucide_user, Hue.Violet, 44.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                Core.session?.username ?: prefs.getString("user", null) ?: "…",
+                                style = MaterialTheme.typography.titleMedium, color = T.text,
+                            )
+                            Muted(stringResource(R.string.set_group_account))
                         }
-                    }, enabled = newKey.isNotEmpty() && pass.isNotEmpty())
-                    GhostButton(stringResource(R.string.cancel), { changing = false })
+                        Chevron()
+                    }
+                }
+                RowGroup {
+                    SettingsGroup.entries.filter { it != SettingsGroup.Account }.forEach { g ->
+                        NavRow(
+                            g.icon, g.hue, stringResource(g.title), stringResource(g.sub),
+                            onClick = { open = g.name },
+                            trailing = {
+                                // Something red in the health check.
+                                if (g == SettingsGroup.Health && Health.bad > 0) {
+                                    Badge(containerColor = T.danger)
+                                    Spacer(Modifier.width(8.dp))
+                                }
+                                Chevron()
+                            },
+                        )
+                    }
+                }
+                RowGroup {
+                    NavRow(
+                        R.drawable.ic_lucide_circle_help, Hue.Cyan, stringResource(R.string.help_title),
+                        stringResource(R.string.help_settings_hint), onClick = onHelp, modifier = Modifier.foundMark(focus == "help"),
+                    )
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Muted(
+                        stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
+                        Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
+                            taps += 1
+                            if (taps >= 7) {
+                                taps = 0
+                                toast(unlocked)
+                                onDeveloper()
+                            }
+                        }.padding(12.dp),
+                    )
                 }
             }
         }
+    }
+}
 
-        SettingsBackupTile(Modifier.foundMark(focus == "backup"))
-
-        Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {
+/** One group's page: its tiles, as they were on the one long page. */
+@Composable
+private fun SettingsGroupPage(
+    group: SettingsGroup,
+    prefs: SharedPreferences,
+    focus: String?,
+    onAutomations: () -> Unit,
+    onSetup: () -> Unit,
+    onHealth: () -> Unit,
+    onOnboarding: () -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    when (group) {
+        SettingsGroup.Account -> {
+            Tile(Modifier.foundMark(focus == "account"), title = stringResource(R.string.settings_account)) {
+                Text(
+                    boldArg(R.string.settings_signed_in_as, Core.session?.username ?: prefs.getString("user", null) ?: "…"),
+                    style = MaterialTheme.typography.bodyMedium, color = T.text,
+                )
+                AddDevice()
+                GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
+                // The account password (not the encryption passphrase) and
+                // signing out every device.
+                AccountSecurity()
+            }
+            // Every sign-in to the account, each but this phone's with "Sign out".
+            SessionsTile(Modifier.foundMark(focus == "sessions"))
+            // Devices removed for good, each with "Allow again".
+            RemovedDevicesTile(Modifier.foundMark(focus == "removed-devices"))
+            // Change the passphrase on all devices (and this phone missing one).
+            KeyRotationPrompt()
+            KeyRotationTile(Modifier.foundMark(focus == "key-rotation"))
+            DeviceKeyTile(Modifier.foundMark(focus == "key"))
+        }
+        SettingsGroup.Phone -> {
+            Tile(Modifier.foundMark(focus == "device"), title = stringResource(R.string.settings_this_device)) {
+                Text(
+                    boldArg(R.string.settings_seen_as, niceName(Core.me?.name ?: "")),
+                    style = MaterialTheme.typography.bodyMedium, color = T.text,
+                )
+                OwnFingerprint()
+                ClipSyncSwitch(stringResource(R.string.settings_clip_sync))
+                ChatHistorySwitch()
+                ClipHistorySwitch()
+                HideConcealedSwitch()
+                ShareCodesSwitch()
+                ShareLabelsSwitch()
+            }
+            Box(Modifier.foundMark(focus == "wallpaper")) { WallpaperSettingsTile() }
+            Box(Modifier.foundMark(focus == "touchpad")) { TouchpadSettingsTile() }
+            Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
+            Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
+            Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
+            Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
+        }
+        SettingsGroup.Files -> {
+            Box(Modifier.foundMark(focus == "photos")) { PhotosTile() }
+            Box(Modifier.foundMark(focus == "sync")) { SyncFoldersTile() }
+            Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
+            Box(Modifier.foundMark(focus == "remote-download")) { RemoteDownloadSettingsTile() }
+        }
+        SettingsGroup.Automation -> {
+            Tile(Modifier.foundMark(focus == "automations"), title = stringResource(R.string.automations_title)) {
+                Muted(stringResource(R.string.automations_settings_hint))
+                SoftButton(stringResource(R.string.automations_open), onAutomations)
+            }
+            Box(Modifier.foundMark(focus == "automation-apps")) { AutomationAppsTile() }
+        }
+        SettingsGroup.Battery -> Box(Modifier.foundMark(focus == "battery")) { SaveBatteryTile() }
+        SettingsGroup.Helper -> {
+            Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
+            Box(Modifier.foundMark(focus == "secure-mode")) { SecureModeTile() }
+            Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
+        }
+        SettingsGroup.Health -> {
+            // The health check, and first-run setup again.
+            HealthSettingsTile(onHealth, onOnboarding)
+            SetupSettingsTile(onSetup)
+        }
+        SettingsGroup.Backup -> SettingsBackupTile(Modifier.foundMark(focus == "backup"))
+        SettingsGroup.Appearance -> Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {
             Muted(stringResource(R.string.settings_appearance_hint))
             ThemePicker(prefs)
             LanguageSetting()
         }
+    }
+}
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            Muted(
-                stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-                Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
-                    taps += 1
-                    if (taps >= 7) {
-                        taps = 0
-                        toast(unlocked)
-                        onDeveloper()
+/** The encryption key: change it here (it must match on every device). */
+@Composable
+private fun DeviceKeyTile(modifier: Modifier) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    var changing by remember { mutableStateOf(false) }
+    var newKey by remember { mutableStateOf("") }
+    var pass by remember { mutableStateOf("") }
+    val keyChanged = stringResource(R.string.settings_key_changed)
+    Tile(modifier, title = stringResource(R.string.settings_device_key)) {
+        Muted(stringResource(R.string.settings_key_hint))
+        if (!changing) {
+            GhostButton(stringResource(R.string.settings_change_key), { changing = true })
+        } else {
+            Field(newKey, { newKey = it }, stringResource(R.string.settings_new_key), password = true)
+            Field(pass, { pass = it }, stringResource(R.string.settings_your_password), password = true)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(stringResource(R.string.save), {
+                    scope.launch {
+                        try {
+                            Core.call { it.updateEncryptionKey(newKey, pass) }
+                            toast(keyChanged)
+                            changing = false; newKey = ""; pass = ""
+                        } catch (e: Exception) {
+                            toast(friendlyError(e))
+                        }
                     }
-                }.padding(12.dp),
-            )
+                }, enabled = newKey.isNotEmpty() && pass.isNotEmpty())
+                GhostButton(stringResource(R.string.cancel), { changing = false })
+            }
         }
     }
 }
