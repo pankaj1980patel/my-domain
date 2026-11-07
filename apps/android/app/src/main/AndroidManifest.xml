@@ -283,6 +283,13 @@
             android:exported="false"
             android:excludeFromRecents="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <!-- A computer not allowed to see this screen asked (PeerPerms.kt):
+             Allow once / Always / Don't allow. -->
+        <activity
+            android:name=".PermissionAskActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <service
             android:name=".ScreenShareService"
             android:exported="false"

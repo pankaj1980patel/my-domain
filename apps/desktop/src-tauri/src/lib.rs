@@ -53,6 +53,7 @@ mod notif_popup;
 mod notify;
 mod otp_codes;
 mod page_layout;
+mod peer_perms;
 mod phone_audio;
 mod phone_notifs;
 mod phone_screen;
@@ -479,6 +480,9 @@ impl EventSink for TauriSink {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
                 std::thread::spawn(move || screen_share::on_watch(&app, &from, on));
             }
+            // A device asked for what it isn't allowed: the window comes
+            // up for the owner's answer.
+            CoreEvent::PermissionAsk { .. } => peer_perms::on_ask(&self.app),
             // A phone shares its screen with this computer: bring its page up.
             CoreEvent::ScreenOffer { from, on } => {
                 let (app, from, on) = (self.app.clone(), from.clone(), *on);
@@ -872,6 +876,9 @@ fn activity_record(app: &AppHandle, ev: &CoreEvent) {
         }
         CoreEvent::ScreenOffer { from, on } => {
             activity::record(app, "screen_offer", Some(from), "", on_off(*on))
+        }
+        CoreEvent::PermissionAsk { from, perm } => {
+            activity::record(app, "permission_ask", Some(from), perm, "")
         }
         CoreEvent::AudioOffer { from, on, .. } => {
             activity::record(app, "audio_offer", Some(from), "", on_off(*on))
@@ -1388,23 +1395,6 @@ fn dnd_devices(app: AppHandle) -> Vec<String> {
     quiet::phones(&app)
 }
 
-// --- the phone as touchpad and keyboard ---
-
-/// Whether your phone may move the pointer and type here.
-#[tauri::command]
-#[specta::specta]
-fn remote_input_allowed(engine: State<Eng>) -> bool {
-    engine.remote_input_allowed()
-}
-
-#[tauri::command]
-#[specta::specta]
-fn set_remote_input_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
-    engine.set_remote_input_allowed(on);
-    // The phone offers its touchpad only while "input" is listed.
-    std::thread::spawn(move || device::refresh_status(&app));
-}
-
 // --- your phone sees this screen, and you see its ---
 
 /// Control another computer from this one (its screen tile): `events_json`
@@ -1441,21 +1431,6 @@ fn send_clipboard_image(
 #[specta::specta]
 fn screen_watch(node_id: String, on: bool, engine: State<Eng>) -> Result<(), CoreError> {
     engine.screen_watch(&node_id, on)
-}
-
-/// Whether your other devices may watch this screen.
-#[tauri::command]
-#[specta::specta]
-fn screen_allowed(engine: State<Eng>) -> bool {
-    engine.screen_allowed()
-}
-
-#[tauri::command]
-#[specta::specta]
-fn set_screen_allowed(on: bool, app: AppHandle, engine: State<Eng>) {
-    engine.set_screen_allowed(on);
-    // The phone offers the screen only while "screen" is listed.
-    std::thread::spawn(move || device::refresh_status(&app));
 }
 
 // --- files ---
@@ -1930,7 +1905,12 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         timers::timer_devices,
         dnd_devices,
         quiet::phone_quiet,
-        remote_input_allowed,
+        peer_perms::peer_permissions,
+        peer_perms::all_permissions,
+        peer_perms::set_peer_permission,
+        peer_perms::permission_answer,
+        peer_perms::permission_notice,
+        peer_perms::dismiss_permission_notice,
         kvm::kvm_settings,
         kvm::kvm_place,
         kvm::kvm_set_enabled,
@@ -1939,9 +1919,6 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         kvm::kvm_set_swap,
         kvm::kvm_set_hotkey,
         kvm::kvm_stop,
-        set_remote_input_allowed,
-        screen_allowed,
-        set_screen_allowed,
         screen_watch,
         phone_screen::phone_touch,
         phone_screen::phone_camera_watch,

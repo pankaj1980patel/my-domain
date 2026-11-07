@@ -277,6 +277,8 @@ fn make_room(map: &mut RevocationMap) -> bool {
 /// links (whatever they are).
 fn enforce<P: Platform>(ctx: &NetCtx<P>, node: &str) {
     let had = ctx.peers.lock().remove(node).is_some();
+    // Paired again, it starts with nothing allowed.
+    super::perms::forget(ctx, node);
     crate::transport::close_link(ctx, node, "manual");
     // A Bluetooth or relay route goes with it.
     ctx.ws_conns.lock().remove(node);

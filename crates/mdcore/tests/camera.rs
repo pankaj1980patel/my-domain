@@ -265,6 +265,10 @@ fn an_app_from_before_never_gets_a_camera_message() {
         ),
         Err(CoreError::Unsupported(_))
     ));
+    phone
+        .engine
+        .set_peer_permission(&old_pc.node_id(), "screen", true)
+        .unwrap();
     old_pc.engine.screen_watch(&phone.node_id(), true).unwrap();
     let deadline = Instant::now() + WAIT;
     while phone.engine.screen_watchers().is_empty() {
@@ -364,6 +368,10 @@ fn pictures_go_only_to_the_computer_the_owner_allowed() {
         .any(|e| matches!(e, CoreEvent::CameraControl { from, .. } if *from == oid)));
 
     // Its screen watchers never get the camera's pictures either.
+    phone
+        .engine
+        .set_peer_permission(&other.node_id(), "screen", true)
+        .unwrap();
     other.engine.screen_watch(&phone.node_id(), true).unwrap();
     let deadline = Instant::now() + WAIT;
     while phone.engine.screen_watchers().is_empty() {

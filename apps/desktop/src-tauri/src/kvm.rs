@@ -407,8 +407,6 @@ pub struct KvmSettings {
     /// Share this computer's mouse and keyboard with the computers placed
     /// around it.
     pub enabled: bool,
-    /// Let your other computers control this one.
-    pub allowed: bool,
     pub clip_follows: bool,
     pub swap_mods: bool,
     /// "ctrl+alt+esc", "ctrl+alt+f12" or "scroll_lock".
@@ -427,6 +425,9 @@ pub struct KvmComputer {
     pub name: String,
     pub os: String,
     pub linked: bool,
+    /// It may take over this computer's mouse and keyboard (a per-device
+    /// permission, off until allowed).
+    pub allowed: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -1171,6 +1172,7 @@ fn settings(engine: &Eng) -> KvmSettings {
         .map(|p| KvmComputer {
             os: engine.kvm_peer_os(&p.node_id),
             linked: linked.contains(&p.node_id),
+            allowed: engine.peer_permissions(&p.node_id).kvm,
             node_id: p.node_id,
             name: p.name,
         })
@@ -1179,7 +1181,6 @@ fn settings(engine: &Eng) -> KvmSettings {
         supported: engine.kvm_available() && kvm_os::unsupported().is_none(),
         blocked: blocked().map(str::to_string),
         enabled: prefs.enabled,
-        allowed: engine.kvm_allowed(),
         clip_follows: engine.kvm_clip_follows(),
         swap_mods: prefs.swap,
         hotkey: prefs.hotkey.id().to_string(),
@@ -1222,9 +1223,13 @@ pub fn kvm_set_enabled(on: bool, engine: State<Eng>) -> KvmSettings {
 
 #[tauri::command]
 #[specta::specta]
-pub fn kvm_set_allowed(on: bool, engine: State<Eng>) -> KvmSettings {
-    engine.set_kvm_allowed(on);
-    settings(&engine)
+pub fn kvm_set_allowed(
+    node_id: String,
+    on: bool,
+    engine: State<Eng>,
+) -> Result<KvmSettings, CoreError> {
+    engine.set_peer_permission(&node_id, "kvm", on)?;
+    Ok(settings(&engine))
 }
 
 #[tauri::command]

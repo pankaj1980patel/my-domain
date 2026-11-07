@@ -50,6 +50,11 @@ import com.mydomain.android.core.ResourceLedger
  *    prompt, then the phone offers it to that computer (`screen_offer`),
  *    which starts watching.
  *
+ * A computer may watch only if allowed for it (mdcore `features::perms`,
+ * "screen"): always (the switch on its page), or once (sharing from its
+ * page, or "Allow once" when it asks: [PeerPerms]). Android's prompt comes
+ * every time all the same.
+ *
  * Nothing is captured without Android's prompt answered yes. While it
  * shares, a notification says with whom, with Stop and "Allow control"
  * (off at each start: view only). It stops on Stop, when the computers stop
@@ -119,6 +124,9 @@ object ScreenShare {
     /** You chose to share this screen with computer [node] (from its page;
      *  [ctx] is the activity): Android's prompt, then the offer. */
     fun share(ctx: Context, node: String) {
+        // Your choice: this computer may see it this time (or always, if
+        // its page says so).
+        PeerPerms.allowForSharing(node)
         val svc = ScreenShareService.current
         if (svc != null) {
             svc.addViewer(node, offer = true)

@@ -11,7 +11,8 @@ It works between your own Macs, Windows PCs and Linux computers that are signed 
 
 1. On one computer, open **Settings → Share mouse and keyboard**.
 2. Your other computers that can share are listed under **Your computers**. Drag each one into the slot for the side of this screen it sits on (**Left**, **Right**, **Above** or **Below**), or pick the side from the list next to its name.
-3. That's it: the other computer learns where this one sits, so you can go both ways. One computer per side.
+3. On the computer you want to control, allow the other one: the switch next to its name under **Your computers** (or **Allow <computer> to take over mouse & keyboard** on its page, under **Permissions**). It's off until you do, computer by computer. If it isn't allowed, the pointer stays put, this computer says why, and the other one asks: **Allow once**, **Always** or **Don't allow**.
+4. That's it: the other computer learns where this one sits, so you can go both ways. One computer per side.
 
 To take a computer off, choose **×** on it, or **Not placed** in the list.
 
@@ -36,7 +37,7 @@ Between a Mac and a Windows or Linux computer, **Swap Cmd and Ctrl** (on by defa
 
 - Only your own computers, signed in to your account, can control each other; everything goes encrypted over your own connection.
 - While another computer controls this one, the bar at the top of the screen and the menu bar or tray icon say so.
-- To never be controlled, turn off **Let my other computers control this one** on that computer. To stop this computer's mouse and keyboard from going anywhere, turn off **Share this computer's mouse and keyboard**.
+- Only computers allowed one by one can take over this one's mouse and keyboard (off for each until you allow it). Turning it off while that computer is in control lets go at once. To stop this computer's mouse and keyboard from going anywhere, turn off **Share this computer's mouse and keyboard**.
 
 ## If it doesn't work
 
@@ -46,6 +47,6 @@ Between a Mac and a Windows or Linux computer, **Swap Cmd and Ctrl** (on by defa
 - **Wayland, being controlled** goes through the remote-desktop portal (GNOME, KDE Plasma), remembered after the first time. Without it, `/dev/uinput` is used if you've allowed it (see [Troubleshooting](help:troubleshooting)); then the pointer can't be pushed back out at the edge: use **Take back** or the hotkey.
 - **Wayland, controlling another computer** needs the input-capture portal (GNOME 45 or later, KDE Plasma 6 or later). It puts invisible barriers on the edges where you placed a computer; pushing through one starts controlling it. Without that portal the computer is **receive only**: Settings says so, and the other computers can still control it. Place it on the other computer's screen to use it from there.
 - The health check shows which portals your Wayland desktop has.
-- **Nothing happens at the edge:** check the computer is placed on that side, that it's connected (Settings lists "not connected" otherwise), and that the other computer allows being controlled.
+- **Nothing happens at the edge:** check the computer is placed on that side, that it's connected (Settings lists "not connected" otherwise), and that the other computer allows this one (the switch next to this computer's name there).
 - **Several screens:** only an outer edge works, one with no screen of the same computer beyond it. On the computer being controlled, the pointer comes in on its outermost screen at that side.
 - **Windows:** a window running as administrator may not take the other computer's input unless my-domain also runs as administrator (Windows' own rule).

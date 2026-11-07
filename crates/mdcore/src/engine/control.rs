@@ -78,14 +78,42 @@ impl<P: Platform> Engine<P> {
 
     // --- touchpad and keyboard: the computer's side ---
 
-    /// Whether this device plays back input from your other devices
-    /// (`CoreEvent::Input`). On until turned off; kept across restarts.
-    pub fn remote_input_allowed(&self) -> bool {
-        crate::features::input::allowed(&self.ctx)
+    // --- per-device permissions (`features::perms`) ---
+
+    /// What `node_id` is allowed here: control this computer, see this
+    /// screen, take over its mouse and keyboard. All off until allowed.
+    pub fn peer_permissions(&self, node_id: &str) -> crate::features::perms::PeerPermissions {
+        crate::features::perms::of(&self.ctx, node_id)
     }
 
-    pub fn set_remote_input_allowed(&self, on: bool) {
-        crate::features::input::set_allowed(&self.ctx, on);
+    /// Every device allowed anything here.
+    pub fn all_permissions(&self) -> Vec<crate::features::perms::PeerPermissions> {
+        crate::features::perms::all(&self.ctx)
+    }
+
+    /// Allow (`on`) `node_id` to do `perm` ("control", "screen", "kvm")
+    /// here, or not. Off takes effect at once (a watch or a session with
+    /// it ends). Kept across restarts and in the settings backup.
+    pub fn set_peer_permission(&self, node_id: &str, perm: &str, on: bool) -> crate::Result<()> {
+        let p = perm_of(perm)?;
+        crate::features::perms::set(&self.ctx, p, node_id, on)
+    }
+
+    /// The owner's answer to `CoreEvent::PermissionAsk`: "once" (while
+    /// it's in use), "always", or "deny" (not asked again for a while).
+    pub fn permission_answer(&self, node_id: &str, perm: &str, answer: &str) -> crate::Result<()> {
+        let p = perm_of(perm)?;
+        crate::features::perms::answer(&self.ctx, p, node_id, answer)
+    }
+
+    /// After the upgrade from the global switches: what was on for every
+    /// device and is now off, until dismissed.
+    pub fn permission_notice(&self) -> Option<crate::features::perms::PermissionNotice> {
+        crate::features::perms::notice(&self.ctx)
+    }
+
+    pub fn dismiss_permission_notice(&self) {
+        crate::features::perms::dismiss_notice(&self.ctx)
     }
 
     // --- waking a sleeping computer ---
@@ -114,16 +142,6 @@ impl<P: Platform> Engine<P> {
     /// link only (fails with `NoLink` and starts connecting otherwise).
     pub fn screen_watch(&self, node_id: &str, on: bool) -> crate::Result<()> {
         crate::features::screen::watch(&self.ctx, node_id, on)
-    }
-
-    /// Whether your other devices may watch this screen. On until turned
-    /// off; kept across restarts. Turning it off ends every watch.
-    pub fn screen_allowed(&self) -> bool {
-        crate::features::screen::allowed(&self.ctx)
-    }
-
-    pub fn set_screen_allowed(&self, on: bool) {
-        crate::features::screen::set_allowed(&self.ctx, on);
     }
 
     /// The devices watching this screen now: while there are any, take
@@ -311,4 +329,9 @@ impl<P: Platform> Engine<P> {
     ) -> crate::Result<usize> {
         crate::features::audio_share::send_frame_to(&self.ctx, pcm, rate, channels, nodes)
     }
+}
+
+fn perm_of(perm: &str) -> crate::Result<crate::features::perms::Perm> {
+    crate::features::perms::Perm::parse(perm)
+        .ok_or_else(|| CoreError::InvalidInput(format!("not a permission: {perm}")))
 }

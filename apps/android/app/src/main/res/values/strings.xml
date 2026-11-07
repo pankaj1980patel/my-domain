@@ -1803,6 +1803,22 @@
     <string name="health_fix_encryption_key">Device key</string>
     <string name="health_fix_connect">Connect</string>
     <string name="health_fix_links_map">Why?</string>
+    <string name="health_fix_permissions">Review</string>
+    <string name="health_allowed">%1$s has permissions here</string>
+    <string name="perm_section">Permissions</string>
+    <string name="perm_screen_switch">Allow %1$s to see this screen</string>
+    <string name="perm_screen_hint">Off: %1$s sees this screen only when you share it from here. On: it can also ask to watch. Android asks every time either way.</string>
+    <string name="perm_ask_screen">%1$s wants to see this screen</string>
+    <string name="perm_ask_body">Android asks before anything is shared. Allow once: just this time. Always: whenever it asks (turn it off on its page).</string>
+    <string name="perm_once">Allow once</string>
+    <string name="perm_always">Always</string>
+    <string name="perm_deny">Don’t allow</string>
+    <string name="perm_refused_control">%1$s hasn’t allowed control from this phone. Allow it on %1$s.</string>
+    <string name="perm_refused_screen">%1$s hasn’t allowed this phone to see its screen. Allow it on %1$s.</string>
+    <string name="perm_refused_kvm">%1$s hasn’t allowed taking over its mouse &amp; keyboard. Allow it on %1$s.</string>
+    <string name="perm_name_control">Control this device</string>
+    <string name="perm_name_screen">See this screen</string>
+    <string name="perm_name_kvm">Take over mouse &amp; keyboard</string>
     <string name="health_fix_update">How to update</string>
 
     <!-- First-run setup -->

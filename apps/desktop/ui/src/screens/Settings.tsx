@@ -39,6 +39,7 @@ import { OtpSetting } from "../components/OtpSetting";
 import { AddDevice } from "../components/AddDevice";
 import { OwnFingerprint } from "../components/VerifyDevice";
 import { RemovedDevicesSetting } from "../components/RemovedDevices";
+import { PermissionsSummary } from "../components/PeerPermissions";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -73,8 +74,6 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
   const [notifs, setNotifs] = createSignal(true);
   const [followDnd, setFollowDnd] = createSignal(false);
   const [quickPanel, setQuickPanel] = createSignal(true);
-  const [remoteInput, setRemoteInput] = createSignal(true);
-  const [screenShare, setScreenShare] = createSignal(true);
   const [shareLabels, setShareLabels] = createSignal(true);
   const [shareLocation, setShareLocation] = createSignal(false);
   const [clipHistory, setClipHistory] = createSignal(true);
@@ -87,8 +86,6 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
     setNotifs(await commands.notificationsEnabled());
     setFollowDnd(await commands.followPhoneDnd());
     setQuickPanel(await commands.quickPanelEnabled());
-    setRemoteInput(await commands.remoteInputAllowed());
-    setScreenShare(await commands.screenAllowed());
     setShareLabels(await commands.labelsShare());
     setShareLocation(await commands.shareLocation());
     setClipHistory(await commands.clipHistoryEnabled());
@@ -107,14 +104,6 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
   const toggleQuickPanel = async (on: boolean) => {
     await commands.setQuickPanelEnabled(on);
     setQuickPanel(on);
-  };
-  const toggleRemoteInput = async (on: boolean) => {
-    await commands.setRemoteInputAllowed(on);
-    setRemoteInput(on);
-  };
-  const toggleScreenShare = async (on: boolean) => {
-    await commands.setScreenAllowed(on);
-    setScreenShare(on);
   };
   const toggleShareLabels = async (on: boolean) => {
     await commands.setLabelsShare(on);
@@ -222,16 +211,7 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
         <TrayBatterySetting />
         <NearbySetting />
         <WifiDirectSetting />
-        <label class="switch-row">
-          <span>{t("settings.remoteInput")}</span>
-          <input type="checkbox" role="switch" checked={remoteInput()} onChange={(e) => toggleRemoteInput(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.remoteInputHint")}</p>
-        <label class="switch-row">
-          <span>{t("settings.screenShare")}</span>
-          <input type="checkbox" role="switch" checked={screenShare()} onChange={(e) => toggleScreenShare(e.currentTarget.checked)} />
-        </label>
-        <p class="muted small">{t("settings.screenShareHint")}</p>
+        <PermissionsSummary />
         <label class="switch-row">
           <span>{t("settings.shareLabels")}</span>
           <input type="checkbox" role="switch" checked={shareLabels()} onChange={(e) => toggleShareLabels(e.currentTarget.checked)} />

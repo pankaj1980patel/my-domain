@@ -946,7 +946,8 @@ pub struct KvmState {
     pub pos: Option<u16>,
     /// Why it became idle: "returned" (the pointer came back), "stopped"
     /// (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
-    /// doesn't allow being controlled), "busy", "ended".
+    /// doesn't allow being controlled), "not_allowed" (it doesn't allow this
+    /// computer: allow it there), "busy", "ended".
     #[serde(default)]
     pub reason: Option<String>,
 }

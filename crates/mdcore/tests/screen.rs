@@ -22,6 +22,10 @@ fn linked(test: &str) -> (TestNode, TestNode) {
         phone.wait_connected(&pc, Duration::from_secs(10)).is_some(),
         "no link"
     );
+    // Seeing a screen is off until allowed for a device.
+    pc.engine
+        .set_peer_permission(&phone.node_id(), "screen", true)
+        .unwrap();
     (phone, pc)
 }
 
@@ -82,17 +86,22 @@ fn a_watched_screen_sends_its_snapshots_to_the_phone() {
 #[test]
 fn a_computer_that_doesnt_share_its_screen_ignores_watchers() {
     let (phone, pc) = linked("screen-off");
-    pc.engine.set_screen_allowed(false);
-    assert!(!pc.engine.screen_allowed());
+    let who = phone.node_id();
+    pc.engine
+        .set_peer_permission(&who, "screen", false)
+        .unwrap();
+    assert!(!pc.engine.peer_permissions(&who).screen);
     phone.engine.screen_watch(&pc.node_id(), true).unwrap();
     std::thread::sleep(Duration::from_millis(800));
     assert!(pc.engine.screen_watchers().is_empty());
 
     // Allowed again, then forbidden while watched: the watch ends.
-    pc.engine.set_screen_allowed(true);
+    pc.engine.set_peer_permission(&who, "screen", true).unwrap();
     phone.engine.screen_watch(&pc.node_id(), true).unwrap();
     wait_watch(&pc, &phone, true);
-    pc.engine.set_screen_allowed(false);
+    pc.engine
+        .set_peer_permission(&who, "screen", false)
+        .unwrap();
     assert!(pc.engine.screen_watchers().is_empty());
     assert_eq!(pc.engine.screen_frame(b"\xff\xd8").unwrap(), 0);
 }
@@ -138,7 +147,14 @@ fn a_phone_shares_its_screen_with_the_computer_it_chose() {
         "the offer showed as chat"
     );
 
-    // Both computers watch; frames go only to the one the phone chose.
+    // Both computers watch (the phone allows both to see its screen);
+    // frames go only to the one the phone chose.
+    for c in [&pc, &other] {
+        phone
+            .engine
+            .set_peer_permission(&c.node_id(), "screen", true)
+            .unwrap();
+    }
     pc.engine.screen_watch(&phone.node_id(), true).unwrap();
     other.engine.screen_watch(&phone.node_id(), true).unwrap();
     let deadline = std::time::Instant::now() + WAIT;

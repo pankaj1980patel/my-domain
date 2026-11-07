@@ -32,4 +32,5 @@ pub struct Extras {
     pub app_info: super::app_info::AppInfo,
     pub onboarding: super::onboarding::OnboardingState,
     pub otp: super::otp_relay::OtpRelay,
+    pub perms: super::perms::Perms,
 }

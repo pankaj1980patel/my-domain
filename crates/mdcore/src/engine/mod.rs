@@ -453,6 +453,9 @@ impl<P: Platform> Engine<P> {
         // Long-running loops: clipboard watcher, IP watcher, P2P heartbeat.
         // Peers remembered from last time: reconnect directly, server or not.
         background::load_peer_cache(&ctx);
+        // The global switches from before become per-device permissions
+        // (all off), once; what was on is kept for a one-time notice.
+        crate::features::perms::migrate(&ctx);
         // Who follows which of this device's apps, from last time.
         crate::features::notif_rich::load_subs(&ctx);
         background::spawn_all(&ctx);

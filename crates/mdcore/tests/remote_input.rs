@@ -21,6 +21,10 @@ fn linked(test: &str) -> (TestNode, TestNode) {
         phone.wait_connected(&pc, Duration::from_secs(10)).is_some(),
         "no link"
     );
+    // Remote input is off until allowed for a device.
+    pc.engine
+        .set_peer_permission(&phone.node_id(), "control", true)
+        .unwrap();
     (phone, pc)
 }
 
@@ -113,15 +117,19 @@ fn touchpad_moves_are_batched_and_keep_their_order() {
 #[test]
 fn a_computer_with_remote_input_off_ignores_it() {
     let (phone, pc) = linked("input-off");
-    assert!(pc.engine.remote_input_allowed());
-    pc.engine.set_remote_input_allowed(false);
-    assert!(!pc.engine.remote_input_allowed());
+    assert!(pc.engine.peer_permissions(&phone.node_id()).control);
+    pc.engine
+        .set_peer_permission(&phone.node_id(), "control", false)
+        .unwrap();
+    assert!(!pc.engine.peer_permissions(&phone.node_id()).control);
     phone.engine.input_click(&pc.node_id(), "right").unwrap();
     phone.engine.input_key(&pc.node_id(), "esc").unwrap();
     std::thread::sleep(Duration::from_millis(800));
     assert_eq!(played(&pc).1, 0, "played back while turned off");
 
-    pc.engine.set_remote_input_allowed(true);
+    pc.engine
+        .set_peer_permission(&phone.node_id(), "control", true)
+        .unwrap();
     phone.engine.input_key(&pc.node_id(), "backspace").unwrap();
     wait_for(&pc, |e| {
         *e == InputEvent::Key {
@@ -153,6 +161,9 @@ fn input_is_never_queued_for_later() {
     let phone = TestNode::start("input-nolink-phone");
     let pc = TestNode::start("input-nolink-pc");
     TestNode::pair(&phone, &pc);
+    pc.engine
+        .set_peer_permission(&phone.node_id(), "control", true)
+        .unwrap();
     // No link yet: refused, and the phone starts connecting.
     let err = phone.engine.input_click(&pc.node_id(), "left").unwrap_err();
     assert!(matches!(err, CoreError::NoLink(_)), "{err:?}");

@@ -1801,6 +1801,22 @@
     <string name="health_fix_encryption_key">डिवाइस कुंजी</string>
     <string name="health_fix_connect">जोड़ें</string>
     <string name="health_fix_links_map">क्यों?</string>
+    <string name="health_fix_permissions">देखें</string>
+    <string name="health_allowed">%1$s को यहाँ अनुमतियाँ मिली हैं</string>
+    <string name="perm_section">अनुमतियाँ</string>
+    <string name="perm_screen_switch">%1$s को यह स्क्रीन देखने दें</string>
+    <string name="perm_screen_hint">बंद: %1$s यह स्क्रीन तभी देखता है जब आप इसे यहाँ से शेयर करें। चालू: वह देखने के लिए पूछ भी सकता है। दोनों ही बार Android हर बार पूछता है।</string>
+    <string name="perm_ask_screen">%1$s यह स्क्रीन देखना चाहता है</string>
+    <string name="perm_ask_body">कुछ भी शेयर होने से पहले Android पूछता है। एक बार अनुमति दें: सिर्फ़ इस बार। हमेशा: जब भी वह पूछे (उसके पेज पर बंद करें)।</string>
+    <string name="perm_once">एक बार अनुमति दें</string>
+    <string name="perm_always">हमेशा</string>
+    <string name="perm_deny">अनुमति न दें</string>
+    <string name="perm_refused_control">%1$s ने इस फ़ोन से कंट्रोल की अनुमति नहीं दी है। %1$s पर अनुमति दें।</string>
+    <string name="perm_refused_screen">%1$s ने इस फ़ोन को अपनी स्क्रीन देखने की अनुमति नहीं दी है। %1$s पर अनुमति दें।</string>
+    <string name="perm_refused_kvm">%1$s ने अपना माउस और कीबोर्ड संभालने की अनुमति नहीं दी है। %1$s पर अनुमति दें।</string>
+    <string name="perm_name_control">इस डिवाइस को कंट्रोल करना</string>
+    <string name="perm_name_screen">यह स्क्रीन देखना</string>
+    <string name="perm_name_kvm">माउस और कीबोर्ड संभालना</string>
     <string name="health_fix_update">अपडेट कैसे करें</string>
 
     <!-- First-run setup -->

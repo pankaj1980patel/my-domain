@@ -117,6 +117,11 @@ export function activityText(a: ActivityItem, device: string): string {
       return t("activity.openedLink", { name: device, url: a.subject });
     case "screen_watch":
       return t(on ? "activity.row.screenWatchOn" : "activity.row.screenWatchOff", { device });
+    case "permission_ask":
+      return t("activity.row.permissionAsk", {
+        device,
+        what: ["control", "screen", "kvm"].includes(a.subject) ? t(`perm.name.${a.subject}` as Key) : a.subject,
+      });
     case "screen_offer":
       return t(on ? "activity.row.screenOfferOn" : "activity.row.screenOfferOff", { device });
     case "audio_offer":

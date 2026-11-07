@@ -111,6 +111,7 @@ private fun fixRes(fix: String): Int = when (fix) {
     "encryption_key" -> R.string.health_fix_encryption_key
     "connect" -> R.string.health_fix_connect
     "links_map" -> R.string.health_fix_links_map
+    "permissions" -> R.string.health_fix_permissions
     else -> R.string.health_fix_update
 }
 
@@ -164,6 +165,7 @@ fun checkTitle(c: HealthPlan.Check): String {
             c.detail == null -> stringResource(R.string.health_version_older_unknown, name)
             else -> stringResource(R.string.health_version_older, name, c.detail)
         }
+        "allowed" -> stringResource(R.string.health_allowed, name)
         else -> c.id
     }
 }
@@ -208,8 +210,16 @@ fun checkDetail(c: HealthPlan.Check): String {
             c.reason == "newer" -> stringResource(R.string.health_version_newer_hint)
             else -> ""
         }
+        "allowed" -> c.features.map { stringResource(permRes(it)) }.joinToString(", ")
         else -> ""
     }
+}
+
+/** What a device may do here, in words (the health check's "allowed"). */
+private fun permRes(perm: String): Int = when (perm) {
+    "control" -> R.string.perm_name_control
+    "kvm" -> R.string.perm_name_kvm
+    else -> R.string.perm_name_screen
 }
 
 // --- fixing ----------------------------------------------------------------------
@@ -240,7 +250,7 @@ fun rememberHealthFix(nav: HealthNav): (HealthPlan.Check) -> Unit {
             "free_space" -> runCatching {
                 ctx.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            "trust_key" -> c.nodeId?.let(nav.onDevice)
+            "trust_key", "permissions" -> c.nodeId?.let(nav.onDevice)
             "encryption_key" -> nav.onSettings()
             "connect" -> c.nodeId?.let { node ->
                 scope.launch {

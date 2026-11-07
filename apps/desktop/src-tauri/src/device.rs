@@ -81,25 +81,19 @@ fn actions(app: &AppHandle, status: &mut serde_json::Value) -> Vec<&'static str>
         // Tell the phone why there's no slide remote, so it can say so.
         Err(why) => status["slides_needs"] = why.into(),
     }
-    // The phone's touchpad: listed while allowed, with what's missing if
-    // it can't work yet (the phone says so; the first try here tells the
-    // user too).
-    if app
-        .try_state::<Eng>()
-        .is_some_and(|e| e.remote_input_allowed())
-    {
-        actions.push("input");
-        if let Err(why) = crate::remote_input::ready() {
-            status["input_needs"] = why.into();
-        }
+    // The phone's touchpad, with what's missing if it can't work yet (the
+    // phone says so; the first try here tells the user too). Listed for
+    // every device: whether that one may use it is a per-device
+    // permission, and a phone not allowed hears why when it tries.
+    actions.push("input");
+    if let Err(why) = crate::remote_input::ready() {
+        status["input_needs"] = why.into();
     }
-    // Your phone sees this screen: listed while allowed, with what's
-    // missing if snapshots can't be taken yet.
-    if app.try_state::<Eng>().is_some_and(|e| e.screen_allowed()) {
-        actions.push("screen");
-        if let Err(why) = crate::screen_share::ready() {
-            status["screen_needs"] = why.into();
-        }
+    // Your phone sees this screen (allowed device by device, as above),
+    // with what's missing if snapshots can't be taken yet.
+    actions.push("screen");
+    if let Err(why) = crate::screen_share::ready() {
+        status["screen_needs"] = why.into();
     }
     // A phone may share its screen with this computer from the phone
     // (`screen_offer`, which older versions would show as chat).

@@ -3,7 +3,8 @@
 // your other computers into the slot for the side they sit on (or pick the
 // side from the list: the same thing without a mouse). The other computer
 // learns where this one sits, so both agree. Then the switches: share
-// this computer's mouse and keyboard, let others control this one, the
+// this computer's mouse and keyboard, which computers may control this one
+// (a switch on each, off until allowed), the
 // clipboard following the pointer, Cmd ↔ Ctrl, and the hotkey that brings
 // everything back.
 
@@ -141,6 +142,15 @@ export function KvmSetting() {
                             <span class="muted"> · {t("kvm.notLinked")}</span>
                           </Show>
                         </span>
+                        <label class="row small" title={t("kvm.allowed", { name: niceName(c.name) })}>
+                          <input
+                            type="checkbox"
+                            role="switch"
+                            aria-label={t("kvm.allowed", { name: niceName(c.name) })}
+                            checked={c.allowed}
+                            onChange={(e) => apply(commands.kvmSetAllowed(c.node_id, e.currentTarget.checked))}
+                          />
+                        </label>
                         <select
                           aria-label={t("kvm.place", { name: niceName(c.name) })}
                           onChange={(e) => place(c.node_id, (e.currentTarget.value || null) as SideName | null)}
@@ -169,15 +179,6 @@ export function KvmSetting() {
                   role="switch"
                   checked={cur().enabled}
                   onChange={(e) => apply(commands.kvmSetEnabled(e.currentTarget.checked))}
-                />
-              </label>
-              <label class="switch-row">
-                <span>{t("kvm.allowed")}</span>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  checked={cur().allowed}
-                  onChange={(e) => apply(commands.kvmSetAllowed(e.currentTarget.checked))}
                 />
               </label>
               <p class="muted small">{t("kvm.allowedHint")}</p>

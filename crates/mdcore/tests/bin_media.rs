@@ -56,6 +56,9 @@ fn linked(test: &str, src_bin: bool, dst_bin: bool) -> (TestNode, TestNode) {
     learn_status(&src, &dst);
 
     dst.engine.audio_listen(&src.node_id(), true).unwrap();
+    src.engine
+        .set_peer_permission(&dst.node_id(), "screen", true)
+        .unwrap();
     dst.engine.screen_watch(&src.node_id(), true).unwrap();
     let who = dst.node_id();
     let (mut listen, mut watch) = (false, false);

@@ -544,8 +544,20 @@ export const commands = {
 	 *  "Stay quiet while my phone is on Do Not Disturb" is off or none is).
 	 */
 	phoneQuiet: () => __TAURI_INVOKE<string[]>("phone_quiet"),
-	/**  Whether your phone may move the pointer and type here. */
-	remoteInputAllowed: () => __TAURI_INVOKE<boolean>("remote_input_allowed"),
+	/**  What `node_id` is allowed here. */
+	peerPermissions: (nodeId: string) => __TAURI_INVOKE<PeerPermissions>("peer_permissions", { nodeId }),
+	/**  Every device allowed anything here. */
+	allPermissions: () => __TAURI_INVOKE<PeerPermissions[]>("all_permissions"),
+	/**
+	 *  Allow (`on`) `node_id` to do `perm` ("control", "screen", "kvm") here,
+	 *  or not. Off ends what it allowed at once.
+	 */
+	setPeerPermission: (nodeId: string, perm: string, on: boolean) => typedError<PeerPermissions, string>(__TAURI_INVOKE("set_peer_permission", { nodeId, perm, on })),
+	/**  The owner's answer to `permission-ask`: "once", "always" or "deny". */
+	permissionAnswer: (nodeId: string, perm: string, answer: string) => typedError<null, string>(__TAURI_INVOKE("permission_answer", { nodeId, perm, answer })),
+	/**  After the upgrade: what was on for every device and is now off. */
+	permissionNotice: () => __TAURI_INVOKE<PermissionNotice | null>("permission_notice"),
+	dismissPermissionNotice: () => __TAURI_INVOKE<void>("dismiss_permission_notice"),
 	kvmSettings: () => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_settings"),
 	/**
 	 *  Place a computer at a side of this one ("left", "right", "top",
@@ -553,16 +565,12 @@ export const commands = {
 	 */
 	kvmPlace: (nodeId: string, side: string | null) => typedError<KvmSettings_Serialize, string>(__TAURI_INVOKE("kvm_place", { nodeId, side })),
 	kvmSetEnabled: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_enabled", { on }),
-	kvmSetAllowed: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_allowed", { on }),
+	kvmSetAllowed: (nodeId: string, on: boolean) => typedError<KvmSettings_Serialize, string>(__TAURI_INVOKE("kvm_set_allowed", { nodeId, on })),
 	kvmSetClip: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_clip", { on }),
 	kvmSetSwap: (on: boolean) => __TAURI_INVOKE<KvmSettings_Serialize>("kvm_set_swap", { on }),
 	kvmSetHotkey: (hotkey: string) => typedError<KvmSettings_Serialize, string>(__TAURI_INVOKE("kvm_set_hotkey", { hotkey })),
 	/**  "Take back" on the controlled computer, or Stop on the controlling one. */
 	kvmStop: () => __TAURI_INVOKE<void>("kvm_stop"),
-	setRemoteInputAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_remote_input_allowed", { on }),
-	/**  Whether your other devices may watch this screen. */
-	screenAllowed: () => __TAURI_INVOKE<boolean>("screen_allowed"),
-	setScreenAllowed: (on: boolean) => __TAURI_INVOKE<void>("set_screen_allowed", { on }),
 	/**
 	 *  Start (`on`) or stop watching a device's screen: snapshots arrive as
 	 *  `screen-frame` events. Renew every 10 s while it shows (a watch ends by
@@ -920,7 +928,8 @@ export const commands = {
  *     `link_down`, `key_changed`, `wake`;
  *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
  *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
- *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"),
+ *     `permission_ask` (`subject` "control", "screen" or "kvm"), `schedule`
  *     (`detail` "done", "queued", "woken" or "failed").
  */
 export type ActivityItem = ActivityItem_Serialize | ActivityItem_Deserialize;
@@ -939,7 +948,8 @@ export type ActivityItem = ActivityItem_Serialize | ActivityItem_Deserialize;
  *     `link_down`, `key_changed`, `wake`;
  *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
  *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
- *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"),
+ *     `permission_ask` (`subject` "control", "screen" or "kvm"), `schedule`
  *     (`detail` "done", "queued", "woken" or "failed").
  */
 export type ActivityItem_Deserialize = {
@@ -981,7 +991,8 @@ export type ActivityItem_Deserialize = {
  *     `link_down`, `key_changed`, `wake`;
  *   - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
  *     its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
- *     `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+ *     `audio_offer`, `audio_listen` (`detail` "on" / "off"),
+ *     `permission_ask` (`subject` "control", "screen" or "kvm"), `schedule`
  *     (`detail` "done", "queued", "woken" or "failed").
  */
 export type ActivityItem_Serialize = {
@@ -2518,6 +2529,11 @@ export type KvmComputer = {
 	name: string,
 	os: string,
 	linked: boolean,
+	/**
+	 *  It may take over this computer's mouse and keyboard (a per-device
+	 *  permission, off until allowed).
+	 */
+	allowed: boolean,
 };
 
 /**
@@ -2546,8 +2562,6 @@ export type KvmSettings_Deserialize = {
 	 *  around it.
 	 */
 	enabled: boolean,
-	/**  Let your other computers control this one. */
-	allowed: boolean,
 	clip_follows: boolean,
 	swap_mods: boolean,
 	/**  "ctrl+alt+esc", "ctrl+alt+f12" or "scroll_lock". */
@@ -2574,8 +2588,6 @@ export type KvmSettings_Serialize = {
 	 *  around it.
 	 */
 	enabled: boolean,
-	/**  Let your other computers control this one. */
-	allowed: boolean,
 	clip_follows: boolean,
 	swap_mods: boolean,
 	/**  "ctrl+alt+esc", "ctrl+alt+f12" or "scroll_lock". */
@@ -2622,7 +2634,8 @@ export type KvmState_Deserialize = {
 	/**
 	 *  Why it became idle: "returned" (the pointer came back), "stopped"
 	 *  (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
-	 *  doesn't allow being controlled), "busy", "ended".
+	 *  doesn't allow being controlled), "not_allowed" (it doesn't allow this
+	 *  computer: allow it there), "busy", "ended".
 	 */
 	reason?: string | null,
 };
@@ -2655,7 +2668,8 @@ export type KvmState_Serialize = {
 	/**
 	 *  Why it became idle: "returned" (the pointer came back), "stopped"
 	 *  (the hotkey or Stop), "link_lost", "timeout", "off" (that computer
-	 *  doesn't allow being controlled), "busy", "ended".
+	 *  doesn't allow being controlled), "not_allowed" (it doesn't allow this
+	 *  computer: allow it there), "busy", "ended".
 	 */
 	reason: string | null,
 };
@@ -3337,6 +3351,17 @@ export type PathTry = {
  */
 export type Peer = Peer_Serialize | Peer_Deserialize;
 
+/**  What one device is allowed to do here (always, not "once"). */
+export type PeerPermissions = {
+	node_id: string,
+	/**  Control this computer (remote input). */
+	control: boolean,
+	/**  See this screen. */
+	screen: boolean,
+	/**  Take over this computer's mouse and keyboard. */
+	kvm: boolean,
+};
+
 /**
  *  A known peer device. Deserializable too: the peer list is cached on the
  *  device (see engine/background.rs `spawn_peer_cache`).
@@ -3401,6 +3426,15 @@ export type Peer_Serialize = {
 	ipv6?: string,
 	/**  Public `ip:port` the peer's router forwards to its QUIC port (UPnP). */
 	mapped_quic?: string,
+};
+
+/**
+ *  The one-time notice after the upgrade: these were on for every device
+ *  and are now off until allowed device by device.
+ */
+export type PermissionNotice = {
+	/**  "control", "screen", "kvm". */
+	features: string[],
 };
 
 /**  Where a call stands. */

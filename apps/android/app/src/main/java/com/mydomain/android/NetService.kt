@@ -424,6 +424,11 @@ class NetService : Service() {
                         "text_shared" -> onTextShared(o)
                         "gallery_request" -> Gallery.onRequest(this@NetService, o)
                         "screen_watch" -> ScreenShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))
+                        // A computer not allowed to see this screen asked: ask
+                        // the owner (Allow once / Always / Don't allow).
+                        "permission_ask" -> PeerPerms.onAsk(this@NetService, o.optString("from"), o.optString("perm"))
+                        // A computer refused this phone's touchpad or watch: say why.
+                        "permission_refused" -> PeerPerms.onRefused(this@NetService, o.optString("from"), o.optString("perm"))
                         // A computer asks to see this phone's camera (the phone
                         // asks first), or stopped; and turns it about.
                         "camera_watch" -> CameraShare.onWatch(this@NetService, o.optString("from"), o.optBoolean("on"))

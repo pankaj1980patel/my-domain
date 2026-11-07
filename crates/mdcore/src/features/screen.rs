@@ -22,9 +22,12 @@
 //!   `RENEW_EVERY` while it shows the screen, so a phone that went away
 //!   (crashed, lost its link) stops the snapshots by itself.
 //! - Only your own devices can watch (decrypted with your key, from a device
-//!   in this one's list), and only while screen sharing is allowed here
-//!   (`Engine::set_screen_allowed`, on until turned off). The host shows
-//!   when a device starts watching (`CoreEvent::ScreenWatch`).
+//!   in this one's list), and only a device allowed to see this screen
+//!   (`features::perms`, "screen": off until allowed for that device; a
+//!   phone's owner allows the computer when sharing with it). Otherwise
+//!   the watch is refused: the viewer hears why (`perm_refused`), the
+//!   owner is asked. Turning it off for a device ends its watch. The host
+//!   shows when a device starts watching (`CoreEvent::ScreenWatch`).
 //! - Frames go only over a live link, never queued: a stale picture of the
 //!   screen is worth nothing. One that's too big (`MAX_FRAME_BYTES`) isn't
 //!   sent.
@@ -48,6 +51,7 @@ use crate::events::CoreEvent;
 use crate::platform::Platform;
 use crate::transport::media::{self, Sent};
 
+use super::perms::Perm;
 use super::{ControlHandler, ControlMsg};
 
 /// How long a watch lasts without being renewed.
@@ -57,52 +61,43 @@ pub const RENEW_EVERY: Duration = Duration::from_secs(10);
 /// Largest snapshot sent, in bytes of JPEG.
 pub const MAX_FRAME_BYTES: usize = 600 * 1024;
 
-const ALLOWED_KEY: &str = "screen_share";
-
-/// Both sides: who's watching this screen (computer), whether it's
-/// allowed, and the snapshot counter.
+/// Both sides: who's watching this screen, and the snapshot counter.
 #[derive(Default)]
 pub struct Screen {
     /// Watching device -> when its watch ends.
     watchers: Mutex<HashMap<String, Instant>>,
-    /// `None` until read from `kv`.
-    allowed: Mutex<Option<bool>>,
     seq: AtomicU64,
 }
 
-/// Whether other devices may watch this screen.
-pub fn allowed<P: Platform>(ctx: &NetCtx<P>) -> bool {
-    let mut a = ctx.extras.screen.allowed.lock();
-    *a.get_or_insert_with(|| ctx.platform.kv_get(ALLOWED_KEY).as_deref() != Some("off"))
-}
-
-/// Allow or forbid watching; forbidding ends every watch now.
-pub fn set_allowed<P: Platform>(ctx: &NetCtx<P>, on: bool) {
-    *ctx.extras.screen.allowed.lock() = Some(on);
-    ctx.platform
-        .kv_set(ALLOWED_KEY, if on { "on" } else { "off" });
-    if !on {
-        let ended: Vec<String> = ctx
-            .extras
-            .screen
-            .watchers
-            .lock()
-            .drain()
-            .map(|(n, _)| n)
-            .collect();
-        for from in ended {
-            ctx.sink.emit(CoreEvent::ScreenWatch { from, on: false });
-        }
+/// `node` may no longer see this screen: its watch ends now.
+pub(crate) fn drop_watcher<P: Platform>(ctx: &NetCtx<P>, node: &str) {
+    let was = ctx.extras.screen.watchers.lock().remove(node).is_some();
+    if was {
+        ctx.sink.emit(CoreEvent::ScreenWatch {
+            from: node.to_string(),
+            on: false,
+        });
     }
 }
 
 /// The devices watching this screen now (expired watches are dropped).
 pub fn watchers<P: Platform>(ctx: &NetCtx<P>) -> Vec<String> {
     let now = Instant::now();
-    let mut w = ctx.extras.screen.watchers.lock();
-    w.retain(|_, until| *until > now);
-    let mut list: Vec<String> = w.keys().cloned().collect();
-    list.sort();
+    let (list, expired) = {
+        let mut w = ctx.extras.screen.watchers.lock();
+        let expired: Vec<String> = w
+            .iter()
+            .filter(|(_, until)| **until <= now)
+            .map(|(n, _)| n.clone())
+            .collect();
+        w.retain(|_, until| *until > now);
+        let mut list: Vec<String> = w.keys().cloned().collect();
+        list.sort();
+        (list, expired)
+    };
+    for n in expired {
+        super::perms::session_ended(ctx, Perm::Screen, &n);
+    }
     list
 }
 
@@ -277,8 +272,12 @@ impl<P: Platform> ControlHandler<P> for ScreenHandler {
         match msg.kind() {
             "screen_watch" => {
                 let on = msg.json("on").as_bool().unwrap_or(false);
-                if on && !allowed(ctx) {
+                if on && !super::perms::allowed(ctx, Perm::Screen, &from) {
+                    super::perms::refuse(ctx, Perm::Screen, &from, true);
                     return;
+                }
+                if !on {
+                    super::perms::session_ended(ctx, Perm::Screen, &from);
                 }
                 let started = {
                     let mut w = ctx.extras.screen.watchers.lock();

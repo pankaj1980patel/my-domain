@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature
+keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -59,6 +59,24 @@ If you lose a device, sell it or stop trusting it, open its page and choose **Re
 - Sensitive things are off until you turn them on, on the device they concern: sharing a location, letting your devices see a screen, calls on the computer, webhooks.
 - Screen sharing and phone audio are asked for every time, by Android itself. The camera is asked for every time too, on the phone, before anything is shown.
 - A notification tells you when a device's location is shared, when its screen is being watched or its camera is on, and when an automation or webhook runs.
+
+## Permissions: allowed device by device
+
+Three things let another device act on a computer or see it. Each is **off** until you allow it, **for one device at a time**:
+
+- **Allow <device> to control this computer**: its touchpad and keyboard move the pointer and type.
+- **Allow <device> to see this screen**: it shows this screen.
+- **Allow <device> to take over mouse & keyboard**: with Share mouse and keyboard, its pointer comes across onto this screen.
+
+Find them on the device's page, under **Permissions**. Settings sums up who is allowed what, and the health check lists each device allowed anything (grey: nothing to fix, just worth knowing). They're kept in the settings backup.
+
+- A device that isn't allowed is **refused**, and it says so: "Mac hasn't allowed control from this phone. Allow it on Mac."
+- While my-domain runs on the computer, it asks you: "Pixel wants to control this computer": **Allow once** (until it stops, or 10 minutes unused), **Always**, or **Don't allow** (not asked again for a while). Nothing is ever allowed without your answer.
+- Turning one off works at once: a device watching the screen stops seeing it, and a computer controlling this one's mouse and keyboard lets go.
+- A removed device loses everything it was allowed; added again, it starts with nothing.
+- On the phone, a computer may see the phone's screen when you share it from the computer's page (that counts as allowing it once), or always if you turn on **Allow <computer> to see this screen** there. Android still asks every time.
+
+**After updating:** these used to be one switch each, on for all your devices. The update turns them off and shows, once, what was on, with an **Allow for <device>** button for each device. Allow only the ones you want.
 
 ## Copied passwords
 

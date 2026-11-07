@@ -174,6 +174,10 @@ pub struct CoreFacts {
     pub key_changes: Vec<(String, String, bool)>,
     /// The feature groups in use.
     pub features: Vec<String>,
+    /// Devices allowed to control this device, see its screen or take
+    /// over its mouse and keyboard (`features::perms`): (node, name, the
+    /// permissions: "control", "screen", "kvm").
+    pub allowed: Vec<(String, String, Vec<String>)>,
 }
 
 /// A push this recent says pushes work.
@@ -260,6 +264,16 @@ pub fn evaluate(core: &CoreFacts, platform: &PlatformFacts) -> HealthReport {
                 .device(node, name)
                 .fix("trust_key"),
         );
+    }
+
+    // What other devices may do here (grey: nothing to fix, worth
+    // knowing). The fix opens that device's permissions.
+    for (node, name, perms) in &core.allowed {
+        let mut c = HealthCheck::new("allowed", Info, "on")
+            .device(node, name)
+            .fix("permissions");
+        c.features = perms.clone();
+        out.push(c);
     }
 
     for d in &core.devices {
@@ -413,6 +427,24 @@ pub fn core_facts<P: Platform>(
         devices,
         key_changes,
         features,
+        allowed: super::perms::all(ctx)
+            .into_iter()
+            .map(|p| {
+                let name = ctx
+                    .peers
+                    .lock()
+                    .get(&p.node_id)
+                    .map(|x| x.name.clone())
+                    .filter(|n| !n.trim().is_empty())
+                    .unwrap_or_else(|| p.node_id.clone());
+                let perms = [("control", p.control), ("screen", p.screen), ("kvm", p.kvm)]
+                    .into_iter()
+                    .filter(|(_, on)| *on)
+                    .map(|(n, _)| n.to_string())
+                    .collect();
+                (p.node_id, name, perms)
+            })
+            .collect(),
     }
 }
 
@@ -461,6 +493,24 @@ mod tests {
         assert_eq!((r.bad, r.warn), (0, 0));
         assert_eq!(find(&r, "server").reason, "ok");
         assert_eq!(find(&r, "push").reason, "working");
+        assert!(!r.checks.iter().any(|c| c.id == "allowed"));
+    }
+
+    #[test]
+    fn a_device_allowed_to_control_this_one_is_a_grey_line() {
+        let mut c = core();
+        c.allowed = vec![(
+            "n1".into(),
+            "Pixel".into(),
+            vec!["control".into(), "screen".into()],
+        )];
+        let r = evaluate(&c, &PlatformFacts::default());
+        let a = find(&r, "allowed");
+        assert_eq!(a.level, Info);
+        assert_eq!(a.name.as_deref(), Some("Pixel"));
+        assert_eq!(a.features, ["control", "screen"]);
+        assert_eq!(a.fix.as_deref(), Some("permissions"));
+        assert_eq!((r.bad, r.warn), (0, 0));
     }
 
     #[test]

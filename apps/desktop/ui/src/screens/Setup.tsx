@@ -29,15 +29,12 @@ import { focusSoon } from "../lib/a11y";
 /** The settings for the groups picked: clipboard sync follows the pick;
  *  the others are only turned off when left out (nothing that shares more
  *  is turned on behind your back; location sharing stays your switch in
- *  Settings). */
+ *  Settings; controlling this computer and seeing its screen are allowed
+ *  device by device, all off to begin with). */
 async function applyFeatures(picked: Set<string>) {
   const off = (g: string) => !picked.has(g);
   await setClipSync(picked.has("clipboard")).catch(() => {});
   if (off("notifications")) await commands.setNotificationsEnabled(false).catch(() => {});
-  if (off("media")) {
-    await commands.setScreenAllowed(false).catch(() => {});
-    await commands.setRemoteInputAllowed(false).catch(() => {});
-  }
   if (off("find") && (await commands.locationAvailable().catch(() => false))) {
     await commands.setShareLocation(false).catch(() => {});
   }

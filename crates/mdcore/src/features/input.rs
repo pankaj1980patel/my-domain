@@ -30,9 +30,13 @@
 //!   `BATCH_EVERY` as one message. A click, text or key sends what's
 //!   pending first, so the order holds.
 //! - The computer plays back events only from your own devices (the message
-//!   decrypted with your key, from a device in its list) and only while
-//!   remote input is allowed there (`Engine::set_remote_input_allowed`, on
-//!   until turned off). It arrives as `CoreEvent::Input`.
+//!   decrypted with your key, from a device in its list) and only from a
+//!   device allowed to control it (`features::perms`, "control": off until
+//!   allowed for that device). It arrives as `CoreEvent::Input`. Otherwise
+//!   it's refused: the sender hears why (`perm_refused`), the owner is
+//!   asked. Taps and swipes for a phone (`tap`, `swipe`) aren't this: the
+//!   phone plays them only while it shares its screen with that computer
+//!   and its owner allows control there.
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -46,6 +50,7 @@ use crate::events::CoreEvent;
 use crate::model::InputEvent;
 use crate::platform::Platform;
 
+use super::perms::Perm;
 use super::{ControlHandler, ControlMsg};
 
 /// How often pending pointer moves and scrolls go out (about 50 a second).
@@ -64,8 +69,6 @@ pub const MAX_STEP: i32 = 4000;
 const IDLE_STOP: Duration = Duration::from_secs(2);
 /// With no link, the connect ladder starts at most this often per device.
 const CONNECT_EVERY: Duration = Duration::from_secs(5);
-
-const ALLOWED_KEY: &str = "remote_input";
 
 /// Moves and scrolls added up for one device, not sent yet.
 #[derive(Default)]
@@ -103,26 +106,17 @@ struct Batch {
     flushing: bool,
 }
 
-/// The touchpad's state on both sides: pending moves (phone), whether
-/// remote input is allowed (computer).
+/// The touchpad's state: pending moves, and when connecting last started.
 #[derive(Default)]
 pub struct Input {
     batch: Mutex<Batch>,
-    /// `None` until read from `kv`.
-    allowed: Mutex<Option<bool>>,
     connecting: Mutex<HashMap<String, Instant>>,
 }
 
-/// Whether this device plays back input from your other devices.
-pub fn allowed<P: Platform>(ctx: &NetCtx<P>) -> bool {
-    let mut a = ctx.extras.input.allowed.lock();
-    *a.get_or_insert_with(|| ctx.platform.kv_get(ALLOWED_KEY).as_deref() != Some("off"))
-}
-
-pub fn set_allowed<P: Platform>(ctx: &NetCtx<P>, on: bool) {
-    *ctx.extras.input.allowed.lock() = Some(on);
-    ctx.platform
-        .kv_set(ALLOWED_KEY, if on { "on" } else { "off" });
+/// Taps and swipes for a phone's screen: the phone's own call (see the
+/// module doc), not remote input.
+fn for_a_phone(e: &InputEvent) -> bool {
+    matches!(e, InputEvent::Tap { .. } | InputEvent::Swipe { .. })
 }
 
 /// Events made safe to play back: at most `MAX_EVENTS`, moves and scrolls
@@ -296,7 +290,7 @@ impl<P: Platform> ControlHandler<P> for InputHandler {
         let from = msg.sender();
         // Your own devices only: decrypted with your key (or it wouldn't be
         // here), and in this device's list.
-        if from.is_empty() || !ctx.peers.lock().contains_key(&from) || !allowed(ctx) {
+        if from.is_empty() || !ctx.peers.lock().contains_key(&from) {
             return;
         }
         let events: Vec<InputEvent> = match msg.json("events") {
@@ -307,7 +301,14 @@ impl<P: Platform> ControlHandler<P> for InputHandler {
                 .collect(),
             _ => return,
         };
-        let events = clean(events);
+        let mut events = clean(events);
+        if !super::perms::allowed(ctx, Perm::Control, &from) {
+            let before = events.len();
+            events.retain(for_a_phone);
+            if events.len() < before {
+                super::perms::refuse(ctx, Perm::Control, &from, true);
+            }
+        }
         if !events.is_empty() {
             ctx.sink.emit(CoreEvent::Input { from, events });
         }

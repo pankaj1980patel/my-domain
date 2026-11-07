@@ -93,7 +93,8 @@ pub fn kind_of(action: &str) -> &'static str {
 ///    `link_down`, `key_changed`, `wake`;
 ///  - other: `note`, `read_later` (`detail` the site), `timer` (`detail`
 ///    its length in ms), `ring`, `open_url`, `screen_watch`, `screen_offer`,
-///    `audio_offer`, `audio_listen` (`detail` "on" / "off"), `schedule`
+///    `audio_offer`, `audio_listen` (`detail` "on" / "off"),
+///    `permission_ask` (`subject` "control", "screen" or "kvm"), `schedule`
 ///    (`detail` "done", "queued", "woken" or "failed").
 #[derive(serde::Serialize, specta::Type, Clone, Debug, PartialEq)]
 pub struct ActivityItem {

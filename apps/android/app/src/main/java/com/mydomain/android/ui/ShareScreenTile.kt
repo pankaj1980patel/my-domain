@@ -2,6 +2,11 @@ package com.mydomain.android.ui
 
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.mydomain.android.PeerPerms
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import com.mydomain.android.PhoneHelper
@@ -11,7 +16,9 @@ import com.mydomain.android.ScreenShare
 /** Share this phone's screen with computer [node] ([name]): Android's own
  *  prompt first, every time; then the computer shows it. While it shares:
  *  Stop, and whether the computer may tap and swipe here (off at each
- *  start; needs the Accessibility helper). */
+ *  start; needs the Accessibility helper). Its permission: whether that
+ *  computer may see this screen without your sharing it from here (still
+ *  with Android's prompt), off until you allow it. */
 @Composable
 fun ShareScreenTile(node: String, name: String) {
     val ctx = LocalContext.current
@@ -31,5 +38,12 @@ fun ShareScreenTile(node: String, name: String) {
             }
             GhostButton(stringResource(R.string.screen_share_stop), { ScreenShare.stopWith(node) })
         }
+        // Permissions: per device, off until allowed.
+        var allowed by remember(node) { mutableStateOf(PeerPerms.screenAllowed(node)) }
+        Muted(stringResource(R.string.perm_section))
+        SwitchRow(stringResource(R.string.perm_screen_switch, name), allowed) {
+            if (PeerPerms.setScreenAllowed(node, it)) allowed = it
+        }
+        Muted(stringResource(R.string.perm_screen_hint, name))
     }
 }

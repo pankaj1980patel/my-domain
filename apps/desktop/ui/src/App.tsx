@@ -43,6 +43,7 @@ import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 import { HotspotAsk } from "./components/HotspotAsk";
 import { PrintAsk } from "./components/PrintAsk";
+import { PermissionAsk, PermissionNotice } from "./components/PeerPermissions";
 
 type View =
   | { name: "home" }
@@ -454,6 +455,8 @@ export default function App() {
         <DownloadAsk />
         <HotspotAsk />
         <PrintAsk />
+        <PermissionAsk />
+        <PermissionNotice />
         <NoteReminders onOpen={(id) => openNote(id)} />
         <TimerAlarm onOpen={() => go({ name: "timers" })} />
         </Show>

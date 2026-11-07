@@ -42,16 +42,6 @@ impl<P: Platform> Engine<P> {
         kvm::peer_os(&self.ctx, node_id)
     }
 
-    /// Whether your other computers may control this one.
-    pub fn kvm_allowed(&self) -> bool {
-        kvm::allowed(&self.ctx)
-    }
-
-    /// Off lets go at once if another computer controls this one.
-    pub fn set_kvm_allowed(&self, on: bool) {
-        kvm::set_allowed(&self.ctx, on)
-    }
-
     /// Whether the clipboard follows the active screen.
     pub fn kvm_clip_follows(&self) -> bool {
         kvm::clip_follows(&self.ctx)

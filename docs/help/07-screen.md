@@ -8,6 +8,7 @@ platforms: desktop, android
 On the phone's page on the computer, the **Phone screen** tile shows the phone's screen. You can also start it from the phone with **Share this screen** on the computer's page.
 
 - Android asks you **every time** before anything is shared. Nothing is sent without that yes.
+- The computer may see the phone's screen only if the phone allows it: sharing from the computer's page counts as once; **Allow <computer> to see this screen** on that page makes it always. When the computer asks on its own and isn't allowed, the phone asks: **Allow once**, **Always** or **Don't allow**, then Android's own prompt.
 - The phone shows a notification while it shares, with **Stop**, and **Allow control** or **View only** (view only at each start).
 - It stops when you press Stop on either side, when the computer stops watching, or when the phone's screen goes off or locks. The lock screen is never sent.
 
@@ -38,7 +39,7 @@ On the computer, **Take a photo with …** or **Scan documents with …** asks y
 
 The phone's full-screen touchpad shows the computer's screen behind it, so you can see what the pointer does. With **Point & click**, a tap puts the pointer where you touched the picture and clicks there.
 
-- The computer must allow it: **Let my phone see this screen** in its Settings (and **Let my phone control this computer** to be controlled).
+- The computer must allow **this phone**: on the phone's page on the computer, under **Permissions**, turn on **Allow <phone> to see this screen** (and **Allow <phone> to control this computer** to be controlled). Both are off until you do, for each phone. If you haven't, the phone says so ("Mac hasn't allowed control from this phone"), and the computer asks you there: **Allow once**, **Always** or **Don't allow**.
 - **macOS** needs Screen Recording permission for my-domain, and Accessibility to be controlled.
 - **Linux on X11** needs ImageMagick (its `import` tool) to show the screen; control works out of the box.
 - **Linux on Wayland** (GNOME, KDE Plasma, Sway...) goes through your desktop's portals, which ask you once.

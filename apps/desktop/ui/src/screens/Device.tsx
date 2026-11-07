@@ -81,6 +81,7 @@ import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../li
 import type { PageLayoutView } from "../bindings";
 import VerifyDevice from "../components/VerifyDevice";
 import { RemoveDeviceButton } from "../components/RemovedDevices";
+import { PermissionsTile } from "../components/PeerPermissions";
 
 /** Every tile a device's page can show, in default order. A new tile is one
  *  entry here (its `id` is kept in saved layouts: never rename one); a saved
@@ -158,6 +159,9 @@ const TILES: TileDef[] = [
     render: (n) => <PhotosTile node={n} />,
   },
   { id: "lost-mode", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
+  // What this device may do here: control this computer, see its screen,
+  // take over its mouse and keyboard (all off until allowed).
+  { id: "permissions", title: () => t("perm.title"), render: (n) => <PermissionsTile node={n} /> },
   { id: "notify", title: () => t("notify.title"), render: () => <NotifyTile /> },
   { id: "apps", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
 ];

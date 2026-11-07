@@ -189,8 +189,17 @@ pub struct Appearance {
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Sharing {
-    pub screen_share: bool,
-    pub remote_input: bool,
+    /// The global switches from before per-device permissions: read from
+    /// an older backup, never applied (a restore doesn't turn on for every
+    /// device what the upgrade turned off).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_share: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_input: Option<bool>,
+    /// Which device may control this computer, see its screen, take over
+    /// its mouse and keyboard (missing in a backup from before).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Vec<mdcore::features::perms::PeerPermissions>>,
     pub labels_share: bool,
     pub battery_alerts: BatteryAlertSettings,
     /// "Downloads from my devices" (missing in a backup from before).
@@ -682,11 +691,8 @@ pub fn preview(dir: &Path, b: &Backup, cur: &Current) -> Vec<SectionPreview> {
                 let now = cur.sharing.as_ref();
                 let mut k = Vec::new();
                 if let (Some(t), Some(n)) = (then, now) {
-                    if t.screen_share != n.screen_share {
-                        k.push("screen_share".into());
-                    }
-                    if t.remote_input != n.remote_input {
-                        k.push("remote_input".into());
+                    if t.permissions.is_some() && t.permissions != n.permissions {
+                        k.push("permissions".into());
                     }
                     if t.labels_share != n.labels_share {
                         k.push("labels_share".into());
@@ -766,11 +772,29 @@ fn config_dir(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn sharing_now(engine: &Eng) -> Sharing {
     Sharing {
-        screen_share: engine.screen_allowed(),
-        remote_input: engine.remote_input_allowed(),
+        screen_share: None,
+        remote_input: None,
+        permissions: Some(engine.all_permissions()),
         labels_share: engine.labels_share(),
         battery_alerts: engine.battery_alerts(),
         remote_downloads: Some(engine.remote_download_settings()),
+    }
+}
+
+/// Make the per-device permissions what the backup says: what it allows,
+/// allowed; anything else allowed now, turned off.
+fn restore_permissions(engine: &Eng, list: &[mdcore::features::perms::PeerPermissions]) {
+    let mut nodes: BTreeSet<String> = list.iter().map(|p| p.node_id.clone()).collect();
+    nodes.extend(engine.all_permissions().into_iter().map(|p| p.node_id));
+    for node in nodes {
+        let want = list.iter().find(|p| p.node_id == node);
+        for (perm, on) in [
+            ("control", want.is_some_and(|p| p.control)),
+            ("screen", want.is_some_and(|p| p.screen)),
+            ("kvm", want.is_some_and(|p| p.kvm)),
+        ] {
+            let _ = engine.set_peer_permission(&node, perm, on);
+        }
     }
 }
 
@@ -942,8 +966,9 @@ pub fn settings_restore_apply(
     if let (Some(sh), true) = (&s.sharing, chosen.contains("sharing")) {
         match &engine {
             Some(engine) => {
-                engine.set_screen_allowed(sh.screen_share);
-                engine.set_remote_input_allowed(sh.remote_input);
+                if let Some(list) = &sh.permissions {
+                    restore_permissions(engine, list);
+                }
                 engine.set_labels_share(sh.labels_share);
                 if let Err(e) = engine.set_battery_alerts(sh.battery_alerts.clone()) {
                     failed.push(format!("Battery alerts: {e}"));
@@ -1102,8 +1127,14 @@ mod tests {
             language: Some("hi".into()),
         });
         sections.sharing = Some(Sharing {
-            screen_share: false,
-            remote_input: true,
+            screen_share: None,
+            remote_input: None,
+            permissions: Some(vec![mdcore::features::perms::PeerPermissions {
+                node_id: "node-phone".into(),
+                control: true,
+                screen: false,
+                kvm: false,
+            }]),
             labels_share: true,
             battery_alerts: BatteryAlertSettings {
                 enabled: true,
@@ -1352,6 +1383,26 @@ mod tests {
         }
         let _ = std::fs::remove_dir_all(&from);
         let _ = std::fs::remove_dir_all(&to);
+    }
+
+    #[test]
+    fn an_older_backups_global_switches_are_read_never_applied() {
+        let old: Sharing = serde_json::from_value(serde_json::json!({
+            "screen_share": true,
+            "remote_input": true,
+            "labels_share": false,
+            "battery_alerts": {"enabled": true, "low": 20, "charged": 80},
+        }))
+        .unwrap();
+        assert_eq!(old.permissions, None);
+        let again = serde_json::to_value(Sharing {
+            screen_share: None,
+            remote_input: None,
+            ..old
+        })
+        .unwrap();
+        assert!(again.get("screen_share").is_none());
+        assert!(again.get("permissions").is_none());
     }
 
     #[test]

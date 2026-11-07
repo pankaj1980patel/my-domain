@@ -489,6 +489,22 @@ pub enum CoreEvent {
     /// owner's choice: watch it (`Engine::screen_watch`) to see it. Or it
     /// stopped (`!on`).
     ScreenOffer { from: String, on: bool },
+    /// Another of your devices asked for something this device doesn't
+    /// allow it (`perm`: "control", "screen" or "kvm"; `features::perms`):
+    /// it was refused. Ask the owner (Allow once / Always / Don't allow)
+    /// and answer with `Engine::permission_answer`. Never allow without
+    /// that answer.
+    PermissionAsk { from: String, perm: String },
+    /// A device refused what this one asked for (`perm`), and why
+    /// (`why`: "not_allowed", or "refused"): say so, and where to allow it.
+    PermissionRefused {
+        from: String,
+        perm: String,
+        why: String,
+    },
+    /// What device `node_id` is allowed here changed
+    /// (`Engine::peer_permissions`).
+    PermissionsChanged { node_id: String },
     /// A computer started (`on`) or stopped asking to see this phone's
     /// camera (`features::camera`): ask the owner, then send its frames
     /// with `Engine::camera_frame_to` while it watches
@@ -652,6 +668,9 @@ impl CoreEvent {
             CoreEvent::ScreenWatch { .. } => "screen-watch",
             CoreEvent::ScreenFrame { .. } => "screen-frame",
             CoreEvent::ScreenOffer { .. } => "screen-offer",
+            CoreEvent::PermissionAsk { .. } => "permission-ask",
+            CoreEvent::PermissionRefused { .. } => "permission-refused",
+            CoreEvent::PermissionsChanged { .. } => "permissions-changed",
             CoreEvent::CameraWatch { .. } => "camera-watch",
             CoreEvent::CameraFrame { .. } => "camera-frame",
             CoreEvent::CameraOffer { .. } => "camera-offer",

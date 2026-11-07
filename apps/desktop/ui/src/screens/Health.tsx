@@ -68,6 +68,7 @@ export async function fixCheck(c: HealthCheck, nav: HealthNav) {
         await unwrap(commands.openDownloads());
         return;
       case "trust_key":
+      case "permissions":
         if (c.node_id) nav.onDevice(c.node_id);
         return;
       case "encryption_key":

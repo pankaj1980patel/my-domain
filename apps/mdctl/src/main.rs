@@ -41,12 +41,13 @@
 //! `gesture <node> 3|4 left|right|up|down` (a multi-finger swipe),
 //! `point <node> <x> <y>` (pointer to a spot, 0-10000 across the screen),
 //! `type <node> <text...>`, `key <node> enter|backspace|left|right|up|down|esc`;
-//! `input-allow on|off` (play back input from your devices here; "on" also
-//! lists "input" in this device's status, so a phone offers its touchpad),
+//! `input-allow <node> on|off` (play back input from that device here; a
+//! device allowed lists "input" in this device's status, so a phone offers
+//! its touchpad),
 //! `dnd on|off` (report this device's Do Not Disturb), `dnd-active`,
 //! `screen <node> [off]` (watch a computer's screen: snapshots arrive as
-//! `screen-frame`; renew within 25 s), `screen-allow on|off` (let your
-//! devices watch here; "on" lists "screen" in the status),
+//! `screen-frame`; renew within 25 s), `screen-allow <node> on|off` (let
+//! that device watch here; lists "screen" in the status),
 //! `screen-send <jpeg>` (send that picture to whoever watches here),
 //! `wake <node>` (Wake-on-LAN: a computer that said its address once),
 //! `send-picture <node> <png>` (onto that device's clipboard),
@@ -261,13 +262,14 @@ fn expand_env(line: &str) -> String {
 /// `@name` -> that device's node id (exact name, any case); anything else
 /// is already a node id.
 /// This device's status for others: the touchpad and the screen while
-/// they're allowed here (so a phone offers them).
+/// some device is allowed them here (so a phone offers them).
 fn list_actions(engine: &Engine<CliPlatform>) {
     let mut actions = Vec::new();
-    if engine.remote_input_allowed() {
+    let all = engine.all_permissions();
+    if all.iter().any(|p| p.control) {
         actions.push("input");
     }
-    if engine.screen_allowed() {
+    if all.iter().any(|p| p.screen) {
         actions.push("screen");
     }
     engine.set_device_status(&json!({ "actions": actions }).to_string());
@@ -652,14 +654,16 @@ fn run(ctl: &Ctl, line: &str) -> Result<bool, ()> {
             Ok(json!(key))
         }
         "input-allow" => {
+            let who = resolve(engine, &arg(words.next())?)?;
             let on = arg(words.next())? == "on";
-            engine.set_remote_input_allowed(on);
+            engine.set_peer_permission(&who, "control", on)?;
             list_actions(engine);
             Ok(json!(on))
         }
         "screen-allow" => {
+            let who = resolve(engine, &arg(words.next())?)?;
             let on = arg(words.next())? == "on";
-            engine.set_screen_allowed(on);
+            engine.set_peer_permission(&who, "screen", on)?;
             list_actions(engine);
             Ok(json!(on))
         }

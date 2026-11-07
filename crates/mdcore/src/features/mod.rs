@@ -49,6 +49,7 @@ pub mod onboarding;
 pub mod opus_audio;
 pub mod otp_relay;
 pub mod p2p_ping;
+pub mod perms;
 pub mod print;
 pub mod read_later;
 pub mod reconnect;
@@ -229,6 +230,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(input::InputHandler));
         r.register(Arc::new(dnd::DndHandler));
         r.register(Arc::new(screen::ScreenHandler));
+        r.register(Arc::new(perms::PermsHandler));
         r.register(Arc::new(audio_share::AudioShareHandler));
         if folder_sync {
             r.register(Arc::new(folder_sync::FolderSyncHandler));

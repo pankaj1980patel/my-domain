@@ -76,6 +76,13 @@ fn pair_side_by_side(a: &str, b: &str) -> (TestNode, TestNode) {
     mac.engine
         .kvm_set_neighbor(&pc.node_id(), Some("right"))
         .unwrap();
+    // Each allows the other to take over its mouse and keyboard.
+    pc.engine
+        .set_peer_permission(&mac.node_id(), "kvm", true)
+        .unwrap();
+    mac.engine
+        .set_peer_permission(&pc.node_id(), "kvm", true)
+        .unwrap();
     pc.sink
         .wait_until(WAIT, |e| match e {
             CoreEvent::KvmLayout { layout } if !layout.is_empty() => Some(()),
@@ -245,11 +252,28 @@ fn a_password_never_follows_the_pointer() {
 #[test]
 fn a_computer_that_doesnt_allow_it_refuses() {
     let (mac, pc) = pair_side_by_side("kvm-off-mac", "kvm-off-pc");
-    pc.engine.set_kvm_allowed(false);
-    assert!(!pc.engine.kvm_allowed());
+    let m = mac.node_id();
+    pc.engine.set_peer_permission(&m, "kvm", false).unwrap();
+    assert!(!pc.engine.peer_permissions(&m).kvm);
     mac.engine.kvm_start(&pc.node_id(), "right", 1).unwrap();
     let st = wait_state(&mac, "refused", |s| s.role == "idle");
-    assert_eq!(st.reason.as_deref(), Some("off"));
+    assert_eq!(st.reason.as_deref(), Some("not_allowed"));
+    // The mac says why; the pc's owner is asked.
+    let pid = pc.node_id();
+    mac.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::PermissionRefused { from, perm, .. } if *from == pid && perm == "kvm" => {
+                Some(())
+            }
+            _ => None,
+        })
+        .expect("no refusal event");
+    pc.sink
+        .wait_until(WAIT, |e| match e {
+            CoreEvent::PermissionAsk { from, perm } if *from == m && perm == "kvm" => Some(()),
+            _ => None,
+        })
+        .expect("the owner wasn't asked");
     assert!(!pc
         .sink
         .all()
@@ -257,10 +281,10 @@ fn a_computer_that_doesnt_allow_it_refuses() {
         .any(|e| matches!(e, CoreEvent::KvmChanged { state } if state.role == "controlled")));
 
     // Turned off while controlled: it lets go at once, on both ends.
-    pc.engine.set_kvm_allowed(true);
+    pc.engine.set_peer_permission(&m, "kvm", true).unwrap();
     mac.engine.kvm_start(&pc.node_id(), "right", 1).unwrap();
     wait_state(&pc, "controlled", |s| s.role == "controlled");
-    pc.engine.set_kvm_allowed(false);
+    pc.engine.set_peer_permission(&m, "kvm", false).unwrap();
     wait_state(&pc, "let go", |s| s.role == "idle");
     wait_state(&mac, "told", |s| {
         s.role == "idle" && s.reason.as_deref() == Some("stopped")

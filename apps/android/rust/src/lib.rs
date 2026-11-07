@@ -1791,6 +1791,32 @@ impl MdEngine {
         Ok(self.inner.screen_offer(&node_id, on)?)
     }
 
+    /// Whether `node_id` may `perm` ("control", "screen", "kvm") here,
+    /// always (per-device permissions, all off until allowed). On the
+    /// phone: "screen", a computer allowed to see this screen when you
+    /// share it (Android still asks every time).
+    pub fn peer_permission(&self, node_id: String, perm: String) -> bool {
+        let p = self.inner.peer_permissions(&node_id);
+        match perm.as_str() {
+            "control" => p.control,
+            "screen" => p.screen,
+            "kvm" => p.kvm,
+            _ => false,
+        }
+    }
+
+    /// Allow (`on`) `node_id` to do `perm` here, or not; off ends what it
+    /// allowed at once.
+    pub fn set_peer_permission(&self, node_id: String, perm: String, on: bool) -> MdResult<()> {
+        Ok(self.inner.set_peer_permission(&node_id, &perm, on)?)
+    }
+
+    /// The owner's answer to a `permission_ask` event: "once", "always"
+    /// or "deny".
+    pub fn permission_answer(&self, node_id: String, perm: String, answer: String) -> MdResult<()> {
+        Ok(self.inner.permission_answer(&node_id, &perm, &answer)?)
+    }
+
     /// The computers asking to see this phone's camera now (its owner
     /// allows each one first).
     pub fn camera_watchers(&self) -> Vec<String> {

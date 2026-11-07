@@ -160,6 +160,8 @@ export function checkTitle(c: HealthCheck): string {
     case "version":
       if (c.reason === "older" && !c.detail) return t("health.version.olderUnknown", { name });
       return t(`health.version.${c.reason}` as Key, { name, version: c.detail ?? "" });
+    case "allowed":
+      return t("health.allowed", { name });
     default:
       return c.id;
   }
@@ -201,6 +203,8 @@ export function checkDetail(c: HealthCheck): string {
         return t("health.version.olderHint", { features: c.features.map(featureLabel).join(", ") });
       if (c.reason === "newer") return t("health.version.newerHint");
       return "";
+    case "allowed":
+      return c.features.map((f) => (has(`perm.name.${f}`) ? t(`perm.name.${f}` as Key) : f)).join(", ");
     default:
       return "";
   }

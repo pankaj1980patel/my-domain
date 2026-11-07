@@ -12,7 +12,9 @@
 //! kvm_enter  { from, edge, pos, os, clip? }   the sender controls the receiver now;
 //!                                     the pointer comes in at the receiver's `edge`,
 //!                                     `pos` ten-thousandths along it
-//! kvm_ack    { from, ok, why? }       the receiver's answer ("off", "busy", "ended")
+//! kvm_ack    { from, ok, why? }       the receiver's answer ("off", "busy", "ended",
+//!                                     "not_allowed": not allowed for this computer;
+//!                                     an older app reads that as "ended")
 //! kvm_input  { from, events: [KvmEvent] }   buttons, keys, wheel (and motion
 //!                                     where there's no DATAGRAM path), in order
 //! kvm_ping / kvm_pong { from }        once a second while controlling
@@ -36,8 +38,10 @@
 //!   everything held when the controller goes quiet (`CONTROLLED_TIMEOUT`)
 //!   or its link drops. Each of these ends in `KvmChanged` with role
 //!   "idle".
-//! - Being controlled can be turned off (`set_allowed`): a `kvm_enter`
-//!   then gets `kvm_ack { ok: false, why: "off" }`.
+//! - Being controlled is allowed computer by computer (`features::perms`,
+//!   "kvm": off until allowed): from any other, a `kvm_enter` gets
+//!   `kvm_ack { ok: false, why: "not_allowed" }` and the owner is asked.
+//!   Turning it off for the computer in control lets go at once.
 //! - The layout is kept on both ends and agrees: setting where a computer
 //!   sits here tells it where this one sits there (the opposite side);
 //!   the newer setting (`at`) wins, sent again when a link comes up. One
@@ -62,6 +66,7 @@ use crate::model::{KvmEvent, KvmNeighbor, KvmState};
 use crate::platform::Platform;
 use crate::transport::{media, send_control_to};
 
+use super::perms::Perm;
 use super::{ControlHandler, ControlMsg};
 
 pub const FLAG: &str = "kvm";
@@ -72,7 +77,6 @@ const VERSION: u64 = 1;
 
 const CAPS_PREFIX: &str = "kvm_caps:";
 const LAYOUT_KEY: &str = "kvm_layout";
-const ALLOWED_KEY: &str = "kvm_allowed";
 const CLIP_KEY: &str = "kvm_clip";
 
 /// How often pending pointer motion goes out (about 125 a second).
@@ -182,7 +186,6 @@ pub struct Kvm {
     caps: Mutex<HashMap<String, String>>,
     /// `None` until read from `kv`.
     layout: Mutex<Option<HashMap<String, Place>>>,
-    allowed: Mutex<Option<bool>>,
     clip: Mutex<Option<bool>>,
     watching: AtomicBool,
 }
@@ -196,7 +199,6 @@ impl Default for Kvm {
             motion: Mutex::new(Motion::default()),
             caps: Mutex::new(HashMap::new()),
             layout: Mutex::new(None),
-            allowed: Mutex::new(None),
             clip: Mutex::new(None),
             watching: AtomicBool::new(false),
         }
@@ -288,20 +290,10 @@ fn name_of<P: Platform>(ctx: &NetCtx<P>, node: &str) -> Option<String> {
 // Settings
 // ---------------------------------------------------------------------------
 
-/// Whether other computers may control this one (on until turned off).
-pub fn allowed<P: Platform>(ctx: &NetCtx<P>) -> bool {
-    *state(ctx)
-        .allowed
-        .lock()
-        .get_or_insert_with(|| ctx.platform.kv_get(ALLOWED_KEY).as_deref() != Some("off"))
-}
-
-/// Turning it off while controlled lets go at once.
-pub fn set_allowed<P: Platform>(ctx: &NetCtx<P>, on: bool) {
-    *state(ctx).allowed.lock() = Some(on);
-    ctx.platform
-        .kv_set(ALLOWED_KEY, if on { "on" } else { "off" });
-    if !on && matches!(*state(ctx).session.lock(), Session::Controlled { .. }) {
+/// `node` may no longer take over this computer (`features::perms`): if
+/// it controls it now, let go at once.
+pub(crate) fn revoked<P: Platform>(ctx: &NetCtx<P>, node: &str) {
+    if controller(ctx).as_deref() == Some(node) {
         stop(ctx, "off");
     }
 }
@@ -493,9 +485,15 @@ fn emit<P: Platform>(ctx: &NetCtx<P>, state: KvmState) {
 /// End the session (whatever it was) and say why; returns what it was.
 fn end<P: Platform>(ctx: &NetCtx<P>) -> Session {
     let was = std::mem::replace(&mut *state(ctx).session.lock(), Session::Idle);
-    let mut m = state(ctx).motion.lock();
-    m.dx = 0;
-    m.dy = 0;
+    {
+        let mut m = state(ctx).motion.lock();
+        m.dx = 0;
+        m.dy = 0;
+    }
+    // An "allow once" is used up with the session.
+    if let Session::Controlled { node, .. } = &was {
+        super::perms::session_ended(ctx, Perm::Kvm, node);
+    }
     was
 }
 
@@ -966,11 +964,18 @@ impl<P: Platform> ControlHandler<P> for KvmHandler {
                 } else {
                     let why = msg.opt("why").unwrap_or_else(|| "ended".into());
                     let why = match why.as_str() {
-                        "off" | "busy" | "ended" => why,
+                        "off" | "busy" | "ended" | "not_allowed" => why,
                         _ => "ended".into(),
                     };
                     end(ctx);
                     emit(ctx, idle_state(Some(&why), None, None));
+                    if why == "not_allowed" {
+                        ctx.sink.emit(CoreEvent::PermissionRefused {
+                            from: from.clone(),
+                            perm: Perm::Kvm.as_str().into(),
+                            why,
+                        });
+                    }
                 }
             }
             "kvm_input" => {
@@ -1100,14 +1105,17 @@ fn on_enter<P: Platform>(ctx: &NetCtx<P>, from: &str, msg: &ControlMsg) {
     let Some(edge) = Side::parse(&msg.str("edge")) else {
         return;
     };
-    if !allowed(ctx) {
-        refuse("off");
-        return;
-    }
     // Only the computer placed on that side here may bring the pointer in
     // across it (as the controller itself checks before it starts).
     if neighbor_at(ctx, edge).as_deref() != Some(from) {
         refuse("off");
+        return;
+    }
+    // Allowed for this computer (or once, still in use): else refused,
+    // and the owner here asked.
+    if !super::perms::allowed(ctx, Perm::Kvm, from) {
+        refuse("not_allowed");
+        super::perms::refuse(ctx, Perm::Kvm, from, false);
         return;
     }
     let pos = clamp_pos(msg.json("pos").as_u64().unwrap_or(u64::from(POS_SCALE / 2)));
