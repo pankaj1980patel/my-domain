@@ -154,8 +154,14 @@ object ScreenShare {
      *  with it, with "Allow control" on and the helper on. */
     fun onInput(ctx: Context, from: String, events: JSONArray?) {
         val svc = ScreenShareService.current ?: return
-        if (events == null || !svc.isViewer(from) || !svc.controlAllowed) return
-        val helper = PhoneHelper.instance ?: return
+        if (events == null || !svc.isViewer(from)) return
+        // Secure mode: say so here (once a while), with a way to turn it off.
+        val helper = PhoneHelper.instance
+        if (helper == null) {
+            SecureMode.blocked(ctx, Core.peerName(from))
+            return
+        }
+        if (!svc.controlAllowed) return
         val real = realSize(ctx)
         val (fw, fh) = svc.frameSize
         for (i in 0 until events.length()) {
@@ -413,9 +419,11 @@ class ScreenShareService : Service() {
     }
 
     fun setControl(on: Boolean) {
+        val was = controlAllowed
         // Taps need the helper; without it there's nothing to allow.
         controlAllowed = on && PhoneHelper.instance != null
         changed()
+        if (was && !controlAllowed) SecureMode.controlEnded(this, wasAllowed = true)
     }
 
     /** The notification, the device screen and the status follow. */
@@ -482,6 +490,7 @@ class ScreenShareService : Service() {
         if (wasCurrent) current = null
         offerOff(viewers.toList())
         viewers.clear()
+        if (controlAllowed) SecureMode.controlEnded(this, wasAllowed = true)
         controlAllowed = false
         screenOff?.let { runCatching { unregisterReceiver(it) } }
         screenOff = null

@@ -102,6 +102,8 @@ fun HomeScreen(
             item { SavingBatteryBanner(onBattery) }
             // A passphrase change made on another device missed here.
             item { KeyRotationPrompt() }
+            // The phone helper is on: banking apps may refuse to work (Secure mode).
+            item { SecureModeHomeCard() }
             if (devices.isEmpty()) {
                 item {
                     EmptyState(

@@ -156,6 +156,10 @@ private val SETTINGS_SECTIONS = listOf(
         listOf(R.string.nearby_switch, R.string.nearby_switch_hint),
     ),
     SettingsSection("helper", R.string.helper_title, listOf(R.string.helper_hint)),
+    SettingsSection(
+        "secure-mode", R.string.secure_title,
+        listOf(R.string.secure_hint, R.string.secure_auto_after, R.string.secure_instant_title),
+    ),
     SettingsSection("shizuku", R.string.shizuku_title, listOf(R.string.shizuku_hint)),
     SettingsSection("key", R.string.settings_device_key, listOf(R.string.settings_key_hint)),
     SettingsSection("appearance", R.string.settings_appearance, listOf(R.string.settings_appearance_hint)),

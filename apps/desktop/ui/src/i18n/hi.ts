@@ -527,6 +527,8 @@ export const hi: Partial<Messages> = {
   "control.radioPanelHint": "फ़ोन पर स्विच खोल देता है, ताकि आप उसे टैप कर सकें। सीधे बदलने के लिए फ़ोन की सुलभता (Accessibility) सेटिंग्स में my-domain चालू करें।",
   "control.keyLabel": "फ़ोन बटन",
   "control.keysOff": "{name} के बटन इस्तेमाल करने के लिए वहाँ सुलभता (Accessibility) सेटिंग्स में my-domain चालू करें।",
+  "control.secureMode": "सुरक्षित मोड चालू है — यहाँ से कंट्रोल करने के लिए {name} पर इसे बंद करें।",
+  "control.helperSecure": "फ़ोन हेल्पर: बंद (सुरक्षित मोड)",
   "control.radio.location": "लोकेशन",
   "locate.title": "यह कहाँ है",
   "locate.offOn": "{name} पर लोकेशन शेयर करना बंद है। वहाँ my-domain की सेटिंग्स में “मेरे कंप्यूटरों को देखने दें कि यह फ़ोन कहाँ है” चालू करें।",

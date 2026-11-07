@@ -1262,7 +1262,9 @@ function ScreenTile(props: { node: string }) {
             />
           </label>
           <p class="muted small">
-            {!st()?.helper
+            {st()?.secureMode
+              ? t("control.secureMode", { name: peerName(props.node) })
+              : !st()?.helper
               ? t("phoneScreen.controlNeedsHelper")
               : !st()?.screenControl
                 ? t("phoneScreen.controlNeedsAllow")
@@ -1862,7 +1864,11 @@ function WifiList(props: { node: string; st: DeviceStatus }) {
  *  phone (its Accessibility service presses them). */
 function KeyRow(props: { node: string; st: DeviceStatus }) {
   const off = () =>
-    props.st.helper === false ? t("control.keysOff", { name: peerName(props.node) }) : undefined;
+    props.st.secureMode
+      ? t("control.secureMode", { name: peerName(props.node) })
+      : props.st.helper === false
+        ? t("control.keysOff", { name: peerName(props.node) })
+        : undefined;
   const keys = [
     ["back", "control.key.back"],
     ["home", "control.key.home"],
@@ -1874,17 +1880,23 @@ function KeyRow(props: { node: string; st: DeviceStatus }) {
   const press = (key: string) => () =>
     runAction(props.node, "key", { key }).catch((e) => toast(friendlyError(e), "error"));
   return (
-    <div class="row" role="group" aria-label={t("control.keyLabel")}>
-      <For each={keys}>
-        {([key, label]) => (
-          <Gate reason={off()}>
-            <button class="btn btn-ghost btn-sm" disabled={!!off()} onClick={press(key)}>
-              {t(label)}
-            </button>
-          </Gate>
-        )}
-      </For>
-    </div>
+    <>
+      <div class="row" role="group" aria-label={t("control.keyLabel")}>
+        <For each={keys}>
+          {([key, label]) => (
+            <Gate reason={off()}>
+              <button class="btn btn-ghost btn-sm" disabled={!!off()} onClick={press(key)}>
+                {t(label)}
+              </button>
+            </Gate>
+          )}
+        </For>
+      </div>
+      {/* The phone helper is off on purpose (banking apps): say so. */}
+      <Show when={props.st.secureMode}>
+        <p class="muted small">{t("control.helperSecure")}</p>
+      </Show>
+    </>
   );
 }
 

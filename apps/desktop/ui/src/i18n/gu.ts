@@ -526,6 +526,8 @@ export const gu: Partial<Messages> = {
   "control.radioPanelHint": "તમે ટૅપ કરી શકો તે માટે ફોન પર સ્વિચ ખોલે છે. સીધું બદલવા માટે ફોનના ઍક્સેસિબિલિટી સેટિંગ્સમાં my-domain ચાલુ કરો.",
   "control.keyLabel": "ફોનની કી",
   "control.keysOff": "તેની કી વાપરવા માટે {name} પર ઍક્સેસિબિલિટી સેટિંગ્સમાં my-domain ચાલુ કરો.",
+  "control.secureMode": "સુરક્ષિત મોડ ચાલુ છે — અહીંથી નિયંત્રિત કરવા માટે {name} પર તેને બંધ કરો.",
+  "control.helperSecure": "ફોન હેલ્પર: બંધ (સુરક્ષિત મોડ)",
   "control.radio.location": "લોકેશન",
   "locate.title": "તે ક્યાં છે",
   "locate.offOn": "{name} પર લોકેશન શેરિંગ બંધ છે. ત્યાં my-domainના સેટિંગ્સમાં “મારા કમ્પ્યુટરને આ ફોન ક્યાં છે તે જોવા દો” ચાલુ કરો.",

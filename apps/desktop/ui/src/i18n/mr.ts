@@ -525,6 +525,8 @@ export const mr: Partial<Messages> = {
   "control.radioPanelHint": "तुम्ही टॅप करण्यासाठी फोनवर स्विच उघडते. थेट बदलण्यासाठी फोनच्या ॲक्सेसिबिलिटी सेटिंग्जमध्ये my-domain चालू करा.",
   "control.keyLabel": "फोनच्या की",
   "control.keysOff": "त्याच्या की वापरण्यासाठी {name} वरील ॲक्सेसिबिलिटी सेटिंग्जमध्ये my-domain चालू करा.",
+  "control.secureMode": "सुरक्षित मोड चालू आहे — येथून नियंत्रित करण्यासाठी {name} वर तो बंद करा.",
+  "control.helperSecure": "फोन मदतनीस: बंद (सुरक्षित मोड)",
   "control.radio.location": "लोकेशन",
   "locate.title": "ते कुठे आहे",
   "locate.offOn": "{name} वर लोकेशन शेअरिंग बंद आहे. तिथे my-domain च्या सेटिंग्जमध्ये “हा फोन कुठे आहे ते माझ्या संगणकांना पाहू द्या” चालू करा.",

@@ -90,6 +90,9 @@ export type DeviceStatus = {
   locationSharing: boolean;
   /** Its Accessibility helper is on (phone keys, no-tap radios). */
   helper?: boolean;
+  /** Its helper is off on purpose: Secure mode, so banking apps work
+   *  (`secure_mode`). Turned off on the phone only. */
+  secureMode?: boolean;
   /** A phone that can share its screen from the phone and take taps and
    *  swipes on it (`screen_send`). */
   screenSend?: boolean;
@@ -632,6 +635,7 @@ export async function startEvents(opts: { panel?: boolean } = {}) {
         wifiScanNeeds: typeof status?.wifi_scan_needs === "string" ? status.wifi_scan_needs : undefined,
         locationSharing: status?.location_sharing === true,
         helper: typeof status?.helper === "boolean" ? status.helper : undefined,
+        secureMode: status?.secure_mode === true,
         screenSend: status?.screen_send === true,
         screenControl: status?.screen_control === true,
         audioSource: status?.audio_source === true,

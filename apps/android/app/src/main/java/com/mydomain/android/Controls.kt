@@ -97,6 +97,9 @@ object Controls {
         LostMode.state(ctx, o)
         DndWatch.state(ctx, o)
         o.put("helper", PhoneHelper.instance != null)
+        // The helper is off on purpose (Secure mode, so banking apps work):
+        // computers say so instead of "turn it on in Accessibility".
+        if (SecureMode.isOn(ctx)) o.put("secure_mode", true)
         // It can share its screen from here (screen_offer) and take taps
         // and swipes on it; control is allowed now (the share's own switch).
         o.put("screen_send", true)
@@ -163,7 +166,8 @@ object Controls {
                 "search" -> DeviceActions.search(ctx, fromName, args.optString("app"), args.optString("query"))
                 "keep_awake" -> DeviceActions.keepAwake(ctx, args.optInt("minutes", 0))
                 "radio" -> args.has("on") && Radios.set(ctx, fromName, args.optString("what"), args.optBoolean("on"))
-                "key" -> PhoneHelper.instance?.press(args.optString("key")) == true
+                "key" -> PhoneHelper.instance?.press(args.optString("key"))
+                    ?: false.also { SecureMode.blocked(ctx, fromName) }
                 "wifi" -> WifiNetworks.run(ctx, args)
                 "locate" -> PhoneLocation.locate(ctx, fromName)
                 "screen_settings" -> ScreenSettings.run(ctx, args)

@@ -77,6 +77,12 @@
          (ScreenSettings); the user grants it on a system screen. -->
     <uses-permission android:name="android.permission.WRITE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Secure mode (SecureMode.kt): turn the phone helper back on at once.
+         Only you can grant it, once, from a computer over adb (the app's
+         settings show the command); without it, Accessibility settings
+         open for you instead. The app never asks for it. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
     <!-- Lost mode (LostMode.kt): its screen over the lock screen, from the
          background (a full-screen notification), and back after a restart. -->
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
@@ -384,6 +390,26 @@
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>
         </service>
+        <!-- Quick Settings tile (SecureMode.kt): Secure mode, the phone helper
+             off so banking apps work, and back on. -->
+        <service
+            android:name=".SecureModeTileService"
+            android:exported="true"
+            android:icon="@android:drawable/ic_lock_idle_lock"
+            android:label="@string/secure_title"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+        <!-- Secure mode's "Turn helper on" (a notification button). -->
+        <activity
+            android:name=".SecureModeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <!-- Quick Settings tile (QuickTiles.kt): open the app on a new note. -->
         <service
             android:name=".NewNoteTileService"

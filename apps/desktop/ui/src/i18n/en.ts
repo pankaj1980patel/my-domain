@@ -525,6 +525,8 @@ export const en = {
   "control.radioPanelHint": "Opens the switch on the phone for you to tap. Turn on my-domain in the phone's Accessibility settings to switch directly.",
   "control.keyLabel": "Phone keys",
   "control.keysOff": "Turn on my-domain in Accessibility settings on {name} to use its keys.",
+  "control.secureMode": "Secure mode is on — turn it off on {name} to control it from here.",
+  "control.helperSecure": "Phone helper: off (Secure mode)",
   "control.radio.location": "Location",
   "locate.title": "Where it is",
   "locate.offOn": "Location sharing is off on {name}. Turn on \u201cLet my computers see where this phone is\u201d in my-domain\u2019s Settings there.",

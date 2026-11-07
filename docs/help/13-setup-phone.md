@@ -1,6 +1,6 @@
 ---
 title: Set up this phone
-keywords: setup, set up, checklist, permission, permissions, allow, settings, notification access, accessibility, battery, unrestricted, autostart, auto-start, background, vivo, iqoo, xiaomi, oppo, realme, oneplus, samsung, shizuku, location, photos, microphone, full screen, nearby
+keywords: setup, set up, checklist, permission, permissions, allow, settings, notification access, accessibility, battery, unrestricted, autostart, auto-start, background, vivo, iqoo, xiaomi, oppo, realme, oneplus, samsung, shizuku, location, photos, microphone, full screen, nearby, secure mode, banking, irctc, helper off
 platforms: desktop, android
 ---
 On the phone, **Settings → Set up this phone** lists every optional permission and setting my-domain can use, what each is for, and whether it is on. Everything here is optional: turn on only what you want to use.
@@ -13,7 +13,7 @@ On the phone, **Settings → Set up this phone** lists every optional permission
 
 - **Notifications**: incoming files, rings, notifications shared from your computers, lost mode.
 - **Notification access**: this phone's notifications on your computers, verification codes, and what's playing.
-- **Accessibility helper**: lets your computers switch radios, press Back, Home and Lock, and control the screen while you share it.
+- **Accessibility helper**: lets your computers switch radios, press Back, Home and Lock, and control the screen while you share it. Banking and train-ticket apps may refuse to work while it's on: turn on **Secure mode** before you use them (see [Banking apps and Secure mode](help:privacy)).
 - **Unrestricted battery use**: keeps my-domain reachable in the background. Pick my-domain and choose "Don't optimise" (on newer phones: App battery usage → **Unrestricted**).
 - **Start by itself (phone maker's setting)**: shown on phones whose maker adds a battery manager of its own (vivo and iQOO, Xiaomi, OPPO, realme, OnePlus, Samsung, Huawei, Honor). It stops apps in the background whatever Android allows, so the phone stops answering your computers after a while. **Open the phone's page** goes to that maker's page (or, if this phone has none of the known ones, my-domain's page in Settings). Allow my-domain to start by itself and to run in the background there:
   - **vivo / iQOO**: allow **Background start-up** (Autostart) for my-domain, and under Battery → Background power consumption management choose **Allow high background power consumption**.
@@ -32,3 +32,21 @@ On the phone, **Settings → Set up this phone** lists every optional permission
 - **Widget** and **Quick Settings tiles**: see [Widget and Quick Settings tiles](help:widget-tiles).
 
 Some items say **Not needed on this Android version**: that version already allows it.
+
+## Secure mode: the helper off for banking apps
+
+Some banking and train-ticket apps (IRCTC, for one) refuse to open, or warn you, while **any** Accessibility service is on, my-domain's helper included. **Secure mode** switches the helper off for them:
+
+- **Settings → Secure mode** on the phone, the **Secure mode** Quick Settings tile (edit your tiles to add it), or **Turn on Secure mode** on the home screen while the helper is on. The tile shows **Helper off** while Secure mode is on.
+- While it's on, your computers can't tap or swipe on this screen, press its keys or tap radio switches for you (a switch opens on the phone for you to tap instead). They say **Secure mode is on**, and the phone shows a notification with **Turn helper on**.
+- **Turning it off**: Android lets no app turn an Accessibility service on by itself, so Accessibility settings open with a hint: turn on **my-domain** there.
+
+**Instant switching.** To turn the helper back on with one tap instead, run this once on a computer with the phone plugged in over USB (USB debugging on in Developer options):
+
+```
+adb shell pm grant com.mydomain.android android.permission.WRITE_SECURE_SETTINGS
+```
+
+Then **Check** in Settings → Secure mode says it's granted. Only you can grant this; my-domain never asks for it or grants it itself. Uninstalling the app removes it.
+
+**By itself.** Secure mode can also come on by itself: after 5, 15 or 60 minutes without remote control, and when a remote-control session ends. Both are off until you choose them.

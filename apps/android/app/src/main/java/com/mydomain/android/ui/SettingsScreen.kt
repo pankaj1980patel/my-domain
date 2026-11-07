@@ -345,7 +345,7 @@ fun HelperSettingsTile() {
             style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
         SoftButton(stringResource(R.string.helper_open), onClick = {
-            runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+            runCatching { ctx.startActivity(com.mydomain.android.SecureMode.settingsIntent(ctx)) }
         })
     }
 }
@@ -499,6 +499,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
         Box(Modifier.foundMark(focus == "remote-download")) { RemoteDownloadSettingsTile() }
         Box(Modifier.foundMark(focus == "helper")) { HelperSettingsTile() }
+        Box(Modifier.foundMark(focus == "secure-mode")) { SecureModeTile() }
         Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
 
         Tile(Modifier.foundMark(focus == "key"), title = stringResource(R.string.settings_device_key)) {

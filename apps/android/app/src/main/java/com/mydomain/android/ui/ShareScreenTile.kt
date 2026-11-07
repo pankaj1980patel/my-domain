@@ -12,6 +12,7 @@ import androidx.compose.ui.res.stringResource
 import com.mydomain.android.PhoneHelper
 import com.mydomain.android.R
 import com.mydomain.android.ScreenShare
+import com.mydomain.android.SecureMode
 
 /** Share this phone's screen with computer [node] ([name]): Android's own
  *  prompt first, every time; then the computer shows it. While it shares:
@@ -33,6 +34,10 @@ fun ShareScreenTile(node: String, name: String) {
             if (PhoneHelper.instance != null) {
                 SwitchRow(stringResource(R.string.screen_share_allow, name), ScreenShare.control) { ScreenShare.allowControl(it) }
                 Muted(stringResource(R.string.screen_share_allow_hint, name))
+            } else if (SecureMode.isOn(ctx)) {
+                // Off on purpose: one tap to let the computer control it.
+                Muted(stringResource(R.string.secure_share_needs_helper, name))
+                SoftButton(stringResource(R.string.secure_turn_helper_on), { SecureMode.turnOff(ctx) })
             } else {
                 Muted(stringResource(R.string.screen_share_needs_helper, name))
             }

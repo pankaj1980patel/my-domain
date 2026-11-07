@@ -1,6 +1,6 @@
 ---
 title: Widget and Quick Settings tiles
-keywords: widget, widgets, home screen, quick settings, tile, tiles, shortcut, shortcuts, app icon, long press, send clipboard, lock computer, ring, notes, notes widget, new note
+keywords: widget, widgets, home screen, quick settings, tile, tiles, shortcut, shortcuts, app icon, long press, send clipboard, lock computer, ring, notes, notes widget, new note, secure mode
 platforms: android
 ---
 ## Home-screen widget
@@ -23,7 +23,7 @@ It changes as soon as your notes do, here or on your other devices, and it still
 
 ## Quick Settings tiles
 
-Three tiles for Android's Quick Settings panel: **Send clipboard**, **Lock computer** and **New note** (opens my-domain straight into a new note).
+Four tiles for Android's Quick Settings panel: **Send clipboard**, **Lock computer**, **New note** (opens my-domain straight into a new note) and **Secure mode** (the phone helper off so banking apps work; see [Set up this phone](help:setup-phone)).
 
 To add them: swipe down twice from the top of the screen, tap the pencil (Edit), and drag the tiles in. Android doesn't tell apps whether you've added them, so the Set up this phone checklist can't show whether they're on.
 

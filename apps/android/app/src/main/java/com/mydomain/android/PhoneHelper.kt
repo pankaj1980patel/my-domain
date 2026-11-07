@@ -12,6 +12,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.mydomain.android.core.SecureModePlan
 
 /**
  * my-domain's Accessibility service: what lets your computers do on this
@@ -29,20 +30,69 @@ import android.view.accessibility.AccessibilityNodeInfo
  *    with, only while you allow control in the sharing notification.
  *
  * It reads screens only while doing one of these, and only Settings'.
+ *
+ * Secure mode ([SecureMode]) switches it off ([switchOff]) so banking apps
+ * work; it can do that by itself after some minutes with no remote control
+ * or when a remote-control session ends ([scheduleIdle]), if you asked.
  */
 class PhoneHelper : AccessibilityService() {
     private val main = Handler(Looper.getMainLooper())
 
+    /** Its last remote use (a tap, key or switch), or when it came on. */
+    @Volatile
+    private var lastUse = System.currentTimeMillis()
+    private val idleCheck = Runnable { checkIdle() }
+
     override fun onServiceConnected() {
         instance = this
         Log.i(TAG, "on")
-        Controls.onChange()
+        // Secure mode asked for while it was starting: off again.
+        if (SecureMode.onHelperConnected(this)) {
+            switchOff()
+            return
+        }
+        markUse()
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(idleCheck)
         if (instance === this) instance = null
-        Controls.onChange()
+        SecureMode.changed(this)
         super.onDestroy()
+    }
+
+    /** Secure mode: switch itself off (Android takes it out of the list of
+     *  enabled services; only you, or adb-granted settings access, can put
+     *  it back). */
+    fun switchOff() {
+        main.removeCallbacks(idleCheck)
+        Log.i(TAG, "off (Secure mode)")
+        runCatching { disableSelf() }.onFailure { Log.w(TAG, "disableSelf: $it") }
+    }
+
+    /** A computer used it just now: the idle timer starts again. */
+    fun markUse() {
+        lastUse = System.currentTimeMillis()
+        scheduleIdle()
+    }
+
+    /** (Re)arm "Secure mode after N minutes without remote control". */
+    fun scheduleIdle() {
+        main.removeCallbacks(idleCheck)
+        val next = SecureModePlan.nextCheckMs(SecureMode.idleMinutes(this), lastUse, System.currentTimeMillis(), controlling())
+            ?: return
+        main.postDelayed(idleCheck, next)
+    }
+
+    private fun controlling() = ScreenShareService.current?.controlAllowed == true
+
+    private fun checkIdle() {
+        if (SecureModePlan.idleDue(SecureMode.idleMinutes(this), lastUse, System.currentTimeMillis(), controlling())) {
+            Log.i(TAG, "idle: Secure mode on")
+            SecureMode.turnOn(this)
+        } else {
+            scheduleIdle()
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
@@ -51,6 +101,7 @@ class PhoneHelper : AccessibilityService() {
     /** Open [panel], tap the switch for radio [what] so it's [on], check,
      *  close. [done] gets whether it worked (on the main thread). */
     fun switchRadio(what: String, on: Boolean, panel: Intent, done: (Boolean) -> Unit) {
+        markUse()
         main.post {
             if (runCatching { startActivity(panel.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.isFailure) {
                 done(false)
@@ -91,6 +142,7 @@ class PhoneHelper : AccessibilityService() {
 
     /** Press a phone key; false if [key] is unknown or it didn't work. */
     fun press(key: String): Boolean {
+        markUse()
         val action = when (key) {
             "back" -> GLOBAL_ACTION_BACK
             "home" -> GLOBAL_ACTION_HOME
@@ -118,6 +170,7 @@ class PhoneHelper : AccessibilityService() {
             android.accessibilityservice.GestureDescription.Builder().addStroke(stroke).build()
         }.onFailure { Log.w(TAG, "touch: $it") }.getOrNull() ?: return false
         main.post {
+            markUse()
             if (!runCatching { dispatchGesture(gesture, null, null) }.getOrDefault(false)) Log.w(TAG, "touch not played")
         }
         return true
@@ -148,8 +201,10 @@ class PhoneHelper : AccessibilityService() {
         /** Turned on in Settings → Accessibility (it may still be starting). */
         fun enabled(ctx: Context): Boolean {
             val me = ComponentName(ctx, PhoneHelper::class.java).flattenToString()
-            val list = Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
-            return list.split(':').any { it.equals(me, ignoreCase = true) }
+            val list = runCatching {
+                Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            }.getOrNull()
+            return SecureModePlan.contains(list, me)
         }
 
         /** Words a radio's switch is labelled with (English; the panel's

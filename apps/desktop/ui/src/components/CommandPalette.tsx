@@ -215,7 +215,11 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
     }
   }
   if (has("key")) {
-    const off = st.helper === false ? t("control.keysOff", { name }) : undefined;
+    const off = st.secureMode
+      ? t("control.secureMode", { name })
+      : st.helper === false
+        ? t("control.keysOff", { name })
+        : undefined;
     const keys = [
       ["back", "control.key.back"],
       ["home", "control.key.home"],

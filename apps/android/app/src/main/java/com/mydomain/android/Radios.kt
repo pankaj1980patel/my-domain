@@ -127,6 +127,9 @@ object Radios {
             helper.switchRadio(what, on, intent) { ok -> Log.i(TAG, "$what by Accessibility: $ok") }
             return true
         }
+        // Secure mode keeps the helper off: the panel opens for you, and
+        // the phone says how to let your computers tap it again.
+        SecureMode.blocked(app, fromName)
         if (what == "bluetooth" && on && bluetoothPrompt(app)) return true
         val label = app.getString(
             when (what) {

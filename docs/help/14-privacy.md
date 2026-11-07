@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature, change passphrase, new passphrase, passphrase changed, rotate, rotation, key rotation, account, account password, change password, sign out, sign out all devices, signed out, sessions, signed-in sessions
+keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature, change passphrase, new passphrase, passphrase changed, rotate, rotation, key rotation, account, account password, change password, sign out, sign out all devices, signed out, sessions, signed-in sessions, secure mode, banking, banking apps, irctc, accessibility, helper
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -106,6 +106,12 @@ A password copied from a password manager is never synced to your other devices,
 ## Verification codes
 
 **Send verification codes to my computers** is off until you turn it on on the phone. Then only four things go, end-to-end encrypted like every message: the code, the app it came from, who it's from (when the text says, like "Google") and when it expires. Never the notification's text. They go only to the computers you chose, only over a live link (a code waits at most 2 minutes for one), and the computer forgets the code after 5 minutes. Codes are never logged, never kept in Activity, a history or search, and a copied one is marked private and cleared from the clipboard after 90 seconds. The phone reads them from notifications only: never from your SMS. Private mode for the notification itself works as before. See [Phone notifications on the computer](help:notifications).
+
+## Banking apps and Secure mode
+
+my-domain's phone helper is an Accessibility service: it's what lets a computer tap on the phone's screen while you share it, press its keys and tap radio switches. It reads the screen only while doing one of those, and only Settings'. Banking and ticket apps can't tell which Accessibility service is on, so many refuse to work while any is.
+
+**Secure mode** switches the helper off, so they work. Your computers then can't control the phone at all until you turn it off again on the phone itself; a computer can't turn it off for you. Computers show **Phone helper: off (Secure mode)** on the phone's page. See [Set up this phone](help:setup-phone) for the switch, the tile, the automatic options and instant switching.
 
 ## What stays on each device
 

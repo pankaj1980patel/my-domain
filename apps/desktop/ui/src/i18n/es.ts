@@ -525,6 +525,8 @@ export const es: Partial<Messages> = {
   "control.radioPanelHint": "Abre el interruptor en el teléfono para que lo toques. Activa my-domain en los ajustes de Accesibilidad del teléfono para cambiarlo directamente.",
   "control.keyLabel": "Botones del teléfono",
   "control.keysOff": "Activa my-domain en los ajustes de Accesibilidad de {name} para usar sus botones.",
+  "control.secureMode": "El modo seguro está activado — desactívalo en {name} para controlarlo desde aquí.",
+  "control.helperSecure": "Asistente del teléfono: desactivado (modo seguro)",
   "control.radio.location": "Ubicación",
   "locate.title": "Dónde está",
   "locate.offOn": "Compartir ubicación está desactivado en {name}. Activa “Permitir que mis ordenadores vean dónde está este teléfono” en los Ajustes de my-domain allí.",
