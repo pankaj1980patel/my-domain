@@ -1,4 +1,103 @@
 {
-  "screens": [],
+  "screens": [
+    {
+      "file": "002-home-dark.webp",
+      "title": "Home",
+      "alt": "The my-domain Android home screen: greeting, a computer with its battery and storage, quick actions and device health, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "005-devices-dark.webp",
+      "title": "Devices",
+      "alt": "The list of your devices on the phone, with which are online, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "009-device-mac-dark.webp",
+      "title": "A computer’s page",
+      "alt": "A Mac’s page on the phone: status, chat, files and device tools, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "011-device-mac-messages-dark.webp",
+      "title": "Messages",
+      "alt": "Chat with a computer from the phone, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "013-device-mac-files-dark.webp",
+      "title": "Files",
+      "alt": "Send files and folders, browse the computer’s files and share the clipboard, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "016-device-mac-control-dark.webp",
+      "title": "Remote control",
+      "alt": "Ring or find the computer, change its volume and keep it awake, from the phone, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "019-device-mac-media-dark.webp",
+      "title": "Media",
+      "alt": "What’s playing on the computer, with controls, and phone audio sent to it, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "008-more-dark.webp",
+      "title": "More",
+      "alt": "The More menu: files, messages, notes, timers, read later, automations, search and settings.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "033-notes-dark.webp",
+      "title": "Notes",
+      "alt": "Shared notes on the phone, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "034-timers-dark.webp",
+      "title": "Timers",
+      "alt": "A shared timer running on the phone, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "039-health-dark.webp",
+      "title": "Health check",
+      "alt": "The health check: each line says what my-domain needs and how to fix it, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "060-settings-appearance-dark.webp",
+      "title": "Appearance",
+      "alt": "The five themes, from Cosmic Blue to Cosmic Light.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "067-home-light.webp",
+      "title": "Home, light theme",
+      "alt": "The home screen in the Cosmic Light theme, with sample data.",
+      "width": 1080,
+      "height": 2400
+    },
+    {
+      "file": "001-sign-in-dark.webp",
+      "title": "Sign in",
+      "alt": "The sign-in screen with the galaxy logo and the tagline Your devices. Your domain.",
+      "width": 1080,
+      "height": 2400
+    }
+  ],
   "videos": []
 }
