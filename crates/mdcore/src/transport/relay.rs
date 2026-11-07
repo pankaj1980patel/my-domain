@@ -195,7 +195,14 @@ fn connect_relay<P: Platform>(ctx: &NetCtx<P>, url: &str, token: &str) -> Result
         Ok(WsMessage::Text(t)) if parse(&t)["ok"] == true => {
             parse(&t)["bin"].as_u64() >= Some(u64::from(BIN_VERSION))
         }
-        Ok(WsMessage::Text(t)) => return Err(format!("relay refused: {t}")),
+        Ok(WsMessage::Text(t)) => {
+            // The session was signed out (password changed, "Sign out all
+            // devices" elsewhere): the apps ask to sign in again.
+            if parse(&t)["error"] == "unauthorized" {
+                crate::registry::token_refused(token);
+            }
+            return Err(format!("relay refused: {t}"));
+        }
         other => return Err(format!("relay auth failed: {other:?}")),
     };
     let _ = raw.set_read_timeout(Some(Duration::from_millis(100)));
@@ -487,9 +494,15 @@ fn relay_loop<P: Platform>(
     my_id: u64,
 ) {
     let mut last_ping = Instant::now();
+    // The server closed us because the session was signed out.
+    let mut signed_out = false;
     loop {
         match ws.read() {
-            Ok(WsMessage::Text(t)) => on_server_frame(&ctx, &parse(&t)),
+            Ok(WsMessage::Text(t)) => {
+                let v = parse(&t);
+                signed_out |= v["error"] == "signed out";
+                on_server_frame(&ctx, &v)
+            }
             // A media record from a device of ours (the server says which).
             // It opens only with our key; one that doesn't is dropped.
             Ok(WsMessage::Binary(b)) => {
@@ -554,6 +567,36 @@ fn relay_loop<P: Platform>(
             drop_live(&ctx, &peer);
         }
     }
+    if signed_out {
+        reconnect_after_sign_out(ctx);
+    }
+}
+
+/// The server closed the relay socket because its session was signed out.
+/// If this device changed the password itself it has a new token by now,
+/// and the socket comes back; otherwise the server refuses the token and
+/// the apps ask to sign in again (`registry::token_refused`).
+fn reconnect_after_sign_out<P: Platform>(ctx: NetCtx<P>) {
+    std::thread::spawn(move || {
+        // Give a password change made here time to adopt its new token.
+        if !ctx.shutdown.wait(Duration::from_secs(2)) {
+            return;
+        }
+        let Some(token) = ctx.token.lock().clone() else {
+            return;
+        };
+        let url = match &ctx.config.relay_url {
+            Some(u) => Some(u.clone()),
+            None => ctx
+                .server_url
+                .lock()
+                .clone()
+                .and_then(|s| relay_url_for(&s).ok()),
+        };
+        if let Some(url) = url {
+            let _ = ensure_relay(&ctx, &url, &token);
+        }
+    });
 }
 
 fn on_server_frame<P: Platform>(ctx: &NetCtx<P>, v: &Value) {

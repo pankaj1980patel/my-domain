@@ -888,6 +888,26 @@ export const commands = {
 	/**  How strong a passphrase being typed is: 0 (too short) to 4. */
 	passphraseStrength: (passphrase: string) => __TAURI_INVOKE<number>("passphrase_strength", { passphrase }),
 	/**
+	 *  Change the account password. This computer gets a new session; every
+	 *  other device is signed out by the server.
+	 */
+	changeAccountPassword: (current: string, newPassword: string) => typedError<null, string>(__TAURI_INVOKE("change_account_password", { current, newPassword })),
+	/**
+	 *  Sign out every device of the account. With the password this computer
+	 *  signs straight back in (true); without it, it's signed out too.
+	 */
+	signOutAllDevices: (password: string) => typedError<boolean, string>(__TAURI_INVOKE("sign_out_all_devices", { password })),
+	/**  The account's signed-in sessions, this computer's first. */
+	accountSessions: () => typedError<AccountSession_Serialize[], string>(__TAURI_INVOKE("account_sessions")),
+	/**  Sign out one session from the list. */
+	signOutSession: (id: string) => typedError<null, string>(__TAURI_INVOKE("sign_out_session", { id })),
+	/**  The server signed this computer out and it hasn't signed in again. */
+	signedOutElsewhere: () => __TAURI_INVOKE<boolean>("signed_out_elsewhere"),
+	/**  Sign in again after that, with the account password only. */
+	signInAgain: (password: string) => typedError<null, string>(__TAURI_INVOKE("sign_in_again", { password })),
+	/**  The change-password form's problem (a message key), if any. */
+	accountPasswordProblem: (current: string, newPassword: string, repeat: string) => __TAURI_INVOKE<string | null>("account_password_problem", { current, newPassword, repeat }),
+	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
 	 *  closed.
@@ -929,6 +949,35 @@ export const commands = {
 };
 
 /* Types */
+/**  One signed-in session of the account (`GET /auth/sessions`). */
+export type AccountSession = AccountSession_Serialize | AccountSession_Deserialize;
+
+/**  One signed-in session of the account (`GET /auth/sessions`). */
+export type AccountSession_Deserialize = {
+	id: string,
+	/**  The device that signed in with it; empty until it registered. */
+	name?: string,
+	node_id?: string,
+	/**  Seconds since the epoch. */
+	created?: number | null,
+	last_seen?: number | null,
+	/**  This device's own session. */
+	current?: boolean,
+};
+
+/**  One signed-in session of the account (`GET /auth/sessions`). */
+export type AccountSession_Serialize = {
+	id: string,
+	/**  The device that signed in with it; empty until it registered. */
+	name: string,
+	node_id: string,
+	/**  Seconds since the epoch. */
+	created: number | null,
+	last_seen: number | null,
+	/**  This device's own session. */
+	current: boolean,
+};
+
 /**
  *  One row of the timeline. The window words it from `action`:
  * 

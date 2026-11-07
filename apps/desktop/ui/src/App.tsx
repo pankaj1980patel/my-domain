@@ -3,7 +3,9 @@
 // is hidden.
 
 import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
-import { dismissRing, onOpenDevice, onQuickOpen, peerName, resume, state } from "./lib/core";
+import { dismissRing, onOpenDevice, onQuickOpen, peerName, resume, signOut, state } from "./lib/core";
+import { listen } from "@tauri-apps/api/event";
+import { SignedOutPrompt } from "./components/Account";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { toast, Toasts } from "./components/ui";
@@ -69,6 +71,22 @@ export default function App() {
     unlockAudio();
     resume().then(setSignedIn, () => setSignedIn(false));
   });
+  // The server signed this computer out (password changed, or signed out
+  // from another device): ask for the password, now or at the next start.
+  const [signedOut, setSignedOut] = createSignal<{ username: string } | null>(null);
+  onMount(() => {
+    commands
+      .signedOutElsewhere()
+      .then(async (yes) => yes && setSignedOut({ username: (await commands.getSavedSession()).username }))
+      .catch(() => {});
+    const off = listen<{ username: string }>("signed-out", (e) => setSignedOut({ username: e.payload.username }));
+    onCleanup(() => off.then((f) => f()).catch(() => {}));
+  });
+  const afterSignInAgain = () => {
+    setSignedOut(null);
+    if (signedIn()) return;
+    resume().then((yes) => (yes ? signedInNow() : setSignedIn(false)), () => setSignedIn(false));
+  };
   const [view, setView] = createSignal<View>({ name: "home" });
   let main: HTMLElement | undefined;
   const go = (v: View) => setView(v);
@@ -462,6 +480,15 @@ export default function App() {
         <NoteReminders onOpen={(id) => openNote(id)} />
         <TimerAlarm onOpen={() => go({ name: "timers" })} />
         </Show>
+      </Show>
+      <Show when={signedOut()}>
+        {(who) => (
+          <SignedOutPrompt
+            username={who().username}
+            onDone={afterSignInAgain}
+            onOther={() => void signOut()}
+          />
+        )}
       </Show>
       <Show when={state.ringing}>{(r) => <RingBanner from={r().from} />}</Show>
       <Toasts />

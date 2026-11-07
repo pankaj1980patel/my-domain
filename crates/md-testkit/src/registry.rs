@@ -16,6 +16,10 @@
 //!   GET  /devices?exclude=<node_id> (Bearer) -> the user's other devices
 //!   POST /devices/state     (Bearer)   {node_id, ws_open?, inbound_blocked?, ...}
 //!   POST /devices/probe     (Bearer)   -> {tcp_reachable, ws_reachable, udp_reachable}
+//!   POST /auth/password (Bearer)       {password,new_password} -> new token
+//!                                      (403 wrong password); other tokens die
+//!   POST /auth/logout_all (Bearer)     every token of the user dies
+//!   GET  /auth/sessions (Bearer)       one entry per live token
 //!   GET  /health                       -> 200
 //!   POST /signal            (Bearer)   recorded (delivery is SignalHub's job)
 //!   POST /pair/create (Bearer), POST /pair/claim, GET /pair/status (Bearer),
@@ -37,9 +41,13 @@ fn session_token(username: &str) -> String {
         .map(|d| d.as_secs())
         .unwrap_or(0)
         + 7 * 24 * 3600;
+    // Unique, like real tokens (their session ids): two registries in one
+    // test process never hand out the same token.
+    static SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let sid = SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let header = URL_SAFE_NO_PAD.encode(r#"{"alg":"HS256","typ":"JWT"}"#);
     let claims = URL_SAFE_NO_PAD
-        .encode(json!({"sub": username, "username": username, "exp": exp}).to_string());
+        .encode(json!({"sub": username, "username": username, "exp": exp, "sid": sid}).to_string());
     format!("{header}.{claims}.fake-signature")
 }
 
@@ -156,6 +164,16 @@ impl FakeRegistry {
         self.state.lock().unwrap().signals.clone()
     }
 
+    /// Sign out every session of `username` (as a password change or "Sign
+    /// out all devices" on another device would): their tokens get 401.
+    pub fn sign_out_everywhere(&self, username: &str) {
+        self.state
+            .lock()
+            .unwrap()
+            .tokens
+            .retain(|_, user| user != username);
+    }
+
     /// Behave like a server from before `/pair/*` (404).
     pub fn without_pairing(&self) {
         self.state.lock().unwrap().no_pairing = true;
@@ -240,6 +258,56 @@ fn handle(state: &Arc<Mutex<State>>, mut req: tiny_http::Request) {
             st.tokens.insert(token.clone(), u.clone());
             drop(st);
             respond(req, 200, json!({"token": token, "username": u}))
+        }
+        ("POST", "/auth/password")
+        | ("POST", "/auth/logout_all")
+        | ("GET", "/auth/sessions")
+        | ("POST", "/auth/sessions/revoke") => {
+            let Some(u) = user else {
+                drop(st);
+                return respond(req, 401, json!({"error": "unauthorized"}));
+            };
+            match path.as_str() {
+                "/auth/password" => {
+                    if st.users.get(&u) != Some(&s("password")) {
+                        drop(st);
+                        return respond(
+                            req,
+                            403,
+                            json!({"error": "current password is incorrect"}),
+                        );
+                    }
+                    st.users.insert(u.clone(), s("new_password"));
+                    st.tokens.retain(|_, user| *user != u);
+                    let token = session_token(&u);
+                    st.tokens.insert(token.clone(), u.clone());
+                    drop(st);
+                    respond(req, 200, json!({"token": token, "username": u}))
+                }
+                "/auth/logout_all" => {
+                    st.tokens.retain(|_, user| *user != u);
+                    drop(st);
+                    respond(req, 204, Value::Null)
+                }
+                "/auth/sessions" => {
+                    // One session per token (the fake shares a token per user).
+                    let list: Vec<Value> = st
+                        .tokens
+                        .iter()
+                        .filter(|(_, user)| **user == u)
+                        .map(|(t, _)| {
+                            json!({"id": t.len().to_string(), "name": "", "node_id": "",
+                                   "created": 1.0, "last_seen": 2.0, "current": *t == token})
+                        })
+                        .collect();
+                    drop(st);
+                    respond(req, 200, json!(list))
+                }
+                _ => {
+                    drop(st);
+                    respond(req, 404, json!({"error": "no such session"}))
+                }
+            }
         }
         ("POST", "/auth/login") | ("POST", "/auth/verify") => {
             let (u, p) = (s("username").to_lowercase(), s("password"));

@@ -41,6 +41,7 @@ import { OwnFingerprint } from "../components/VerifyDevice";
 import { RemovedDevicesSetting } from "../components/RemovedDevices";
 import { PermissionsSummary } from "../components/PeerPermissions";
 import { KeyRotationSetting } from "../components/KeyRotation";
+import { AccountSecurity } from "../components/Account";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -157,6 +158,7 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
             {t("settings.signOut")}
           </button>
         </div>
+        <AccountSecurity />
       </article>
 
       <RemovedDevicesSetting />

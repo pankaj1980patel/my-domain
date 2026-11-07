@@ -69,6 +69,8 @@ fn api(state: AppState) -> Router {
         .route("/auth/logout", post(auth::logout))
         .route("/auth/logout_all", post(auth::logout_all))
         .route("/auth/password", post(auth::change_password))
+        .route("/auth/sessions", get(auth::sessions))
+        .route("/auth/sessions/revoke", post(auth::revoke_session))
         .layer(DefaultBodyLimit::max(MAX_AUTH_BODY));
     let admin = Router::new()
         .route("/admin/limits", get(admin::limits))
@@ -603,6 +605,59 @@ mod api_tests {
         )
         .await;
         assert_eq!(r.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn sessions_are_listed_and_one_can_be_signed_out() {
+        let base = start(signal::PushConfig::default()).await;
+        let ip = "203.0.113.21";
+        let (a, b) = (
+            issue_token(SECRET, "id-ann", "ann").unwrap(),
+            issue_token(SECRET, "id-ann", "ann").unwrap(),
+        );
+        assert_eq!(
+            send(&base, "/auth/sessions", None, ip, None).await.status(),
+            401
+        );
+        // Each session is listed once it has been used.
+        let r = send(&base, "/auth/sessions", Some(&b), ip, None).await;
+        assert_eq!(r.status(), 200);
+        let r = send(&base, "/auth/sessions", Some(&a), ip, None).await;
+        assert_eq!(r.status(), 200);
+        let list: Vec<Value> = r.json().await.unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["current"], true);
+        assert_eq!(list[1]["current"], false);
+        for k in ["id", "name", "node_id", "created", "last_seen"] {
+            assert!(list[1].get(k).is_some(), "{k}");
+        }
+        let b_id = list[1]["id"].as_str().unwrap().to_string();
+
+        let revoke = |id: Value| {
+            send(
+                &base,
+                "/auth/sessions/revoke",
+                Some(&a),
+                ip,
+                Some(json!({ "id": id })),
+            )
+        };
+        assert_eq!(revoke(json!("not-a-session")).await.status(), 404);
+        assert_eq!(revoke(json!("")).await.status(), 400);
+        let r = revoke(json!(b_id)).await;
+        assert_eq!(r.status(), 200);
+        let v: Value = r.json().await.unwrap();
+        assert_eq!(v["signed_out_all"], false);
+        assert_eq!(
+            send(&base, "/auth/sessions", Some(&b), ip, None)
+                .await
+                .status(),
+            401,
+            "the signed-out session is refused"
+        );
+        let r = send(&base, "/auth/sessions", Some(&a), ip, None).await;
+        let list: Vec<Value> = r.json().await.unwrap();
+        assert_eq!(list.len(), 1, "and gone from the list");
     }
 
     #[tokio::test]

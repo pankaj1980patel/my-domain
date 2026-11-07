@@ -425,6 +425,8 @@ object Core {
         Notes.refresh()
         Timers.refresh()
         ReadLater.refresh()
+        // Signed out by the server: "Sign in again" instead of the app.
+        Account.refreshSignedOut()
     }
 
     /** Re-read every live link's quality (called every few seconds while

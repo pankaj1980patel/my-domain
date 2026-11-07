@@ -140,6 +140,7 @@ export function KeyRotationSetting() {
     <article class="tile" id="settings-key-rotation">
       <h2>{t("keyRotation.title")}</h2>
       <p class="muted small">{t("keyRotation.hint")}</p>
+      <p class="muted small">{t("account.passphraseHint")}</p>
       <Show when={rotation()}>
         {(r) => (
           <Switch>

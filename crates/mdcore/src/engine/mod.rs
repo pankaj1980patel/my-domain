@@ -28,6 +28,7 @@ use crate::registry::{
 use crate::signal::{Signal, Signaler};
 use crate::transport::{self, P2pConns};
 
+mod account;
 mod background;
 mod ble;
 pub use ble::BleSender;
@@ -291,6 +292,9 @@ pub struct Engine<P: Platform> {
     token: Arc<Mutex<Option<String>>>,
     username: Arc<Mutex<Option<String>>>,
     disco_send: Arc<UdpSocket>,
+    /// This device is changing its own session (password change, sign out
+    /// all): the server refusing the old token then is no sign-out.
+    auth_busy: Arc<AtomicBool>,
     /// Owns the QUIC runtime; dropped (after `Drop::drop` runs) with the engine.
     _quic: transport::quic::QuicNode,
 }
@@ -472,8 +476,11 @@ impl<P: Platform> Engine<P> {
             ctx,
             username: Arc::new(Mutex::new(None)),
             disco_send,
+            auth_busy: Arc::default(),
             _quic: quic,
         };
+        // Signed out by the server (password changed elsewhere...): say so.
+        engine.watch_sign_out();
         // Signed in last time: carry on, and re-register in the background
         // (the FCM token, our addresses) so a push can reach us again.
         if engine.restore_session() {

@@ -317,6 +317,42 @@ pub async fn logout_all(State(s): State<AppState>, user: AuthUser) -> Result<Sta
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// `GET /auth/sessions`: the account's signed-in sessions (this one first,
+/// marked `current`), each with the device that registered with it.
+pub async fn sessions(
+    State(s): State<AppState>,
+    user: AuthUser,
+) -> Result<Json<Vec<crate::session::SessionOut>>, AppError> {
+    s.sessions.list(&user).await.map(Json)
+}
+
+#[derive(Deserialize)]
+pub struct RevokeReq {
+    pub id: String,
+}
+
+/// `POST /auth/sessions/revoke {"id"}`: sign out one of the account's
+/// sessions (its relay socket is closed). 404 if the account has no such
+/// session. `signed_out_all`: the account's revoked list was full, so every
+/// session (this one too) was signed out instead.
+pub async fn revoke_session(
+    State(s): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<RevokeReq>,
+) -> Result<Json<serde_json::Value>, AppError> {
+    if req.id.is_empty() || req.id.len() > 64 {
+        return Err(AppError::BadRequest("id must be a session id".into()));
+    }
+    let all = s
+        .sessions
+        .revoke_session(&user, &req.id)
+        .await?
+        .ok_or_else(|| AppError::NotFound("no such session".into()))?;
+    s.relay
+        .sign_out(&user.user_id, (!all).then_some(req.id.as_str()));
+    Ok(Json(serde_json::json!({ "signed_out_all": all })))
+}
+
 #[derive(Deserialize)]
 pub struct PasswordReq {
     pub password: String,
@@ -325,6 +361,7 @@ pub struct PasswordReq {
 
 /// `POST /auth/password` (signed in) `{"password", "new_password"}`: change
 /// the password. Every session is signed out; the caller gets a new token.
+/// A wrong current password is 403 (401 means this session is signed out).
 pub async fn change_password(
     State(s): State<AppState>,
     user: AuthUser,
@@ -335,8 +372,9 @@ pub async fn change_password(
             "new_password must be 6-256 characters".into(),
         ));
     }
+    let wrong = || AppError::Forbidden("current password is incorrect".into());
     if too_long(&user.username, &req.password) {
-        return Err(AppError::Unauthorized);
+        return Err(wrong());
     }
     let oid = ObjectId::parse_str(&user.user_id).map_err(|_| AppError::Unauthorized)?;
     let users = s.db.collection::<User>(crate::models::USERS_COLL);
@@ -346,13 +384,17 @@ pub async fn change_password(
         &req.password,
         found.map(|u| u.password_hash),
     )
-    .await?;
+    .await
+    .map_err(|e| match e {
+        AppError::Unauthorized => wrong(),
+        e => e,
+    })?;
     let password_hash = hash_password_blocking(&req.new_password).await?;
     users
         .update_one(
             doc! { "_id": oid },
             doc! {
-                "$set": { "password_hash": password_hash, "revoked": [] },
+                "$set": { "password_hash": password_hash, "revoked": [], "sessions": [] },
                 "$inc": { "token_ver": 1_i64 },
             },
         )

@@ -242,6 +242,8 @@ pub async fn register(
     Json(req): Json<DeviceReq>,
 ) -> Result<Json<serde_json::Value>, AppError> {
     validate(&req)?;
+    // The account's session list names the device signed in with it.
+    s.sessions.note_device(&user, &req.node_id, &req.name).await;
     let ip = clean_ip(req.ip.as_deref(), client_ip(addr, &headers));
     let coll = s.db.collection::<Device>(crate::models::DEVICES_COLL);
     // A new device must fit under the account's cap; the same device again

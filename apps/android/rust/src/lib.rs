@@ -815,6 +815,46 @@ impl MdEngine {
         self.inner.logout();
     }
 
+    // --- account security (mdcore `engine::account`) ---
+
+    /// The server signed this phone out (password changed or "Sign out all
+    /// devices" elsewhere) and it hasn't signed in again.
+    pub fn signed_out_elsewhere(&self) -> bool {
+        self.inner.signed_out_elsewhere()
+    }
+
+    /// Sign in again after that, with the account password only (the key
+    /// is still here; `NoKey` when it isn't: sign in fully).
+    pub fn sign_in_again(&self, password: String) -> MdResult<()> {
+        Ok(self.inner.sign_in_again(&password)?)
+    }
+
+    /// Change the account password: this phone stays signed in, every other
+    /// device is signed out by the server.
+    pub fn change_account_password(&self, current: String, new_password: String) -> MdResult<()> {
+        Ok(self
+            .inner
+            .change_account_password(&current, &new_password)?)
+    }
+
+    /// Sign out every device of the account; with the password this phone
+    /// signs straight back in (true), without it it's signed out (false).
+    pub fn sign_out_all_devices(&self, password: String) -> MdResult<bool> {
+        Ok(self.inner.sign_out_all_devices(&password)?)
+    }
+
+    /// The account's signed-in sessions as a JSON array
+    /// (`[{id,name,node_id,created,last_seen,current}]`, this phone first).
+    pub fn account_sessions(&self) -> MdResult<String> {
+        let list = self.inner.account_sessions()?;
+        serde_json::to_string(&list).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// Sign out one session from the list.
+    pub fn sign_out_session(&self, id: String) -> MdResult<()> {
+        Ok(self.inner.sign_out_session(&id)?)
+    }
+
     // --- adding a device by QR code / 6-digit code (mdcore `join`) ---
 
     /// Start adding a device: a fresh single-use invite, valid 5 minutes.

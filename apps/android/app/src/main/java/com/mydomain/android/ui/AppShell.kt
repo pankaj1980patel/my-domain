@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
+import com.mydomain.android.core.Account
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.Findable
 import com.mydomain.android.core.FoundKind
@@ -89,8 +90,13 @@ fun App(prefs: SharedPreferences) {
 
     CompositionLocalProvider(LocalToast provides toast, LocalUndo provides undo) {
         if (!Core.ready) {
+            // Signed out by the server (password changed elsewhere...): the
+            // password alone signs back in; else the full sign-in.
+            val user = Core.session?.username ?: prefs.getString("user", null)
             Scaffold(snackbarHost = { SnackbarHost(snack) }, containerColor = Color.Transparent) { inner ->
-                Box(Modifier.padding(inner)) { SignInScreen(prefs) }
+                Box(Modifier.padding(inner)) {
+                    if (Account.signedOut && !user.isNullOrBlank()) SignedOutScreen(user) else SignInScreen(prefs)
+                }
             }
         } else {
             Main(prefs, snack)

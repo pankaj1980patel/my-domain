@@ -28,7 +28,9 @@ cargo run                # listens on http://0.0.0.0:8080 (PORT to override)
 | POST | `/auth/verify` | — | `{username,password}` → 200/401 (confirm password for a settings change) |
 | POST | `/auth/logout` | JWT | → 204; this session's token stops working (its relay socket is closed) |
 | POST | `/auth/logout_all` | JWT | → 204; every session of the account stops working |
-| POST | `/auth/password` | JWT | `{password,new_password}` → `{token,username}`; signs out every session, the caller gets a new token |
+| POST | `/auth/password` | JWT | `{password,new_password}` → `{token,username}`; signs out every session, the caller gets a new token; a wrong current password is 403 (401 = this session is signed out) |
+| GET  | `/auth/sessions` | JWT | → `[{id,name,node_id,created,last_seen,current}]`, this session first (times in seconds since the epoch) |
+| POST | `/auth/sessions/revoke` | JWT | `{id}` → `{signed_out_all}`; signs out that session (404 if the account has none such) |
 | GET  | `/admin/limits` | `ADMIN_TOKEN` | limiter counts only (no addresses, names or ids); 404 when `ADMIN_TOKEN` is unset |
 | POST | `/admin/invites` | `ADMIN_TOKEN` | `{uses?:1, days?:7}` → `{code}` (shown once; only a hash is stored) |
 | POST | `/devices/register` | JWT | `{node_id,name,ip?,tcp_port,udp_port}` — upsert (also the network-change update) |
@@ -67,6 +69,12 @@ have no session id and count as version 0: they keep working until the account's
 `logout_all`/password change, and `/auth/logout` with one signs out every session. An account keeps
 at most 64 revoked session ids (each until its token expires); a logout past that signs out every
 session instead.
+
+The account record also lists its sessions (`sessions`: id, first and last seen, expiry, and the device
+that registered with it) for `GET /auth/sessions`. A session is added the first time its token is used;
+"last seen" is written at most every 10 minutes (and when a new device registers with it). At most 50
+are listed, the least recently seen dropped first (that doesn't sign it out; `logout_all` still does);
+expired ones are dropped as new ones come, and a logout or `logout_all` removes them.
 
 ## Limits
 

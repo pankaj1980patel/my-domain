@@ -65,6 +65,8 @@ fun friendlyError(e: Throwable): String {
     val m = raw.lowercase()
     return when {
         "update the server to use qr join" in m -> str(R.string.error_update_server)
+        "update the server to list sessions" in m -> str(R.string.error_update_server_sessions)
+        "incorrect password" in m -> str(R.string.error_wrong_password)
         "expired or was already used" in m -> str(R.string.error_join_code_used)
         "too many tries" in m -> str(R.string.error_too_many_tries)
         "join code is damaged" in m || "isn't a my-domain join code" in m -> str(R.string.error_bad_join_link)

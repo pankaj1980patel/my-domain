@@ -5,8 +5,8 @@ use super::*;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 
 /// Secret-store keys (see `Platform::secret_get`).
-const SECRET_TOKEN: &str = "session_token";
-const SECRET_KEY: &str = "device_key";
+pub(super) const SECRET_TOKEN: &str = "session_token";
+pub(super) const SECRET_KEY: &str = "device_key";
 
 /// A restored token must stay valid at least this long, or we ask the user
 /// to sign in again rather than fail later.
@@ -32,7 +32,7 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-fn unhex32(s: &str) -> Option<[u8; 32]> {
+pub(super) fn unhex32(s: &str) -> Option<[u8; 32]> {
     let mut out = [0u8; 32];
     if s.len() != 64 {
         return None;
@@ -102,6 +102,7 @@ impl<P: Platform> Engine<P> {
         *self.token.lock() = Some(token);
         self.ctx.platform.kv_set("server_url", &url);
         self.ctx.platform.kv_set("username", &username);
+        self.ctx.platform.kv_set(super::account::SIGNED_OUT_KEY, "");
         *self.username.lock() = Some(username);
     }
 
@@ -191,6 +192,7 @@ impl<P: Platform> Engine<P> {
             });
         }
         *self.ctx.key.lock() = None;
+        self.ctx.platform.kv_set(super::account::SIGNED_OUT_KEY, "");
         self.ctx.platform.secret_set(SECRET_TOKEN, None);
         self.ctx.platform.secret_set(SECRET_KEY, None);
         crate::features::rekey::reset(&self.ctx);

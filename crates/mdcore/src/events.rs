@@ -464,6 +464,12 @@ pub enum CoreEvent {
     /// passphrase. `state` as in `KeyRotation`; the apps refresh
     /// `Engine::key_rotation`.
     KeyRotationChanged { state: String },
+    /// The server no longer takes this device's session: the account
+    /// password was changed or "Sign out all devices" (or this session's
+    /// "Sign out") was used on another device. The token is forgotten (the
+    /// encryption key is kept); the apps ask for the password again
+    /// (`Engine::sign_in_again`) instead of failing silently.
+    SignedOut { username: String },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -669,6 +675,7 @@ impl CoreEvent {
             CoreEvent::KeyChanged { .. } => "key-changed",
             CoreEvent::RevocationsChanged { .. } => "revocations-changed",
             CoreEvent::KeyRotationChanged { .. } => "key-rotation-changed",
+            CoreEvent::SignedOut { .. } => "signed-out",
 
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",
@@ -780,6 +787,19 @@ mod tests {
             state: "ringing".into(),
         };
         assert_eq!(call.to_json()["kind"], "call_notification");
+    }
+
+    #[test]
+    fn signed_out_has_its_name_and_kind() {
+        let ev = CoreEvent::SignedOut {
+            username: "ann".into(),
+        };
+        assert_eq!(ev.name(), "signed-out");
+        assert_eq!(
+            ev.to_json(),
+            json!({"kind": "signed_out", "username": "ann"})
+        );
+        assert_eq!(ev.ui_payload(), json!({"username": "ann"}));
     }
 
     #[test]

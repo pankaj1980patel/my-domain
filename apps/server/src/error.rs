@@ -15,6 +15,8 @@ pub enum AppError {
     Conflict(String),
     /// Expired, used, or never there (a join code).
     Gone(String),
+    /// No such thing (a session to sign out).
+    NotFound(String),
     /// Too many failed attempts; try again later.
     TooMany,
     /// Over a rate limit: 429 with `Retry-After` (whole seconds, at least 1).
@@ -43,6 +45,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden(m) => (StatusCode::FORBIDDEN, m),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m),
             AppError::Gone(m) => (StatusCode::GONE, m),
+            AppError::NotFound(m) => (StatusCode::NOT_FOUND, m),
             AppError::TooMany => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "too many tries, wait a minute".to_string(),

@@ -88,6 +88,8 @@ export function friendlyError(e: unknown): string {
   if (m.includes("encryption key")) return t("error.noKey");
   if (m.includes("peer not found")) return t("error.peerNotFound");
   if (m.includes("not logged in")) return t("error.signedOut");
+  if (m.includes("incorrect password") || m === "unauthorized") return t("error.wrongPassword");
+  if (m.includes("update the server to list sessions")) return t("account.sessionsOldServer");
   if (m.includes("invalid credentials") || m.includes("401")) return t("error.badCredentials");
   if (m.includes("no clipboard response")) return t("error.noClipboard");
   if (m.includes("only http and https")) return t("error.badLink");

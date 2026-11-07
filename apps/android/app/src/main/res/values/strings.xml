@@ -1909,4 +1909,52 @@
     <string name="onboard_card_title">Finish setting up</string>
     <string name="onboard_card_body">Step %1$d of %2$d: %3$s. It takes a minute and you can skip anything.</string>
     <string name="onboard_card_open">Carry on</string>
+    <!-- Account security: account password, sign out all devices, sessions, signed out elsewhere -->
+    <string name="account_password_hint">Your account password signs you in to the server. It isn’t your encryption passphrase, which never leaves your devices (change that under “Change passphrase on all devices”).</string>
+    <string name="account_change_password">Change account password</string>
+    <string name="account_password_current">Current password</string>
+    <string name="account_password_new">New password</string>
+    <string name="account_password_repeat">New password again</string>
+    <string name="account_password_need_current">Type your current password.</string>
+    <string name="account_password_too_short">The new password needs at least 6 characters.</string>
+    <string name="account_password_mismatch">The two new passwords don’t match.</string>
+    <string name="account_password_same">The new password is the same as the current one.</string>
+    <string name="account_password_warning">This phone stays signed in with a new session. Every other device is signed out by the server and must sign in again with the new password.</string>
+    <string name="account_password_confirm">Change password</string>
+    <string name="account_password_changed">Password changed. Your other devices must sign in again.</string>
+    <string name="account_working">Working…</string>
+    <string name="account_sign_out_all">Sign out all devices</string>
+    <string name="account_sign_out_all_title">Sign out all devices?</string>
+    <string name="account_sign_out_all_body">Every device signed in to your account is signed out, this phone too. Each must sign in again with the password. Your encryption passphrase doesn’t change.</string>
+    <string name="account_sign_out_all_password">Password (optional)</string>
+    <string name="account_sign_out_all_password_hint">With your password this phone signs straight back in; without it, it shows sign-in.</string>
+    <string name="account_sign_out_all_done">All devices signed out. This phone signed back in.</string>
+    <string name="account_sessions_title">Signed-in sessions</string>
+    <string name="account_sessions_hint">Each sign-in to your account. Sign out one you don’t recognise.</string>
+    <string name="account_sessions_refresh">Refresh</string>
+    <string name="account_session_this">%1$s (this phone)</string>
+    <string name="account_session_unknown">Unknown device</string>
+    <string name="account_session_times">Signed in %1$s · last seen %2$s</string>
+    <string name="account_session_sign_out_title">Sign out %1$s?</string>
+    <string name="account_session_sign_out_body">That device is signed out by the server and must sign in again with the password.</string>
+    <string name="account_session_signed_out">Session signed out.</string>
+    <string name="account_ago_now">just now</string>
+    <plurals name="account_ago_minutes">
+        <item quantity="one">%1$d min ago</item>
+        <item quantity="other">%1$d min ago</item>
+    </plurals>
+    <plurals name="account_ago_hours">
+        <item quantity="one">%1$d hour ago</item>
+        <item quantity="other">%1$d hours ago</item>
+    </plurals>
+    <plurals name="account_ago_days">
+        <item quantity="one">%1$d day ago</item>
+        <item quantity="other">%1$d days ago</item>
+    </plurals>
+    <string name="account_signed_out_title">You were signed out</string>
+    <string name="account_signed_out_body">The password for %1$s was changed, or all devices were signed out, on another device. Type the password to sign in again.</string>
+    <string name="account_sign_in_again">Sign in again</string>
+    <string name="account_sign_in_another_way">Sign in another way</string>
+    <string name="error_wrong_password">That password isn’t right.</string>
+    <string name="error_update_server_sessions">Update the server to see your sessions.</string>
 </resources>

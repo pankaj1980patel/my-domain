@@ -27,6 +27,27 @@ pub struct Revoked {
     pub exp: i64,
 }
 
+/// A signed-in session, for the account's "Signed-in sessions" list
+/// (`GET /auth/sessions`). Kept until its token expires (`exp`); an account
+/// lists at most `MAX_SESSIONS`, the least recently seen dropped first
+/// (dropping one from the list doesn't sign it out). Times are seconds
+/// since the epoch.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SessionRec {
+    pub sid: String,
+    pub created: i64,
+    pub last_seen: i64,
+    pub exp: i64,
+    /// The device that registered with this session, once it has.
+    #[serde(default)]
+    pub node_id: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Sessions an account lists at once.
+pub const MAX_SESSIONS: usize = 50;
+
 /// One account's session state.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Account {
@@ -34,6 +55,33 @@ pub struct Account {
     /// signed out ("sign out all devices", password change).
     pub ver: i64,
     pub revoked: Vec<Revoked>,
+    /// Its signed-in sessions (some may since have been revoked or expired:
+    /// `Sessions::list` leaves those out).
+    pub sessions: Vec<SessionRec>,
+}
+
+/// `list` with `rec` merged in: an existing session (same `sid`) gets its
+/// `last_seen` (and device, when given), a new one is added; expired ones go,
+/// and past `MAX_SESSIONS` the least recently seen.
+/// (What `MongoStore::put_session` does in the database; used as is by
+/// `MemStore`.)
+#[cfg(test)]
+pub fn merge_session(list: &mut Vec<SessionRec>, rec: SessionRec, now: i64) {
+    list.retain(|r| r.exp >= now);
+    match list.iter_mut().find(|r| r.sid == rec.sid) {
+        Some(r) => {
+            r.last_seen = r.last_seen.max(rec.last_seen);
+            if !rec.node_id.is_empty() {
+                r.node_id = rec.node_id;
+                r.name = rec.name;
+            }
+        }
+        None => list.push(rec),
+    }
+    if list.len() > MAX_SESSIONS {
+        list.sort_by_key(|r| std::cmp::Reverse(r.last_seen));
+        list.truncate(MAX_SESSIONS);
+    }
 }
 
 /// A limiter record: a counted window (`since_ms`, `n`) or a lockout
@@ -58,8 +106,12 @@ pub trait Store: Send + Sync {
     /// Sign out every session of the account (and forget its revoked list,
     /// which the new version covers).
     async fn bump_version(&self, user_id: &str) -> Result<(), AppError>;
-    /// Sign out one session; expired entries are dropped on the way.
+    /// Sign out one session; expired entries are dropped on the way. The
+    /// session leaves the account's list too.
     async fn revoke(&self, user_id: &str, sid: &str, exp: i64) -> Result<(), AppError>;
+    /// Add a session to the account's list, or note that it was seen (and
+    /// which device it is): see `merge_session`.
+    async fn put_session(&self, user_id: &str, rec: SessionRec) -> Result<(), AppError>;
     /// Save a limiter record in the background (never blocks a request).
     /// Records with the same key and `since_ms` are one record, keeping the
     /// larger `n`.
@@ -126,7 +178,7 @@ impl Store for MongoStore {
         let Some(d) = self
             .users()
             .find_one(doc! { "_id": oid })
-            .projection(doc! { "token_ver": 1, "revoked": 1 })
+            .projection(doc! { "token_ver": 1, "revoked": 1, "sessions": 1 })
             .await?
         else {
             return Ok(None);
@@ -144,7 +196,19 @@ impl Store for MongoStore {
                     .collect()
             })
             .unwrap_or_default();
-        Ok(Some(Account { ver, revoked }))
+        let sessions = d
+            .get_array("sessions")
+            .map(|a| {
+                a.iter()
+                    .filter_map(|b| mongodb::bson::from_bson::<SessionRec>(b.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Some(Account {
+            ver,
+            revoked,
+            sessions,
+        }))
     }
 
     async fn bump_version(&self, user_id: &str) -> Result<(), AppError> {
@@ -152,7 +216,10 @@ impl Store for MongoStore {
         self.users()
             .update_one(
                 doc! { "_id": oid },
-                doc! { "$inc": { "token_ver": 1_i64 }, "$set": { "revoked": [] } },
+                doc! {
+                    "$inc": { "token_ver": 1_i64 },
+                    "$set": { "revoked": [], "sessions": [] },
+                },
             )
             .await?;
         Ok(())
@@ -169,7 +236,49 @@ impl Store for MongoStore {
         self.users()
             .update_one(
                 doc! { "_id": oid },
-                doc! { "$push": { "revoked": { "sid": sid, "exp": exp } } },
+                doc! {
+                    "$push": { "revoked": { "sid": sid, "exp": exp } },
+                    "$pull": { "sessions": { "sid": sid } },
+                },
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn put_session(&self, user_id: &str, rec: SessionRec) -> Result<(), AppError> {
+        let oid = ObjectId::parse_str(user_id).map_err(|_| AppError::Unauthorized)?;
+        // Seen again: just the time (and the device, once known).
+        let mut set = doc! { "sessions.$.last_seen": rec.last_seen };
+        if !rec.node_id.is_empty() {
+            set.insert("sessions.$.node_id", &rec.node_id);
+            set.insert("sessions.$.name", &rec.name);
+        }
+        let r = self
+            .users()
+            .update_one(
+                doc! { "_id": oid, "sessions.sid": &rec.sid },
+                doc! { "$set": set },
+            )
+            .await?;
+        if r.matched_count > 0 {
+            return Ok(());
+        }
+        // New: drop the expired, then add it, keeping the most recently seen.
+        self.users()
+            .update_one(
+                doc! { "_id": oid },
+                doc! { "$pull": { "sessions": { "exp": { "$lt": now_secs() } } } },
+            )
+            .await?;
+        let bson = mongodb::bson::to_bson(&rec).map_err(|e| AppError::Internal(e.to_string()))?;
+        self.users()
+            .update_one(
+                doc! { "_id": oid },
+                doc! { "$push": { "sessions": {
+                    "$each": [bson],
+                    "$sort": { "last_seen": 1 },
+                    "$slice": -(MAX_SESSIONS as i64),
+                } } },
             )
             .await?;
         Ok(())
@@ -322,6 +431,7 @@ impl Store for MemStore {
         let a = g.accounts.entry(user_id.to_string()).or_default();
         a.ver += 1;
         a.revoked.clear();
+        a.sessions.clear();
         Ok(())
     }
 
@@ -334,6 +444,14 @@ impl Store for MemStore {
             sid: sid.to_string(),
             exp,
         });
+        a.sessions.retain(|r| r.sid != sid);
+        Ok(())
+    }
+
+    async fn put_session(&self, user_id: &str, rec: SessionRec) -> Result<(), AppError> {
+        let mut g = self.inner.lock().unwrap();
+        let a = g.accounts.entry(user_id.to_string()).or_default();
+        merge_session(&mut a.sessions, rec, now_secs());
         Ok(())
     }
 
@@ -401,6 +519,45 @@ impl Store for MemStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn rec(sid: &str, seen: i64, exp: i64) -> SessionRec {
+        SessionRec {
+            sid: sid.into(),
+            created: seen,
+            last_seen: seen,
+            exp,
+            node_id: String::new(),
+            name: String::new(),
+        }
+    }
+
+    #[test]
+    fn sessions_merge_by_id_drop_the_expired_and_keep_the_most_recent() {
+        let mut list = vec![rec("old", 1, 50), rec("a", 10, 1000)];
+        merge_session(&mut list, rec("b", 20, 1000), 100);
+        let ids: Vec<&str> = list.iter().map(|r| r.sid.as_str()).collect();
+        assert_eq!(ids, ["a", "b"], "the expired one is dropped");
+        // Seen again, now from a device: updated in place.
+        let mut again = rec("a", 30, 1000);
+        again.node_id = "n1".into();
+        again.name = "Pixel".into();
+        merge_session(&mut list, again, 100);
+        assert_eq!(list.len(), 2);
+        assert_eq!((list[0].last_seen, list[0].name.as_str()), (30, "Pixel"));
+        assert_eq!(list[0].created, 10, "created stays");
+        // Seen again without a device: the device stays.
+        merge_session(&mut list, rec("a", 40, 1000), 100);
+        assert_eq!(list[0].node_id, "n1");
+
+        for i in 0..MAX_SESSIONS {
+            merge_session(&mut list, rec(&format!("s{i}"), 100 + i as i64, 1000), 100);
+        }
+        assert_eq!(list.len(), MAX_SESSIONS);
+        assert!(
+            !list.iter().any(|r| r.sid == "a"),
+            "least recently seen goes"
+        );
+    }
 
     #[test]
     fn prefixes_are_matched_literally() {

@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature, change passphrase, new passphrase, passphrase changed, rotate, rotation, key rotation
+keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature, change passphrase, new passphrase, passphrase changed, rotate, rotation, key rotation, account, account password, change password, sign out, sign out all devices, signed out, sessions, signed-in sessions
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -52,6 +52,18 @@ If you lose a device, sell it or stop trusting it, open its page and choose **Re
 
 - **Settings → Removed devices** lists them, with who removed each. **Allow again** takes a removal back on all your devices (only do this for a device you have back and trust).
 - A removed device that still has your device key could join again as a **new** device (with a QR code or a code, or after a reinstall). It then shows up in your list as a new device, and you can remove that too. To keep it out for good, change the passphrase on all your devices (below).
+
+## Your account
+
+Your **account password** signs your devices in to the server (to find each other and to pass messages along when they can't connect directly). It is not your **passphrase** (device key): the passphrase encrypts what your devices send each other and never leaves them. Changing one never changes the other.
+
+In **Settings → Account**:
+
+- **Change account password**: type the current password and the new one twice (a hint shows how strong it is). Before it changes you're told what happens: **this device stays signed in** with a new session, and **every other device is signed out** by the server and must sign in again with the new password. Your passphrase doesn't change, so nothing else needs setting up again.
+- **Sign out all devices**: signs out every device on your account, this one too. Type your password in the confirm to keep this device signed in; leave it empty and this device asks for it like the others. Use it if a device is lost or you think someone else signed in.
+- **Signed-in sessions**: each device signed in to your account, with when it signed in and was last seen. **Sign out** next to one you don't recognise signs out just that one (it would need the password to come back). A device signed in before it registered shows as not set up yet.
+
+When a device is signed out this way (the password was changed, or it was signed out from another device), it says **You were signed out** the next time it talks to the server and asks for the account password. Your passphrase and settings stay on it, so the password alone signs it back in. **Sign in another way** goes back to the full sign-in.
 
 ## Changing the passphrase on all devices
 

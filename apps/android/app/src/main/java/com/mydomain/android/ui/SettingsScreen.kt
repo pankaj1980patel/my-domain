@@ -452,7 +452,13 @@ fun SettingsScreen(
             )
             AddDevice()
             GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
+            // The account password (not the encryption passphrase) and
+            // signing out every device.
+            AccountSecurity()
         }
+
+        // Every sign-in to the account, each but this phone's with "Sign out".
+        SessionsTile(Modifier.foundMark(focus == "sessions"))
 
         // Devices removed for good, each with "Allow again".
         RemovedDevicesTile(Modifier.foundMark(focus == "removed-devices"))

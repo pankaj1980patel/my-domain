@@ -77,6 +77,150 @@ pub fn http_err(e: ureq::Error) -> String {
     }
 }
 
+// --- a session the server no longer takes ("signed out elsewhere") ---
+
+/// Told about a token the server answered 401 to; returns false once it no
+/// longer cares (its engine is gone) and is dropped.
+pub(crate) type RefusedHook = std::sync::Arc<dyn Fn(&str) -> bool + Send + Sync>;
+
+fn refused_hooks() -> &'static std::sync::Mutex<Vec<RefusedHook>> {
+    static HOOKS: std::sync::OnceLock<std::sync::Mutex<Vec<RefusedHook>>> =
+        std::sync::OnceLock::new();
+    HOOKS.get_or_init(Default::default)
+}
+
+/// Call `hook` whenever the server refuses a session token (each engine
+/// checks whether it's its own).
+pub(crate) fn on_token_refused(hook: RefusedHook) {
+    if let Ok(mut h) = refused_hooks().lock() {
+        h.push(hook);
+    }
+}
+
+/// The server answered 401 to `token` (on a call that sends it, or the
+/// relay's sign-in). The hooks run on a thread of their own: the caller may
+/// hold locks.
+pub(crate) fn token_refused(token: &str) {
+    let token = token.to_string();
+    std::thread::spawn(move || {
+        let hooks: Vec<RefusedHook> = refused_hooks()
+            .lock()
+            .map(|h| h.clone())
+            .unwrap_or_default();
+        let gone: Vec<RefusedHook> = hooks.into_iter().filter(|h| !h(&token)).collect();
+        if !gone.is_empty() {
+            if let Ok(mut h) = refused_hooks().lock() {
+                h.retain(|x| !gone.iter().any(|g| std::sync::Arc::ptr_eq(g, x)));
+            }
+        }
+    });
+}
+
+/// `http_err` for a call made with `token`: a 401 means the session is
+/// signed out (`token_refused`).
+fn authed_err(token: &str) -> impl FnOnce(ureq::Error) -> String + '_ {
+    move |e| {
+        if matches!(e, ureq::Error::Status(401, _)) {
+            token_refused(token);
+        }
+        http_err(e)
+    }
+}
+
+/// What `change_password_call` says when the current password is wrong.
+pub const WRONG_PASSWORD: &str = "incorrect password";
+
+/// Change the account password (`/auth/password`); the new session token.
+/// Every other session is signed out by the server.
+pub fn change_password_call(
+    url: &str,
+    token: &str,
+    password: &str,
+    new_password: &str,
+) -> Result<TokenResp, String> {
+    match crate::tls::http()
+        .post(&format!("{}/auth/password", base(url)))
+        .timeout(Duration::from_secs(15))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "password": password, "new_password": new_password }))
+    {
+        Ok(r) => r.into_json::<TokenResp>().map_err(|e| e.to_string()),
+        Err(ureq::Error::Status(403, _)) => Err(WRONG_PASSWORD.into()),
+        // An older server says 401 for a wrong password too: whether the
+        // session is still good is asked separately (a 401 there is the
+        // sign-out).
+        Err(ureq::Error::Status(401, _)) => match registry_fetch(url, token, "") {
+            Ok(_) => Err(WRONG_PASSWORD.into()),
+            Err(e) => Err(e),
+        },
+        Err(e) => Err(http_err(e)),
+    }
+}
+
+/// Sign out every session of the account (`/auth/logout_all`), this one too.
+pub fn logout_all_call(url: &str, token: &str) -> Result<(), String> {
+    crate::tls::http()
+        .post(&format!("{}/auth/logout_all", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({}))
+        .map_err(authed_err(token))?;
+    Ok(())
+}
+
+/// One signed-in session of the account (`GET /auth/sessions`).
+#[derive(Deserialize, serde::Serialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct AccountSession {
+    pub id: String,
+    /// The device that signed in with it; empty until it registered.
+    #[serde(default)]
+    pub name: String,
+    #[serde(default)]
+    pub node_id: String,
+    /// Seconds since the epoch.
+    #[serde(default)]
+    pub created: f64,
+    #[serde(default)]
+    pub last_seen: f64,
+    /// This device's own session.
+    #[serde(default)]
+    pub current: bool,
+}
+
+/// What an older server without `/auth/sessions` gets turned into.
+pub const SESSIONS_OLD_SERVER: &str = "update the server to list sessions";
+
+/// The account's signed-in sessions, this one first.
+pub fn sessions_call(url: &str, token: &str) -> Result<Vec<AccountSession>, String> {
+    match crate::tls::http()
+        .get(&format!("{}/auth/sessions", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .call()
+    {
+        Ok(r) => r
+            .into_json::<Vec<AccountSession>>()
+            .map_err(|e| e.to_string()),
+        Err(ureq::Error::Status(404 | 405, _)) => Err(SESSIONS_OLD_SERVER.into()),
+        Err(e) => Err(authed_err(token)(e)),
+    }
+}
+
+/// Sign out session `id`; true when the server signed out every session
+/// instead (this one too).
+pub fn revoke_session_call(url: &str, token: &str, id: &str) -> Result<bool, String> {
+    let v = crate::tls::http()
+        .post(&format!("{}/auth/sessions/revoke", base(url)))
+        .timeout(Duration::from_secs(10))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({ "id": id }))
+        .map_err(authed_err(token))?
+        .into_json::<serde_json::Value>()
+        .map_err(|e| e.to_string())?;
+    Ok(v["signed_out_all"].as_bool().unwrap_or(false))
+}
+
 pub fn auth_call(
     url: &str,
     path: &str,
@@ -147,7 +291,7 @@ pub fn registry_register(
             "nat": nat.as_str(),
             "kind": kind,
         }))
-        .map_err(http_err)?;
+        .map_err(authed_err(token))?;
     Ok(())
 }
 
@@ -166,7 +310,7 @@ pub fn send_signal(
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "from": from, "to": to, "type": kind, "data": data }))
-        .map_err(http_err)?;
+        .map_err(authed_err(token))?;
     Ok(())
 }
 
@@ -177,7 +321,7 @@ pub fn registry_unregister(url: &str, token: &str, node_id: &str) -> Result<(), 
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id }))
-        .map_err(http_err)?;
+        .map_err(authed_err(token))?;
     Ok(())
 }
 
@@ -190,7 +334,7 @@ pub fn send_selfping(url: &str, token: &str, node_id: &str, sid: &str) -> Result
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id, "sid": sid }))
-        .map_err(http_err)?;
+        .map_err(authed_err(token))?;
     Ok(())
 }
 
@@ -215,7 +359,7 @@ pub fn update_device_state(
             "reflexive_ip": reflexive_ip,
             "reflexive_udp_port": reflexive_udp_port,
         }))
-        .map_err(http_err)?;
+        .map_err(authed_err(token))?;
     Ok(())
 }
 
@@ -238,7 +382,7 @@ pub fn probe_inbound(
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({ "node_id": node_id, "check": checks }))
-        .map_err(http_err)?
+        .map_err(authed_err(token))?
         .into_json::<ProbeResult>()
         .map_err(|e| e.to_string())
 }
@@ -261,6 +405,14 @@ fn pair_err(e: ureq::Error) -> String {
     match e {
         ureq::Error::Status(404 | 405, _) => PAIR_OLD_SERVER.to_string(),
         other => http_err(other),
+    }
+}
+
+/// `pair_err` for a call made with `token` (a 401 is a sign-out).
+fn pair_err_authed(token: &str, e: ureq::Error) -> String {
+    match e {
+        ureq::Error::Status(404 | 405, _) => PAIR_OLD_SERVER.to_string(),
+        other => authed_err(token)(other),
     }
 }
 
@@ -291,7 +443,7 @@ pub fn pair_create(
             .map(Some)
             .map_err(|e| e.to_string()),
         Err(ureq::Error::Status(409, _)) => Ok(None),
-        Err(e) => Err(pair_err(e)),
+        Err(e) => Err(pair_err_authed(token, e)),
     }
 }
 
@@ -333,7 +485,7 @@ pub fn pair_status(url: &str, token: &str) -> Result<PairStatusResp, String> {
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .call()
-        .map_err(pair_err)?
+        .map_err(|e| pair_err_authed(token, e))?
         .into_json::<PairStatusResp>()
         .map_err(|e| e.to_string())
 }
@@ -344,7 +496,7 @@ pub fn pair_cancel(url: &str, token: &str) -> Result<(), String> {
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .send_json(serde_json::json!({}))
-        .map_err(pair_err)?;
+        .map_err(|e| pair_err_authed(token, e))?;
     Ok(())
 }
 
@@ -360,7 +512,7 @@ pub fn registry_fetch(
         .timeout(Duration::from_secs(10))
         .set("Authorization", &format!("Bearer {token}"))
         .call()
-        .map_err(http_err)?
+        .map_err(authed_err(token))?
         .into_json::<Vec<RegistryDevice>>()
         .map_err(|e| e.to_string())
 }

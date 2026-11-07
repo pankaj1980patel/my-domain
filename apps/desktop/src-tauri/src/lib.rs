@@ -16,6 +16,7 @@ use mdcore::model::{Identity, Peer};
 use mdcore::platform::{IfaceMode, Platform};
 use mdcore::CoreError;
 
+mod account;
 mod activity;
 mod automations;
 mod away_lock;
@@ -2020,6 +2021,13 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         key_changes::cancel_key_rotation,
         key_changes::dismiss_key_rotation,
         key_changes::passphrase_strength,
+        account::change_account_password,
+        account::sign_out_all_devices,
+        account::account_sessions,
+        account::sign_out_session,
+        account::signed_out_elsewhere,
+        account::sign_in_again,
+        account::account_password_problem,
         settings_backup::settings_backup_save,
         settings_backup::settings_restore_open,
         settings_backup::settings_restore_apply,

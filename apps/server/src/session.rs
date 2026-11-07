@@ -7,6 +7,11 @@
 //! `POST /auth/logout_all` and a password change bump the version, which
 //! signs out every session at once (and empties the revoked list).
 //!
+//! Each session is listed for the account (`GET /auth/sessions`) from the
+//! first time its token is used, with when it was last seen (written at most
+//! every `TOUCH_EVERY`) and the device that registered with it; any one can
+//! be signed out from the list (`POST /auth/sessions/revoke`).
+//!
 //! The account's state is read once and cached for `CACHE_TTL`; a change made
 //! through this server updates the cache at once, so the TTL matters only
 //! when the database was changed from elsewhere. Tokens from before this
@@ -21,7 +26,7 @@ use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 
 use crate::error::AppError;
-use crate::store::{Account, Store};
+use crate::store::{Account, SessionRec, Store};
 
 pub const TOKEN_TTL_SECS: u64 = 7 * 24 * 3600;
 /// How long an account's session state is trusted without asking the store.
@@ -31,6 +36,22 @@ const MAX_CACHED: usize = 100_000;
 /// Sessions signed out one by one that an account keeps on its list (each
 /// until its token expires). Past this a logout signs out every session.
 pub const MAX_REVOKED: usize = 64;
+/// How often a session's "last seen" is written while it's in use.
+const TOUCH_EVERY: Duration = Duration::from_secs(10 * 60);
+
+/// One session in `GET /auth/sessions`.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+pub struct SessionOut {
+    pub id: String,
+    /// The device that registered with it (empty until one has).
+    pub name: String,
+    pub node_id: String,
+    /// Seconds since the epoch.
+    pub created: i64,
+    pub last_seen: i64,
+    /// The session this request came with.
+    pub current: bool,
+}
 
 #[derive(Serialize, Deserialize)]
 pub struct Claims {
@@ -104,6 +125,9 @@ pub struct Sessions {
     secret: String,
     store: Arc<dyn Store>,
     cache: Mutex<HashMap<String, (Instant, Arc<Account>)>>,
+    /// Session id -> when its "last seen" was last written and the device
+    /// it was written with.
+    touched: Mutex<HashMap<String, (Instant, String)>>,
 }
 
 impl Sessions {
@@ -112,6 +136,7 @@ impl Sessions {
             secret,
             store,
             cache: Mutex::default(),
+            touched: Mutex::default(),
         })
     }
 
@@ -184,12 +209,105 @@ impl Sessions {
         if c.ver != a.ver || (!c.sid.is_empty() && a.revoked.iter().any(|r| r.sid == c.sid)) {
             return Err(AppError::Unauthorized);
         }
-        Ok(AuthUser {
+        let user = AuthUser {
             user_id: c.sub,
             username: c.username,
             sid: c.sid,
             exp: c.exp as i64,
-        })
+        };
+        self.touch(&user, None).await;
+        Ok(user)
+    }
+
+    /// Note that `user`'s session was seen now (from device `node`: id,
+    /// name), at most every `TOUCH_EVERY` unless the device is new. Best
+    /// effort: a store error only skips it.
+    async fn touch(&self, user: &AuthUser, node: Option<(&str, &str)>) {
+        if user.sid.is_empty() {
+            return;
+        }
+        let now = Instant::now();
+        {
+            let mut t = self.touched.lock().unwrap();
+            if let Some((at, n)) = t.get(&user.sid) {
+                let same_device = node.is_none_or(|(id, _)| id == n);
+                if same_device && now.saturating_duration_since(*at) < TOUCH_EVERY {
+                    return;
+                }
+            }
+            if t.len() >= MAX_CACHED {
+                crate::limits::evict_oldest(&mut t, |(at, _)| *at);
+            }
+            let known = t.get(&user.sid).map(|(_, n)| n.clone()).unwrap_or_default();
+            let n = node.map_or(known, |(id, _)| id.to_string());
+            t.insert(user.sid.clone(), (now, n));
+        }
+        let secs = now_secs() as i64;
+        let (node_id, name) = node.unwrap_or_default();
+        let rec = SessionRec {
+            sid: user.sid.clone(),
+            // Tokens don't say when they were issued; their expiry does.
+            created: (user.exp - TOKEN_TTL_SECS as i64).min(secs),
+            last_seen: secs,
+            exp: user.exp,
+            node_id: node_id.to_string(),
+            name: name.to_string(),
+        };
+        if let Err(e) = self.store.put_session(&user.user_id, rec).await {
+            tracing::warn!("noting a session failed: {e:?}");
+            self.touched.lock().unwrap().remove(&user.sid);
+        }
+    }
+
+    /// The device `node_id` (named `name`) registered with `user`'s session.
+    pub async fn note_device(&self, user: &AuthUser, node_id: &str, name: &str) {
+        self.touch(user, Some((node_id, name))).await;
+    }
+
+    /// The account's signed-in sessions, this one first, then the most
+    /// recently seen (signed-out and expired ones left out).
+    pub async fn list(&self, user: &AuthUser) -> Result<Vec<SessionOut>, AppError> {
+        let a = self.account(&user.user_id, true).await?;
+        let now = now_secs() as i64;
+        let mut out: Vec<SessionOut> = a
+            .sessions
+            .iter()
+            .filter(|r| r.exp >= now && !a.revoked.iter().any(|x| x.sid == r.sid))
+            .map(|r| SessionOut {
+                id: r.sid.clone(),
+                name: r.name.clone(),
+                node_id: r.node_id.clone(),
+                created: r.created,
+                last_seen: r.last_seen,
+                current: r.sid == user.sid,
+            })
+            .collect();
+        out.sort_by_key(|s| (!s.current, std::cmp::Reverse(s.last_seen)));
+        Ok(out)
+    }
+
+    /// Sign out the account's session `id` (from the list). `None` when the
+    /// account lists no such session; else whether every session was signed
+    /// out instead (see `logout`).
+    pub async fn revoke_session(
+        &self,
+        user: &AuthUser,
+        id: &str,
+    ) -> Result<Option<bool>, AppError> {
+        if id == user.sid {
+            return self.logout(user).await.map(Some);
+        }
+        let a = self.account(&user.user_id, true).await?;
+        let Some(rec) = a.sessions.iter().find(|r| r.sid == id) else {
+            return Ok(None);
+        };
+        let target = AuthUser {
+            user_id: user.user_id.clone(),
+            username: user.username.clone(),
+            sid: rec.sid.clone(),
+            exp: rec.exp,
+        };
+        self.logout(&target).await.map(Some)
     }
 
     /// Sign out the session `user` came with. A token from before session
@@ -204,6 +322,7 @@ impl Sessions {
         }
         let r = self.store.revoke(&user.user_id, &user.sid, user.exp).await;
         self.forget(&user.user_id);
+        self.touched.lock().unwrap().remove(&user.sid);
         r.map(|()| false)
     }
 
@@ -247,6 +366,48 @@ mod tests {
         // A new sign-in after that works.
         let c = s.issue("u1", "ann").await.unwrap();
         assert!(s.verify(&c).await.is_ok());
+    }
+
+    #[tokio::test]
+    async fn sessions_are_listed_with_their_device_and_can_be_signed_out_one_by_one() {
+        let s = Sessions::test("secret");
+        let a = s.issue("u1", "ann").await.unwrap();
+        let b = s.issue("u1", "ann").await.unwrap();
+        let unused = s.issue("u1", "ann").await.unwrap();
+        let ua = s.verify(&a).await.unwrap();
+        let ub = s.verify(&b).await.unwrap();
+        s.note_device(&ub, "node-b", "Pixel").await;
+        let _ = unused; // never used: not listed
+
+        let list = s.list(&ua).await.unwrap();
+        assert_eq!(list.len(), 2);
+        assert!(list[0].current && list[0].id == ua.sid, "this one first");
+        assert_eq!(
+            (list[1].name.as_str(), list[1].node_id.as_str()),
+            ("Pixel", "node-b")
+        );
+        assert!(!list[1].current);
+        assert!(list[1].created <= list[1].last_seen);
+
+        // Signed out from the list: gone from it and refused.
+        assert_eq!(s.revoke_session(&ua, &ub.sid).await.unwrap(), Some(false));
+        assert!(s.verify(&b).await.is_err());
+        let list = s.list(&ua).await.unwrap();
+        assert_eq!(list.iter().map(|x| &x.id).collect::<Vec<_>>(), [&ua.sid]);
+        assert_eq!(s.revoke_session(&ua, "nope").await.unwrap(), None);
+        // Other accounts' sessions can't be named.
+        let other = s.issue("u2", "bob").await.unwrap();
+        let uo = s.verify(&other).await.unwrap();
+        assert_eq!(s.revoke_session(&uo, &ua.sid).await.unwrap(), None);
+        assert!(s.verify(&a).await.is_ok());
+
+        // "Sign out all devices" empties the list.
+        s.logout_all("u1").await.unwrap();
+        let fresh = s.issue("u1", "ann").await.unwrap();
+        let uf = s.verify(&fresh).await.unwrap();
+        let list = s.list(&uf).await.unwrap();
+        assert_eq!(list.len(), 1);
+        assert!(list[0].current);
     }
 
     #[tokio::test]

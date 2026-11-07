@@ -464,6 +464,10 @@ class NetService : Service() {
                         "revocations_changed" -> runCatching { RemovedDevices.load() }
                         // The passphrase change moved on (or this phone missed one).
                         "key_rotation_changed" -> runCatching { KeyRotation.load() }
+                        // The server no longer takes this phone's session (the
+                        // password was changed, or all devices signed out,
+                        // elsewhere): ask for the password again.
+                        "signed_out" -> com.mydomain.android.core.Account.onSignedOut()
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {
