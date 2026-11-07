@@ -1910,4 +1910,52 @@
     <string name="onboard_card_title">सेटअप पूर्ण करा</string>
     <string name="onboard_card_body">%2$d पैकी पायरी %1$d: %3$s. याला एक मिनिट लागतो आणि तुम्ही काहीही वगळू शकता.</string>
     <string name="onboard_card_open">पुढे चला</string>
+    <!-- खात्याची सुरक्षा: खात्याचा पासवर्ड, सर्व डिव्हाइसमधून साइन आउट, सत्रे, इतरत्र साइन आउट -->
+    <string name="account_password_hint">तुमचा खात्याचा पासवर्ड तुम्हाला सर्व्हरवर साइन इन करतो. हा तुमचा एन्क्रिप्शन पासफ्रेज नाही, जो कधीही तुमच्या डिव्हाइसबाहेर जात नाही (तो “सर्व डिव्हाइसवर पासफ्रेज बदला” मध्ये बदला).</string>
+    <string name="account_change_password">खात्याचा पासवर्ड बदला</string>
+    <string name="account_password_current">सध्याचा पासवर्ड</string>
+    <string name="account_password_new">नवीन पासवर्ड</string>
+    <string name="account_password_repeat">नवीन पासवर्ड पुन्हा</string>
+    <string name="account_password_need_current">तुमचा सध्याचा पासवर्ड टाइप करा.</string>
+    <string name="account_password_too_short">नवीन पासवर्डमध्ये किमान 6 अक्षरे हवीत.</string>
+    <string name="account_password_mismatch">दोन्ही नवीन पासवर्ड जुळत नाहीत.</string>
+    <string name="account_password_same">नवीन पासवर्ड सध्याच्या पासवर्डसारखाच आहे.</string>
+    <string name="account_password_warning">हा फोन नवीन सत्रासह साइन इन राहतो. इतर प्रत्येक डिव्हाइस सर्व्हरकडून साइन आउट केले जाते आणि त्याला नवीन पासवर्डने पुन्हा साइन इन करावे लागेल.</string>
+    <string name="account_password_confirm">पासवर्ड बदला</string>
+    <string name="account_password_changed">पासवर्ड बदलला. तुमच्या इतर डिव्हाइसना पुन्हा साइन इन करावे लागेल.</string>
+    <string name="account_working">काम सुरू आहे…</string>
+    <string name="account_sign_out_all">सर्व डिव्हाइसमधून साइन आउट करा</string>
+    <string name="account_sign_out_all_title">सर्व डिव्हाइसमधून साइन आउट करायचे?</string>
+    <string name="account_sign_out_all_body">तुमच्या खात्यात साइन इन केलेले प्रत्येक डिव्हाइस साइन आउट होते, हा फोनसुद्धा. प्रत्येकाला पासवर्डने पुन्हा साइन इन करावे लागेल. तुमचा एन्क्रिप्शन पासफ्रेज बदलत नाही.</string>
+    <string name="account_sign_out_all_password">पासवर्ड (ऐच्छिक)</string>
+    <string name="account_sign_out_all_password_hint">पासवर्ड दिल्यास हा फोन लगेच पुन्हा साइन इन होतो; त्याशिवाय, तो साइन-इन दाखवतो.</string>
+    <string name="account_sign_out_all_done">सर्व डिव्हाइस साइन आउट झाली. हा फोन पुन्हा साइन इन झाला.</string>
+    <string name="account_sessions_title">साइन इन केलेली सत्रे</string>
+    <string name="account_sessions_hint">तुमच्या खात्यातील प्रत्येक साइन-इन. तुम्ही ओळखत नसलेले साइन आउट करा.</string>
+    <string name="account_sessions_refresh">रिफ्रेश करा</string>
+    <string name="account_session_this">%1$s (हा फोन)</string>
+    <string name="account_session_unknown">अज्ञात डिव्हाइस</string>
+    <string name="account_session_times">साइन इन %1$s · शेवटचे पाहिले %2$s</string>
+    <string name="account_session_sign_out_title">%1$s साइन आउट करायचे?</string>
+    <string name="account_session_sign_out_body">ते डिव्हाइस सर्व्हरकडून साइन आउट केले जाते आणि त्याला पासवर्डने पुन्हा साइन इन करावे लागेल.</string>
+    <string name="account_session_signed_out">सत्र साइन आउट झाले.</string>
+    <string name="account_ago_now">आत्ताच</string>
+    <plurals name="account_ago_minutes">
+        <item quantity="one">%1$d मिनिटापूर्वी</item>
+        <item quantity="other">%1$d मिनिटांपूर्वी</item>
+    </plurals>
+    <plurals name="account_ago_hours">
+        <item quantity="one">%1$d तासापूर्वी</item>
+        <item quantity="other">%1$d तासांपूर्वी</item>
+    </plurals>
+    <plurals name="account_ago_days">
+        <item quantity="one">%1$d दिवसापूर्वी</item>
+        <item quantity="other">%1$d दिवसांपूर्वी</item>
+    </plurals>
+    <string name="account_signed_out_title">तुम्ही साइन आउट झाला आहात</string>
+    <string name="account_signed_out_body">दुसऱ्या डिव्हाइसवर %1$s चा पासवर्ड बदलला गेला, किंवा सर्व डिव्हाइस साइन आउट केली गेली. पुन्हा साइन इन करण्यासाठी पासवर्ड टाइप करा.</string>
+    <string name="account_sign_in_again">पुन्हा साइन इन करा</string>
+    <string name="account_sign_in_another_way">दुसऱ्या पद्धतीने साइन इन करा</string>
+    <string name="error_wrong_password">हा पासवर्ड बरोबर नाही.</string>
+    <string name="error_update_server_sessions">तुमची सत्रे पाहण्यासाठी सर्व्हर अपडेट करा.</string>
 </resources>

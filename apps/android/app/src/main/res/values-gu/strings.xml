@@ -1910,4 +1910,52 @@
     <string name="onboard_card_title">સેટઅપ પૂરું કરો</string>
     <string name="onboard_card_body">પગલું %1$d / %2$d: %3$s. તેમાં એક મિનિટ લાગે છે અને તમે કંઈપણ છોડી શકો છો.</string>
     <string name="onboard_card_open">ચાલુ રાખો</string>
+    <!-- એકાઉન્ટ સુરક્ષા: એકાઉન્ટ પાસવર્ડ, બધા ડિવાઇસમાંથી સાઇન આઉટ, સત્રો, બીજે સાઇન આઉટ -->
+    <string name="account_password_hint">તમારો એકાઉન્ટ પાસવર્ડ તમને સર્વર પર સાઇન ઇન કરાવે છે. તે તમારો એન્ક્રિપ્શન પાસફ્રેઝ નથી, જે ક્યારેય તમારા ડિવાઇસની બહાર જતો નથી (તેને “બધા ડિવાઇસ પર પાસફ્રેઝ બદલો” માં બદલો).</string>
+    <string name="account_change_password">એકાઉન્ટ પાસવર્ડ બદલો</string>
+    <string name="account_password_current">હાલનો પાસવર્ડ</string>
+    <string name="account_password_new">નવો પાસવર્ડ</string>
+    <string name="account_password_repeat">નવો પાસવર્ડ ફરીથી</string>
+    <string name="account_password_need_current">તમારો હાલનો પાસવર્ડ લખો.</string>
+    <string name="account_password_too_short">નવા પાસવર્ડમાં ઓછામાં ઓછા 6 અક્ષર હોવા જોઈએ.</string>
+    <string name="account_password_mismatch">બંને નવા પાસવર્ડ મેળ ખાતા નથી.</string>
+    <string name="account_password_same">નવો પાસવર્ડ હાલના પાસવર્ડ જેવો જ છે.</string>
+    <string name="account_password_warning">આ ફોન નવા સત્ર સાથે સાઇન ઇન રહે છે. બાકીના દરેક ડિવાઇસને સર્વર સાઇન આઉટ કરે છે અને તેણે નવા પાસવર્ડથી ફરી સાઇન ઇન કરવું પડશે.</string>
+    <string name="account_password_confirm">પાસવર્ડ બદલો</string>
+    <string name="account_password_changed">પાસવર્ડ બદલાઈ ગયો. તમારા બીજા ડિવાઇસે ફરી સાઇન ઇન કરવું પડશે.</string>
+    <string name="account_working">ચાલી રહ્યું છે…</string>
+    <string name="account_sign_out_all">બધા ડિવાઇસમાંથી સાઇન આઉટ કરો</string>
+    <string name="account_sign_out_all_title">બધા ડિવાઇસમાંથી સાઇન આઉટ કરવું છે?</string>
+    <string name="account_sign_out_all_body">તમારા એકાઉન્ટમાં સાઇન ઇન થયેલું દરેક ડિવાઇસ સાઇન આઉટ થાય છે, આ ફોન પણ. દરેકે પાસવર્ડથી ફરી સાઇન ઇન કરવું પડશે. તમારો એન્ક્રિપ્શન પાસફ્રેઝ બદલાતો નથી.</string>
+    <string name="account_sign_out_all_password">પાસવર્ડ (વૈકલ્પિક)</string>
+    <string name="account_sign_out_all_password_hint">પાસવર્ડ આપવાથી આ ફોન તરત ફરી સાઇન ઇન થાય છે; તેના વિના, તે સાઇન-ઇન બતાવે છે.</string>
+    <string name="account_sign_out_all_done">બધા ડિવાઇસ સાઇન આઉટ થયા. આ ફોન ફરી સાઇન ઇન થયો.</string>
+    <string name="account_sessions_title">સાઇન ઇન થયેલાં સત્રો</string>
+    <string name="account_sessions_hint">તમારા એકાઉન્ટમાં થયેલું દરેક સાઇન-ઇન. જેને તમે ઓળખતા ન હો તેને સાઇન આઉટ કરો.</string>
+    <string name="account_sessions_refresh">રિફ્રેશ કરો</string>
+    <string name="account_session_this">%1$s (આ ફોન)</string>
+    <string name="account_session_unknown">અજાણ્યું ડિવાઇસ</string>
+    <string name="account_session_times">સાઇન ઇન %1$s · છેલ્લે જોયું %2$s</string>
+    <string name="account_session_sign_out_title">%1$s ને સાઇન આઉટ કરવું છે?</string>
+    <string name="account_session_sign_out_body">તે ડિવાઇસને સર્વર સાઇન આઉટ કરે છે અને તેણે પાસવર્ડથી ફરી સાઇન ઇન કરવું પડશે.</string>
+    <string name="account_session_signed_out">સત્ર સાઇન આઉટ થયું.</string>
+    <string name="account_ago_now">હમણાં જ</string>
+    <plurals name="account_ago_minutes">
+        <item quantity="one">%1$d મિનિટ પહેલાં</item>
+        <item quantity="other">%1$d મિનિટ પહેલાં</item>
+    </plurals>
+    <plurals name="account_ago_hours">
+        <item quantity="one">%1$d કલાક પહેલાં</item>
+        <item quantity="other">%1$d કલાક પહેલાં</item>
+    </plurals>
+    <plurals name="account_ago_days">
+        <item quantity="one">%1$d દિવસ પહેલાં</item>
+        <item quantity="other">%1$d દિવસ પહેલાં</item>
+    </plurals>
+    <string name="account_signed_out_title">તમે સાઇન આઉટ થઈ ગયા</string>
+    <string name="account_signed_out_body">બીજા ડિવાઇસ પર %1$s નો પાસવર્ડ બદલાયો, અથવા બધા ડિવાઇસ સાઇન આઉટ થયા. ફરી સાઇન ઇન કરવા માટે પાસવર્ડ લખો.</string>
+    <string name="account_sign_in_again">ફરી સાઇન ઇન કરો</string>
+    <string name="account_sign_in_another_way">બીજી રીતે સાઇન ઇન કરો</string>
+    <string name="error_wrong_password">આ પાસવર્ડ સાચો નથી.</string>
+    <string name="error_update_server_sessions">તમારાં સત્રો જોવા માટે સર્વર અપડેટ કરો.</string>
 </resources>

@@ -1910,4 +1910,52 @@
     <string name="onboard_card_title">அமைப்பை முடியுங்கள்</string>
     <string name="onboard_card_body">படி %1$d / %2$d: %3$s. ஒரு நிமிடம் ஆகும், எதையும் தவிர்க்கலாம்.</string>
     <string name="onboard_card_open">தொடர்</string>
+    <!-- கணக்குப் பாதுகாப்பு: கணக்குக் கடவுச்சொல், எல்லாச் சாதனங்களிலிருந்தும் வெளியேறுதல், அமர்வுகள், வேறிடத்தில் வெளியேற்றம் -->
+    <string name="account_password_hint">உங்கள் கணக்குக் கடவுச்சொல் உங்களை சர்வரில் உள்நுழையச் செய்கிறது. இது உங்கள் குறியாக்கக் கடவுச்சொற்றொடர் அல்ல; அது உங்கள் சாதனங்களை விட்டு ஒருபோதும் வெளியேறாது (அதை “எல்லாச் சாதனங்களிலும் கடவுச்சொற்றொடரை மாற்று” என்பதில் மாற்றுங்கள்).</string>
+    <string name="account_change_password">கணக்குக் கடவுச்சொல்லை மாற்று</string>
+    <string name="account_password_current">தற்போதைய கடவுச்சொல்</string>
+    <string name="account_password_new">புதிய கடவுச்சொல்</string>
+    <string name="account_password_repeat">புதிய கடவுச்சொல் மீண்டும்</string>
+    <string name="account_password_need_current">உங்கள் தற்போதைய கடவுச்சொல்லை உள்ளிடுங்கள்.</string>
+    <string name="account_password_too_short">புதிய கடவுச்சொல்லுக்குக் குறைந்தது 6 எழுத்துகள் தேவை.</string>
+    <string name="account_password_mismatch">இரண்டு புதிய கடவுச்சொற்களும் பொருந்தவில்லை.</string>
+    <string name="account_password_same">புதிய கடவுச்சொல் தற்போதையதைப் போலவே உள்ளது.</string>
+    <string name="account_password_warning">இந்த ஃபோன் புதிய அமர்வுடன் உள்நுழைந்தே இருக்கும். மற்ற ஒவ்வொரு சாதனத்தையும் சர்வர் வெளியேற்றும்; அவை புதிய கடவுச்சொல்லுடன் மீண்டும் உள்நுழைய வேண்டும்.</string>
+    <string name="account_password_confirm">கடவுச்சொல்லை மாற்று</string>
+    <string name="account_password_changed">கடவுச்சொல் மாற்றப்பட்டது. உங்கள் மற்ற சாதனங்கள் மீண்டும் உள்நுழைய வேண்டும்.</string>
+    <string name="account_working">செயல்படுகிறது…</string>
+    <string name="account_sign_out_all">எல்லாச் சாதனங்களிலிருந்தும் வெளியேறு</string>
+    <string name="account_sign_out_all_title">எல்லாச் சாதனங்களிலிருந்தும் வெளியேறவா?</string>
+    <string name="account_sign_out_all_body">உங்கள் கணக்கில் உள்நுழைந்துள்ள ஒவ்வொரு சாதனமும் வெளியேற்றப்படும், இந்த ஃபோனும் சேர்த்து. ஒவ்வொன்றும் கடவுச்சொல்லுடன் மீண்டும் உள்நுழைய வேண்டும். உங்கள் குறியாக்கக் கடவுச்சொற்றொடர் மாறாது.</string>
+    <string name="account_sign_out_all_password">கடவுச்சொல் (விருப்பத்தேர்வு)</string>
+    <string name="account_sign_out_all_password_hint">கடவுச்சொல் இருந்தால் இந்த ஃபோன் உடனே மீண்டும் உள்நுழையும்; இல்லையெனில், உள்நுழைவுத் திரையைக் காட்டும்.</string>
+    <string name="account_sign_out_all_done">எல்லாச் சாதனங்களும் வெளியேற்றப்பட்டன. இந்த ஃபோன் மீண்டும் உள்நுழைந்தது.</string>
+    <string name="account_sessions_title">உள்நுழைந்த அமர்வுகள்</string>
+    <string name="account_sessions_hint">உங்கள் கணக்கில் நடந்த ஒவ்வொரு உள்நுழைவும். நீங்கள் அடையாளம் காணாத ஒன்றை வெளியேற்றுங்கள்.</string>
+    <string name="account_sessions_refresh">புதுப்பி</string>
+    <string name="account_session_this">%1$s (இந்த ஃபோன்)</string>
+    <string name="account_session_unknown">தெரியாத சாதனம்</string>
+    <string name="account_session_times">உள்நுழைந்தது %1$s · கடைசியாகப் பார்த்தது %2$s</string>
+    <string name="account_session_sign_out_title">%1$s ஐ வெளியேற்றவா?</string>
+    <string name="account_session_sign_out_body">அந்தச் சாதனத்தை சர்வர் வெளியேற்றும்; அது கடவுச்சொல்லுடன் மீண்டும் உள்நுழைய வேண்டும்.</string>
+    <string name="account_session_signed_out">அமர்வு வெளியேற்றப்பட்டது.</string>
+    <string name="account_ago_now">இப்போதுதான்</string>
+    <plurals name="account_ago_minutes">
+        <item quantity="one">%1$d நிமிடத்துக்கு முன்</item>
+        <item quantity="other">%1$d நிமிடங்களுக்கு முன்</item>
+    </plurals>
+    <plurals name="account_ago_hours">
+        <item quantity="one">%1$d மணிநேரத்துக்கு முன்</item>
+        <item quantity="other">%1$d மணிநேரத்துக்கு முன்</item>
+    </plurals>
+    <plurals name="account_ago_days">
+        <item quantity="one">%1$d நாளுக்கு முன்</item>
+        <item quantity="other">%1$d நாட்களுக்கு முன்</item>
+    </plurals>
+    <string name="account_signed_out_title">நீங்கள் வெளியேற்றப்பட்டீர்கள்</string>
+    <string name="account_signed_out_body">மற்றொரு சாதனத்தில் %1$s இன் கடவுச்சொல் மாற்றப்பட்டது, அல்லது எல்லாச் சாதனங்களும் வெளியேற்றப்பட்டன. மீண்டும் உள்நுழைய கடவுச்சொல்லை உள்ளிடுங்கள்.</string>
+    <string name="account_sign_in_again">மீண்டும் உள்நுழை</string>
+    <string name="account_sign_in_another_way">வேறு வழியில் உள்நுழை</string>
+    <string name="error_wrong_password">இந்தக் கடவுச்சொல் சரியில்லை.</string>
+    <string name="error_update_server_sessions">உங்கள் அமர்வுகளைப் பார்க்க சர்வரைப் புதுப்பியுங்கள்.</string>
 </resources>
