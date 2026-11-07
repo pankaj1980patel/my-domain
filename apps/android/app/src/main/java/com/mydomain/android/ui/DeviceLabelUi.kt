@@ -155,22 +155,6 @@ fun DeviceIcon(icon: String, size: Dp = 24.dp, color: Color = T.text) {
     Canvas(Modifier.size(size)) { drawDeviceIcon(icon, Offset.Zero, this.size.minDimension, color) }
 }
 
-/** A device's avatar: the icon you chose, else the one for what it is
- *  ([DeviceKinds]), ringed and tinted in its colour. The icon stays in the
- *  text colour, so it keeps full contrast whatever the colour. */
-@Composable
-fun DeviceAvatar(node: String, size: Dp = 44.dp) {
-    val label = DeviceLabels.labels[node]
-    val accent = labelColor(label?.color)
-    val shape = MaterialTheme.shapes.small
-    // Decorative: the device's name is always next to it.
-    var m = Modifier.size(size).clearAndSetSemantics {}.clip(shape).background(T.surface2, shape)
-    if (accent != null) m = m.background(accent.copy(alpha = 0.18f), shape).border(BorderStroke(2.dp, accent), shape)
-    Box(m, contentAlignment = Alignment.Center) {
-        DeviceIcon(DeviceKindPlan.iconOf(label?.icon, DeviceKinds.kinds[node]), size * 0.6f)
-    }
-}
-
 /** The nickname / icon / colour editor, for a device's screen. */
 @Composable
 fun DeviceLabelEditor(node: String, onDone: () -> Unit) {

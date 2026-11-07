@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,42 +81,15 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import com.mydomain.android.ffi.PeerInfo
 
-/** A glass card: the one container style (kit card, 18 dp corners). Quiet
- *  borders: told apart by its soft fill, no outline. */
+/** A card with an optional title: the one container style, [SoftCard]
+ *  (kept as the name the older screens use). */
 @Composable
 fun Tile(
     modifier: Modifier = Modifier,
     title: String? = null,
     onClick: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
-) {
-    val body: @Composable () -> Unit = {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (title != null) {
-                Text(title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium, color = T.text)
-            }
-            content()
-        }
-    }
-    // Only a tile you can tap is clickable: a disabled clickable Surface
-    // would merge every line in it into one node read as "disabled".
-    if (onClick != null) {
-        Surface(
-            onClick = onClick,
-            modifier = modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            color = T.surface,
-            content = body,
-        )
-    } else {
-        Surface(
-            modifier = modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            color = T.surface,
-            content = body,
-        )
-    }
-}
+) = SoftCard(modifier, onClick = onClick, title = title, content = content)
 
 /** Android's "Remove animations" (Settings.Global ANIMATOR_DURATION_SCALE
  *  at 0): skip decorative motion such as the connecting pulse. */
@@ -265,35 +239,19 @@ fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
     }
 }
 
+/** Coloured dot + plain-words status, with signal bars while linked.
+ *  [compact]: one line, no bars (lists). */
 @Composable
-fun Avatar(name: String, size: Dp = 44.dp) {
-    Box(
-        // Decorative: the name is always next to it.
-        Modifier.size(size).background(T.surface2, MaterialTheme.shapes.small).clearAndSetSemantics {},
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(initial(name), color = T.text, fontWeight = FontWeight.SemiBold, fontSize = (size.value * 0.4f).sp)
-    }
-}
-
-/** Coloured dot + plain-words status. */
-@Composable
-fun StatusPill(node: String) {
+fun StatusPill(node: String, modifier: Modifier = Modifier, compact: Boolean = false) {
     val s = linkStateOf(node)
-    val color = when (s) {
-        LinkState.Direct -> T.success
-        LinkState.Relay -> T.warning
-        LinkState.Failed -> T.danger
-        LinkState.Connecting -> T.accent
-        LinkState.Offline -> T.text3
-    }
+    val color = stateColor(s)
     val pulse = if (s == LinkState.Connecting && !reducedMotion()) {
         val tr = rememberInfiniteTransition(label = "pulse")
         val a by tr.animateFloat(0.3f, 1f, infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "a")
         a
     } else 1f
-    val q = if (s == LinkState.Direct || s == LinkState.Relay) Core.quality[node] else null
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    val q = if (!compact && (s == LinkState.Direct || s == LinkState.Relay)) Core.quality[node] else null
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
         // Connected dots glow softly (kit .dot), except in the quiet theme.
         val glow = s == LinkState.Direct && T.dotGlow
         Box(
@@ -305,6 +263,7 @@ fun StatusPill(node: String) {
         Text(
             linkLabel(s), style = MaterialTheme.typography.labelMedium,
             color = if (s == LinkState.Offline || s == LinkState.Connecting) T.text2 else color,
+            maxLines = if (compact) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
         )
         if (q != null && qualityLabel(q) != null) {
             Spacer(Modifier.width(6.dp))
@@ -328,36 +287,6 @@ fun SignalBars(quality: String, color: androidx.compose.ui.graphics.Color) {
                 Modifier.width(3.dp).height(h.dp)
                     .background(if (i < filled) on else T.borderStrong, RoundedCornerShape(1.dp)),
             )
-        }
-    }
-}
-
-@Composable
-fun DeviceCard(peer: PeerInfo, onOpen: () -> Unit, onConnect: () -> Unit) {
-    val s = linkStateOf(peer.nodeId)
-    val unread = Core.messages.count { it.node == peer.nodeId && it.incoming }
-    Tile(onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            DeviceAvatar(peer.nodeId)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    Core.peerName(peer.nodeId), Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.titleMedium, color = T.text,
-                )
-                StatusPill(peer.nodeId)
-            }
-            if (unread > 0) {
-                val unreadText = pluralStringResource(R.plurals.a11y_unread, unread, unread)
-                Box(
-                    Modifier.padding(start = 8.dp).background(T.accent, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)
-                        .clearAndSetSemantics { contentDescription = unreadText },
-                ) { Text("$unread", color = T.onAccent, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold) }
-            }
-            if (s == LinkState.Offline || s == LinkState.Failed) {
-                Spacer(Modifier.width(8.dp))
-                GhostButton(stringResource(R.string.connect), onConnect, small = true)
-            }
         }
     }
 }

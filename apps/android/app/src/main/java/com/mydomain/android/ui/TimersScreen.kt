@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -98,16 +95,9 @@ fun TimersScreen(onBack: () -> Unit, onHelp: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
-                }
-                Text(
-                    stringResource(R.string.timers_title), Modifier.weight(1f).semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall, color = T.text,
-                )
+            BackBar(stringResource(R.string.timers_title), onBack) {
                 IconButton(onClick = onHelp) {
-                    Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                    LIcon(R.drawable.ic_lucide_info, T.text2, 24.dp, stringResource(R.string.help_open))
                 }
             }
             Muted(stringResource(R.string.timers_subtitle))
@@ -293,44 +283,6 @@ private fun TimerRow(x: TimerItem, now: Long, devices: List<String>, me: String)
             }
             SoftButton(stringResource(R.string.timer_plus_minute), { act { Timers.add(x.id, MINUTE) } })
             if (!ended) GhostButton(stringResource(R.string.timer_cancel), { act { Timers.action(x.id, "cancel") } })
-        }
-    }
-}
-
-/** The Timers entry on Devices: how many run, and the soonest. */
-@Composable
-fun TimersEntry(onOpen: () -> Unit) {
-    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(1000)
-            Core.awaitOnScreen()
-            now = System.currentTimeMillis()
-        }
-    }
-    val list = Timers.sorted()
-    val running = list.count { it.state == "running" && !Timers.ended(it, now) }
-    val ringing = list.count { Timers.ended(it, now) }
-    val next = list.firstOrNull { it.state == "running" && !Timers.ended(it, now) }
-    Tile(onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.timers_title), style = MaterialTheme.typography.titleMedium, color = T.text)
-                Muted(
-                    when {
-                        ringing > 0 -> stringResource(R.string.timer_times_up)
-                        running > 0 -> pluralStringResource(R.plurals.timers_running, running, running)
-                        list.isNotEmpty() -> stringResource(R.string.timers_paused)
-                        else -> stringResource(R.string.timers_entry_hint)
-                    },
-                )
-            }
-            if (next != null) {
-                Text(
-                    TimerPlan.clock(Timers.remaining(next, now)),
-                    fontSize = 22.sp, fontWeight = FontWeight.Bold, color = T.text,
-                )
-            }
         }
     }
 }

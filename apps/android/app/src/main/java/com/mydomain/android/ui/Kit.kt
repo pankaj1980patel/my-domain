@@ -1,12 +1,15 @@
 package com.mydomain.android.ui
 
 import androidx.annotation.DrawableRes
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -19,7 +22,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -32,12 +34,31 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -45,13 +66,18 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.Hyphens
+import androidx.compose.ui.text.style.LineBreak
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mydomain.android.R
+import com.mydomain.android.core.Core
 
 // The redesign's building blocks (the cosmic design boards): soft filled
 // cards with no bright outlines, round coloured icons, pill tabs and chips,
@@ -78,7 +104,10 @@ fun hue(h: Hue): Color {
 }
 
 /** What each kind of thing is coloured: files blue, messages violet, calls
- *  green, alerts amber, danger red; tools cyan. */
+ *  green, alerts amber, danger red; tools cyan. A colour means only that:
+ *  navigation and settings rows with no such meaning are [Hue.Muted] (or
+ *  [Hue.Cyan] when they are tools), and the same item keeps one colour
+ *  everywhere. */
 object Hues {
     val files = Hue.Blue
     val messages = Hue.Violet
@@ -86,6 +115,18 @@ object Hues {
     val alerts = Hue.Amber
     val danger = Hue.Red
     val tools = Hue.Cyan
+    val plain = Hue.Muted
+}
+
+/** Messages that came in since you last opened Messages (this session):
+ *  the top bar's bell and the unread badges on device rows. */
+internal object Attention {
+    var seenAt by mutableLongStateOf(0L)
+
+    val newMessages: Int
+        get() = Core.messages.count { it.incoming && it.ts > seenAt }
+
+    fun newFrom(node: String): Int = Core.messages.count { it.node == node && it.incoming && it.ts > seenAt }
 }
 
 /** A Lucide icon ([res]: R.drawable.ic_lucide_*), tinted. Decorative unless
@@ -95,23 +136,38 @@ fun LIcon(@DrawableRes res: Int, tint: Color = T.text, size: Dp = 22.dp, descrip
     Icon(painterResource(res), description, modifier.size(size), tint = tint)
 }
 
-/** A soft filled card: no outline, told apart by its fill (quiet borders). */
+/** A card's title (a heading). */
+@Composable
+fun CardTitle(title: String, modifier: Modifier = Modifier) {
+    Text(title, modifier.semantics { heading() }, style = MaterialTheme.typography.titleMedium, color = T.text)
+}
+
+/** The one card: a soft fill, the theme's card corners, no outline (quiet
+ *  borders), except a hairline on the light theme, where the fill alone is
+ *  too close to the background. [title]: a heading on top. */
 @Composable
 fun SoftCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     padding: PaddingValues = PaddingValues(16.dp),
     color: Color = T.surface,
+    title: String? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = MaterialTheme.shapes.medium
+    val border = if (T.isLight) BorderStroke(1.dp, T.border) else null
     val body: @Composable () -> Unit = {
-        Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp), content = content)
+        Column(Modifier.padding(padding), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (title != null) CardTitle(title)
+            content()
+        }
     }
+    // Only a card you can tap is clickable: a disabled clickable Surface
+    // would merge every line in it into one node read as "disabled".
     if (onClick != null) {
-        Surface(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = shape, color = color, content = body)
+        Surface(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = shape, color = color, border = border, content = body)
     } else {
-        Surface(modifier = modifier.fillMaxWidth(), shape = shape, color = color, content = body)
+        Surface(modifier = modifier.fillMaxWidth(), shape = shape, color = color, border = border, content = body)
     }
 }
 
@@ -125,40 +181,106 @@ fun IconBubble(@DrawableRes icon: Int, h: Hue, size: Dp = 40.dp) {
     ) { LIcon(icon, c, size * 0.5f) }
 }
 
-/** A round coloured action with its label under it (Home's quick actions). */
+/** Labels under icons: never broken mid-word (hyphenated where the
+ *  language allows, else moved whole to the next line). */
 @Composable
-fun QuickAction(@DrawableRes icon: Int, h: Hue, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+private fun tileLabelStyle(): TextStyle = MaterialTheme.typography.labelMedium.copy(hyphens = Hyphens.Auto, lineBreak = LineBreak.Heading)
+
+/** One action: an icon over its words. Disabled for now ([enabled] false)
+ *  with [reason] said under it and read out ("Offline", "Sending…");
+ *  actions a device can't do at all are left out, not disabled. */
+data class TileAction(
+    @DrawableRes val icon: Int,
+    val label: String,
+    val h: Hue,
+    val enabled: Boolean = true,
+    val reason: String? = null,
+    val onClick: () -> Unit,
+)
+
+private fun Modifier.disabledReason(a: TileAction): Modifier =
+    if (!a.enabled && a.reason != null) semantics { stateDescription = a.reason } else this
+
+/** A round coloured action with its label under it on one line (Home's
+ *  quick actions). */
+@Composable
+fun QuickAction(a: TileAction, modifier: Modifier = Modifier) {
     Column(
-        modifier.alpha(if (enabled) 1f else 0.45f).clip(RoundedCornerShape(16.dp))
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 6.dp),
+        modifier.clip(RoundedCornerShape(16.dp))
+            .clickable(enabled = a.enabled, role = Role.Button, onClick = a.onClick)
+            .disabledReason(a).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        IconBubble(icon, h, 52.dp)
+        Box(Modifier.alpha(if (a.enabled) 1f else 0.45f)) { IconBubble(a.icon, a.h, 52.dp) }
         Text(
-            label, style = MaterialTheme.typography.labelMedium, color = T.text, textAlign = TextAlign.Center,
-            maxLines = 2, overflow = TextOverflow.Ellipsis,
+            a.label, style = tileLabelStyle(), color = if (a.enabled) T.text else T.text2, textAlign = TextAlign.Center,
+            maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
+        if (!a.enabled && a.reason != null) {
+            Text(a.reason, style = MaterialTheme.typography.bodySmall, color = T.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
 /** One choice of a [Pills] row: [value], its words, an optional icon. */
 data class Pill<V>(val value: V, val label: String, @DrawableRes val icon: Int? = null)
 
-/** Single-choice pills in a row that scrolls sideways (tabs and filter
- *  chips): the chosen one filled with the accent wash. */
+/** Fade the ends of a sideways-scrolling row where there's more to see. */
+fun Modifier.fadingEdges(scroll: ScrollState, edge: Dp = 24.dp): Modifier = this
+    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+    .drawWithContent {
+        drawContent()
+        val w = edge.toPx()
+        if (scroll.value > 0) {
+            drawRect(
+                Brush.horizontalGradient(0f to Color.Transparent, 1f to Color.Black, startX = 0f, endX = w),
+                size = Size(w, size.height), blendMode = BlendMode.DstIn,
+            )
+        }
+        if (scroll.value < scroll.maxValue) {
+            drawRect(
+                Brush.horizontalGradient(0f to Color.Black, 1f to Color.Transparent, startX = size.width - w, endX = size.width),
+                topLeft = Offset(size.width - w, 0f), size = Size(w, size.height), blendMode = BlendMode.DstIn,
+            )
+        }
+    }
+
+/** Single-choice pills in a row that scrolls sideways (tabs: [role]
+ *  Tab; filters: RadioButton): the chosen one filled with the accent wash
+ *  and scrolled into view; the ends fade where the row goes on. */
 @Composable
-fun <V> Pills(options: List<Pill<V>>, selected: V, onSelect: (V) -> Unit, modifier: Modifier = Modifier) {
+fun <V> Pills(
+    options: List<Pill<V>>,
+    selected: V,
+    onSelect: (V) -> Unit,
+    modifier: Modifier = Modifier,
+    role: Role = Role.Tab,
+) {
+    val scroll = rememberScrollState()
+    var viewport by remember { mutableIntStateOf(0) }
+    // Each pill's left edge and width in the row, by index.
+    val spots = remember { mutableStateMapOf<Int, Pair<Int, Int>>() }
+    val at = options.indexOfFirst { it.value == selected }
+    val spot = spots[at]
+    LaunchedEffect(at, spot, viewport) {
+        val (x, w) = spot ?: return@LaunchedEffect
+        if (viewport == 0) return@LaunchedEffect
+        scroll.animateScrollTo((x - (viewport - w) / 2).coerceIn(0, scroll.maxValue))
+    }
     Row(
-        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).selectableGroup(),
+        modifier.fillMaxWidth().onSizeChanged { viewport = it.width }.fadingEdges(scroll)
+            .horizontalScroll(scroll).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        options.forEach { p ->
+        options.forEachIndexed { i, p ->
             val on = p.value == selected
             Row(
-                Modifier.heightIn(min = 40.dp).clip(CircleShape)
+                Modifier.onGloballyPositioned { spots[i] = it.positionInParent().x.toInt() to it.size.width }
+                    .minimumInteractiveComponentSize().heightIn(min = 40.dp).clip(CircleShape)
                     .background(if (on) T.accentBg else T.surface)
-                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(p.value) })
+                    .selectable(selected = on, role = role, onClick = { onSelect(p.value) })
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -167,7 +289,7 @@ fun <V> Pills(options: List<Pill<V>>, selected: V, onSelect: (V) -> Unit, modifi
                     Spacer(Modifier.width(6.dp))
                 }
                 Text(
-                    p.label, style = MaterialTheme.typography.labelLarge,
+                    p.label, style = MaterialTheme.typography.labelLarge, maxLines = 1,
                     color = if (on) T.accentFg else T.text2, fontWeight = if (on) FontWeight.Bold else FontWeight.Medium,
                 )
             }
@@ -197,7 +319,8 @@ fun Chevron() {
 }
 
 /** A row: round icon, title and an optional line, then [trailing] (a
- *  chevron by default). One TalkBack stop when tappable. */
+ *  chevron by default). One TalkBack stop when tappable; [state] is read
+ *  out with it (a badge's meaning). */
 @Composable
 fun NavRow(
     @DrawableRes icon: Int,
@@ -206,10 +329,12 @@ fun NavRow(
     subtitle: String? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    state: String? = null,
     trailing: (@Composable RowScope.() -> Unit)? = { Chevron() },
 ) {
     var m = modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp))
     if (onClick != null) m = m.clickable(role = Role.Button, onClick = onClick)
+    if (state != null) m = m.semantics(mergeDescendants = true) { stateDescription = state }
     Row(m.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         IconBubble(icon, h, 40.dp)
         Spacer(Modifier.width(12.dp))
@@ -226,7 +351,7 @@ fun NavRow(
     }
 }
 
-/** A card of [NavRow]s with a little space between. */
+/** A card of [NavRow]s, with an optional heading above it. */
 @Composable
 fun RowGroup(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -239,8 +364,8 @@ fun RowGroup(title: String? = null, content: @Composable ColumnScope.() -> Unit)
 
 /** A section's heading, with an optional link at its end ("View all"). */
 @Composable
-fun SectionTitle(title: String, action: String? = null, onAction: (() -> Unit)? = null) {
-    Row(Modifier.fillMaxWidth().padding(top = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+fun SectionTitle(title: String, action: String? = null, onAction: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(top = 6.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
             title, Modifier.weight(1f).semantics { heading() },
             style = MaterialTheme.typography.titleMedium, color = T.text, fontWeight = FontWeight.Bold,
@@ -248,25 +373,17 @@ fun SectionTitle(title: String, action: String? = null, onAction: (() -> Unit)? 
         if (action != null && onAction != null) {
             Text(
                 action,
-                Modifier.heightIn(min = 40.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAction)
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                Modifier.heightIn(min = 48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onAction)
+                    .padding(horizontal = 10.dp, vertical = 14.dp),
                 style = MaterialTheme.typography.labelLarge, color = T.accentFg,
             )
         }
     }
 }
 
-/** One action of a [GroupCard]: an icon over its words. */
-data class TileAction(
-    @DrawableRes val icon: Int,
-    val label: String,
-    val h: Hue,
-    val enabled: Boolean = true,
-    val onClick: () -> Unit,
-)
-
-/** A grouped card (the device page): a header (icon, title, line,
- *  chevron) over a row of action tiles, three to a row. */
+/** A grouped card (the device page): a header ([leading] or a round icon,
+ *  title, line, chevron) over its action tiles, three to a row, or two on a
+ *  narrow screen or with large text (so no label breaks mid-word). */
 @Composable
 fun GroupCard(
     @DrawableRes icon: Int,
@@ -276,13 +393,35 @@ fun GroupCard(
     onHeader: (() -> Unit)?,
     actions: List<TileAction>,
     modifier: Modifier = Modifier,
+    leading: (@Composable () -> Unit)? = null,
 ) {
     SoftCard(modifier, padding = PaddingValues(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 12.dp)) {
-        NavRow(icon, h, title, subtitle, onHeader, trailing = if (onHeader != null) ({ Chevron() }) else null)
-        actions.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { a -> ActionTile(a, Modifier.weight(1f)) }
-                repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
+        if (leading != null) {
+            var m = Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(16.dp))
+            if (onHeader != null) m = m.clickable(role = Role.Button, onClick = onHeader)
+            Row(m.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                leading()
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleSmall, color = T.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    if (!subtitle.isNullOrEmpty()) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = T.text2)
+                }
+                if (onHeader != null) Chevron()
+            }
+        } else {
+            NavRow(icon, h, title, subtitle, onHeader, trailing = if (onHeader != null) ({ Chevron() }) else null)
+        }
+        if (actions.isNotEmpty()) {
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
+                val perRow = if (maxWidth < 340.dp || LocalDensity.current.fontScale > 1.15f) 2 else 3
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    actions.chunked(perRow).forEach { row ->
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            row.forEach { a -> ActionTile(a, Modifier.weight(1f)) }
+                            repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                        }
+                    }
+                }
             }
         }
     }
@@ -292,13 +431,15 @@ fun GroupCard(
 fun ActionTile(a: TileAction, modifier: Modifier = Modifier) {
     Column(
         modifier.heightIn(min = 76.dp).clip(RoundedCornerShape(14.dp)).background(T.surface2)
-            .alpha(if (a.enabled) 1f else 0.45f)
             .clickable(enabled = a.enabled, role = Role.Button, onClick = a.onClick)
-            .padding(horizontal = 10.dp, vertical = 12.dp),
+            .disabledReason(a).padding(horizontal = 10.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        LIcon(a.icon, hue(a.h), 22.dp)
-        Text(a.label, style = MaterialTheme.typography.labelLarge, color = T.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        LIcon(a.icon, if (a.enabled) hue(a.h) else T.text3, 22.dp)
+        Text(a.label, style = tileLabelStyle(), color = if (a.enabled) T.text else T.text2, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (!a.enabled && a.reason != null) {
+            Text(a.reason, style = MaterialTheme.typography.bodySmall, color = T.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -309,29 +450,38 @@ fun StatCard(@DrawableRes icon: Int, h: Hue, value: String, label: String, sub: 
         Row(verticalAlignment = Alignment.CenterVertically) {
             LIcon(icon, hue(h), 20.dp)
             Spacer(Modifier.width(6.dp))
-            Text(value, style = MaterialTheme.typography.titleLarge, color = T.text, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(
+                value, style = MaterialTheme.typography.titleLarge, color = T.text, fontWeight = FontWeight.Bold,
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
+            )
         }
         Column {
             Text(label, style = MaterialTheme.typography.labelMedium, color = T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (sub != null) Text(sub, style = MaterialTheme.typography.labelSmall, color = T.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (sub != null) Text(sub, style = MaterialTheme.typography.bodySmall, color = T.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
-/** The bar at the top of the main tabs: the logo and wordmark, the bell
- *  (with how many need a look) and Settings (a dot when the health check
- *  found something red). */
+/** The bar at the top of the main tabs: the logo with the wordmark (Home)
+ *  or the tab's [title], the bell (with how many messages are new) and
+ *  Settings. */
 @Composable
-fun TopBar(bellCount: Int, onBell: () -> Unit, settingsDot: Boolean, onSettings: () -> Unit) {
+fun TopBar(title: String?, bellCount: Int, onBell: () -> Unit, onSettings: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 4.dp, top = 6.dp),
+        Modifier.fillMaxWidth().statusBarsPadding().heightIn(min = 56.dp).padding(start = 16.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Image(painterResource(logoRes()), null, Modifier.size(40.dp))
+        Image(painterResource(logoRes()), null, Modifier.size(if (title == null) 40.dp else 32.dp))
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Wordmark(fontSize = 20)
-            Tagline()
+        Box(Modifier.weight(1f)) {
+            if (title == null) {
+                Wordmark(fontSize = 20, maxLines = 1)
+            } else {
+                Text(
+                    title, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleLarge,
+                    color = T.text, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         val bellLabel = if (bellCount > 0) {
             androidx.compose.ui.res.pluralStringResource(R.plurals.top_bell_count, bellCount, bellCount)
@@ -341,7 +491,8 @@ fun TopBar(bellCount: Int, onBell: () -> Unit, settingsDot: Boolean, onSettings:
         IconButton(onClick = onBell, modifier = Modifier.semantics { contentDescription = bellLabel }) {
             BadgedBox(badge = {
                 if (bellCount > 0) {
-                    Badge(containerColor = T.danger, contentColor = Color.White) {
+                    // White on the dark themes' danger pink is 2.7:1: a deeper red.
+                    Badge(containerColor = if (T.isLight) T.danger else Color(0xFFE11D48), contentColor = Color.White) {
                         Text(if (bellCount > 99) "99+" else "$bellCount", fontSize = 10.sp)
                     }
                 }
@@ -349,14 +500,12 @@ fun TopBar(bellCount: Int, onBell: () -> Unit, settingsDot: Boolean, onSettings:
         }
         val settingsLabel = stringResource(R.string.tab_settings)
         IconButton(onClick = onSettings, modifier = Modifier.semantics { contentDescription = settingsLabel }) {
-            BadgedBox(badge = { if (settingsDot) Badge(containerColor = T.danger) }) {
-                LIcon(R.drawable.ic_lucide_settings, T.text, 24.dp)
-            }
+            LIcon(R.drawable.ic_lucide_settings, T.text, 24.dp)
         }
     }
 }
 
-/** A pushed screen's bar: Back, the title in the middle, and [actions]. */
+/** A pushed screen's bar: Back, the title, and [actions]. */
 @Composable
 fun BackBar(title: String, onBack: () -> Unit, actions: (@Composable RowScope.() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -368,23 +517,3 @@ fun BackBar(title: String, onBack: () -> Unit, actions: (@Composable RowScope.()
         if (actions != null) Row(verticalAlignment = Alignment.CenterVertically, content = actions)
     }
 }
-
-/** A coloured dot and words: "Online" / "Offline" (a pill). */
-@Composable
-fun OnlinePill(online: Boolean) {
-    val c = if (online) T.success else T.text3
-    Row(
-        Modifier.clip(CircleShape).background(c.copy(alpha = 0.16f)).padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(8.dp).background(c, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            stringResource(if (online) R.string.dev_online else R.string.dev_offline),
-            style = MaterialTheme.typography.labelLarge, color = if (online) T.success else T.text2,
-        )
-    }
-}
-
-/** A limit for wide screens: content stays readable on a tablet. */
-fun Modifier.readable(): Modifier = this.widthIn(max = 720.dp)

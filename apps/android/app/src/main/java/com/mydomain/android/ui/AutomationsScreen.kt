@@ -13,8 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,15 +73,7 @@ fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { if (editing != null) editing = null else onBack() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
-            }
-            Text(
-                stringResource(R.string.automations_title), Modifier.semantics { heading() },
-                style = MaterialTheme.typography.headlineSmall, color = T.text,
-            )
-        }
+        BackBar(stringResource(R.string.automations_title), { if (editing != null) editing = null else onBack() })
         val e = editing
         if (e != null) {
             AutomationForm(e, isNew, onDone = { editing = null })

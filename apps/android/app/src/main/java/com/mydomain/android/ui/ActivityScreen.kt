@@ -1,5 +1,12 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -23,9 +30,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
@@ -82,8 +86,9 @@ import java.util.Date
  * only the timeline's own record (the histories stay). A row opens where it
  * lives ([onOpen]); the way to Transfers stays on top.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
+fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit, state: LazyListState = rememberLazyListState()) {
     val ctx = LocalContext.current
     var text by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf("") }
@@ -116,58 +121,98 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
     val filtered = text.isNotBlank() || kind.isNotEmpty() || node.isNotEmpty()
     val days = remember(page.items) { ActivityFeed.byDay(page.items) { dayKey(it) } }
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
-            PageHead(stringResource(R.string.activity_title), stringResource(R.string.activity_subtitle))
-        }
-        item {
-            val active = TransferLog.list.count { !it.finished }
-            SoftCard(padding = PaddingValues(4.dp)) {
-                NavRow(
-                    R.drawable.ic_lucide_arrow_left_right, Hues.files,
-                    if (active > 0) stringResource(R.string.transfers_open_active, active) else stringResource(R.string.transfers_open),
-                    stringResource(R.string.transfers_subtitle), onClick = onTransfers,
-                )
-            }
-        }
-        item {
-            OutlinedTextField(
-                text, { text = it; pages = 1 },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(stringResource(R.string.activity_search)) },
-                singleLine = true,
-                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = T.text3) },
-                trailingIcon = if (text.isEmpty()) null else {
-                    { IconButton(onClick = { text = "" }) { Icon(Icons.Filled.Clear, stringResource(R.string.search_clear), tint = T.text2) } }
-                },
-                shape = MaterialTheme.shapes.small,
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = T.accent, unfocusedBorderColor = T.controlBorder,
-                    focusedLabelColor = T.accentFg, unfocusedLabelColor = T.text3, cursorColor = T.accent,
-                    focusedContainerColor = T.surface2, unfocusedContainerColor = T.surface2,
-                    focusedTextColor = T.text, unfocusedTextColor = T.text,
-                ),
-            )
-        }
-        item {
-            Chips(
-                listOf("" to stringResource(R.string.activity_all)) +
-                    ActivityFeed.KINDS.filter { it !in hidden }.map { it to stringResource(kindLabel(it)) },
-                kind,
-            ) { kind = it; pages = 1 }
-        }
-        if (Core.peers.isNotEmpty()) {
+    var deviceMenu by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    LazyColumn(
+        Modifier.fillMaxSize(), state = state,
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        // Transfers live in More → Files & transfers; here only while some run.
+        val active = TransferLog.list.count { !it.finished }
+        if (active > 0) {
             item {
-                Chips(
-                    listOf("" to stringResource(R.string.activity_all_devices)) + Core.peers.map { it.nodeId to Core.peerName(it.nodeId) },
-                    node,
-                ) { node = it; pages = 1 }
+                SoftCard(padding = PaddingValues(4.dp)) {
+                    NavRow(
+                        R.drawable.ic_lucide_arrow_left_right, Hues.files,
+                        pluralStringResource(R.plurals.transfers_under_way, active, active),
+                        stringResource(R.string.transfers_subtitle), onClick = onTransfers,
+                    )
+                }
             }
         }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GhostButton(stringResource(R.string.activity_choose), { choosing = true }, small = true)
-                GhostButton(stringResource(R.string.activity_clear), { confirmClear = true }, small = true)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                OutlinedTextField(
+                    text, { text = it; pages = 1 },
+                    modifier = Modifier.weight(1f),
+                    label = { Text(stringResource(R.string.activity_search)) },
+                    singleLine = true,
+                    leadingIcon = { LIcon(R.drawable.ic_lucide_search, T.text3, 22.dp) },
+                    trailingIcon = if (text.isEmpty()) null else {
+                        { IconButton(onClick = { text = "" }) { LIcon(R.drawable.ic_lucide_x, T.text2, 22.dp, stringResource(R.string.search_clear)) } }
+                    },
+                    shape = MaterialTheme.shapes.small,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = T.accent, unfocusedBorderColor = T.controlBorder,
+                        focusedLabelColor = T.accentFg, unfocusedLabelColor = T.text3, cursorColor = T.accent,
+                        focusedContainerColor = T.surface2, unfocusedContainerColor = T.surface2,
+                        focusedTextColor = T.text, unfocusedTextColor = T.text,
+                    ),
+                )
+                // What's shown, and (apart, in red, last) clearing it.
+                Box {
+                    IconButton(onClick = { menu = true }) {
+                        LIcon(R.drawable.ic_lucide_ellipsis_vertical, T.text, 24.dp, stringResource(R.string.more_options))
+                    }
+                    DropdownMenu(menu, onDismissRequest = { menu = false }, containerColor = T.bar) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.activity_choose), color = T.text) },
+                            leadingIcon = { LIcon(R.drawable.ic_lucide_sliders_horizontal, T.text2, 20.dp) },
+                            onClick = { menu = false; choosing = true },
+                        )
+                        HorizontalDivider(color = T.border)
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.activity_clear), color = T.danger) },
+                            leadingIcon = { LIcon(R.drawable.ic_lucide_trash_2, T.danger, 20.dp) },
+                            onClick = { menu = false; confirmClear = true },
+                        )
+                    }
+                }
+            }
+        }
+        // The kinds stay pinned while the timeline scrolls; the device is
+        // one pill with a menu.
+        stickyHeader(key = "kinds") {
+            Row(
+                Modifier.fillMaxWidth().background(T.bg).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.weight(1f)) {
+                    Chips(
+                        listOf("" to stringResource(R.string.activity_all)) +
+                            ActivityFeed.KINDS.filter { it !in hidden }.map { it to stringResource(kindLabel(it)) },
+                        kind,
+                    ) { kind = it; pages = 1 }
+                }
+                if (Core.peers.isNotEmpty()) {
+                    Box {
+                        Pills(
+                            listOf(Pill<Unit?>(Unit, (if (node.isEmpty()) stringResource(R.string.activity_all_devices) else Core.peerName(node)) + " ▾")),
+                            if (node.isEmpty()) null else Unit, { deviceMenu = true }, Modifier.padding(start = 8.dp).widthIn(max = 160.dp),
+                            role = Role.DropdownList,
+                        )
+                        DropdownMenu(deviceMenu, onDismissRequest = { deviceMenu = false }, containerColor = T.bar) {
+                            (listOf("" to stringResource(R.string.activity_all_devices)) + sortedPeers().map { it to Core.peerName(it) })
+                                .forEach { (id, label) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label, color = if (id == node) T.accentFg else T.text) },
+                                        onClick = { node = id; pages = 1; deviceMenu = false },
+                                    )
+                                }
+                        }
+                    }
+                }
             }
         }
         ActivityLog.clearedAt()?.let { at ->
@@ -188,12 +233,7 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
             }
         }
         days.forEach { (day, rows) ->
-            item(key = "d-$day") {
-                Text(
-                    dayLabel(ctx, rows.first().ts), Modifier.padding(top = 12.dp).semantics { heading() },
-                    style = MaterialTheme.typography.titleSmall, color = T.text2,
-                )
-            }
+            item(key = "d-$day") { SectionTitle(dayLabel(ctx, rows.first().ts)) }
             items(rows, key = { it.id }) { a -> ActivityRowView(ctx, a, onOpen, last = a === rows.last()) }
         }
         if (page.more) {
@@ -246,7 +286,7 @@ fun ActivityScreen(onTransfers: () -> Unit, onOpen: (ActivityRow) -> Unit) {
 /** Single-choice chips in a row that scrolls sideways. */
 @Composable
 private fun Chips(options: List<Pair<String, String>>, selected: String, onSelect: (String) -> Unit) {
-    Pills(options.map { (value, label) -> Pill(value, label, if (value.isEmpty()) null else kindIcon(value)) }, selected, onSelect)
+    Pills(options.map { (value, label) -> Pill(value, label, if (value.isEmpty()) null else kindIcon(value)) }, selected, onSelect, role = Role.RadioButton)
 }
 
 /** One row: a coloured round icon on the timeline, what happened, then the
@@ -307,19 +347,19 @@ private fun kindLabel(kind: String): Int = when (kind) {
     else -> R.string.activity_kind_other
 }
 
-/** A row's icon and colour: files blue, messages violet, calls green,
- *  alerts amber, problems red. */
+/** A row's icon and colour: files and clipboard blue, messages violet,
+ *  calls green, alerts amber, problems red; the rest plain. */
 private fun activityIcon(a: ActivityRow): Pair<Int, Hue> = when {
-    a.action == "note" -> R.drawable.ic_lucide_sticky_note to Hue.Amber
-    a.action == "timer" -> R.drawable.ic_lucide_timer to Hue.Amber
-    a.action == "read_later" -> R.drawable.ic_lucide_bookmark to Hue.Cyan
+    a.action == "note" -> R.drawable.ic_lucide_sticky_note to Hues.plain
+    a.action == "timer" -> R.drawable.ic_lucide_timer to Hues.plain
+    a.action == "read_later" -> R.drawable.ic_lucide_bookmark to Hues.plain
     a.action == "key_changed" -> R.drawable.ic_lucide_triangle_alert to Hue.Red
     a.kind == "files" -> R.drawable.ic_lucide_file to Hues.files
-    a.kind == "clipboard" -> R.drawable.ic_lucide_clipboard to Hue.Violet
+    a.kind == "clipboard" -> R.drawable.ic_lucide_clipboard to Hues.files
     a.kind == "messages" -> R.drawable.ic_lucide_message_circle to Hues.messages
     a.kind == "calls" -> R.drawable.ic_lucide_phone to Hues.calls
     a.kind == "notifications" -> R.drawable.ic_lucide_bell to Hues.alerts
-    a.kind == "connections" -> R.drawable.ic_lucide_link_2 to Hue.Green
+    a.kind == "connections" -> R.drawable.ic_lucide_link_2 to Hues.plain
     else -> R.drawable.ic_lucide_activity to Hue.Muted
 }
 

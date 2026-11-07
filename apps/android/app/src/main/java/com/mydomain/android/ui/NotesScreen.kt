@@ -25,10 +25,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
@@ -98,7 +94,7 @@ private const val NEW = Notes.NEW
  * [onOpened] says it was, so the shell can forget it.
  */
 @Composable
-fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}, onBack: (() -> Unit)? = null) {
+fun NotesScreen(onHelp: () -> Unit, onBack: () -> Unit, openNote: String? = null, onOpened: () -> Unit = {}) {
     // The open note's id (NEW: a new one; null: the list). `opened` changes
     // only when you pick one, so a new note getting its id keeps the editor.
     var open by rememberSaveable { mutableStateOf<String?>(null) }
@@ -135,57 +131,47 @@ fun NotesScreen(onHelp: () -> Unit, openNote: String? = null, onOpened: () -> Un
 }
 
 @Composable
-private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () -> Unit, onBack: (() -> Unit)? = null) {
+private fun NotesList(onOpen: (String) -> Unit, onNew: () -> Unit, onHelp: () -> Unit, onBack: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var upcoming by rememberSaveable { mutableStateOf(false) }
     val all = Notes.sorted()
     val list = (if (upcoming) Notes.upcoming() else all).filter { Notes.matches(it, query) }
     val now = rememberNow()
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        item {
-            if (onBack != null) {
-                // Opened from More or Workspace: Back, the title and Help.
-                Column {
-                    BackBar(stringResource(R.string.notes_title), onBack) {
-                        IconButton(onClick = onHelp) {
-                            Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
-                        }
-                    }
-                    Muted(stringResource(R.string.notes_subtitle))
-                }
-            } else {
-                PageHead(stringResource(R.string.notes_title), stringResource(R.string.notes_subtitle)) {
-                    IconButton(onClick = onHelp) {
-                        Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
-                    }
+    // The bar stays put above the list: Back, the title and Help.
+    Column(Modifier.fillMaxSize()) {
+        BackBar(stringResource(R.string.notes_title), onBack) {
+            IconButton(onClick = onHelp) {
+                LIcon(R.drawable.ic_lucide_info, T.text2, 24.dp, stringResource(R.string.help_open))
+            }
+        }
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            item { Muted(stringResource(R.string.notes_subtitle)) }
+            item {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) { Field(query, { query = it }, stringResource(R.string.notes_search)) }
+                    PrimaryButton(stringResource(R.string.notes_new), onNew)
                 }
             }
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { Field(query, { query = it }, stringResource(R.string.notes_search)) }
-                PrimaryButton(stringResource(R.string.notes_new), onNew)
+            item {
+                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceButton(stringResource(R.string.notes_filter_all), !upcoming) { upcoming = false }
+                    ChoiceButton(stringResource(R.string.notes_filter_upcoming), upcoming) { upcoming = true }
+                }
             }
-        }
-        item {
-            Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChoiceButton(stringResource(R.string.notes_filter_all), !upcoming) { upcoming = false }
-                ChoiceButton(stringResource(R.string.notes_filter_upcoming), upcoming) { upcoming = true }
+            if (upcoming && list.isEmpty() && query.isBlank()) {
+                item { Muted(stringResource(R.string.notes_no_upcoming)) }
+            } else if (all.isEmpty()) {
+                item { EmptyState(stringResource(R.string.notes_empty_title), stringResource(R.string.notes_empty_body)) }
+            } else if (list.isEmpty()) {
+                item { Muted(stringResource(R.string.notes_no_match, query)) }
             }
+            items(list, key = { it.id }) { n -> NoteRow(n, now, upcoming) { onOpen(n.id) } }
         }
-        if (upcoming && list.isEmpty() && query.isBlank()) {
-            item { Muted(stringResource(R.string.notes_no_upcoming)) }
-        } else if (all.isEmpty()) {
-            item { EmptyState(stringResource(R.string.notes_empty_title), stringResource(R.string.notes_empty_body)) }
-        } else if (list.isEmpty()) {
-            item { Muted(stringResource(R.string.notes_no_match, query)) }
-        }
-        items(list, key = { it.id }) { n -> NoteRow(n, now, upcoming) { onOpen(n.id) } }
     }
 }
 
@@ -218,10 +204,9 @@ private fun reminderTime(ctx: Context, at: Long): String = DateUtils.formatDateT
 /** A bell: a note with a reminder (warning colour once it's due). */
 @Composable
 private fun ReminderBell(due: Boolean, label: String?) {
-    Icon(
-        Icons.Outlined.Notifications, label,
-        Modifier.padding(horizontal = 2.dp).height(16.dp).width(16.dp),
-        tint = if (due) T.warning else T.text2,
+    LIcon(
+        R.drawable.ic_lucide_bell, if (due) T.warning else T.text2, 16.dp, label,
+        Modifier.padding(horizontal = 2.dp),
     )
 }
 
@@ -377,7 +362,7 @@ private fun NoteEditor(startId: String?, onClose: () -> Unit, onCreated: (String
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onClose) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back))
             }
             Text(
                 stringResource(R.string.notes_title), Modifier.weight(1f).semantics { heading() },

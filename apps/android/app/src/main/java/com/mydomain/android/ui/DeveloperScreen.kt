@@ -16,8 +16,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -71,7 +69,7 @@ fun DeveloperScreen(onBack: () -> Unit) {
     ) {
         item {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
+                IconButton(onClick = onBack) { LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back)) }
                 Text("Developer", Modifier.semantics { heading() }, style = MaterialTheme.typography.headlineSmall, color = T.text)
             }
         }

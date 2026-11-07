@@ -48,7 +48,7 @@ fun hasInfo(st: DeviceStatus): Boolean =
 fun InfoTile(node: String, name: String, st: DeviceStatus) {
     val ctx = LocalContext.current
     val size = { n: Long -> Formatter.formatShortFileSize(ctx, n) }
-    Tile(title = stringResource(R.string.info_title)) {
+    Tile(title = stringResource(R.string.dev_card_info)) {
         Muted(stringResource(R.string.info_hint, name))
         st.battery?.let { level ->
             InfoRow(

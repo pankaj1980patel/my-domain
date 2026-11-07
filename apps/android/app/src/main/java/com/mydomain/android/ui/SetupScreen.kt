@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -183,7 +180,7 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
     ) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back))
             }
             Column(Modifier.weight(1f)) {
                 Text(
@@ -195,7 +192,7 @@ fun SetupScreen(onBack: () -> Unit, onHelp: () -> Unit = {}) {
             }
             // "?": the Help topic on what each item is for.
             IconButton(onClick = onHelp) {
-                Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                LIcon(R.drawable.ic_lucide_info, T.text2, 24.dp, stringResource(R.string.help_open))
             }
         }
         Muted(stringResource(R.string.setup_hint))
@@ -248,33 +245,5 @@ fun SetupSettingsTile(onOpen: () -> Unit) {
     val (on, total) = setup.count
     Tile(title = stringResource(R.string.setup_tile, on, total), onClick = onOpen) {
         Muted(stringResource(R.string.setup_tile_hint))
-    }
-}
-
-/** The home screen's card, shown once after sign-in until it's dismissed
- *  or opened (remembered in the "md" prefs), and only while something is
- *  still off. */
-@Composable
-fun SetupHomeCard(onOpen: () -> Unit) {
-    val ctx = LocalContext.current
-    val prefs = remember { ctx.getSharedPreferences("md", Context.MODE_PRIVATE) }
-    var dismissed by remember { mutableStateOf(prefs.getBoolean(SetupState.PREF_CARD_DISMISSED, false)) }
-    if (dismissed) return
-    val setup = rememberSetupRows()
-    val (on, total) = setup.count
-    if (!SetupChecklist.showCard(signedIn = true, dismissed = dismissed, on = on, total = total)) return
-    val dismiss = {
-        dismissed = true
-        prefs.edit().putBoolean(SetupState.PREF_CARD_DISMISSED, true).apply()
-    }
-    Tile(title = stringResource(R.string.setup_card_title)) {
-        Muted(stringResource(R.string.setup_card_body, on, total))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PrimaryButton(stringResource(R.string.setup_card_open), {
-                dismiss()
-                onOpen()
-            }, Modifier.weight(1f))
-            GhostButton(stringResource(R.string.setup_card_dismiss), dismiss, Modifier.weight(1f))
-        }
     }
 }

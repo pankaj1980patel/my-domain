@@ -12,7 +12,6 @@
     <string name="tab_devices">डिव्हाइस</string>
     <string name="tab_activity">घडामोडी</string>
     <string name="tab_settings">सेटिंग्ज</string>
-    <string name="tab_notes">नोट्स</string>
 
     <!-- Shared -->
     <string name="back">मागे</string>
@@ -60,21 +59,13 @@
     <!-- Home -->
     <string name="home_title">तुमचे डिव्हाइस</string>
     <string name="home_subtitle_empty">तुमच्या खात्यात साइन इन केलेले डिव्हाइस इथे दिसतात. रिफ्रेश करण्यासाठी खाली ओढा.</string>
-    <plurals name="home_subtitle_connected">
-        <item quantity="one">%2$d पैकी %1$d कनेक्ट केलेले</item>
-        <item quantity="other">%2$d पैकी %1$d कनेक्ट केलेले</item>
-    </plurals>
     <string name="home_empty_title">अजून इतर डिव्हाइस नाहीत</string>
     <string name="home_empty_body">तुमच्या संगणकावर किंवा दुसऱ्या फोनवर my-domain इंस्टॉल करा आणि त्याच खात्याने साइन इन करा. ते आपोआप इथे दिसेल.</string>
     <string name="home_list_updated">डिव्हाइस सूची अपडेट झाली</string>
 
     <!-- Activity -->
-    <string name="activity_title">घडामोडी</string>
-    <string name="activity_subtitle">तुमच्या डिव्हाइसदरम्यान काय घडले: फाइल, क्लिपबोर्ड, संदेश, कॉल, कनेक्शन आणि बरेच काही.</string>
     <string name="activity_empty_title">अजून काही नाही</string>
     <string name="activity_empty_body">फाइल, क्लिपबोर्ड, संदेश आणि तुमचे डिव्हाइस करत असलेल्या इतर गोष्टी इथे दिसतात.</string>
-    <string name="activity_entry">घडामोडी</string>
-    <string name="activity_entry_body">तुमच्या डिव्हाइसदरम्यानच्या फाइल, क्लिपबोर्ड, संदेश आणि कॉल, दिवसानुसार.</string>
     <string name="activity_kind_files">फाइल</string>
     <string name="activity_kind_clipboard">क्लिपबोर्ड</string>
     <string name="activity_kind_messages">संदेश</string>
@@ -139,8 +130,6 @@
     <!-- Transfers: every file going to or coming from your devices -->
     <string name="transfers_title">ट्रान्सफर</string>
     <string name="transfers_subtitle">तुमच्या डिव्हाइसकडे आणि डिव्हाइसकडून येत-जात असलेल्या फाइल आणि फोल्डर.</string>
-    <string name="transfers_open">ट्रान्सफर</string>
-    <string name="transfers_open_active">ट्रान्सफर · %1$d चालू</string>
     <string name="transfers_active">चालू</string>
     <string name="transfers_recent">अलीकडील</string>
     <string name="transfers_empty_title">अजून कोणतेही ट्रान्सफर नाहीत</string>
@@ -231,7 +220,6 @@
     <string name="apps_show">त्याची ॲप्स दाखवा</string>
     <string name="apps_search">ॲप्स शोधा</string>
     <string name="apps_none">दाखवण्यासाठी कोणतीही ॲप्स नाहीत.</string>
-    <string name="find_title">शोधा आणि नियंत्रित करा</string>
     <string name="find_body">शोधण्यासाठी त्यावर रिंग वाजवा, किंवा त्यावर लिंक उघडा.</string>
     <string name="find_ring">रिंग करा</string>
     <string name="find_ringing">%1$s वर रिंग वाजत आहे</string>
@@ -699,7 +687,6 @@
     <string name="locate_asking">%1$s कुठे आहे ते विचारत आहे…</string>
     <string name="locate_where">%1$s, %2$s जवळ (±%3$d मी, %4$d मि पूर्वी)</string>
     <string name="locate_off">%1$s वर स्थान शेअरिंग बंद आहे. तिथे my-domain च्या सेटिंग्जमध्ये “हा संगणक कुठे आहे ते माझ्या फोनला पाहू द्या” चालू करा.</string>
-    <string name="info_title">हे डिव्हाइस</string>
     <string name="info_hint">%1$s ने स्वतःबद्दल शेवटी काय सांगितले.</string>
     <string name="info_battery">बॅटरी</string>
     <string name="info_battery_level">%1$d%%</string>
@@ -858,7 +845,6 @@
     <string name="automation_empty_note">पाठवायची नोट लिहा.</string>
 
     <!-- Device labels: a nickname, icon and colour, shared with your other devices while the Settings switch is on -->
-    <string name="label_edit">संपादित करा</string>
     <string name="label_title">हे डिव्हाइस इथे कसे दिसते</string>
     <string name="label_hint">सेटिंग्जमध्ये “माझ्या इतर डिव्हाइससोबत नावे आणि आयकॉन शेअर करा” चालू असताना, तुमच्या इतर डिव्हाइसवरही ते असेच दिसते.</string>
     <string name="label_nickname">टोपणनाव</string>
@@ -962,10 +948,6 @@
     <string name="setup_not_needed">या Android आवृत्तीवर आवश्यक नाही</string>
     <string name="setup_info">तपासता येत नाही: खाली पाहा</string>
     <string name="setup_turn_on">चालू करा…</string>
-    <string name="setup_card_title">हा फोन सेट अप करा</string>
-    <string name="setup_card_body">%2$d पैकी %1$d पर्यायी वैशिष्ट्ये चालू आहेत. प्रत्येक काय करते ते पाहा आणि तुम्हाला हवी ती चालू करा.</string>
-    <string name="setup_card_open">मला दाखवा</string>
-    <string name="setup_card_dismiss">आता नाही</string>
     <string name="setup_no_screen">या फोनवर त्यासाठी स्क्रीन नाही. Android च्या सेटिंग्जमध्ये ते शोधा.</string>
 
     <string name="setup_notifications_title">सूचना</string>
@@ -1065,7 +1047,6 @@
     <string name="automation_apps_failed">करता आले नाही: %1$s</string>
     <!-- Search everything (SearchScreen.kt) -->
     <string name="search_screen_title">शोधा</string>
-    <string name="search_open">या फोनवरील सर्व काही शोधा</string>
     <string name="search_field">डिव्हाइस, मेसेज, नोट्स, फाइल्स शोधा…</string>
     <string name="search_clear">शोध साफ करा</string>
     <string name="search_intro">तुमची डिव्हाइस, मेसेज, नोट्स, क्लिपबोर्ड इतिहास, ट्रान्सफर, सिंक केलेले फोल्डर, ऑटोमेशन, सेटिंग्ज आणि मदत शोधते. फक्त या फोनवर असलेले; काहीही कुठेही पाठवले जात नाही.</string>
@@ -1124,7 +1105,6 @@
     <string name="read_later_mark_read">वाचले म्हणून खूण करा</string>
     <string name="read_later_mark_unread">न वाचलेले म्हणून खूण करा</string>
     <string name="read_later_delete">हटवा</string>
-    <string name="read_later_none_unread">न वाचलेले काहीही नाही</string>
     <plurals name="read_later_unread_count">
         <item quantity="one">%1$d न वाचलेली</item>
         <item quantity="other">%1$d न वाचलेल्या</item>
@@ -1715,7 +1695,6 @@
     <string name="verify_scan_mismatch">की जुळत नाहीत. या डिव्हाइसवर विश्वास ठेवू नका: तुमच्या डिव्हाइसच्या मध्ये काहीतरी असू शकते.</string>
     <string name="verify_ok">ठीक आहे</string>
     <string name="verify_close">बंद करा</string>
-    <string name="map_entry">तुमची डिव्हाइस कशी कनेक्ट आहेत</string>
     <string name="map_entry_body">प्रत्येक डिव्हाइस कसे जोडलेले आहे, आणि एखादे का नाही ते पाहा</string>
     <string name="map_image">तुमची डिव्हाइस कशी कनेक्ट आहेत याचे चित्र. हेच खाली सूचीत दिले आहे.</string>
     <!-- Insert from phone (InsertCapture.kt): a computer asks for a photo or a document scan. -->
@@ -1822,10 +1801,6 @@
     <string name="health_running">तपासत आहे…</string>
     <string name="health_last_run">%1$s तपासले</string>
     <string name="health_all_good">सर्व काही ठीक दिसते.</string>
-    <string name="health_summary_bad">%1$d दुरुस्त करणे आवश्यक</string>
-    <string name="health_summary_warn">%1$d पाहण्यासारखे</string>
-    <string name="health_home_title">एखाद्या गोष्टीकडे लक्ष देणे आवश्यक आहे</string>
-    <string name="health_home_body">आरोग्य तपासणीत %1$d समस्या सापडल्या. काय चुकले आणि ते कसे दुरुस्त करायचे ते ती सांगते.</string>
     <string name="health_open">आरोग्य तपासणी उघडा</string>
     <string name="health_device_banner">या डिव्हाइसमध्ये काहीतरी चुकले आहे. काय आणि ते कसे दुरुस्त करायचे ते आरोग्य तपासणी सांगते.</string>
     <string name="health_settings_tile">आरोग्य तपासणी</string>
@@ -2011,14 +1986,14 @@
     <string name="dev_rename_named">%1$s चे नाव बदला</string>
     <string name="dev_health_check">आरोग्य तपासणी</string>
     <string name="dev_tab_overview">आढावा</string>
-    <string name="dev_tab_comm">संवाद</string>
+    <string name="dev_tab_comm">संदेश</string>
     <string name="dev_tab_files">फाइल</string>
-    <string name="dev_tab_remote">रिमोट कंट्रोल</string>
+    <string name="dev_tab_remote">नियंत्रण</string>
     <string name="dev_tab_media">मीडिया</string>
     <string name="dev_card_comm">संदेश आणि सूचना</string>
-    <string name="dev_card_comm_sub">चॅट, क्लिपबोर्ड आणि सूचना</string>
+    <string name="dev_card_comm_sub">चॅट आणि सूचना</string>
     <string name="dev_card_files">फाइल आणि शेअरिंग</string>
-    <string name="dev_card_files_sub">फाइल आणि फोल्डर पाठवा, किंवा त्याचे फोल्डर पाहा</string>
+    <string name="dev_card_files_sub">फाइल आणि फोल्डर पाठवा, पाहा, क्लिपबोर्ड</string>
     <string name="dev_card_tools">डिव्हाइस साधने</string>
     <string name="dev_card_tools_sub">वाजवा, शोधा, नियंत्रित करा</string>
     <string name="dev_card_info">डिव्हाइसची माहिती</string>
@@ -2043,7 +2018,6 @@
     <string name="home_q_clipboard">क्लिपबोर्ड</string>
     <string name="home_q_screen">स्क्रीन</string>
     <string name="home_q_ring">वाजवा</string>
-    <string name="home_q_more">अधिक</string>
     <string name="home_recent">अलीकडील घडामोडी</string>
     <string name="home_view_all">सर्व पाहा</string>
     <string name="home_health">डिव्हाइसचे आरोग्य</string>
@@ -2052,10 +2026,9 @@
     <string name="home_health_bad">लक्ष द्या</string>
     <string name="more_files">फाइल आणि ट्रान्सफर</string>
     <string name="more_files_sub">फाइल पाठवा, पाहा आणि सिंक करा</string>
-    <string name="more_messages">संदेश</string>
+    <string name="more_messages">संदेश आणि सूचना</string>
     <string name="more_messages_sub">चॅट आणि सूचना</string>
     <string name="more_workspace">वर्कस्पेस</string>
-    <string name="more_workspace_sub">नोट्स, टायमर आणि नंतर वाचा</string>
     <string name="more_automations_sub">काही घडल्यावर काहीतरी करा</string>
     <string name="more_search">शोधा</string>
     <string name="more_search_sub">या फोनवर ठेवलेले सर्व</string>
@@ -2100,5 +2073,29 @@
     <plurals name="more_rules_count">
         <item quantity="one">%1$d नियम</item>
         <item quantity="other">%1$d नियम</item>
+    </plurals>
+    <string name="dev_sending">पाठवत आहे…</string>
+    <string name="dev_security">सुरक्षा</string>
+    <string name="dev_remove_title">हे डिव्हाइस काढा</string>
+    <string name="dev_remove_hint">कायमचे: तुमची डिव्हाइस त्यावर विश्वास ठेवणे थांबवतात. सेटिंग्जमध्ये पुन्हा परवानगी देता येते.</string>
+    <string name="ctl_group_find">शोधा</string>
+    <string name="ctl_group_sound">आवाज आणि मीडिया</string>
+    <string name="ctl_group_screen">स्क्रीन आणि पॉवर</string>
+    <string name="ctl_group_open">त्यावर उघडा</string>
+    <string name="more_options">अधिक पर्याय</string>
+    <string name="set_group_health">आरोग्य तपासणी आणि सेटअप</string>
+    <string name="set_sign_out_title">या फोनवरून साइन आउट करायचे?</string>
+    <string name="set_sign_out_hint">तुमची इतर डिव्हाइस साइन इन राहतील. तुम्ही येथे कधीही पुन्हा साइन इन करू शकता.</string>
+    <plurals name="health_needs_fixing">
+        <item quantity="one">%1$d समस्या दुरुस्त करणे आवश्यक</item>
+        <item quantity="other">%1$d समस्या दुरुस्त करणे आवश्यक</item>
+    </plurals>
+    <plurals name="health_worth_look">
+        <item quantity="one">%1$d पाहण्यासारखे</item>
+        <item quantity="other">%1$d पाहण्यासारखे</item>
+    </plurals>
+    <plurals name="transfers_under_way">
+        <item quantity="one">ट्रान्सफर · %1$d चालू</item>
+        <item quantity="other">ट्रान्सफर · %1$d चालू</item>
     </plurals>
 </resources>

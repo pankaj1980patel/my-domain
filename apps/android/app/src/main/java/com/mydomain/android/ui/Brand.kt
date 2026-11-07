@@ -25,7 +25,7 @@ import com.mydomain.android.R
 fun logoRes(): Int = if (T.isLight) R.drawable.logo_mark_light else R.drawable.logo_mark
 
 @Composable
-fun Wordmark(modifier: Modifier = Modifier, fontSize: Int = 30) {
+fun Wordmark(modifier: Modifier = Modifier, fontSize: Int = 30, maxLines: Int = Int.MAX_VALUE) {
     val accent = T.accentFg
     Text(
         buildAnnotatedString {
@@ -33,6 +33,7 @@ fun Wordmark(modifier: Modifier = Modifier, fontSize: Int = 30) {
             withStyle(SpanStyle(color = accent)) { append(stringResource(R.string.brand_wordmark_accent)) }
         },
         modifier = modifier,
+        maxLines = maxLines,
         color = T.text,
         style = TextStyle(fontFamily = Inter, fontSize = fontSize.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.01).em),
     )

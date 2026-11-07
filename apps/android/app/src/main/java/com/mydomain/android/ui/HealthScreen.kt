@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.ui.res.pluralStringResource
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
@@ -16,8 +17,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -312,18 +311,8 @@ fun HealthScreen(onBack: () -> Unit, nav: HealthNav) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
-            }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(R.string.health_title), Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall, color = T.text,
-                )
-                if (Health.ranAt > 0) Muted(stringResource(R.string.health_last_run, timeAgo(Health.ranAt)))
-            }
-        }
+        BackBar(stringResource(R.string.health_title), onBack)
+        if (Health.ranAt > 0) Muted(stringResource(R.string.health_last_run, timeAgo(Health.ranAt)))
         Muted(stringResource(R.string.health_subtitle))
         PrimaryButton(
             stringResource(if (Health.running) R.string.health_running else R.string.health_rerun),
@@ -340,25 +329,14 @@ fun HealthScreen(onBack: () -> Unit, nav: HealthNav) {
                     checks.isEmpty() -> stringResource(R.string.health_running)
                     bad == 0 && warn == 0 -> stringResource(R.string.health_all_good)
                     else -> listOfNotNull(
-                        if (bad > 0) stringResource(R.string.health_summary_bad, bad) else null,
-                        if (warn > 0) stringResource(R.string.health_summary_warn, warn) else null,
+                        if (bad > 0) pluralStringResource(R.plurals.health_needs_fixing, bad, bad) else null,
+                        if (warn > 0) pluralStringResource(R.plurals.health_worth_look, warn, warn) else null,
                     ).joinToString(" · ")
                 },
                 style = MaterialTheme.typography.titleMedium, color = T.text,
             )
             checks.forEach { HealthRow(it, fix) }
         }
-    }
-}
-
-/** Home's card while the health check has something red. */
-@Composable
-fun HealthHomeCard(onOpen: () -> Unit) {
-    val bad = Health.bad
-    if (bad == 0) return
-    Tile(title = stringResource(R.string.health_home_title)) {
-        Muted(stringResource(R.string.health_home_body, bad))
-        PrimaryButton(stringResource(R.string.health_open), onOpen, Modifier.fillMaxWidth())
     }
 }
 

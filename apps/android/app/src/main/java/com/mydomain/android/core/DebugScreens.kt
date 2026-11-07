@@ -34,7 +34,6 @@ enum class DebugScreen(val key: String) {
     MORE("more"),
     FILES("files"),
     MESSAGES("messages"),
-    WORKSPACE("workspace"),
 }
 
 /** A screen asked for from adb, with what it needs. */

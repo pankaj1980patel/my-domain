@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,7 +89,7 @@ fun HelpScreen(topic: String?, onTopic: (String?) -> Unit, onBack: () -> Unit) {
     ) {
         Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = { if (current != null) onTopic(null) else onBack() }) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back))
             }
             Text(
                 current?.title ?: stringResource(R.string.help_title), Modifier.semantics { heading() },

@@ -1,5 +1,16 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.TextButton
+import java.util.Locale
+import androidx.compose.foundation.layout.height
+import androidx.compose.runtime.derivedStateOf
+import android.content.Context
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -32,15 +43,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -75,15 +82,17 @@ import com.mydomain.android.core.linkStateOf
 import com.mydomain.android.core.progressLabel
 import kotlinx.coroutines.launch
 
-/** The device page's tabs (pill tabs under the header). Each tile of the
- *  old one long page lives on one ([TILE_TAB]); Overview has the grouped
- *  action cards on top. */
+/** The device page's tabs (pill tabs under the header, pinned while the
+ *  page scrolls). Each tile of the page lives on one ([TILE_TAB]);
+ *  Overview has the grouped action cards; Settings has what it is, how
+ *  it's linked, Verify and, kept apart at the bottom, Remove. */
 enum class DeviceTab(val key: String, val label: Int, val icon: Int) {
     Overview("overview", R.string.dev_tab_overview, R.drawable.ic_lucide_layout_grid),
     Communication("comm", R.string.dev_tab_comm, R.drawable.ic_lucide_message_circle),
     Files("files", R.string.dev_tab_files, R.drawable.ic_lucide_folder),
     Remote("remote", R.string.dev_tab_remote, R.drawable.ic_lucide_mouse_pointer_2),
     Media("media", R.string.dev_tab_media, R.drawable.ic_lucide_music),
+    Settings("settings", R.string.settings_title, R.drawable.ic_lucide_settings),
     ;
 
     companion object {
@@ -91,38 +100,47 @@ enum class DeviceTab(val key: String, val label: Int, val icon: Int) {
     }
 }
 
-/** Which tab each tile is on (ids as in [deviceTiles]). */
+/** Which tab each tile is on (ids as in [deviceTiles]). Clipboard is the
+ *  last part of Files. */
 private val TILE_TAB = mapOf(
     "chat" to DeviceTab.Communication,
-    "clipboard" to DeviceTab.Communication,
-    "clipboard-history" to DeviceTab.Communication,
     "notify" to DeviceTab.Communication,
     "computer-notifs" to DeviceTab.Communication,
     "apps" to DeviceTab.Communication,
     "files" to DeviceTab.Files,
     "browse" to DeviceTab.Files,
+    "clipboard" to DeviceTab.Files,
+    "clipboard-history" to DeviceTab.Files,
     "control" to DeviceTab.Remote,
+    "control-sound" to DeviceTab.Remote,
+    "control-screen" to DeviceTab.Remote,
+    "control-open" to DeviceTab.Remote,
     "touchpad" to DeviceTab.Remote,
     "screen-share" to DeviceTab.Remote,
     "commands" to DeviceTab.Remote,
     "now-playing" to DeviceTab.Media,
     "phone-audio" to DeviceTab.Media,
     "computer-audio" to DeviceTab.Media,
-    "info" to DeviceTab.Overview,
-    "connection" to DeviceTab.Overview,
+    "info" to DeviceTab.Settings,
+    "connection" to DeviceTab.Settings,
 )
 
 private fun tabOf(id: String): DeviceTab = TILE_TAB[id] ?: DeviceTab.Overview
 
-/** One device: Back, its name and a menu; its art, status and when it was
- *  last seen; pill tabs (Overview, Communication, Files, Remote control,
- *  Media), Overview with grouped action cards. Every tile of the old page is
- *  on one tab. [focus]: what a search result opened ("msg:<id>" a message,
- *  "clip:<id>" a clip), brought into view and marked; "tab:<key>" opens
- *  that tab. */
+/** The tab you were last on for each device (like the desktop's). */
+private const val LAST_TAB = "deviceTab."
+
+/** One device: Back (its name once the header has scrolled away) and a
+ *  menu; its art, status and when it was last seen; pinned pill tabs
+ *  (Overview, Messages, Files, Control, Media, Settings). [focus]: what to
+ *  bring up: "msg:<id>" a message, "clip:<id>" a clip (marked),
+ *  "tab:<key>" a tab, "tile:<id>" a tile, "edit" the name editor. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHealth: () -> Unit = {}) {
     val peer = Core.peers.firstOrNull { it.nodeId == node }
+    val ctx = LocalContext.current
+    val prefs = remember { ctx.getSharedPreferences("md", Context.MODE_PRIVATE) }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var editing by remember(node, focus) { mutableStateOf(focus == "edit") }
@@ -130,23 +148,32 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
     val list = rememberLazyListState()
     val foundMessage = focus?.takeIf { it.startsWith("msg:") }?.removePrefix("msg:")?.toLongOrNull()
     val foundClip = focus?.takeIf { it.startsWith("clip:") }?.removePrefix("clip:")?.toLongOrNull()
+    val focusTile = focus?.takeIf { it.startsWith("tile:") }?.removePrefix("tile:")
     val startTab = when {
-        foundMessage != null || foundClip != null -> DeviceTab.Communication
-        else -> DeviceTab.of(focus?.removePrefix("tab:")) ?: DeviceTab.Overview
+        foundMessage != null -> DeviceTab.Communication
+        foundClip != null -> DeviceTab.Files
+        focusTile != null -> tabOf(focusTile)
+        focus?.startsWith("tab:") == true -> DeviceTab.of(focus.removePrefix("tab:")) ?: DeviceTab.Overview
+        else -> DeviceTab.of(prefs.getString(LAST_TAB + node, null)) ?: DeviceTab.Overview
     }
     var tabKey by rememberSaveable(node, focus) { mutableStateOf(startTab.key) }
-    val tab = DeviceTab.of(tabKey) ?: DeviceTab.Overview
     // A tile to bring into view once its tab shows (a card's action, a search).
     var scrollTo by remember(node, focus) {
         mutableStateOf(
             when {
                 foundMessage != null -> "chat"
                 foundClip != null -> "clipboard-history"
+                focusTile != null -> focusTile
+                focus == "edit" -> "label"
                 else -> null
             },
         )
     }
-    val goTo = { t: DeviceTab, tile: String? -> tabKey = t.key; scrollTo = tile }
+    val goTo = { t: DeviceTab, tile: String? ->
+        tabKey = t.key
+        scrollTo = tile
+        prefs.edit().putString(LAST_TAB + node, t.key).apply()
+    }
     LaunchedEffect(tabKey, scrollTo) {
         val k = scrollTo ?: return@LaunchedEffect
         list.scrollToKey(k)
@@ -158,24 +185,40 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
     // (PageLayoutStore).
     var arranging by remember(node) { mutableStateOf(false) }
     var said by remember(node) { mutableStateOf("") }
+    // Back leaves Arrange or the name editor first, not the page.
+    BackHandler(enabled = arranging || editing) {
+        arranging = false
+        editing = false
+    }
     val kind = pageKind(node)
     val tiles = deviceTiles(node, Core.peerName(node), foundMessage, foundClip).filter { kind in it.kinds }
     val layout = PageLayoutStore.view(kind, node, tiles.map { it.id })
     val arrangeLabel = stringResource(R.string.layout_arrange)
     val send = rememberFileSender { node }
     val name = Core.peerName(node)
+    // The name shows in the bar once the header has scrolled away.
+    val scrolled by remember { derivedStateOf { list.firstVisibleItemIndex > 0 } }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
-        BackBar(if (peer == null) stringResource(R.string.home_title) else name, onBack) {
+    Column(Modifier.fillMaxSize()) {
+        BackBar(
+            when {
+                peer == null -> stringResource(R.string.dev_card_info)
+                scrolled -> name
+                else -> ""
+            },
+            onBack,
+        ) {
             if (peer != null) {
                 Box {
                     IconButton(onClick = { menu = true }) {
                         LIcon(R.drawable.ic_lucide_ellipsis_vertical, T.text, 24.dp, stringResource(R.string.dev_menu, name))
                     }
-                    DeviceMenu(node, menu, onDismiss = { menu = false }, onRename = { editing = true }, onArrange = {
-                        arranging = true
-                        said = ""
-                    }, onHealth = onHealth)
+                    DeviceMenu(
+                        node, menu, onDismiss = { menu = false },
+                        onRename = { editing = true; scrollTo = "label" },
+                        onArrange = { arranging = true; said = "" },
+                        onHealth = onHealth,
+                    )
                 }
             }
         }
@@ -187,9 +230,11 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
         val st = Core.deviceStatus[node]
         // Tabs with nothing on them for this device are left out.
         val shown = layout.shown.mapNotNull { id -> tiles.firstOrNull { it.id == id } }.filter { it.available }
-        val tabs = DeviceTab.entries.filter { t -> t == DeviceTab.Overview || shown.any { tabOf(it.id) == t } }
+        val tabs = DeviceTab.entries.filter { t ->
+            t == DeviceTab.Overview || t == DeviceTab.Settings || shown.any { tabOf(it.id) == t }
+        }
         // A tab left with nothing (a tile hidden, the device changed): Overview.
-        val tab = if (tab in tabs) tab else DeviceTab.Overview
+        val tab = DeviceTab.of(tabKey)?.takeIf { it in tabs } ?: DeviceTab.Overview
         LazyColumn(
             Modifier.fillMaxSize(),
             state = list,
@@ -197,28 +242,28 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item(key = "hero") {
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
-                    ArtAvatar(node, 96.dp)
-                    Spacer(Modifier.width(14.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            name, style = MaterialTheme.typography.headlineSmall, color = T.text,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.semantics { heading() },
-                        )
-                        // What it is: "Apple MacBook Pro", "Samsung Galaxy S23".
-                        DeviceKinds.describe(node).takeIf { it.isNotEmpty() }?.let { Muted(it) }
-                        StatusPill(node)
-                        (viaText(node) ?: lastSeenText(node))?.let { Muted(it) }
-                        if (s == LinkState.Connecting || s == LinkState.Failed) {
-                            progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ArtAvatar(node, 80.dp)
+                        Spacer(Modifier.width(14.dp))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                LabelDot(node)
+                                Text(
+                                    name, style = MaterialTheme.typography.headlineSmall, color = T.text,
+                                    maxLines = 2, overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.semantics { heading() },
+                                )
+                            }
+                            // What it is: "Apple MacBook Pro", "Samsung Galaxy S23".
+                            DeviceKinds.describe(node).takeIf { it.isNotEmpty() }?.let { Muted(it) }
+                            StatusPill(node)
+                            (viaText(node) ?: lastSeenText(node))?.let { Muted(it) }
+                            if (s == LinkState.Connecting || s == LinkState.Failed) {
+                                progressLabel(Core.progress[node])?.let { Muted(it, Modifier.announce()) }
+                            }
                         }
                     }
-                    OnlinePill(s == LinkState.Direct || s == LinkState.Relay)
-                }
-            }
-            item(key = "hero-actions") {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     FactChips(node)
                     // Asleep? Wake it (Wake-on-LAN), if it said it may be woken.
                     WakeIt(node)
@@ -227,24 +272,26 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
                             scope.launch { try { Core.connect(node) } catch (e: Exception) { toast(friendlyError(e)) } }
                         }, Modifier.fillMaxWidth())
                     }
+                    // About the whole device: its security key changed (refused
+                    // until you decide); the health check found something red.
+                    KeyChangeBanner(node)
+                    HealthDeviceBanner(node, onHealth)
                 }
             }
             if (!arranging) {
-                item(key = "tabs") {
-                    Pills(tabs.map { Pill(it, stringResource(it.label), it.icon) }, tab, { goTo(it, null) })
+                stickyHeader(key = "tabs") {
+                    Box(Modifier.fillMaxWidth().background(T.bg).padding(vertical = 4.dp)) {
+                        Pills(tabs.map { Pill(it, stringResource(it.label), it.icon) }, tab, { goTo(it, null) })
+                    }
                 }
             }
-            // Its security key changed: refused until you decide.
-            item(key = "key-change") { KeyChangeBanner(node) }
-            // The health check found something red about this device.
-            item(key = "health") { HealthDeviceBanner(node, onHealth) }
             if (editing) item(key = "label") { DeviceLabelEditor(node) { editing = false } }
             if (arranging) {
                 arrangeItems(node, name, kind, tiles, layout, said, { said = it }) { arranging = false }
             } else {
                 if (tab == DeviceTab.Overview) {
                     item(key = "cards") {
-                        OverviewCards(node, name, st, shown.map { it.id }.toSet(), send, goTo)
+                        OverviewCards(node, name, st, shown.map { it.id }.toSet(), tabs, send, goTo)
                     }
                 }
                 val here = shown.filter { tabOf(it.id) == tab }
@@ -252,11 +299,20 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
                     Box(Modifier.longPressToArrange(node, arrangeLabel) { arranging = true }) { t.content() }
                 }
                 if (layout.shown.isEmpty()) item { Muted(stringResource(R.string.layout_all_hidden)) }
-                if (tab == DeviceTab.Overview) {
+                if (tab == DeviceTab.Settings) {
                     // Compare security keys with it; "Verified" once you have.
-                    item(key = "verify") { VerifyRow(node) }
-                    // Remove it for good (asks first; "Allow again" in Settings).
-                    item(key = "remove") { RemoveDeviceRow(node, name, onBack) }
+                    item(key = "verify") { Tile(title = stringResource(R.string.dev_security)) { VerifyRow(node) } }
+                    // Remove it for good (asks first; "Allow again" in Settings),
+                    // apart at the very bottom.
+                    item(key = "remove") {
+                        Column {
+                            Spacer(Modifier.height(24.dp))
+                            Tile(title = stringResource(R.string.dev_remove_title)) {
+                                Muted(stringResource(R.string.dev_remove_hint))
+                                RemoveDeviceRow(node, name, onBack)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -302,15 +358,17 @@ private fun DeviceMenu(
     }
 }
 
-/** Overview's grouped cards: Messaging & notifications, Files & sharing,
- *  Device tools (only what it can do), and Device info. Each tile acts, or
- *  opens the tab with the full controls. [shown]: the tiles it offers now. */
+/** Overview's grouped cards: Messaging & notifications, Files & sharing
+ *  (clipboard last), Device tools (only what it can do), and Device info.
+ *  Each tile acts, or opens the tab with the full controls. [shown]: the
+ *  tiles it offers now. */
 @Composable
 private fun OverviewCards(
     node: String,
     name: String,
     st: DeviceStatus?,
     shown: Set<String>,
+    tabs: List<DeviceTab>,
     send: FileSender,
     goTo: (DeviceTab, String?) -> Unit,
 ) {
@@ -319,38 +377,42 @@ private fun OverviewCards(
     val ringing = stringResource(R.string.find_ringing, name)
     val ringQueued = stringResource(R.string.find_ring_queued, name)
     val asked = stringResource(R.string.clipboard_asked)
+    val sending = stringResource(R.string.dev_sending)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         val comm = buildList {
-            if ("chat" in shown) add(TileAction(R.drawable.ic_lucide_message_circle, stringResource(R.string.dev_act_chat), Hue.Violet) { goTo(DeviceTab.Communication, "chat") })
-            add(
-                TileAction(R.drawable.ic_lucide_clipboard, stringResource(R.string.dev_act_get_clipboard), Hue.Violet) {
-                    scope.launch { try { Core.pullClipboard(node); toast(asked) } catch (e: Exception) { toast(friendlyError(e)) } }
-                },
-            )
+            if ("chat" in shown) add(TileAction(R.drawable.ic_lucide_message_circle, stringResource(R.string.dev_act_chat), Hues.messages) { goTo(DeviceTab.Communication, "chat") })
             val notif = when {
                 "computer-notifs" in shown -> "computer-notifs"
                 "apps" in shown -> "apps"
                 "notify" in shown -> "notify"
                 else -> null
             }
-            if (notif != null) add(TileAction(R.drawable.ic_lucide_bell, stringResource(R.string.dev_act_notifications), Hue.Amber) { goTo(DeviceTab.Communication, notif) })
+            if (notif != null) add(TileAction(R.drawable.ic_lucide_bell, stringResource(R.string.dev_act_notifications), Hues.alerts) { goTo(DeviceTab.Communication, notif) })
         }
-        GroupCard(
-            R.drawable.ic_lucide_message_circle, Hue.Violet, stringResource(R.string.dev_card_comm),
-            stringResource(R.string.dev_card_comm_sub), { goTo(DeviceTab.Communication, null) }, comm,
-        )
+        if (DeviceTab.Communication in tabs) {
+            GroupCard(
+                R.drawable.ic_lucide_message_circle, Hues.messages, stringResource(R.string.dev_card_comm),
+                stringResource(R.string.dev_card_comm_sub), { goTo(DeviceTab.Communication, null) }, comm,
+            )
+        }
         val files = buildList {
-            add(TileAction(R.drawable.ic_lucide_send, stringResource(R.string.dev_act_send), Hue.Blue, !send.busy) { send.files() })
-            add(TileAction(R.drawable.ic_lucide_folder_open, stringResource(R.string.dev_act_send_folder), Hue.Blue, !send.busy) { send.folder() })
-            if ("browse" in shown) add(TileAction(R.drawable.ic_lucide_folder, stringResource(R.string.dev_act_browse), Hue.Blue) { goTo(DeviceTab.Files, "browse") })
+            add(TileAction(R.drawable.ic_lucide_send, stringResource(R.string.dev_act_send), Hues.files, !send.busy, sending) { send.files() })
+            add(TileAction(R.drawable.ic_lucide_folder_open, stringResource(R.string.dev_act_send_folder), Hues.files, !send.busy, sending) { send.folder() })
+            if ("browse" in shown) add(TileAction(R.drawable.ic_lucide_folder, stringResource(R.string.dev_act_browse), Hues.files) { goTo(DeviceTab.Files, "browse") })
+            // The clipboard ask waits for a link (the core queues it).
+            add(
+                TileAction(R.drawable.ic_lucide_clipboard, stringResource(R.string.dev_act_get_clipboard), Hues.files) {
+                    scope.launch { try { Core.pullClipboard(node); toast(asked) } catch (e: Exception) { toast(friendlyError(e)) } }
+                },
+            )
         }
         GroupCard(
-            R.drawable.ic_lucide_folder, Hue.Blue, stringResource(R.string.dev_card_files),
+            R.drawable.ic_lucide_folder, Hues.files, stringResource(R.string.dev_card_files),
             stringResource(R.string.dev_card_files_sub), { goTo(DeviceTab.Files, null) }, files,
         )
         val tools = buildList {
             add(
-                TileAction(R.drawable.ic_lucide_bell_ring, stringResource(R.string.dev_act_ring), Hue.Amber) {
+                TileAction(R.drawable.ic_lucide_bell_ring, stringResource(R.string.dev_act_ring), Hues.alerts) {
                     scope.launch {
                         try {
                             val via = Core.ring(node)
@@ -359,26 +421,20 @@ private fun OverviewCards(
                     }
                 },
             )
-            if ("control" in shown) {
-                val canLocate = st != null && "locate" in st.actions
-                add(
-                    TileAction(
-                        if (canLocate) R.drawable.ic_lucide_map_pin else R.drawable.ic_lucide_sliders_horizontal,
-                        stringResource(if (canLocate) R.string.dev_act_find else R.string.dev_act_controls), Hue.Cyan,
-                    ) { goTo(DeviceTab.Remote, "control") },
-                )
+            if (st != null && "locate" in st.actions) add(TileAction(R.drawable.ic_lucide_map_pin, stringResource(R.string.dev_act_find), Hues.tools) { goTo(DeviceTab.Remote, "control") })
+            if ("control-sound" in shown || "control-screen" in shown) {
+                add(TileAction(R.drawable.ic_lucide_sliders_horizontal, stringResource(R.string.dev_act_controls), Hues.tools) { goTo(DeviceTab.Remote, if ("control-sound" in shown) "control-sound" else "control-screen") })
             }
-            if ("screen-share" in shown) add(TileAction(R.drawable.ic_lucide_screen_share, stringResource(R.string.dev_act_screen), Hue.Cyan) { goTo(DeviceTab.Remote, "screen-share") })
-            if ("touchpad" in shown) add(TileAction(R.drawable.ic_lucide_mouse_pointer_2, stringResource(R.string.touchpad_title), Hue.Cyan) { goTo(DeviceTab.Remote, "touchpad") })
-            if ("commands" in shown) add(TileAction(R.drawable.ic_lucide_terminal, stringResource(R.string.run_title), Hue.Cyan) { goTo(DeviceTab.Remote, "commands") })
-            if ("now-playing" in shown) add(TileAction(R.drawable.ic_lucide_music, stringResource(R.string.media_title), Hue.Violet) { goTo(DeviceTab.Media, "now-playing") })
+            if ("screen-share" in shown) add(TileAction(R.drawable.ic_lucide_screen_share, stringResource(R.string.dev_act_screen), Hues.tools) { goTo(DeviceTab.Remote, "screen-share") })
+            if ("touchpad" in shown) add(TileAction(R.drawable.ic_lucide_mouse_pointer_2, stringResource(R.string.touchpad_title), Hues.tools) { goTo(DeviceTab.Remote, "touchpad") })
+            if ("commands" in shown) add(TileAction(R.drawable.ic_lucide_terminal, stringResource(R.string.run_title), Hues.tools) { goTo(DeviceTab.Remote, "commands") })
         }
         GroupCard(
-            R.drawable.ic_lucide_wrench, Hue.Cyan, stringResource(R.string.dev_card_tools),
-            stringResource(R.string.dev_card_tools_sub), if ("control" in shown) ({ goTo(DeviceTab.Remote, null) }) else null, tools,
+            R.drawable.ic_lucide_wrench, Hues.tools, stringResource(R.string.dev_card_tools),
+            stringResource(R.string.dev_card_tools_sub), if (DeviceTab.Remote in tabs) ({ goTo(DeviceTab.Remote, null) }) else null, tools,
         )
-        // Device info: what it is, its OS and address; the full numbers
-        // are in the tile below.
+        // Device info: what it is, its OS and address; the rest is on its
+        // Settings tab.
         val facts = listOfNotNull(
             osName(node),
             DeviceKinds.kinds[node]?.model?.takeIf { it.isNotEmpty() },
@@ -386,10 +442,9 @@ private fun OverviewCards(
         )
         SoftCard(padding = PaddingValues(6.dp)) {
             NavRow(
-                R.drawable.ic_lucide_info, Hue.Blue, stringResource(R.string.dev_card_info),
+                R.drawable.ic_lucide_info, Hues.plain, stringResource(R.string.dev_card_info),
                 facts.joinToString(" · ").ifEmpty { null },
-                onClick = if ("info" in shown) ({ goTo(DeviceTab.Overview, "info") }) else null,
-                trailing = if ("info" in shown) ({ Chevron() }) else null,
+                onClick = { goTo(DeviceTab.Settings, if ("info" in shown) "info" else null) },
             )
         }
     }
@@ -430,9 +485,23 @@ private fun deviceTiles(node: String, name: String, foundMessage: Long?, foundCl
         PageTile("files", R.string.files_title) { FilesTile(node) },
         // Its shared folders, for a device that can be browsed.
         PageTile("browse", R.string.browse_title, available = st?.sharedFolders != null) { BrowseTile(node, name) },
-        PageTile("control", R.string.find_title) { FindTile(node, name) },
+        // Clipboard: the last part of Files.
+        PageTile("clipboard", R.string.clipboard_title) { ClipboardTile(node) },
+        // Text sent to it and from it as clipboard, kept on this phone.
+        PageTile("clipboard-history", R.string.clip_history_title, available = ClipLog.enabled) {
+            ClipHistoryTile(node, name, foundClip)
+        },
+        // Find & control, in parts (the "control" id stays: saved layouts).
+        PageTile("control", R.string.ctl_group_find) { FindTile(node, name) },
+        PageTile("control-sound", R.string.ctl_group_sound, available = st != null && st.actions.any { it in SOUND }) {
+            st?.let { SoundTile(node, it) }
+        },
+        PageTile("control-screen", R.string.ctl_group_screen, available = st != null && st.actions.any { it in SCREEN }) {
+            st?.let { ScreenPowerTile(node, it) }
+        },
+        PageTile("control-open", R.string.ctl_group_open) { OpenOnTile(node, name) },
         // What it said about itself: battery, storage, memory, processor, uptime.
-        PageTile("info", R.string.info_title, available = st != null && hasInfo(st)) {
+        PageTile("info", R.string.dev_card_info, available = st != null && hasInfo(st)) {
             st?.let { InfoTile(node, name, it) }
         },
         // How this phone reaches the computer, and how fast.
@@ -469,11 +538,6 @@ private fun deviceTiles(node: String, name: String, foundMessage: Long?, foundCl
         // A computer that can show its own notifications here (it says notif_share).
         PageTile("computer-notifs", R.string.computer_notifs_title, COMPUTER, available = st?.notifShare != null) {
             st?.notifShare?.let { ComputerNotifsTile(node, name, it) }
-        },
-        PageTile("clipboard", R.string.clipboard_title) { ClipboardTile(node) },
-        // Text sent to it and from it as clipboard, kept on this phone.
-        PageTile("clipboard-history", R.string.clip_history_title, available = ClipLog.enabled) {
-            ClipHistoryTile(node, name, foundClip)
         },
         PageTile("notify", R.string.notify_title) { NotifyTile() },
         PageTile("apps", R.string.apps_title) { AppsTile(node) },
@@ -619,7 +683,16 @@ private fun ChatTile(node: String, found: Long? = null) {
     val thread = merged.takeLast(if (keep) shown else 50)
     val more = keep && (saved.more || merged.size > shown)
 
-    Tile(title = stringResource(R.string.chat_title)) {
+    Tile {
+        // The title, with "Clear" kept small at its end, away from the input.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            CardTitle(stringResource(R.string.chat_title), Modifier.weight(1f))
+            if (thread.isNotEmpty()) {
+                TextButton({ Core.clearChat(node) }, Modifier.heightIn(min = 48.dp)) {
+                    Text(stringResource(R.string.chat_clear), color = T.text2, style = MaterialTheme.typography.labelLarge)
+                }
+            }
+        }
         if (thread.isEmpty()) {
             Muted(stringResource(R.string.chat_empty), Modifier.fillMaxWidth().padding(vertical = 8.dp), center = true)
         }
@@ -651,24 +724,29 @@ private fun ChatTile(node: String, found: Long? = null) {
                 }
             }
         }
-        if (thread.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
-                GhostButton(stringResource(R.string.chat_clear), { Core.clearChat(node) }, small = true)
-            }
-        }
         if (keep) Muted(stringResource(R.string.chat_kept))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(text, { text = it }, stringResource(R.string.chat_hint), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            PrimaryButton(stringResource(R.string.send), {
-                val t = text.trim()
-                if (t.isNotEmpty()) {
-                    busy = true
-                    scope.launch {
-                        try { Core.sendMessage(node, t); text = "" } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
+            // Send: a round icon button (one primary action per tab).
+            val canSend = !busy && text.isNotBlank()
+            FilledIconButton(
+                onClick = {
+                    val t = text.trim()
+                    if (t.isNotEmpty()) {
+                        busy = true
+                        scope.launch {
+                            try { Core.sendMessage(node, t); text = "" } catch (e: Exception) { toast(friendlyError(e)) } finally { busy = false }
+                        }
                     }
-                }
-            }, enabled = !busy && text.isNotBlank())
+                },
+                enabled = canSend,
+                modifier = Modifier.size(48.dp),
+                colors = IconButtonDefaults.filledIconButtonColors(
+                    containerColor = T.primary, contentColor = T.onPrimary,
+                    disabledContainerColor = T.surface2, disabledContentColor = T.text3,
+                ),
+            ) { LIcon(R.drawable.ic_lucide_send, if (canSend) T.onPrimary else T.text3, 20.dp, stringResource(R.string.send)) }
         }
     }
 }
@@ -805,8 +883,12 @@ private fun LocateRow(node: String, name: String, status: DeviceStatus) {
     val place = status.location
     if (place != null) {
         val mins = ((System.currentTimeMillis() / 1000 - place.at) / 60).coerceAtLeast(0)
+        // Coordinates in plain digits with a point, whatever the language.
         Text(
-            stringResource(R.string.locate_where, "%.5f".format(place.lat), "%.5f".format(place.lon), place.acc.toInt(), mins),
+            stringResource(
+                R.string.locate_where,
+                String.format(Locale.ROOT, "%.5f", place.lat), String.format(Locale.ROOT, "%.5f", place.lon), place.acc.toInt(), mins,
+            ),
             Modifier.announce(), style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
     }
@@ -831,29 +913,46 @@ private fun LocateRow(node: String, name: String, status: DeviceStatus) {
     if (!status.locationSharing) Muted(stringResource(R.string.locate_off, name))
 }
 
+/** Actions of the "Sound & media" part, and of "Screen & power". */
+private val SOUND = setOf("volume", "mute", "ringer", "media")
+private val SCREEN = setOf("flashlight", "keep_awake", "lock", "slides")
+
+/** Run one of the device's own actions, saying why if it fails. */
+@Composable
+private fun rememberRun(node: String): (String, JSONObject) -> Unit {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    return { name, args ->
+        scope.launch {
+            try { Core.runAction(node, name, args) } catch (e: Exception) { toast(friendlyError(e)) }
+        }
+    }
+}
+
+/** A row of equal buttons for [node]'s action, under its own label line. */
+@Composable
+private fun Btn(label: Int, run: () -> Unit, m: Modifier = Modifier) =
+    GhostButton(stringResource(label), run, m, small = true)
+
+/** Find: ring it, and where it is (when it lets your devices ask). Asks
+ *  for its status when the page opens over a live link. */
 @Composable
 private fun FindTile(node: String, name: String) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
-    var url by remember { mutableStateOf("") }
-    var busy by remember { mutableStateOf(false) }
     val status = Core.deviceStatus[node]
     val ringing = stringResource(R.string.find_ringing, name)
     val ringQueued = stringResource(R.string.find_ring_queued, name)
-    val linkSent = stringResource(R.string.find_link_sent, name)
-    val linkQueued = stringResource(R.string.find_link_queued, name)
-    val linkInvalid = stringResource(R.string.find_link_invalid)
 
     // Ask for its status when the screen opens; the reply fills `status`
-    // (and the info tile).
-    // Asked only over a live link (and again when one comes up): asking a
-    // device that isn't connected would wake it by push just to show this.
+    // (and the info tile). Asked only over a live link (and again when one
+    // comes up): asking a device that isn't connected would wake it by
+    // push just to show this.
     val linked = Core.links.containsKey(node)
     LaunchedEffect(node, linked) { if (linked) runCatching { Core.requestStatus(node) } }
 
-    Tile(title = stringResource(R.string.find_title)) {
+    Tile(title = stringResource(R.string.ctl_group_find)) {
         Muted(stringResource(R.string.find_body))
-        if (status != null && status.actions.isNotEmpty()) Controls(node, status)
         SoftButton(stringResource(R.string.find_ring), {
             scope.launch {
                 try {
@@ -863,10 +962,109 @@ private fun FindTile(node: String, name: String) {
             }
         }, Modifier.fillMaxWidth())
         if (status != null && "locate" in status.actions) LocateRow(node, name, status)
+    }
+}
+
+/** Sound & media: volume, mute, the ringer and the media keys, each only
+ *  when the device listed it. */
+@Composable
+private fun SoundTile(node: String, st: DeviceStatus) {
+    val run = rememberRun(node)
+    Tile(title = stringResource(R.string.ctl_group_sound)) {
+        if ("volume" in st.actions || "mute" in st.actions) {
+            Muted(st.volume?.let { stringResource(R.string.ctl_volume_level, it) } ?: stringResource(R.string.ctl_volume), Modifier.announce())
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if ("volume" in st.actions) {
+                    Btn(R.string.ctl_volume_down, { run("volume", JSONObject().put("step", -1)) }, Modifier.weight(1f))
+                    Btn(R.string.ctl_volume_up, { run("volume", JSONObject().put("step", 1)) }, Modifier.weight(1f))
+                }
+                if ("mute" in st.actions) {
+                    Btn(
+                        if (st.muted == true) R.string.ctl_unmute else R.string.ctl_mute,
+                        { run("mute", JSONObject().put("on", st.muted != true)) }, Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+        if ("ringer" in st.actions) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("normal" to R.string.ctl_ring_normal, "vibrate" to R.string.ctl_ring_vibrate, "silent" to R.string.ctl_ring_silent)
+                    .forEach { (mode, label) ->
+                        // The current mode is the filled one, and says "selected".
+                        val m = Modifier.weight(1f)
+                        if (st.ringer == mode) SoftButton(stringResource(label), { }, m, selected = true)
+                        else Btn(label, { run("ringer", JSONObject().put("mode", mode)) }, m.semantics { selected = false })
+                    }
+            }
+        }
+        if ("media" in st.actions) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Btn(R.string.ctl_previous, { run("media", JSONObject().put("key", "previous")) }, Modifier.weight(1f))
+                Btn(R.string.ctl_play_pause, { run("media", JSONObject().put("key", "play_pause")) }, Modifier.weight(1f))
+                Btn(R.string.ctl_next, { run("media", JSONObject().put("key", "next")) }, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** Screen & power: the flashlight, keeping it awake, locking it and the
+ *  slide remote, each only when the device listed it. */
+@Composable
+private fun ScreenPowerTile(node: String, st: DeviceStatus) {
+    val run = rememberRun(node)
+    Tile(title = stringResource(R.string.ctl_group_screen)) {
+        if ("flashlight" in st.actions) {
+            val on = st.torch == true
+            SoftButton(
+                stringResource(if (on) R.string.ctl_torch_off else R.string.ctl_torch_on),
+                { run("flashlight", JSONObject().put("on", !on)) }, Modifier.fillMaxWidth(),
+            )
+        }
+        if ("keep_awake" in st.actions) {
+            Muted(stringResource(R.string.ctl_awake))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Btn(R.string.ctl_awake_30, { run("keep_awake", JSONObject().put("minutes", 30)) }, Modifier.weight(1f))
+                Btn(R.string.ctl_awake_60, { run("keep_awake", JSONObject().put("minutes", 60)) }, Modifier.weight(1f))
+                Btn(R.string.ctl_awake_off, { run("keep_awake", JSONObject().put("minutes", 0)) }, Modifier.weight(1f))
+            }
+        }
+        if ("lock" in st.actions) {
+            Btn(R.string.ctl_lock, { run("lock", JSONObject()) }, Modifier.fillMaxWidth())
+        }
+        if ("slides" in st.actions) {
+            Muted(
+                when (st.slidesNeeds) {
+                    "accessibility" -> stringResource(R.string.ctl_slides_needs_accessibility)
+                    "xdotool", "wtype" -> stringResource(R.string.ctl_slides_needs_tool)
+                    else -> stringResource(R.string.ctl_slides)
+                },
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Btn(R.string.ctl_slide_previous, { run("slides", JSONObject().put("key", "previous")) }, Modifier.weight(1f))
+                Btn(R.string.ctl_slide_black, { run("slides", JSONObject().put("key", "black")) }, Modifier.weight(1f))
+                Btn(R.string.ctl_slide_next, { run("slides", JSONObject().put("key", "next")) }, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** Open on it: a web link, and a search in an app when it can. */
+@Composable
+private fun OpenOnTile(node: String, name: String) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val run = rememberRun(node)
+    val st = Core.deviceStatus[node]
+    var url by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val linkSent = stringResource(R.string.find_link_sent, name)
+    val linkQueued = stringResource(R.string.find_link_queued, name)
+    val linkInvalid = stringResource(R.string.find_link_invalid)
+    Tile(title = stringResource(R.string.ctl_group_open)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Field(url, { url = it }, stringResource(R.string.find_link_hint), Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            PrimaryButton(stringResource(R.string.send), {
+            SoftButton(stringResource(R.string.send), {
                 val link = withScheme(url)
                 if (!isWebLink(link)) {
                     toast(linkInvalid)
@@ -882,102 +1080,15 @@ private fun FindTile(node: String, name: String) {
                 }
             }, enabled = !busy && url.isNotBlank())
         }
-    }
-}
-
-/** Buttons for the actions the device listed in its status. */
-@Composable
-private fun Controls(node: String, st: DeviceStatus) {
-    val toast = LocalToast.current
-    val scope = rememberCoroutineScope()
-    val run = { name: String, args: JSONObject ->
-        scope.launch {
-            try { Core.runAction(node, name, args) } catch (e: Exception) { toast(friendlyError(e)) }
-        }
-        Unit
-    }
-    @Composable
-    fun Btn(label: Int, name: String, args: JSONObject, m: Modifier = Modifier) =
-        GhostButton(stringResource(label), { run(name, args) }, m, small = true)
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if ("flashlight" in st.actions) {
-            val on = st.torch == true
-            SoftButton(
-                stringResource(if (on) R.string.ctl_torch_off else R.string.ctl_torch_on),
-                { run("flashlight", JSONObject().put("on", !on)) }, Modifier.fillMaxWidth(),
-            )
-        }
-        if ("volume" in st.actions || "mute" in st.actions) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    st.volume?.let { stringResource(R.string.ctl_volume_level, it) } ?: stringResource(R.string.ctl_volume),
-                    color = T.text2, style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f).announce(),
-                )
-                if ("volume" in st.actions) {
-                    Btn(R.string.ctl_volume_down, "volume", JSONObject().put("step", -1))
-                    Btn(R.string.ctl_volume_up, "volume", JSONObject().put("step", 1))
-                }
-                if ("mute" in st.actions) {
-                    Btn(if (st.muted == true) R.string.ctl_unmute else R.string.ctl_mute, "mute", JSONObject().put("on", st.muted != true))
-                }
-            }
-        }
-        if ("media" in st.actions) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Btn(R.string.ctl_previous, "media", JSONObject().put("key", "previous"), Modifier.weight(1f))
-                Btn(R.string.ctl_play_pause, "media", JSONObject().put("key", "play_pause"), Modifier.weight(1f))
-                Btn(R.string.ctl_next, "media", JSONObject().put("key", "next"), Modifier.weight(1f))
-            }
-        }
-        if ("slides" in st.actions) {
-            Muted(
-                when (st.slidesNeeds) {
-                    "accessibility" -> stringResource(R.string.ctl_slides_needs_accessibility)
-                    "xdotool", "wtype" -> stringResource(R.string.ctl_slides_needs_tool)
-                    else -> stringResource(R.string.ctl_slides)
-                }
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Btn(R.string.ctl_slide_previous, "slides", JSONObject().put("key", "previous"), Modifier.weight(1f))
-                Btn(R.string.ctl_slide_black, "slides", JSONObject().put("key", "black"), Modifier.weight(1f))
-                Btn(R.string.ctl_slide_next, "slides", JSONObject().put("key", "next"), Modifier.weight(1f))
-            }
-        }
-        if ("keep_awake" in st.actions) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(R.string.ctl_awake), color = T.text2,
-                    style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f),
-                )
-                Btn(R.string.ctl_awake_30, "keep_awake", JSONObject().put("minutes", 30))
-                Btn(R.string.ctl_awake_60, "keep_awake", JSONObject().put("minutes", 60))
-                Btn(R.string.ctl_awake_off, "keep_awake", JSONObject().put("minutes", 0))
-            }
-        }
-        if ("search" in st.actions) {
+        if (st != null && "search" in st.actions) {
             var query by remember { mutableStateOf("") }
             Field(query, { query = it }, stringResource(R.string.ctl_search_hint), Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf("youtube" to R.string.ctl_search_youtube, "spotify" to R.string.ctl_search_spotify, "web" to R.string.ctl_search_web)
                     .forEach { (app, label) ->
-                        GhostButton(stringResource(label), {
+                        Btn(label, {
                             if (query.isNotBlank()) run("search", JSONObject().put("app", app).put("query", query.trim()))
-                        }, Modifier.weight(1f), small = true)
-                    }
-            }
-        }
-        if ("lock" in st.actions) {
-            Btn(R.string.ctl_lock, "lock", JSONObject(), Modifier.fillMaxWidth())
-        }
-        if ("ringer" in st.actions) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("normal" to R.string.ctl_ring_normal, "vibrate" to R.string.ctl_ring_vibrate, "silent" to R.string.ctl_ring_silent)
-                    .forEach { (mode, label) ->
-                        // The current mode is the filled one, and says "selected".
-                        val m = Modifier.weight(1f)
-                        if (st.ringer == mode) SoftButton(stringResource(label), { }, m, selected = true)
-                        else Btn(label, "ringer", JSONObject().put("mode", mode), m.semantics { selected = false })
+                        }, Modifier.weight(1f))
                     }
             }
         }

@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -36,7 +37,10 @@ fun RemoveDeviceRow(node: String, name: String, onRemoved: () -> Unit) {
     val scope = rememberCoroutineScope()
     var asking by remember(node) { mutableStateOf(false) }
     val removed = stringResource(R.string.remove_device_done, name)
-    GhostButton(stringResource(R.string.remove_device), { asking = true }, small = true)
+    // Destructive: danger text, kept apart at the bottom of the page.
+    TextButton({ asking = true }, Modifier.heightIn(min = 48.dp)) {
+        Text(stringResource(R.string.remove_device), color = T.danger, style = MaterialTheme.typography.labelLarge)
+    }
     if (asking) {
         AlertDialog(
             onDismissRequest = { asking = false },
@@ -64,7 +68,7 @@ fun RemoveDeviceRow(node: String, name: String, onRemoved: () -> Unit) {
                             toast(friendlyError(e))
                         }
                     }
-                }) { Text(stringResource(R.string.remove_device), color = T.warning) }
+                }) { Text(stringResource(R.string.remove_device), color = T.danger) }
             },
         )
     }

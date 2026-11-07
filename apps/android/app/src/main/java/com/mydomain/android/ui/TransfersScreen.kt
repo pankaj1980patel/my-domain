@@ -22,11 +22,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -72,7 +68,7 @@ private const val STALE_MS = 5_000L
  * opened, scrolled to and marked.
  */
 @Composable
-fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: String? = null, embedded: Boolean = false) {
+fun TransfersScreen(onOpenDevice: (String) -> Unit, found: String? = null) {
     val all = TransferLog.list
     // A batch's files show inside it.
     val list = all.filter { it.batch == null }
@@ -95,27 +91,14 @@ fun TransfersScreen(onBack: () -> Unit, onOpenDevice: (String) -> Unit, found: S
     }
 
     LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
+        // The Files hub's bar and tabs say where you are: the line, and Clear.
         item {
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                // In the Files hub ([embedded]) its bar and tabs say where you are.
-                if (!embedded) {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
-                    }
-                }
-                Column(Modifier.weight(1f)) {
-                    if (!embedded) {
-                        Text(
-                            stringResource(R.string.transfers_title), Modifier.semantics { heading() },
-                            style = MaterialTheme.typography.headlineSmall, color = T.text,
-                        )
-                    }
-                }
+            Row(Modifier.padding(top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Muted(stringResource(R.string.transfers_subtitle), Modifier.weight(1f))
                 if (finished.isNotEmpty()) {
                     GhostButton(stringResource(R.string.transfers_clear), { TransferLog.clearFinished() }, small = true)
                 }
             }
-            Muted(stringResource(R.string.transfers_subtitle), Modifier.padding(bottom = 8.dp))
         }
         if (list.isEmpty()) {
             item { EmptyState(stringResource(R.string.transfers_empty_title), stringResource(R.string.transfers_empty_body)) }

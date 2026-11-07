@@ -16,9 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -64,16 +61,6 @@ import com.mydomain.android.core.OtherLinkInfo
 import com.mydomain.android.core.timeAgo
 import kotlinx.coroutines.delay
 import kotlin.math.sqrt
-
-/** The Devices screen's way in: "How your devices are connected". */
-@Composable
-fun LinksMapEntry(onOpen: () -> Unit) {
-    if (Core.peers.isEmpty()) return
-    Tile(onClick = onOpen) {
-        Text(stringResource(R.string.map_entry), style = MaterialTheme.typography.titleMedium, color = T.text)
-        Muted(stringResource(R.string.map_entry_body))
-    }
-}
 
 private fun ago(secs: Long): String = timeAgo(System.currentTimeMillis() - secs * 1000)
 
@@ -204,14 +191,14 @@ fun LinksMapScreen(onBack: () -> Unit, onHelp: () -> Unit, onDevice: (String) ->
         item {
             Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
+                    LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back))
                 }
                 Text(
                     stringResource(R.string.map_title), Modifier.weight(1f).semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall, color = T.text,
                 )
                 IconButton(onClick = onHelp) {
-                    Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                    LIcon(R.drawable.ic_lucide_info, T.text2, 24.dp, stringResource(R.string.help_open))
                 }
             }
             Muted(stringResource(R.string.map_subtitle))

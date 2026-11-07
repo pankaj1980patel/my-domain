@@ -220,6 +220,9 @@ object Core {
     var ready by mutableStateOf(false); private set
     var peers by mutableStateOf<List<PeerInfo>>(emptyList()); private set
 
+    /** [peers] was read at least once (Home shows no "no devices yet" before). */
+    var peersLoaded by mutableStateOf(false); private set
+
     /** node id -> live link transport ("quic", "relay", ...). */
     val links = mutableStateMapOf<String, String>()
 
@@ -311,6 +314,7 @@ object Core {
         val now = System.currentTimeMillis()
         me = DeviceIdentity(SampleData.ME, SampleData.MY_NAME, SampleData.MY_IP, 47103.toUShort())
         session = Session(SampleData.USER, SampleData.SERVER, true)
+        peersLoaded = true
         peers = SampleData.devices.map {
             PeerInfo(it.node, it.name, it.ip, 47103.toUShort(), it.source, it.link != null, it.link)
         }
@@ -498,6 +502,7 @@ object Core {
             session = s
             ready = r
             peers = p
+            peersLoaded = true
             links.clear()
             p.forEach { peer -> peer.link?.let { links[peer.nodeId] = it } }
             HomeWidget.refresh(app)
@@ -628,7 +633,7 @@ object Core {
         // What the Activity timeline keeps that no history does.
         ActivityLog.onEvent(o)
         when (o.optString("kind")) {
-            "peers_updated" -> peersNow?.let { peers = it }
+            "peers_updated" -> peersNow?.let { peers = it; peersLoaded = true }
             // Labels set on your other devices: take them here.
             "labels_changed" -> {
                 DeviceLabels.applyShared(app, o.optJSONArray("labels"))

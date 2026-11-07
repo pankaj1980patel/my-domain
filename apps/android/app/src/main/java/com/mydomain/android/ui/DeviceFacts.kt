@@ -1,5 +1,19 @@
 package com.mydomain.android.ui
 
+import kotlinx.coroutines.launch
+import com.mydomain.android.core.DeviceLabels
+import com.mydomain.android.core.friendlyError
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.ui.platform.LocalDensity
 import android.text.format.Formatter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -69,11 +83,12 @@ fun osName(node: String): String? {
 /** Connected now (directly or through the internet). */
 fun isOnline(node: String): Boolean = Core.links.containsKey(node)
 
-/** How it's linked now ("Local network", "Relay server"...), from the
- *  links map; null when not linked or not known. */
+/** Which direct link it is ("Local network", "Bluetooth"...), from the
+ *  links map; null unless directly linked (the status already says
+ *  "through the internet") or when not known. */
 @Composable
 fun viaText(node: String): String? {
-    if (!isOnline(node)) return null
+    if (linkStateOf(node) != LinkState.Direct) return null
     val how = LinksMap.info?.devices?.firstOrNull { it.nodeId == node }?.link?.how ?: return null
     return stringResource(howRes(how))
 }
@@ -92,7 +107,7 @@ fun FollowLinksMap() {
     LaunchedEffect(LinksMap.changes) { runCatching { LinksMap.load() } }
 }
 
-/** The status line's colour for [s]. */
+/** The status colour for [s] (StatusPill, rows). */
 @Composable
 fun stateColor(s: LinkState) = when (s) {
     LinkState.Direct -> T.success
@@ -102,21 +117,9 @@ fun stateColor(s: LinkState) = when (s) {
     LinkState.Offline -> T.text3
 }
 
-/** A dot and the plain-words status, small. */
+/** A battery level's colour: amber when low and not charging (an alert). */
 @Composable
-fun StatusLine(node: String) {
-    val s = linkStateOf(node)
-    val c = stateColor(s)
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).background(c, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            linkLabel(s), style = MaterialTheme.typography.labelMedium,
-            color = if (s == LinkState.Offline || s == LinkState.Connecting) T.text2 else c,
-            maxLines = 1, overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
+fun batteryHue(level: Int, charging: Boolean?): Hue = if (level <= 20 && charging != true) Hue.Amber else Hue.Green
 
 /** The chips under a device's name: its OS, battery and network kind, each
  *  only when it said. */
@@ -133,7 +136,7 @@ fun FactChips(node: String) {
             InfoChip(
                 if (st.charging == true) R.drawable.ic_lucide_battery_charging else R.drawable.ic_lucide_battery,
                 stringResource(R.string.dev_percent, b),
-                if (b <= 20 && st.charging != true) Hue.Red else Hue.Green,
+                batteryHue(b, st.charging),
             )
         }
         if (wifi) InfoChip(R.drawable.ic_lucide_wifi, stringResource(R.string.dev_wifi), Hue.Blue)
@@ -149,13 +152,22 @@ fun ArtAvatar(node: String, size: Dp) {
     ) { DeviceArt(node, size * 0.62f, maxWidth = size * 0.78f) }
 }
 
-/** A device as a row (Devices, Home's "Your devices"): its art, name,
- *  status, battery when it said, and a chevron; opens its page. */
+/** The colour you gave a device (its label), as a small dot; nothing when none. */
+@Composable
+fun LabelDot(node: String) {
+    val c = labelColor(DeviceLabels.labels[node]?.color) ?: return
+    Box(Modifier.padding(end = 6.dp).size(8.dp).background(c, CircleShape))
+}
+
+/** A device as a row (Devices, Home's "Your devices"): its art, its colour
+ *  and name, battery and a short status, and a chevron; opens its page. */
 @Composable
 fun DeviceListRow(node: String, onOpen: () -> Unit) {
     val name = Core.peerName(node)
     val st = Core.deviceStatus[node]
-    val unread = Core.messages.count { it.node == node && it.incoming }
+    val unread = Attention.newFrom(node)
+    val s = linkStateOf(node)
+    val online = s == LinkState.Direct || s == LinkState.Relay
     Row(
         Modifier.fillMaxWidth().heightIn(min = 72.dp).clip(RoundedCornerShape(16.dp))
             .clickable(role = Role.Button, onClick = onOpen).padding(horizontal = 12.dp, vertical = 8.dp)
@@ -165,20 +177,33 @@ fun DeviceListRow(node: String, onOpen: () -> Unit) {
         Box(Modifier.width(64.dp), contentAlignment = Alignment.Center) { DeviceArt(node, 48.dp, maxWidth = 64.dp) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                name, Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = T.text,
-                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusLine(node)
+                LabelDot(node)
+                Text(
+                    name, style = MaterialTheme.typography.titleSmall, color = T.text,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // The battery first, so a long status never pushes it out.
                 st?.battery?.let { b ->
-                    Spacer(Modifier.width(10.dp))
-                    LIcon(if (st.charging == true) R.drawable.ic_lucide_battery_charging else R.drawable.ic_lucide_battery, hue(Hue.Green), 14.dp)
+                    LIcon(if (st.charging == true) R.drawable.ic_lucide_battery_charging else R.drawable.ic_lucide_battery, hue(batteryHue(b, st.charging)), 14.dp)
                     Spacer(Modifier.width(3.dp))
                     Text(stringResource(R.string.dev_percent, b), style = MaterialTheme.typography.labelMedium, color = T.text2)
+                    Spacer(Modifier.width(10.dp))
                 }
+                Box(Modifier.size(8.dp).background(stateColor(s), CircleShape))
+                Spacer(Modifier.width(6.dp))
+                val words = when (s) {
+                    LinkState.Connecting, LinkState.Failed -> linkLabel(s)
+                    else -> listOfNotNull(stringResource(if (online) R.string.dev_online else R.string.dev_offline), viaText(node)).joinToString(" · ")
+                }
+                Text(
+                    words, Modifier.weight(1f, fill = false), style = MaterialTheme.typography.labelMedium,
+                    color = if (online) stateColor(s) else T.text2, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
             }
-            lastSeenText(node)?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = T.text3) }
+            lastSeenText(node)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = T.text3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
         }
         if (unread > 0) {
             val unreadText = pluralStringResource(R.plurals.a11y_unread, unread, unread)
@@ -193,7 +218,9 @@ fun DeviceListRow(node: String, onOpen: () -> Unit) {
 }
 
 /** Battery, storage and memory as stat cards, each only when [node]
- *  reported it (Home, under the hero). Tapping opens its page. */
+ *  reported it (Home, under the hero), two to a row with large text.
+ *  Tapping opens its page. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun StatRow(node: String, onOpen: () -> Unit) {
     val st = Core.deviceStatus[node] ?: return
@@ -204,7 +231,7 @@ fun StatRow(node: String, onOpen: () -> Unit) {
             add { m ->
                 StatCard(
                     if (st.charging == true) R.drawable.ic_lucide_battery_charging else R.drawable.ic_lucide_battery,
-                    Hue.Green, stringResource(R.string.dev_percent, b), stringResource(R.string.info_battery),
+                    batteryHue(b, st.charging), stringResource(R.string.dev_percent, b), stringResource(R.string.info_battery),
                     if (st.charging == true) stringResource(R.string.dev_charging) else null, m, onOpen,
                 )
             }
@@ -214,7 +241,7 @@ fun StatRow(node: String, onOpen: () -> Unit) {
             val used = ((disk - st.storageFree.coerceIn(0, disk)) * 100 / disk).toInt()
             add { m ->
                 StatCard(
-                    R.drawable.ic_lucide_hard_drive, Hue.Violet, stringResource(R.string.dev_percent, used),
+                    R.drawable.ic_lucide_hard_drive, Hues.tools, stringResource(R.string.dev_percent, used),
                     stringResource(R.string.info_storage), stringResource(R.string.dev_free, size(st.storageFree)), m, onOpen,
                 )
             }
@@ -224,16 +251,52 @@ fun StatRow(node: String, onOpen: () -> Unit) {
             val used = ((ram - st.ramFree.coerceIn(0, ram)) * 100 / ram).toInt()
             add { m ->
                 StatCard(
-                    R.drawable.ic_lucide_memory_stick, Hue.Blue, stringResource(R.string.dev_percent, used),
+                    R.drawable.ic_lucide_memory_stick, Hues.tools, stringResource(R.string.dev_percent, used),
                     stringResource(R.string.info_memory), stringResource(R.string.dev_of, size(ram - st.ramFree.coerceIn(0, ram)), size(ram)), m, onOpen,
                 )
             }
         }
     }
     if (cards.isEmpty()) return
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    val perRow = if (LocalDensity.current.fontScale > 1.15f) 2 else 3
+    FlowRow(
+        Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = perRow,
+    ) {
         cards.forEach { c -> c(Modifier.weight(1f)) }
     }
+}
+
+/** Pull down to read the device list again (Home and Devices). */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RefreshDevices(content: @Composable () -> Unit) {
+    val toast = LocalToast.current
+    val scope = rememberCoroutineScope()
+    val pull = rememberPullToRefreshState()
+    var refreshing by remember { mutableStateOf(false) }
+    val updated = stringResource(R.string.home_list_updated)
+    PullToRefreshBox(
+        isRefreshing = refreshing,
+        onRefresh = {
+            refreshing = true
+            scope.launch {
+                try { Core.refreshDevices(); toast(updated) } catch (e: Exception) { toast(friendlyError(e)) }
+                finally { refreshing = false }
+            }
+        },
+        modifier = Modifier.fillMaxSize(),
+        state = pull,
+        indicator = {
+            PullToRefreshDefaults.Indicator(
+                state = pull,
+                isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = T.bar,
+                color = T.accent,
+            )
+        },
+    ) { content() }
 }
 
 /** Padding for the main screens' lists. */

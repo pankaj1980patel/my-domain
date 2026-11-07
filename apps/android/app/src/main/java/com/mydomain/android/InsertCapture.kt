@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.ui.LIcon
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
@@ -60,10 +61,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -699,13 +696,13 @@ class InsertCaptureActivity : ComponentActivity() {
             }
             Column {
                 IconButton({ pages = ScanPages.up(pages, i) }, enabled = i > 0) {
-                    Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.insert_move_up), tint = T.text)
+                    LIcon(R.drawable.ic_lucide_chevron_up, T.text, 24.dp, stringResource(R.string.insert_move_up))
                 }
                 IconButton({ pages = ScanPages.down(pages, i) }, enabled = i < pages.size - 1) {
-                    Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.insert_move_down), tint = T.text)
+                    LIcon(R.drawable.ic_lucide_chevron_down, T.text, 24.dp, stringResource(R.string.insert_move_down))
                 }
                 IconButton({ pages = ScanPages.delete(pages, i); if (pages.isEmpty()) wantCamera() }) {
-                    Icon(Icons.Filled.Delete, stringResource(R.string.insert_delete_page), tint = T.danger)
+                    LIcon(R.drawable.ic_lucide_trash_2, T.danger, 24.dp, stringResource(R.string.insert_delete_page))
                 }
             }
         }

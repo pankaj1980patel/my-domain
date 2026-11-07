@@ -10,7 +10,6 @@
     <string name="tab_devices">Devices</string>
     <string name="tab_activity">Activity</string>
     <string name="tab_settings">Settings</string>
-    <string name="tab_notes">Notes</string>
 
     <!-- Shared -->
     <string name="back">Back</string>
@@ -58,21 +57,13 @@
     <!-- Home -->
     <string name="home_title">Your devices</string>
     <string name="home_subtitle_empty">Devices signed in to your account appear here. Pull down to refresh.</string>
-    <plurals name="home_subtitle_connected">
-        <item quantity="one">%1$d of %2$d connected</item>
-        <item quantity="other">%1$d of %2$d connected</item>
-    </plurals>
     <string name="home_empty_title">No other devices yet</string>
     <string name="home_empty_body">Install my-domain on your computer or another phone and sign in with the same account. It shows up here by itself.</string>
     <string name="home_list_updated">Device list updated</string>
 
     <!-- Activity -->
-    <string name="activity_title">Activity</string>
-    <string name="activity_subtitle">What happened between your devices: files, clipboard, messages, calls, connections and more.</string>
     <string name="activity_empty_title">Nothing yet</string>
     <string name="activity_empty_body">Files, clipboard, messages and other things your devices do show up here.</string>
-    <string name="activity_entry">Activity</string>
-    <string name="activity_entry_body">Files, clipboard, messages and calls between your devices, by day.</string>
     <string name="activity_kind_files">Files</string>
     <string name="activity_kind_clipboard">Clipboard</string>
     <string name="activity_kind_messages">Messages</string>
@@ -137,8 +128,6 @@
     <!-- Transfers: every file going to or coming from your devices -->
     <string name="transfers_title">Transfers</string>
     <string name="transfers_subtitle">Files and folders on their way to and from your devices.</string>
-    <string name="transfers_open">Transfers</string>
-    <string name="transfers_open_active">Transfers · %1$d under way</string>
     <string name="transfers_active">Under way</string>
     <string name="transfers_recent">Recent</string>
     <string name="transfers_empty_title">No transfers yet</string>
@@ -229,7 +218,6 @@
     <string name="apps_show">Show its apps</string>
     <string name="apps_search">Search apps</string>
     <string name="apps_none">No apps to show.</string>
-    <string name="find_title">Find &amp; control</string>
     <string name="find_body">Ring it to find it, or open a link on it.</string>
     <string name="find_ring">Ring</string>
     <string name="find_ringing">Ringing %1$s</string>
@@ -698,7 +686,6 @@
     <string name="locate_asking">Asking where %1$s is…</string>
     <string name="locate_where">Near %1$s, %2$s (±%3$d m, %4$d min ago)</string>
     <string name="locate_off">Location sharing is off on %1$s. Turn on “Let my phone see where this computer is” in my-domain’s Settings there.</string>
-    <string name="info_title">This device</string>
     <string name="info_hint">What %1$s last said about itself.</string>
     <string name="info_battery">Battery</string>
     <string name="info_battery_level">%1$d%%</string>
@@ -857,7 +844,6 @@
     <string name="automation_empty_note">Write the note to send.</string>
 
     <!-- Device labels: a nickname, icon and colour, shared with your other devices while the Settings switch is on -->
-    <string name="label_edit">Edit</string>
     <string name="label_title">How this device looks here</string>
     <string name="label_hint">Your other devices show it too, while “Share names and icons with my other devices” is on in Settings.</string>
     <string name="label_nickname">Nickname</string>
@@ -961,10 +947,6 @@
     <string name="setup_not_needed">Not needed on this Android version</string>
     <string name="setup_info">Can’t be checked: see below</string>
     <string name="setup_turn_on">Turn on…</string>
-    <string name="setup_card_title">Set up this phone</string>
-    <string name="setup_card_body">%1$d of %2$d optional features are on. See what each one does and turn on the ones you want.</string>
-    <string name="setup_card_open">Show me</string>
-    <string name="setup_card_dismiss">Not now</string>
     <string name="setup_no_screen">This phone has no screen for that. Look for it in Android’s Settings.</string>
 
     <string name="setup_notifications_title">Notifications</string>
@@ -1064,7 +1046,6 @@
     <string name="automation_apps_failed">Couldn’t do it: %1$s</string>
     <!-- Search everything (SearchScreen.kt) -->
     <string name="search_screen_title">Search</string>
-    <string name="search_open">Search everything on this phone</string>
     <string name="search_field">Search devices, messages, notes, files…</string>
     <string name="search_clear">Clear search</string>
     <string name="search_intro">Finds your devices, messages, notes, the clipboard history, transfers, synced folders, automations, Settings and Help. Only what’s on this phone; nothing is sent anywhere.</string>
@@ -1123,7 +1104,6 @@
     <string name="read_later_mark_read">Mark read</string>
     <string name="read_later_mark_unread">Mark unread</string>
     <string name="read_later_delete">Delete</string>
-    <string name="read_later_none_unread">Nothing unread</string>
     <plurals name="read_later_unread_count">
         <item quantity="one">%1$d unread</item>
         <item quantity="other">%1$d unread</item>
@@ -1715,7 +1695,6 @@
     <string name="verify_scan_mismatch">The keys don’t match. Don’t trust this device: something may be between your devices.</string>
     <string name="verify_ok">OK</string>
     <string name="verify_close">Close</string>
-    <string name="map_entry">How your devices are connected</string>
     <string name="map_entry_body">See how each device is linked, and why one isn’t</string>
     <string name="map_image">Picture of how your devices are connected. The same is listed below.</string>
     <!-- Insert from phone (InsertCapture.kt): a computer asks for a photo or a document scan. -->
@@ -1822,10 +1801,6 @@
     <string name="health_running">Checking…</string>
     <string name="health_last_run">Checked %1$s</string>
     <string name="health_all_good">Everything looks fine.</string>
-    <string name="health_summary_bad">%1$d need fixing</string>
-    <string name="health_summary_warn">%1$d worth a look</string>
-    <string name="health_home_title">Something needs attention</string>
-    <string name="health_home_body">The health check found %1$d problem(s). It says what’s wrong and how to fix it.</string>
     <string name="health_open">Open health check</string>
     <string name="health_device_banner">Something’s wrong with this device. The health check says what and how to fix it.</string>
     <string name="health_settings_tile">Health check</string>
@@ -2011,14 +1986,14 @@
     <string name="dev_rename_named">Rename %1$s</string>
     <string name="dev_health_check">Health check</string>
     <string name="dev_tab_overview">Overview</string>
-    <string name="dev_tab_comm">Communication</string>
+    <string name="dev_tab_comm">Messages</string>
     <string name="dev_tab_files">Files</string>
-    <string name="dev_tab_remote">Remote control</string>
+    <string name="dev_tab_remote">Control</string>
     <string name="dev_tab_media">Media</string>
     <string name="dev_card_comm">Messaging &amp; notifications</string>
-    <string name="dev_card_comm_sub">Chat, clipboard and notifications</string>
+    <string name="dev_card_comm_sub">Chat and notifications</string>
     <string name="dev_card_files">Files &amp; sharing</string>
-    <string name="dev_card_files_sub">Send files and folders, or browse its folders</string>
+    <string name="dev_card_files_sub">Send files and folders, browse, clipboard</string>
     <string name="dev_card_tools">Device tools</string>
     <string name="dev_card_tools_sub">Ring it, find it, control it</string>
     <string name="dev_card_info">Device info</string>
@@ -2043,7 +2018,6 @@
     <string name="home_q_clipboard">Clipboard</string>
     <string name="home_q_screen">Screen</string>
     <string name="home_q_ring">Ring</string>
-    <string name="home_q_more">More</string>
     <string name="home_recent">Recent activity</string>
     <string name="home_view_all">View all</string>
     <string name="home_health">Device health</string>
@@ -2052,10 +2026,9 @@
     <string name="home_health_bad">Needs attention</string>
     <string name="more_files">Files &amp; transfers</string>
     <string name="more_files_sub">Send, browse and sync files</string>
-    <string name="more_messages">Messages</string>
+    <string name="more_messages">Messages &amp; notifications</string>
     <string name="more_messages_sub">Chats and notifications</string>
     <string name="more_workspace">Workspace</string>
-    <string name="more_workspace_sub">Notes, timers and read later</string>
     <string name="more_automations_sub">When something happens, do something</string>
     <string name="more_search">Search</string>
     <string name="more_search_sub">Everything kept on this phone</string>
@@ -2100,5 +2073,29 @@
     <plurals name="more_rules_count">
         <item quantity="one">%1$d rule</item>
         <item quantity="other">%1$d rules</item>
+    </plurals>
+    <string name="dev_sending">Sending…</string>
+    <string name="dev_security">Security</string>
+    <string name="dev_remove_title">Remove this device</string>
+    <string name="dev_remove_hint">For good: your devices stop trusting it. Settings can allow it again.</string>
+    <string name="ctl_group_find">Find</string>
+    <string name="ctl_group_sound">Sound &amp; media</string>
+    <string name="ctl_group_screen">Screen &amp; power</string>
+    <string name="ctl_group_open">Open on it</string>
+    <string name="more_options">More options</string>
+    <string name="set_group_health">Health check &amp; setup</string>
+    <string name="set_sign_out_title">Sign out of this phone?</string>
+    <string name="set_sign_out_hint">Your other devices stay signed in. You can sign in here again any time.</string>
+    <plurals name="health_needs_fixing">
+        <item quantity="one">%1$d problem needs fixing</item>
+        <item quantity="other">%1$d problems need fixing</item>
+    </plurals>
+    <plurals name="health_worth_look">
+        <item quantity="one">%1$d worth a look</item>
+        <item quantity="other">%1$d worth a look</item>
+    </plurals>
+    <plurals name="transfers_under_way">
+        <item quantity="one">Transfers · %1$d under way</item>
+        <item quantity="other">Transfers · %1$d under way</item>
     </plurals>
 </resources>

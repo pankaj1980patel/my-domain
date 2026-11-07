@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
@@ -23,10 +22,6 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -317,9 +312,9 @@ fun SearchScreen(
     // Straight to typing when it opens empty (not when coming back to results).
     LaunchedEffect(Unit) { if (query.isEmpty()) runCatching { field.requestFocus() } }
 
-    Column(Modifier.fillMaxSize().imePadding()) {
+    Column(Modifier.fillMaxSize()) {
         Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 4.dp, end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text) }
+            IconButton(onClick = onBack) { LIcon(R.drawable.ic_lucide_arrow_left, T.text, 24.dp, stringResource(R.string.back)) }
             Text(
                 stringResource(R.string.search_screen_title), Modifier.semantics { heading() },
                 style = MaterialTheme.typography.headlineSmall, color = T.text,
@@ -330,11 +325,11 @@ fun SearchScreen(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).focusRequester(field),
             label = { Text(stringResource(R.string.search_field)) },
             singleLine = true,
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = T.text3) },
+            leadingIcon = { LIcon(R.drawable.ic_lucide_search, T.text3, 22.dp) },
             trailingIcon = if (query.isEmpty()) null else {
                 {
                     IconButton(onClick = { onQuery(""); runCatching { field.requestFocus() } }) {
-                        Icon(Icons.Filled.Clear, stringResource(R.string.search_clear), tint = T.text2)
+                        LIcon(R.drawable.ic_lucide_x, T.text2, 22.dp, stringResource(R.string.search_clear))
                     }
                 }
             },
@@ -459,23 +454,6 @@ private fun ResultRow(f: Found, words: List<String>, onClick: () -> Unit) {
                 )
             }
             if (meta.isNotEmpty()) Muted(meta)
-        }
-    }
-}
-
-/** The Home entry to Search: looks like a field, opens the Search screen. */
-@Composable
-fun SearchEntry(onOpen: () -> Unit) {
-    Surface(
-        onClick = onOpen,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { role = Role.Button },
-        shape = MaterialTheme.shapes.small,
-        color = T.surface2,
-        border = BorderStroke(1.dp, T.controlBorder),
-    ) {
-        Row(Modifier.padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(Icons.Filled.Search, contentDescription = null, tint = T.text3)
-            Text(stringResource(R.string.search_open), style = MaterialTheme.typography.bodyMedium, color = T.text3)
         }
     }
 }

@@ -12,7 +12,6 @@
     <string name="tab_devices">சாதனங்கள்</string>
     <string name="tab_activity">செயல்பாடு</string>
     <string name="tab_settings">அமைப்புகள்</string>
-    <string name="tab_notes">குறிப்புகள்</string>
 
     <!-- Shared -->
     <string name="back">பின்செல்</string>
@@ -60,21 +59,13 @@
     <!-- Home -->
     <string name="home_title">உங்கள் சாதனங்கள்</string>
     <string name="home_subtitle_empty">உங்கள் கணக்கில் உள்நுழைந்த சாதனங்கள் இங்கே தோன்றும். புதுப்பிக்கக் கீழே இழுங்கள்.</string>
-    <plurals name="home_subtitle_connected">
-        <item quantity="one">%2$d இல் %1$d இணைக்கப்பட்டது</item>
-        <item quantity="other">%2$d இல் %1$d இணைக்கப்பட்டன</item>
-    </plurals>
     <string name="home_empty_title">இன்னும் வேறு சாதனங்கள் இல்லை</string>
     <string name="home_empty_body">உங்கள் கணினியிலோ மற்றொரு ஃபோனிலோ my-domain ஐ நிறுவி அதே கணக்கில் உள்நுழையுங்கள். அது தானாகவே இங்கே தோன்றும்.</string>
     <string name="home_list_updated">சாதனப் பட்டியல் புதுப்பிக்கப்பட்டது</string>
 
     <!-- Activity -->
-    <string name="activity_title">செயல்பாடு</string>
-    <string name="activity_subtitle">உங்கள் சாதனங்களுக்கு இடையே நடந்தவை: கோப்புகள், கிளிப்போர்டு, செய்திகள், அழைப்புகள், இணைப்புகள் மற்றும் பல.</string>
     <string name="activity_empty_title">இன்னும் எதுவும் இல்லை</string>
     <string name="activity_empty_body">கோப்புகள், கிளிப்போர்டு, செய்திகள் மற்றும் உங்கள் சாதனங்கள் செய்யும் பிற செயல்கள் இங்கே தோன்றும்.</string>
-    <string name="activity_entry">செயல்பாடு</string>
-    <string name="activity_entry_body">உங்கள் சாதனங்களுக்கு இடையேயான கோப்புகள், கிளிப்போர்டு, செய்திகள், அழைப்புகள், நாள்வாரியாக.</string>
     <string name="activity_kind_files">கோப்புகள்</string>
     <string name="activity_kind_clipboard">கிளிப்போர்டு</string>
     <string name="activity_kind_messages">செய்திகள்</string>
@@ -139,8 +130,6 @@
     <!-- Transfers: every file going to or coming from your devices -->
     <string name="transfers_title">பரிமாற்றங்கள்</string>
     <string name="transfers_subtitle">உங்கள் சாதனங்களுக்குச் செல்லும், அவற்றிலிருந்து வரும் கோப்புகளும் கோப்புறைகளும்.</string>
-    <string name="transfers_open">பரிமாற்றங்கள்</string>
-    <string name="transfers_open_active">பரிமாற்றங்கள் · %1$d நடைபெறுகின்றன</string>
     <string name="transfers_active">நடைபெறுகின்றன</string>
     <string name="transfers_recent">சமீபத்தியவை</string>
     <string name="transfers_empty_title">இன்னும் பரிமாற்றங்கள் இல்லை</string>
@@ -231,7 +220,6 @@
     <string name="apps_show">அதன் ஆப்ஸைக் காட்டு</string>
     <string name="apps_search">ஆப்ஸில் தேடு</string>
     <string name="apps_none">காட்ட ஆப்ஸ் எதுவும் இல்லை.</string>
-    <string name="find_title">கண்டுபிடி &amp; கட்டுப்படுத்து</string>
     <string name="find_body">கண்டுபிடிக்க அதை ஒலிக்கச் செய்யுங்கள், அல்லது அதில் ஒரு இணைப்பைத் திறங்கள்.</string>
     <string name="find_ring">ஒலிக்கச் செய்</string>
     <string name="find_ringing">%1$s ஒலிக்கிறது</string>
@@ -699,7 +687,6 @@
     <string name="locate_asking">%1$s எங்கே உள்ளது எனக் கேட்கிறது…</string>
     <string name="locate_where">%1$s, %2$s அருகில் (±%3$d மீ, %4$d நிமி முன்பு)</string>
     <string name="locate_off">%1$s இல் இருப்பிடப் பகிர்வு முடக்கப்பட்டுள்ளது. அங்கே my-domain இன் அமைப்புகளில் “இந்தக் கணினி எங்கே உள்ளது என்பதை என் ஃபோன் பார்க்கட்டும்” என்பதை இயக்குங்கள்.</string>
-    <string name="info_title">இந்தச் சாதனம்</string>
     <string name="info_hint">%1$s தன்னைப் பற்றிக் கடைசியாகச் சொன்னது.</string>
     <string name="info_battery">பேட்டரி</string>
     <string name="info_battery_level">%1$d%%</string>
@@ -858,7 +845,6 @@
     <string name="automation_empty_note">அனுப்ப வேண்டிய குறிப்பை எழுதுங்கள்.</string>
 
     <!-- Device labels: a nickname, icon and colour, shared with your other devices while the Settings switch is on -->
-    <string name="label_edit">திருத்து</string>
     <string name="label_title">இந்தச் சாதனம் இங்கே எப்படித் தோன்றும்</string>
     <string name="label_hint">அமைப்புகளில் “பெயர்களையும் ஐகான்களையும் என் பிற சாதனங்களுடன் பகிர்” இயக்கத்தில் இருக்கும்போது, உங்கள் பிற சாதனங்களும் இதைக் காட்டும்.</string>
     <string name="label_nickname">புனைபெயர்</string>
@@ -962,10 +948,6 @@
     <string name="setup_not_needed">இந்த Android பதிப்பில் தேவையில்லை</string>
     <string name="setup_info">சரிபார்க்க முடியாது: கீழே பார்க்கவும்</string>
     <string name="setup_turn_on">இயக்கு…</string>
-    <string name="setup_card_title">இந்த ஃபோனை அமை</string>
-    <string name="setup_card_body">%2$d விருப்ப அம்சங்களில் %1$d இயக்கத்தில் உள்ளன. ஒவ்வொன்றும் என்ன செய்கிறது என்று பார்த்து, வேண்டியவற்றை இயக்குங்கள்.</string>
-    <string name="setup_card_open">காட்டு</string>
-    <string name="setup_card_dismiss">இப்போது வேண்டாம்</string>
     <string name="setup_no_screen">இதற்கான திரை இந்த ஃபோனில் இல்லை. Android அமைப்புகளில் தேடுங்கள்.</string>
 
     <string name="setup_notifications_title">அறிவிப்புகள்</string>
@@ -1065,7 +1047,6 @@
     <string name="automation_apps_failed">செய்ய முடியவில்லை: %1$s</string>
     <!-- Search everything (SearchScreen.kt) -->
     <string name="search_screen_title">தேடல்</string>
-    <string name="search_open">இந்த ஃபோனில் உள்ள அனைத்தையும் தேடு</string>
     <string name="search_field">சாதனங்கள், செய்திகள், குறிப்புகள், கோப்புகளைத் தேடு…</string>
     <string name="search_clear">தேடலை அழி</string>
     <string name="search_intro">உங்கள் சாதனங்கள், செய்திகள், குறிப்புகள், கிளிப்போர்டு வரலாறு, பரிமாற்றங்கள், ஒத்திசைக்கப்பட்ட கோப்புறைகள், ஆட்டோமேஷன்கள், அமைப்புகள், உதவி ஆகியவற்றைக் கண்டுபிடிக்கும். இந்த ஃபோனில் உள்ளவை மட்டுமே; எதுவும் எங்கும் அனுப்பப்படாது.</string>
@@ -1124,7 +1105,6 @@
     <string name="read_later_mark_read">படித்ததாகக் குறி</string>
     <string name="read_later_mark_unread">படிக்காததாகக் குறி</string>
     <string name="read_later_delete">நீக்கு</string>
-    <string name="read_later_none_unread">படிக்காதது எதுவுமில்லை</string>
     <plurals name="read_later_unread_count">
         <item quantity="one">%1$d படிக்காதது</item>
         <item quantity="other">%1$d படிக்காதவை</item>
@@ -1715,7 +1695,6 @@
     <string name="verify_scan_mismatch">சாவிகள் பொருந்தவில்லை. இந்தச் சாதனத்தை நம்பாதீர்கள்: உங்கள் சாதனங்களுக்கு இடையில் ஏதோ இருக்கலாம்.</string>
     <string name="verify_ok">சரி</string>
     <string name="verify_close">மூடு</string>
-    <string name="map_entry">உங்கள் சாதனங்கள் எப்படி இணைக்கப்பட்டுள்ளன</string>
     <string name="map_entry_body">ஒவ்வொரு சாதனமும் எப்படி இணைக்கப்பட்டுள்ளது, ஒன்று ஏன் இணைக்கப்படவில்லை என்று பாருங்கள்</string>
     <string name="map_image">உங்கள் சாதனங்கள் எப்படி இணைக்கப்பட்டுள்ளன என்பதன் படம். இதுவே கீழே பட்டியலிடப்பட்டுள்ளது.</string>
     <!-- Insert from phone (InsertCapture.kt): a computer asks for a photo or a document scan. -->
@@ -1822,10 +1801,6 @@
     <string name="health_running">சரிபார்க்கிறது…</string>
     <string name="health_last_run">%1$s சரிபார்க்கப்பட்டது</string>
     <string name="health_all_good">எல்லாம் சரியாக உள்ளது.</string>
-    <string name="health_summary_bad">%1$d சரிசெய்ய வேண்டியவை</string>
-    <string name="health_summary_warn">%1$d கவனிக்கத்தக்கவை</string>
-    <string name="health_home_title">ஏதோ ஒன்றுக்குக் கவனம் தேவை</string>
-    <string name="health_home_body">நலச் சோதனை %1$d சிக்கல்(களை) கண்டறிந்தது. என்ன தவறு, எப்படிச் சரிசெய்வது என்று அது சொல்லும்.</string>
     <string name="health_open">நலச் சோதனையைத் திற</string>
     <string name="health_device_banner">இந்தச் சாதனத்தில் ஏதோ தவறு உள்ளது. என்ன, எப்படிச் சரிசெய்வது என்று நலச் சோதனை சொல்லும்.</string>
     <string name="health_settings_tile">நலச் சோதனை</string>
@@ -2011,14 +1986,14 @@
     <string name="dev_rename_named">%1$s இன் பெயரை மாற்று</string>
     <string name="dev_health_check">நலச் சோதனை</string>
     <string name="dev_tab_overview">மேலோட்டம்</string>
-    <string name="dev_tab_comm">தொடர்பு</string>
+    <string name="dev_tab_comm">செய்திகள்</string>
     <string name="dev_tab_files">கோப்புகள்</string>
-    <string name="dev_tab_remote">தொலை கட்டுப்பாடு</string>
+    <string name="dev_tab_remote">கட்டுப்பாடு</string>
     <string name="dev_tab_media">மீடியா</string>
     <string name="dev_card_comm">செய்திகளும் அறிவிப்புகளும்</string>
-    <string name="dev_card_comm_sub">அரட்டை, கிளிப்போர்டு, அறிவிப்புகள்</string>
+    <string name="dev_card_comm_sub">அரட்டையும் அறிவிப்புகளும்</string>
     <string name="dev_card_files">கோப்புகளும் பகிர்வும்</string>
-    <string name="dev_card_files_sub">கோப்புகளையும் கோப்புறைகளையும் அனுப்பு, அல்லது அதன் கோப்புறைகளைப் பார்</string>
+    <string name="dev_card_files_sub">கோப்புகள், கோப்புறைகள் அனுப்பு, உலாவு, கிளிப்போர்டு</string>
     <string name="dev_card_tools">சாதனக் கருவிகள்</string>
     <string name="dev_card_tools_sub">ஒலிக்கச் செய், கண்டுபிடி, கட்டுப்படுத்து</string>
     <string name="dev_card_info">சாதனத் தகவல்</string>
@@ -2043,7 +2018,6 @@
     <string name="home_q_clipboard">கிளிப்போர்டு</string>
     <string name="home_q_screen">திரை</string>
     <string name="home_q_ring">ஒலிக்கச் செய்</string>
-    <string name="home_q_more">மேலும்</string>
     <string name="home_recent">சமீபத்திய செயல்பாடு</string>
     <string name="home_view_all">அனைத்தையும் பார்</string>
     <string name="home_health">சாதன நலம்</string>
@@ -2052,10 +2026,9 @@
     <string name="home_health_bad">கவனம் தேவை</string>
     <string name="more_files">கோப்புகளும் பரிமாற்றங்களும்</string>
     <string name="more_files_sub">கோப்புகளை அனுப்பு, உலாவு, ஒத்திசை</string>
-    <string name="more_messages">செய்திகள்</string>
+    <string name="more_messages">செய்திகளும் அறிவிப்புகளும்</string>
     <string name="more_messages_sub">அரட்டைகளும் அறிவிப்புகளும்</string>
     <string name="more_workspace">பணியிடம்</string>
-    <string name="more_workspace_sub">குறிப்புகள், டைமர்கள், பிறகு படி</string>
     <string name="more_automations_sub">ஏதாவது நடந்தால், ஏதாவது செய்</string>
     <string name="more_search">தேடு</string>
     <string name="more_search_sub">இந்த ஃபோனில் வைத்துள்ள அனைத்தும்</string>
@@ -2100,5 +2073,29 @@
     <plurals name="more_rules_count">
         <item quantity="one">%1$d விதி</item>
         <item quantity="other">%1$d விதிகள்</item>
+    </plurals>
+    <string name="dev_sending">அனுப்புகிறது…</string>
+    <string name="dev_security">பாதுகாப்பு</string>
+    <string name="dev_remove_title">இந்தச் சாதனத்தை நீக்கு</string>
+    <string name="dev_remove_hint">நிரந்தரமாக: உங்கள் சாதனங்கள் இதை நம்புவதை நிறுத்தும். அமைப்புகளில் மீண்டும் அனுமதிக்கலாம்.</string>
+    <string name="ctl_group_find">கண்டுபிடி</string>
+    <string name="ctl_group_sound">ஒலியும் மீடியாவும்</string>
+    <string name="ctl_group_screen">திரையும் மின்சக்தியும்</string>
+    <string name="ctl_group_open">அதில் திற</string>
+    <string name="more_options">மேலும் விருப்பங்கள்</string>
+    <string name="set_group_health">நலச் சோதனையும் அமைவும்</string>
+    <string name="set_sign_out_title">இந்த ஃபோனிலிருந்து வெளியேறவா?</string>
+    <string name="set_sign_out_hint">உங்கள் மற்ற சாதனங்கள் உள்நுழைந்தபடியே இருக்கும். இங்கே எப்போது வேண்டுமானாலும் மீண்டும் உள்நுழையலாம்.</string>
+    <plurals name="health_needs_fixing">
+        <item quantity="one">%1$d சிக்கலைச் சரிசெய்ய வேண்டும்</item>
+        <item quantity="other">%1$d சிக்கல்களைச் சரிசெய்ய வேண்டும்</item>
+    </plurals>
+    <plurals name="health_worth_look">
+        <item quantity="one">%1$d கவனிக்கத்தக்கது</item>
+        <item quantity="other">%1$d கவனிக்கத்தக்கவை</item>
+    </plurals>
+    <plurals name="transfers_under_way">
+        <item quantity="one">பரிமாற்றங்கள் · %1$d நடைபெறுகிறது</item>
+        <item quantity="other">பரிமாற்றங்கள் · %1$d நடைபெறுகின்றன</item>
     </plurals>
 </resources>

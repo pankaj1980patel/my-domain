@@ -1,5 +1,10 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.runtime.key
 import com.mydomain.android.core.Health
 import androidx.compose.material3.Badge
 import androidx.compose.foundation.layout.width
@@ -437,39 +442,39 @@ private enum class SettingsGroup(
     val ids: Set<String>,
 ) {
     Account(
-        R.drawable.ic_lucide_user, Hue.Violet, R.string.set_group_account, R.string.set_group_account_sub,
+        R.drawable.ic_lucide_user, Hues.plain, R.string.set_group_account, R.string.set_group_account_sub,
         setOf("account", "sessions", "removed-devices", "key-rotation", "key"),
     ),
     Phone(
-        R.drawable.ic_lucide_smartphone, Hue.Blue, R.string.set_group_phone, R.string.set_group_phone_sub,
+        R.drawable.ic_lucide_smartphone, Hues.plain, R.string.set_group_phone, R.string.set_group_phone_sub,
         setOf("device", "wallpaper", "location", "camera", "nearby", "wifi-direct", "touchpad"),
     ),
     Files(
-        R.drawable.ic_lucide_folder, Hue.Blue, R.string.set_group_files, R.string.set_group_files_sub,
+        R.drawable.ic_lucide_folder, Hues.files, R.string.set_group_files, R.string.set_group_files_sub,
         setOf("photos", "sync", "print", "remote-download"),
     ),
     Automation(
-        R.drawable.ic_lucide_zap, Hue.Amber, R.string.automations_title, R.string.set_group_automation_sub,
+        R.drawable.ic_lucide_zap, Hues.tools, R.string.automations_title, R.string.set_group_automation_sub,
         setOf("automations", "automation-apps"),
     ),
     Battery(
-        R.drawable.ic_lucide_battery_charging, Hue.Green, R.string.set_group_battery, R.string.set_group_battery_sub,
+        R.drawable.ic_lucide_battery_charging, Hues.plain, R.string.set_group_battery, R.string.set_group_battery_sub,
         setOf("battery"),
     ),
     Helper(
-        R.drawable.ic_lucide_shield, Hue.Red, R.string.set_group_helper, R.string.set_group_helper_sub,
+        R.drawable.ic_lucide_shield, Hues.plain, R.string.set_group_helper, R.string.set_group_helper_sub,
         setOf("helper", "secure-mode", "shizuku"),
     ),
     Health(
-        R.drawable.ic_lucide_shield_check, Hue.Green, R.string.more_security_health, R.string.set_group_health_sub,
+        R.drawable.ic_lucide_shield_check, Hues.plain, R.string.set_group_health, R.string.set_group_health_sub,
         setOf("health", "setup"),
     ),
     Backup(
-        R.drawable.ic_lucide_history, Hue.Cyan, R.string.set_group_backup, R.string.set_group_backup_sub,
+        R.drawable.ic_lucide_archive_restore, Hues.plain, R.string.set_group_backup, R.string.set_group_backup_sub,
         setOf("backup"),
     ),
     Appearance(
-        R.drawable.ic_lucide_palette, Hue.Violet, R.string.settings_appearance, R.string.set_group_appearance_sub,
+        R.drawable.ic_lucide_palette, Hues.plain, R.string.settings_appearance, R.string.set_group_appearance_sub,
         setOf("appearance"),
     ),
     ;
@@ -508,6 +513,8 @@ fun SettingsScreen(
             stringResource(group?.title ?: R.string.settings_title),
             onBack = { if (group != null) open = null else onBack() },
         )
+        // Each page starts at its top (not where the list was scrolled to).
+        key(open) {
         Column(
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -518,7 +525,7 @@ fun SettingsScreen(
                 // Who is signed in, at the top: opens Account & security.
                 SoftCard(onClick = { open = SettingsGroup.Account.name }) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconBubble(R.drawable.ic_lucide_user, Hue.Violet, 44.dp)
+                        IconBubble(R.drawable.ic_lucide_user, Hues.plain, 44.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(
@@ -532,12 +539,14 @@ fun SettingsScreen(
                 }
                 RowGroup {
                     SettingsGroup.entries.filter { it != SettingsGroup.Account }.forEach { g ->
+                        val red = g == SettingsGroup.Health && Health.bad > 0
                         NavRow(
                             g.icon, g.hue, stringResource(g.title), stringResource(g.sub),
                             onClick = { open = g.name },
+                            state = if (red) pluralStringResource(R.plurals.health_needs_fixing, Health.bad, Health.bad) else null,
                             trailing = {
                                 // Something red in the health check.
-                                if (g == SettingsGroup.Health && Health.bad > 0) {
+                                if (red) {
                                     Badge(containerColor = T.danger)
                                     Spacer(Modifier.width(8.dp))
                                 }
@@ -567,6 +576,7 @@ fun SettingsScreen(
                 }
             }
         }
+        }
     }
 }
 
@@ -590,7 +600,6 @@ private fun SettingsGroupPage(
                     style = MaterialTheme.typography.bodyMedium, color = T.text,
                 )
                 AddDevice()
-                GhostButton(stringResource(R.string.settings_sign_out), { scope.launch { runCatching { Core.signOut() } } })
                 // The account password (not the encryption passphrase) and
                 // signing out every device.
                 AccountSecurity()
@@ -603,6 +612,9 @@ private fun SettingsGroupPage(
             KeyRotationPrompt()
             KeyRotationTile(Modifier.foundMark(focus == "key-rotation"))
             DeviceKeyTile(Modifier.foundMark(focus == "key"))
+            // Signing out: apart, last, in red, and asked first.
+            Spacer(Modifier.height(12.dp))
+            SignOutTile(scope)
         }
         SettingsGroup.Phone -> {
             Tile(Modifier.foundMark(focus == "device"), title = stringResource(R.string.settings_this_device)) {
@@ -655,6 +667,33 @@ private fun SettingsGroupPage(
             ThemePicker(prefs)
             LanguageSetting()
         }
+    }
+}
+
+/** Sign this phone out (asks first; your other devices stay signed in). */
+@Composable
+private fun SignOutTile(scope: kotlinx.coroutines.CoroutineScope) {
+    var asking by remember { mutableStateOf(false) }
+    Tile(title = stringResource(R.string.settings_sign_out)) {
+        Muted(stringResource(R.string.set_sign_out_hint))
+        TextButton({ asking = true }, Modifier.heightIn(min = 48.dp)) {
+            Text(stringResource(R.string.settings_sign_out), color = T.danger, style = MaterialTheme.typography.labelLarge)
+        }
+    }
+    if (asking) {
+        AlertDialog(
+            onDismissRequest = { asking = false },
+            containerColor = T.bar,
+            title = { Text(stringResource(R.string.set_sign_out_title), color = T.text) },
+            text = { Text(stringResource(R.string.set_sign_out_hint), color = T.text2) },
+            dismissButton = { TextButton({ asking = false }) { Text(stringResource(R.string.cancel), color = T.text2) } },
+            confirmButton = {
+                TextButton({
+                    asking = false
+                    scope.launch { runCatching { Core.signOut() } }
+                }) { Text(stringResource(R.string.settings_sign_out), color = T.danger) }
+            },
+        )
     }
 }
 

@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -118,16 +115,9 @@ fun ReadLaterScreen(onBack: () -> Unit, onHelp: () -> Unit, found: String? = nul
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item {
-            Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = T.text)
-                }
-                Text(
-                    stringResource(R.string.read_later_title), Modifier.weight(1f).semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall, color = T.text,
-                )
+            BackBar(stringResource(R.string.read_later_title), onBack) {
                 IconButton(onClick = onHelp) {
-                    Icon(Icons.Outlined.Info, stringResource(R.string.help_open), tint = T.text2)
+                    LIcon(R.drawable.ic_lucide_info, T.text2, 24.dp, stringResource(R.string.help_open))
                 }
             }
             Muted(stringResource(R.string.read_later_subtitle))
@@ -199,21 +189,6 @@ private fun LinkRow(e: ReadLaterEntry, modifier: Modifier, onOpen: () -> Unit, o
                 onToggle, small = true,
             )
             GhostButton(stringResource(R.string.read_later_delete), onDelete, small = true)
-        }
-    }
-}
-
-/** Home's way in: "Read later" and how many are unread. */
-@Composable
-fun ReadLaterEntryCard(onOpen: () -> Unit) {
-    val unread = ReadLater.unread()
-    Tile(onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(stringResource(R.string.read_later_title), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = T.text)
-            Muted(
-                if (unread > 0) pluralStringResource(R.plurals.read_later_unread_count, unread, unread)
-                else stringResource(R.string.read_later_none_unread),
-            )
         }
     }
 }
