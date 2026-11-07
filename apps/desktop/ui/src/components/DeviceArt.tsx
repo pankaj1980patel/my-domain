@@ -167,7 +167,8 @@ export function frameOf(icon: string): Frame {
   if (/phone|foldable|watch/.test(icon)) return "phone";
   if (/tablet/.test(icon)) return "tablet";
   if (/laptop/.test(icon)) return "laptop";
-  if (icon === "unknown") return "phone";
+  // Nothing known: a laptop, the most common other device for a computer.
+  if (icon === "unknown") return "laptop";
   return "monitor";
 }
 

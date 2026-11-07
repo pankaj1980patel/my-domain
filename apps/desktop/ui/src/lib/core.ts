@@ -398,7 +398,27 @@ export function peerName(node: string | undefined): string {
 /** The icon drawn for a device on its own: what it said it is (a Mac
  *  laptop, an Android phone...; `features::device_kind`), else "unknown". */
 export function autoIcon(node: string): string {
-  return state.kinds[node]?.icon || "unknown";
+  const said = state.kinds[node]?.icon;
+  if (said && said !== "unknown") return said;
+  const name = state.labels[node]?.nickname || state.peers.find((p) => p.node_id === node)?.name || "";
+  return iconFromName(name);
+}
+
+/** A device that never said what it is (offline, or an older version):
+ *  guess from its name, e.g. "pankaj aspirea32542" is a laptop. */
+export function iconFromName(name: string): string {
+  const n = name.toLowerCase();
+  if (/ipad|tablet|\btab\b|galaxy tab|surface go/.test(n)) return "tablet";
+  if (/macbook/.test(n)) return "mac_laptop";
+  if (/imac/.test(n)) return "imac";
+  if (/mac ?mini|mac ?studio|mac ?pro\b/.test(n)) return "mac_desktop";
+  if (/iphone/.test(n)) return "phone";
+  if (/pixel|galaxy|oneplus|redmi|xiaomi|poco|oppo|vivo|realme|moto|nokia|nothing|android|phone|\bsm-/.test(n))
+    return "android_phone";
+  if (/aspire|thinkpad|ideapad|latitude|inspiron|xps|zenbook|vivobook|pavilion|envy|spectre|elitebook|probook|swift|nitro|predator|legion|yoga|surface|chromebook|laptop|notebook/.test(n))
+    return "laptop";
+  if (/desktop|tower|\bpc\b|workstation|optiplex|nuc/.test(n)) return "desktop";
+  return "unknown";
 }
 
 /** The icon drawn for a device: the one you chose, else `autoIcon`. */
