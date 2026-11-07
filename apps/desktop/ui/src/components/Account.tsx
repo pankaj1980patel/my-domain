@@ -313,8 +313,8 @@ function Sessions() {
                       </div>
                       <div class="small muted">
                         {t("account.sessionTimes", {
-                          created: new Date(s.created * 1000).toLocaleDateString(),
-                          seen: timeAgo(s.last_seen * 1000),
+                          created: s.created == null ? "—" : new Date(s.created * 1000).toLocaleDateString(),
+                          seen: s.last_seen == null ? "—" : timeAgo(s.last_seen * 1000),
                         })}
                       </div>
                     </div>
