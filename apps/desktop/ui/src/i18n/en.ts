@@ -2538,13 +2538,13 @@ export const en = {
   "next.addBody": "Pair your phone or another computer.",
   "next.automation": "Create an automation",
   "next.automationBody": "Let a device do something by itself when something happens.",
-  "next.fix": "Fix {n} problem(s)",
+  "next.fix": { one: "Fix {count} problem", other: "Fix {count} problems" },
   "next.fixBody": "The health check says what's wrong and how to fix it.",
   "next.none": "You're all set.",
   "next.sync": "Set up folder sync",
   "next.syncBody": "Keep a folder the same on two devices.",
   "next.title": "What's next",
-  "next.verify": "Verify {n} device(s)",
+  "next.verify": { one: "Verify {count} device", other: "Verify {count} devices" },
   "next.verifyBody": "Check that each device's security key is really its own.",
   "quick.note": "Create note",
   "search.moreKinds": "More",
@@ -2564,6 +2564,10 @@ export const en = {
   "settings.subtitle": "Your account, this computer and how my-domain looks and behaves.",
   "sec.sub": "Keep your devices safe and running well.",
   "map.sub2": "How your devices are linked and how they reach each other.",
+  "control.part.find": "Find & call",
+  "control.part.sound": "Sound & screen",
+  "notes.synced": "Shared",
+  "notes.syncedHint": "Notes are kept on all your devices",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */

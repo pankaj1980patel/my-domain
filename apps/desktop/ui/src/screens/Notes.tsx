@@ -119,7 +119,7 @@ export default function Notes(props: { request?: NoteRequest }) {
   };
 
   return (
-    <section class="page notes-page">
+    <section class="page page-fit notes-page">
       <header class="page-head">
         <span class="head-tile" aria-hidden="true">
           <Icon name="notes" size={26} tone="amber" />
@@ -130,6 +130,11 @@ export default function Notes(props: { request?: NoteRequest }) {
           </h1>
           <p class="muted">{t("notes.subtitle")}</p>
         </div>
+        {/* Notes are kept on all your devices. */}
+        <span class="chip chip-green" title={t("notes.syncedHint")}>
+          <Icon name="folder-sync" size={15} />
+          {t("notes.synced")}
+        </span>
         <button class="btn btn-primary btn-sm" onClick={() => show(null)}>
           {t("notes.new")}
         </button>

@@ -25,6 +25,13 @@ import { foundId, foundTarget, isFound } from "../lib/search";
 import { HelpLink } from "../help/HelpLink";
 import { t } from "../i18n";
 
+/** One of six tile colours, the same for a site every time. */
+function hueOf(host: string): number {
+  let h = 0;
+  for (const ch of host) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return h % 6;
+}
+
 export default function ReadLater() {
   const [text, setText] = createSignal("");
   const [title, setTitle] = createSignal("");
@@ -32,8 +39,13 @@ export default function ReadLater() {
   const [all, setAll] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
 
+  const [from, setFrom] = createSignal("");
+  /** The devices links were saved on. */
+  const sources = createMemo(() => [...new Set(sortedReadLater().map((i) => i.saved_on).filter((x): x is string => !!x))]);
   const list = createMemo(() =>
-    sortedReadLater().filter((i) => (all() || !i.read) && readLaterMatches(i, query())),
+    sortedReadLater().filter(
+      (i) => (all() || !i.read) && readLaterMatches(i, query()) && (!from() || i.saved_on === from()),
+    ),
   );
   const total = () => Object.keys(readLater.byId).length;
 
@@ -73,7 +85,7 @@ export default function ReadLater() {
     );
 
   return (
-    <section class="page read-later-page">
+    <section class="page page-fit read-later-page">
       <header class="page-head">
         <span class="head-tile" aria-hidden="true">
           <Icon name="readLater" size={26} tone="amber" />
@@ -119,23 +131,24 @@ export default function ReadLater() {
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
         />
-        <div class="rl-filter" role="group" aria-label={t("readLater.filter")}>
-          <button
-            class="btn btn-sm"
-            classList={{ "btn-soft": !all(), "btn-ghost": all() }}
-            aria-pressed={!all()}
-            onClick={() => setAll(false)}
-          >
+        {/* Unread or all, then where it was saved (only devices that saved some). */}
+        <div class="home-filters" role="group" aria-label={t("readLater.filter")}>
+          <button class="filter-chip" aria-pressed={!all()} onClick={() => setAll(false)}>
             {t("readLater.unread")}
           </button>
-          <button
-            class="btn btn-sm"
-            classList={{ "btn-soft": all(), "btn-ghost": !all() }}
-            aria-pressed={all()}
-            onClick={() => setAll(true)}
-          >
+          <button class="filter-chip" aria-pressed={all()} onClick={() => setAll(true)}>
             {t("readLater.all")}
           </button>
+          <Show when={sources().length > 1}>
+            <span class="filter-sep" aria-hidden="true" />
+            <For each={sources()}>
+              {(src) => (
+                <button class="filter-chip" aria-pressed={from() === src} onClick={() => setFrom(from() === src ? "" : src)}>
+                  {t("readLater.savedOn", { name: src })}
+                </button>
+              )}
+            </For>
+          </Show>
         </div>
       </div>
 
@@ -162,6 +175,10 @@ export default function ReadLater() {
                 id={foundId("read_later", i.id)}
                 tabIndex={-1}
               >
+                {/* Its site, as a tile (first letter, a colour of its own). */}
+                <span class="rl-thumb" data-hue={hueOf(i.host)} aria-hidden="true">
+                  {(i.host || "?").replace(/^www\./, "").charAt(0).toUpperCase()}
+                </span>
                 <button class="rl-open" onClick={() => openLink(i.id).catch(fail)} title={i.url}>
                   <span class="rl-title">{i.title || i.host}</span>
                   <span class="muted small rl-meta">

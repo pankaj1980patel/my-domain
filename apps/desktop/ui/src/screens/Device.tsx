@@ -1613,9 +1613,34 @@ function ControlTile(props: { node: string }) {
 
   const st = () => status();
   const has = (x: string) => !!st()?.actions.includes(x);
+  type Part = "find" | "sound" | "net";
+  const parts = (): { id: Part; icon: IconName; label: string }[] => [
+    { id: "find", icon: "find", label: t("control.part.find") },
+    ...(has("volume") || has("mute") || has("media") || has("ringer") || has("flashlight") || has("screen_settings") || has("key")
+      ? [{ id: "sound" as const, icon: "speaker" as const, label: t("control.part.sound") }]
+      : []),
+    ...(has("radio") || has("wifi") ? [{ id: "net" as const, icon: "wifi" as const, label: t("control.group.radios") }] : []),
+  ];
+  const [part, setPart] = createSignal<Part>("find");
   return (
     // Find & control as small cards, one job each.
+    <div class="control-groups-wrap tile-wide">
+      {/* In parts, so the tab fits the window: find and call, sound and
+          screen, Wi-Fi and radios. */}
+      <Show when={parts().length > 1}>
+        <div class="home-filters" role="group" aria-label={t("control.title")}>
+          <For each={parts()}>
+            {(x) => (
+              <button class="filter-chip" aria-pressed={part() === x.id} onClick={() => setPart(x.id)}>
+                <Icon name={x.icon} size={16} />
+                {x.label}
+              </button>
+            )}
+          </For>
+        </div>
+      </Show>
     <div class="control-groups tile-wide">
+      <Show when={part() === "find"}>
       <Group icon="find" tone="red" title={t("control.group.find")}>
         <p class="muted small">{t("control.hint")}</p>
         <button class="btn btn-soft btn-sm" disabled={busy()} onClick={ring}>
@@ -1624,16 +1649,22 @@ function ControlTile(props: { node: string }) {
         </button>
         <Show when={has("locate") && st()}>{(x) => <LocateRow node={props.node} st={x()} />}</Show>
       </Group>
+      </Show>
+      <Show when={part() === "sound"}>
       <Show when={st() && (has("volume") || has("mute") || has("media") || has("ringer"))}>
         <Group icon="speaker" tone="green" title={t("control.group.sound")}>
           <SoundControls node={props.node} st={st()!} />
         </Group>
       </Show>
+      </Show>
+      <Show when={part() === "find"}>
       <Show when={has("dial")}>
         <Group icon="call" tone="green" title={t("control.dial")}>
           <DialRow node={props.node} />
         </Group>
       </Show>
+      </Show>
+      <Show when={part() === "net"}>
       <Show when={st() && has("radio")}>
         <Group icon="bluetooth" tone="blue" title={t("control.group.radios")}>
           <RadioRow node={props.node} st={st()!} />
@@ -1644,6 +1675,8 @@ function ControlTile(props: { node: string }) {
           <WifiList node={props.node} st={st()!} />
         </Group>
       </Show>
+      </Show>
+      <Show when={part() === "sound"}>
       <Show when={st() && (has("flashlight") || has("screen_settings"))}>
         <Group icon="screen" tone="amber" title={t("control.group.display")}>
           <Show when={has("flashlight")}>
@@ -1668,6 +1701,8 @@ function ControlTile(props: { node: string }) {
           </Group>
         )}
       </Show>
+      </Show>
+      <Show when={part() === "find"}>
       <Group icon="connect" tone="cyan" title={t("control.openLink")}>
         <form class="stack" onSubmit={send}>
           <div class="composer">
@@ -1685,6 +1720,8 @@ function ControlTile(props: { node: string }) {
           </div>
         </form>
       </Group>
+      </Show>
+    </div>
     </div>
   );
 }

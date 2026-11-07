@@ -25,7 +25,7 @@ import {
   type TimerAction,
 } from "../lib/timers";
 import { friendlyError, niceName } from "../lib/words";
-import { Empty, toast } from "../components/ui";
+import { toast } from "../components/ui";
 import { HelpLink } from "../help/HelpLink";
 import { t, tn } from "../i18n";
 
@@ -235,9 +235,14 @@ export default function Timers() {
   const devices = useDevices();
   const list = createMemo(() => sortedTimers());
   const running = () => list().filter((x) => x.state === "running" && !hasEnded(x, now())).length;
+  // The big ring: a running one ending soonest, else a paused one.
+  const lead = () => {
+    const live = list().filter((x) => x.state === "running" || x.state === "paused");
+    return live.sort((a, b) => remaining(a, now()) - remaining(b, now()))[0];
+  };
 
   return (
-    <section class="page timers-page">
+    <section class="page page-fit timers-page">
       <header class="page-head">
         <span class="head-tile" aria-hidden="true">
           <Icon name="timers" size={26} tone="amber" />
@@ -252,20 +257,91 @@ export default function Timers() {
           <span class="badge">{tn("timers.running", running())}</span>
         </Show>
       </header>
-      <NewTimer devices={devices()} />
-      <Show
-        when={list().length > 0}
-        fallback={
-          <Show when={timers.loaded}>
-            <Empty icon="timers" title={t("timers.emptyTitle")}>
-              {t("timers.emptyBody")}
-            </Empty>
+      <div class="timers-body">
+        {/* The one that ends soonest, large. */}
+        <BigTimer timer={lead()} now={now()} />
+        <div class="timers-side">
+          <NewTimer devices={devices()} />
+          <Show
+            when={list().length > 0}
+            fallback={
+              <Show when={timers.loaded}>
+                <p class="muted small">{t("timers.emptyBody")}</p>
+              </Show>
+            }
+          >
+            <ul class="timer-list" aria-label={t("timers.title")}>
+              <For each={list()}>{(x) => <TimerCard timer={x} now={now()} devices={devices()} />}</For>
+            </ul>
           </Show>
-        }
-      >
-        <ul class="timer-list" aria-label={t("timers.title")}>
-          <For each={list()}>{(x) => <TimerCard timer={x} now={now()} devices={devices()} />}</For>
-        </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** A ring counting down, with its label and Pause / Resume / +1 min /
+ *  Cancel; empty ("0:00") when nothing runs. */
+function BigTimer(props: { timer: Timer | undefined; now: number }) {
+  const r = 96;
+  const c = 2 * Math.PI * r;
+  const act = (a: TimerAction) => () =>
+    props.timer && timerAction(props.timer.id, a).catch((e) => toast(friendlyError(e), "error"));
+  const left = () => (props.timer ? clock(remaining(props.timer, props.now)) : "0:00");
+  const done = () => (props.timer ? progress(props.timer, props.now) : 0);
+  return (
+    <section class="tile big-timer" aria-label={props.timer?.label || t("timers.title")}>
+      <div class="big-ring">
+        <svg width="220" height="220" viewBox="0 0 220 220" aria-hidden="true">
+          <defs>
+            <linearGradient id="big-ring-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="var(--c-cyan)" />
+              <stop offset="1" stop-color="var(--c-violet)" />
+            </linearGradient>
+          </defs>
+          <circle cx="110" cy="110" r={r} fill="none" stroke="var(--surface-2)" stroke-width="10" />
+          <circle
+            cx="110"
+            cy="110"
+            r={r}
+            fill="none"
+            stroke="url(#big-ring-grad)"
+            stroke-width="10"
+            stroke-linecap="round"
+            stroke-dasharray={`${c * (1 - done())} ${c}`}
+            transform="rotate(-90 110 110)"
+          />
+        </svg>
+        <div class="big-ring-text">
+          <span class="muted small">{props.timer?.label || t("timers.title")}</span>
+          <strong role="timer" aria-live="off" aria-label={t("timers.left", { time: left() })}>
+            {left()}
+          </strong>
+        </div>
+      </div>
+      <Show when={props.timer} fallback={<p class="muted small">{t("timers.emptyTitle")}</p>}>
+        {(x) => (
+          <div class="row big-timer-actions">
+            <Show
+              when={x().state === "running"}
+              fallback={
+                <button class="btn btn-primary btn-sm" onClick={act("resume")}>
+                  {t("timers.resume")}
+                </button>
+              }
+            >
+              <button class="btn btn-soft btn-sm" onClick={act("pause")}>
+                {t("timers.pause")}
+              </button>
+            </Show>
+            <button class="btn btn-soft btn-sm" onClick={() => addTime(x().id, MINUTE).catch((e) => toast(friendlyError(e), "error"))}>
+              {t("timers.plusMinute")}
+            </button>
+            <button class="btn btn-ghost btn-sm" onClick={act("cancel")}>
+              {t("timers.cancel")}
+            </button>
+          </div>
+        )}
       </Show>
     </section>
   );

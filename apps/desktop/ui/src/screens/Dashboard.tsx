@@ -6,7 +6,7 @@
 import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { peerIcon, peerName, state } from "../lib/core";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
 import { badCount } from "../lib/health";
 import { isVerified } from "../lib/verify";
 import { linkStateOf } from "../components/ui";
@@ -20,6 +20,9 @@ import { SetupCard } from "./Setup";
 
 const STRIP = 4;
 
+/** "pankaj" -> "Pankaj". */
+const cap = (s: string) => s.charAt(0).toLocaleUpperCase() + s.slice(1);
+
 export default function Dashboard(props: {
   onOpen: (node: string, tab?: string, tile?: string) => void;
   onAllDevices: () => void;
@@ -32,7 +35,7 @@ export default function Dashboard(props: {
 }) {
   const hour = new Date().getHours();
   const greeting = () =>
-    t(hour < 12 ? "dash.morning" : hour < 18 ? "dash.afternoon" : "dash.evening", { name: state.account.username || "" });
+    t(hour < 12 ? "dash.morning" : hour < 18 ? "dash.afternoon" : "dash.evening", { name: cap(state.account.username || "") });
 
   const devices = createMemo(() =>
     [...state.peers].sort(
@@ -54,12 +57,12 @@ export default function Dashboard(props: {
   const tips = (): Tip[] => {
     const out: Tip[] = [];
     if (badCount() > 0)
-      out.push({ icon: "alert", tone: "amber", title: t("next.fix", { n: badCount() }), body: t("next.fixBody"), run: props.onHealth });
+      out.push({ icon: "alert", tone: "amber", title: tn("next.fix", badCount()), body: t("next.fixBody"), run: props.onHealth });
     if (state.peers.length < 2)
       out.push({ icon: "connect", tone: "cyan", title: t("next.add"), body: t("next.addBody"), run: () => setAdding(true) });
     const unverified = state.peers.filter((p) => !isVerified(p.node_id)).length;
     if (unverified > 0)
-      out.push({ icon: "verify", tone: "green", title: t("next.verify", { n: unverified }), body: t("next.verifyBody"), run: props.onAllDevices });
+      out.push({ icon: "verify", tone: "green", title: tn("next.verify", unverified), body: t("next.verifyBody"), run: props.onAllDevices });
     if (state.syncPairs.length === 0)
       out.push({ icon: "folder-sync", tone: "blue", title: t("next.sync"), body: t("next.syncBody"), run: () => props.onSettings("settings-sync") });
     if (automations() === 0)
