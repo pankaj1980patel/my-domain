@@ -2,7 +2,7 @@
 // page's header. Each is a function the app already had (the command
 // palette and the device page's tiles use the same ones), with its toast.
 
-import { peerName, pickAndSendFile, pullClipboard, ringDevice, sendClipboardTo, state } from "./core";
+import { peerName, pickAndSendFile, pickAndSendFolder, pullClipboard, ringDevice, sendClipboardTo, state } from "./core";
 import { friendlyError } from "./words";
 import { toast } from "../components/ui";
 import { t, tn } from "../i18n";
@@ -13,6 +13,12 @@ const fail = (e: unknown) => toast(friendlyError(e), "error");
 export function quickSendFile(node: string) {
   const name = peerName(node);
   return pickAndSendFile(node).then((sent) => sent && toast(tn("files.started", 1, { name }), "ok"), fail);
+}
+
+/** Choose a folder and send everything in it. */
+export function quickSendFolder(node: string) {
+  const name = peerName(node);
+  return pickAndSendFolder(node).then((n) => n > 0 && toast(tn("files.started", n, { name }), "ok"), fail);
 }
 
 /** What's copied here, to the device's clipboard (queued when unreachable). */

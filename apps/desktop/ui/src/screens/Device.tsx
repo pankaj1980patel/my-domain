@@ -1,6 +1,6 @@
 // One device: its status, then a tile per feature.
 
-import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
 import {
@@ -24,6 +24,7 @@ import {
   openFile,
   openUrlOn,
   peerModel,
+  peerIcon,
   peerName,
   pickAndSendFile,
   pickAndSendFolder,
@@ -50,17 +51,21 @@ import {
   type Transfer,
   unwrap,
 } from "../lib/core";
-import { fileFailReason, friendlyError, humanSize, progressLabel } from "../lib/words";
-import { Gate, linkStateOf, StatusPill, toast } from "../components/ui";
-import { DeviceAvatar, DeviceLabelForm } from "../components/DeviceLabel";
+import { fileFailReason, friendlyError, humanSize, linkLabel, progressLabel, timeAgo } from "../lib/words";
+import { Gate, linkStateOf, toast } from "../components/ui";
+import { DeviceLabelForm } from "../components/DeviceLabel";
 import KeyChangeBanner from "../components/KeyChangeBanner";
 import { deviceProblems } from "../lib/health";
 import ScreenSettingsRow from "./device/ScreenSettingsRow";
 import { t, tn, type Key } from "../i18n";
 import { MenuButton, type MenuItem } from "../components/Menu";
 import { Tabs, panelProps } from "../components/Tabs";
-import { Icon, type IconName } from "../components/Icon";
-import { needsLink, quickGetClipboard, quickRing, quickSendClipboard, quickSendFile } from "../lib/quickActions";
+import { Icon, type IconName, type Tone } from "../components/Icon";
+import { quickGetClipboard, quickRing, quickSendClipboard, quickSendFile, quickSendFolder } from "../lib/quickActions";
+import Overview, { DeviceFacts } from "./device/Overview";
+import { DeviceIcon } from "../components/DeviceIcon";
+import { osName } from "../lib/deviceInfo";
+import { howLabel } from "../lib/health";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
 import PhotosTile from "./device/PhotosTile";
 import BrowseTile from "./device/BrowseTile";
@@ -83,36 +88,34 @@ import ConnectionTile from "./device/ConnectionTile";
 import { NearbyBadge } from "../components/NearbyBadge";
 import { moveOnto, moveStep, pageKind, type PageKind, type TileDef } from "../lib/pageLayout";
 import type { PageLayoutView } from "../bindings";
-import { useVerify, VerifiedBadge } from "../components/VerifyDevice";
+import { useVerify } from "../components/VerifyDevice";
 import { isVerified } from "../lib/verify";
 import { RemoveDeviceConfirm } from "../components/RemovedDevices";
 import { PermissionsTile } from "../components/PeerPermissions";
 
-/** The page's tabs, in order. A tile lives in one (its `tab`); Overview
- *  also shows the most-used ones (OVERVIEW). A tab with nothing this device
- *  offers isn't shown. */
-const TAB_IDS = ["overview", "messages", "files", "notifications", "media", "control", "settings"] as const;
+/** The page's tabs, in order. A tile lives in one (its `tab`); Overview is
+ *  the device's dashboard (device/Overview.tsx). A tab with nothing this
+ *  device offers isn't shown. */
+const TAB_IDS = ["overview", "messages", "files", "remote", "media", "tools", "settings"] as const;
 type DeviceTab = (typeof TAB_IDS)[number];
 const TAB_ICON: Record<DeviceTab, IconName> = {
-  overview: "overview",
+  overview: "home",
   messages: "chat",
   files: "files",
-  notifications: "notifications",
+  remote: "remote",
   media: "media",
-  control: "control",
+  tools: "tools",
   settings: "settings",
 };
 const TAB_LABEL: Record<DeviceTab, Key> = {
   overview: "device.tab.overview",
   messages: "chat.title",
   files: "files.title",
-  notifications: "notifications.title",
+  remote: "device.tab.remote",
   media: "device.tab.media",
-  control: "device.tab.control",
+  tools: "device.tab.tools",
   settings: "nav.settings",
 };
-/** On Overview too: what it says about itself, and what's done most. */
-const OVERVIEW = ["info", "now-playing", "files"];
 
 /** The tab last open on each device's page (this computer only). */
 const TAB_STORE = "md.deviceTab.";
@@ -137,21 +140,21 @@ function saveTab(node: string, tab: DeviceTab) {
  *  layout that predates it shows it at this place. */
 const TILES: TileDef[] = [
   { id: "chat", icon: "chat", tab: "messages", title: () => t("chat.title"), wide: true, render: (n) => <ChatTile node={n} /> },
-  { id: "notifications", icon: "notifications", tab: "notifications", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
-  { id: "notification-history", icon: "history", tab: "notifications", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
+  { id: "notifications", icon: "notifications", tab: "messages", title: () => t("notifications.title"), wide: true, render: (n) => <NotificationsTile node={n} /> },
+  { id: "notification-history", icon: "history", tab: "messages", title: () => t("history.title"), wide: true, render: (n) => <NotificationHistory node={n} /> },
   { id: "clipboard", icon: "clipboard", tab: "files", title: () => t("clipboard.title"), render: (n) => <ClipboardTile node={n} /> },
   { id: "clipboard-history", icon: "history", tab: "files", title: () => t("clipHistory.title"), wide: true, render: (n) => <ClipHistoryTile node={n} /> },
   { id: "files", icon: "files", tab: "files", title: () => t("files.title"), render: (n) => <FilesTile node={n} /> },
   { id: "browse", icon: "folder-open", tab: "files", title: () => t("browse.title"), wide: true, render: (n) => <BrowseTile node={n} /> },
   { id: "sync", icon: "folder-sync", tab: "files", title: () => t("sync.title"), render: (n) => <SyncTile node={n} /> },
-  { id: "control", icon: "locate", tab: "control", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
-  { id: "info", icon: "info", tab: "overview", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
+  { id: "control", icon: "locate", tab: "remote", title: () => t("control.title"), render: (n) => <ControlTile node={n} /> },
+  { id: "info", icon: "info", tab: "tools", title: () => t("info.title"), render: (n) => <InfoTile node={n} /> },
   { id: "connection", icon: "connect", tab: "settings", title: () => t("conn.title"), wide: true, render: (n) => <ConnectionTile node={n} /> },
-  { id: "schedules", icon: "calendar", tab: "control", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
+  { id: "schedules", icon: "calendar", tab: "tools", title: () => t("schedule.title"), wide: true, render: (n) => <ScheduleTile node={n} /> },
   {
     id: "commands",
     icon: "terminal",
-    tab: "control",
+    tab: "remote",
     title: () => t("run.title"),
     available: (n) => !!state.status[n]?.actions.includes("run"),
     render: (n) => <CommandsTile node={n} />,
@@ -159,7 +162,7 @@ const TILES: TileDef[] = [
   {
     id: "screen",
     icon: "screen",
-    tab: "control",
+    tab: "remote",
     title: (n) => (state.status[n]?.platform === "android" ? t("phoneScreen.title") : t("screen.title")),
     available: (n) => !!state.status[n]?.actions.includes("screen"),
     render: (n) => <ScreenTile node={n} />,
@@ -168,7 +171,7 @@ const TILES: TileDef[] = [
     // A phone that can show its camera here (it says camera_view).
     id: "camera",
     icon: "camera",
-    tab: "media",
+    tab: "remote",
     title: () => t("camera.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.cameraView && state.status[n]?.platform === "android",
@@ -179,7 +182,7 @@ const TILES: TileDef[] = [
     // Downloads and the clipboard here (it says insert_capture).
     id: "insert",
     icon: "scan",
-    tab: "media",
+    tab: "tools",
     title: () => t("insert.title"),
     kinds: ["phone"],
     available: (n) => !!state.status[n]?.insertCapture && state.status[n]?.platform === "android",
@@ -217,18 +220,18 @@ const TILES: TileDef[] = [
   {
     id: "photos",
     icon: "image",
-    tab: "media",
+    tab: "files",
     title: () => t("photos.title"),
     wide: true,
     available: (n) => !!state.status[n]?.actions.includes("gallery"),
     render: (n) => <PhotosTile node={n} />,
   },
-  { id: "lost-mode", icon: "lock", tab: "control", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
+  { id: "lost-mode", icon: "lock", tab: "tools", title: () => t("lost.title"), render: (n) => <LostModeTile node={n} /> },
   // What this device may do here: control this computer, see its screen,
   // take over its mouse and keyboard (all off until allowed).
   { id: "permissions", icon: "shield", tab: "settings", title: () => t("perm.title"), render: (n) => <PermissionsTile node={n} /> },
-  { id: "notify", icon: "send", tab: "notifications", title: () => t("notify.title"), render: () => <NotifyTile /> },
-  { id: "apps", icon: "apps", tab: "notifications", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
+  { id: "notify", icon: "send", tab: "messages", title: () => t("notify.title"), render: () => <NotifyTile /> },
+  { id: "apps", icon: "apps", tab: "messages", title: () => t("apps.title"), wide: true, render: (n) => <AppsTile node={n} /> },
 ];
 
 export default function Device(props: {
@@ -237,6 +240,7 @@ export default function Device(props: {
   tab?: { id: string; tile?: string; at: number };
   onBack: () => void;
   onHealth?: () => void;
+  onActivity?: () => void;
 }) {
   const peer = createMemo(() => state.peers.find((p) => p.node_id === props.node));
   const s = () => linkStateOf(props.node);
@@ -271,7 +275,7 @@ export default function Device(props: {
 
   // Tabs: the shown tiles, by tab ("Edit page" order and hiding still
   // apply inside each). A tab with nothing the device offers is left out.
-  const inTab = (d: TileDef, tab: DeviceTab) => d.tab === tab || (tab === "overview" && OVERVIEW.includes(d.id));
+  const inTab = (d: TileDef, tab: DeviceTab) => d.tab === tab;
   const offered = (d: TileDef) => d.available?.(props.node) ?? true;
   const tabs = createMemo(() =>
     TAB_IDS.filter((tab) => tab === "overview" || shownTiles().some((d) => inTab(d, tab) && offered(d))),
@@ -324,29 +328,75 @@ export default function Device(props: {
   const verify = useVerify(() => props.node);
   const [removing, setRemoving] = createSignal(false);
   const menu = (): MenuItem[] => [
-    { icon: "edit", label: t("label.edit"), hint: t("label.editHint"), onSelect: () => setEditing((v) => !v) },
     {
-      icon: "layout", label: arranging() ? t("layout.done") : t("layout.edit"),
+      icon: "layout",
+      label: arranging() ? t("layout.done") : t("layout.edit"),
       hint: t("layout.editHint"),
       onSelect: () => setArranging((v) => !v),
     },
     { icon: "verify", label: t("verify.button"), hint: t("verify.buttonHint"), onSelect: verify.show },
-    ...(live()
+    { icon: "remove", label: t("removeDevice.button"), hint: t("removeDevice.hint"), danger: true, onSelect: () => setRemoving(true) },
+  ];
+  // The link control: Online / Offline, with Reconnect and Disconnect, or
+  // Connect.
+  const linkMenu = (): MenuItem[] =>
+    live()
       ? [
           {
-            icon: "reconnect" as const, label: t("device.reconnect"),
+            icon: "reconnect",
+            label: t("device.reconnect"),
             hint: t("device.reconnectHint"),
             onSelect: () => reconnect(props.node).catch((e) => toast(friendlyError(e), "error")),
           },
           {
-            icon: "disconnect" as const, label: t("device.disconnect"),
+            icon: "disconnect",
+            label: t("device.disconnect"),
             hint: t("device.disconnectHint"),
             onSelect: () => disconnect(props.node).catch((e) => toast(friendlyError(e), "error")),
           },
         ]
-      : []),
-    { icon: "remove", label: t("removeDevice.button"), hint: t("removeDevice.hint"), danger: true, onSelect: () => setRemoving(true) },
+      : [
+          {
+            icon: "connect",
+            label: t("device.connect"),
+            onSelect: () => connect(props.node).catch((e) => toast(friendlyError(e), "error")),
+          },
+        ];
+  // "Quick actions": what's done most, one click each (they wait for a
+  // device that isn't reachable; getting its clipboard needs a link).
+  const quickMenu = (): MenuItem[] => [
+    { icon: "send-file", label: t("quick.sendFile"), onSelect: () => quickSendFile(props.node) },
+    { icon: "send-folder", label: t("files.sendFolder"), onSelect: () => quickSendFolder(props.node) },
+    { icon: "send-clip", label: t("quick.sendClipboard"), onSelect: () => quickSendClipboard(props.node) },
+    ...(live() ? [{ icon: "get-clip" as const, label: t("quick.getClipboard"), onSelect: () => quickGetClipboard(props.node) }] : []),
+    { icon: "ring", label: t("control.ring"), divider: true, onSelect: () => quickRing(props.node) },
   ];
+  const goTo = (tab: string, tile?: string) => {
+    choose(tab);
+    if (tile) setSub({ ...sub(), [tab]: tile });
+  };
+  // Last seen and how it's linked: from the connections map, read once
+  // for this page (and again when the link changes).
+  const [seen, setSeen] = createSignal<{ ago: number | null; how: string } | null>(null);
+  createEffect(
+    on([() => props.node, live], ([node]) => {
+      commands
+        .linksMap()
+        .then((v) => {
+          const d = v.map.devices.find((x) => x.node_id === node);
+          if (node === props.node) setSeen(d ? { ago: d.last_seen_ago_s, how: d.state } : null);
+        })
+        .catch(() => {});
+    }),
+  );
+  const battery = () => state.status[props.node]?.battery;
+  const network = () => {
+    const ssid = state.status[props.node]?.wifiSsid;
+    if (ssid) return ssid;
+    const how = seen()?.how;
+    return live() && how ? howLabel(how) : "";
+  };
+  const statusTone = () => (s() === "direct" ? "green" : s() === "relay" ? "amber" : s() === "failed" ? "red" : "muted");
   const mockMenu = import.meta.env.MODE === "mock" && new URLSearchParams(location.search).get("menu") === "1";
 
   // Ask for its battery whenever this page opens (answer: device-status-event).
@@ -374,66 +424,91 @@ export default function Device(props: {
       }
     >
       {(p) => (
-        <section class="page">
+        <section class="page device-page">
           <button class="link back" onClick={props.onBack}>
             {t("device.back")}
           </button>
-          <header class="device-head">
-            <DeviceAvatar node={props.node} large />
-            <div class="device-main">
+          {/* The hero: the device's picture, its name, how it's linked, a
+              few facts; the link control, Quick actions and "more". */}
+          <header class="device-hero">
+            {/* The device's art (its wallpaper when known: components/
+                DeviceArt.tsx drops in here); its icon until then. */}
+            <div class="device-art" aria-hidden="true">
+              <DeviceIcon icon={peerIcon(props.node)} size={64} />
+            </div>
+            <div class="hero-main">
               <div class="label-title">
                 <h1>{peerName(p().node_id)}</h1>
-                <VerifiedBadge verified={isVerified(props.node)} />
+                <button
+                  class="btn btn-ghost btn-sm btn-icon hero-edit"
+                  aria-label={t("label.editHint")}
+                  title={t("label.editHint")}
+                  aria-expanded={editing()}
+                  onClick={() => setEditing((v) => !v)}
+                >
+                  <Icon name="edit" />
+                </button>
               </div>
-              <Show when={peerModel(p().node_id)}>
-                {(model) => <p class="muted small device-model">{model()}</p>}
-              </Show>
-              <div class="device-status-row">
-                <StatusPill node={props.node} />
+              <p class={`hero-status tone-${statusTone()}`}>
+                <span class="hero-dot" aria-hidden="true" />
+                {linkLabel(s())}
                 <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
-                  <span class="muted small">{progressLabel(state.progress[props.node])}</span>
+                  <span class="muted small"> · {progressLabel(state.progress[props.node])}</span>
+                </Show>
+              </p>
+              <p class="muted small hero-facts">
+                {[
+                  osName(props.node) || peerModel(props.node),
+                  !live() && seen()?.ago != null ? t("map.lastSeen", { ago: timeAgo(Date.now() - seen()!.ago! * 1000) }) : "",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+              <div class="hero-chips">
+                <Show when={isVerified(props.node)}>
+                  <span class="chip chip-green" title={t("verify.badgeHint")}>
+                    <Icon name="verify" size={15} />
+                    {t("verify.badge")}
+                  </span>
+                </Show>
+                <Show when={network()}>
+                  <span class="chip">
+                    <Icon name="wifi" size={15} />
+                    {network()}
+                  </span>
+                </Show>
+                <Show when={battery() !== undefined}>
+                  <span class="chip" classList={{ "chip-red": battery()! <= 15 }}>
+                    <Icon name="battery" size={15} />
+                    {battery()}%
+                  </span>
                 </Show>
               </div>
               {/* Asleep? Wake it, if it said it may be woken. */}
               <WakeButton node={props.node} />
             </div>
-            <div class="device-head-side">
-              <Show when={s() === "offline" || s() === "asleep" || s() === "failed"}>
-                <button
-                  class="btn btn-primary btn-sm"
-                  onClick={() => connect(props.node).catch((e) => toast(friendlyError(e), "error"))}
-                >
-                  <Icon name="connect" />
-                  {t("device.connect")}
-                </button>
-              </Show>
+            <div class="hero-side">
+              <MenuButton
+                label={live() ? t("dash.online") : t("dash.offline")}
+                labelled
+                triggerClass={`btn btn-soft hero-link tone-${statusTone()}`}
+                items={linkMenu()}
+              >
+                <span class="hero-dot" aria-hidden="true" />
+                {live() ? t("dash.online") : t("dash.offline")}
+                <Icon name="chevron-down" size={16} />
+              </MenuButton>
+              <MenuButton label={t("dash.quick")} labelled triggerClass="btn btn-primary" items={quickMenu()}>
+                <Icon name="quick" />
+                {t("dash.quick")}
+                <Icon name="chevron-down" size={16} />
+              </MenuButton>
               <MenuButton label={t("device.more", { name: peerName(props.node) })} items={menu()} startOpen={mockMenu}>
                 <Icon name="more" />
               </MenuButton>
+              <DeviceFacts node={props.node} />
             </div>
           </header>
-          {/* What's done most, one click each (they wait for a device that
-              isn't reachable; getting its clipboard needs it connected). */}
-          <div class="device-actions" role="group" aria-label={t("quick.label", { name: peerName(props.node) })}>
-            <button class="btn btn-soft btn-sm" onClick={() => quickSendFile(props.node)}>
-              <Icon name="send-file" />
-              {t("quick.sendFile")}
-            </button>
-            <button class="btn btn-soft btn-sm" onClick={() => quickSendClipboard(props.node)}>
-              <Icon name="send-clip" />
-              {t("quick.sendClipboard")}
-            </button>
-            <Gate reason={needsLink(props.node)}>
-              <button class="btn btn-soft btn-sm" disabled={!!needsLink(props.node)} onClick={() => quickGetClipboard(props.node)}>
-                <Icon name="get-clip" />
-                {t("quick.getClipboard")}
-              </button>
-            </Gate>
-            <button class="btn btn-soft btn-sm" onClick={() => quickRing(props.node)}>
-              <Icon name="ring" />
-              {t("control.ring")}
-            </button>
-          </div>
           {verify.dialog()}
           <Show when={removing()}>
             <RemoveDeviceConfirm
@@ -469,7 +544,12 @@ export default function Device(props: {
                   selected={current()}
                   onSelect={choose}
                 />
-                <div class="tiles tab-panel" {...panelProps("device", current())}>
+                <Show when={current() === "overview"}>
+                  <div class="tab-panel" {...panelProps("device", "overview")}>
+                    <Overview node={props.node} onGo={goTo} onActivity={() => props.onActivity?.()} />
+                  </div>
+                </Show>
+                <div class="tiles tab-panel" hidden={current() === "overview"} {...panelProps("device", current())}>
                   <Show when={split()}>
                     <ul class="sub-nav tile-wide" aria-label={t("device.tilesOf", { tab: t(TAB_LABEL[current()]) })}>
                       <For each={offeredTiles()}>
@@ -1526,33 +1606,94 @@ function ControlTile(props: { node: string }) {
     }
   };
 
+  const st = () => status();
+  const has = (x: string) => !!st()?.actions.includes(x);
   return (
-    <article class="tile">
-      <h2>{t("control.title")}</h2>
-      <p class="muted small">{t("control.hint")}</p>
-      <Show when={status()?.actions.length}>
-        <Controls node={props.node} st={status()!} />
+    // Find & control as small cards, one job each.
+    <div class="control-groups tile-wide">
+      <Group icon="find" tone="red" title={t("control.group.find")}>
+        <p class="muted small">{t("control.hint")}</p>
+        <button class="btn btn-soft btn-sm" disabled={busy()} onClick={ring}>
+          <Icon name="ring" />
+          {t("control.ring")}
+        </button>
+        <Show when={has("locate") && st()}>{(x) => <LocateRow node={props.node} st={x()} />}</Show>
+      </Group>
+      <Show when={st() && (has("volume") || has("mute") || has("media") || has("ringer"))}>
+        <Group icon="speaker" tone="green" title={t("control.group.sound")}>
+          <SoundControls node={props.node} st={st()!} />
+        </Group>
       </Show>
-      <button class="btn btn-soft btn-block" disabled={busy()} onClick={ring}>
-        {t("control.ring")}
-      </button>
-      <form class="stack" onSubmit={send}>
-        <span class="small">{t("control.openLink")}</span>
-        <div class="composer">
-          <input
-            type="text"
-            inputMode="url"
-            placeholder={t("control.linkPlaceholder")}
-            value={url()}
-            onInput={(e) => setUrl(e.currentTarget.value)}
-            aria-label={t("control.linkLabel")}
-          />
-          <button class="btn btn-soft" type="submit" disabled={busy() || !url().trim()}>
-            {t("control.send")}
-          </button>
-        </div>
-      </form>
-    </article>
+      <Show when={has("dial")}>
+        <Group icon="call" tone="green" title={t("control.dial")}>
+          <DialRow node={props.node} />
+        </Group>
+      </Show>
+      <Show when={st() && (has("radio") || has("wifi"))}>
+        <Group icon="wifi" tone="blue" title={t("control.group.radios")}>
+          <Show when={has("radio")}>
+            <RadioRow node={props.node} st={st()!} />
+          </Show>
+          <Show when={has("wifi")}>
+            <WifiList node={props.node} st={st()!} />
+          </Show>
+        </Group>
+      </Show>
+      <Show when={st() && (has("flashlight") || has("screen_settings"))}>
+        <Group icon="screen" tone="amber" title={t("control.group.display")}>
+          <Show when={has("flashlight")}>
+            <button
+              class="btn btn-soft btn-sm"
+              onClick={() =>
+                runAction(props.node, "flashlight", { on: !st()!.torch }).catch((e) => toast(friendlyError(e), "error"))
+              }
+            >
+              {st()!.torch ? t("control.torchOff") : t("control.torchOn")}
+            </button>
+          </Show>
+          <Show when={has("screen_settings")}>
+            <ScreenSettingsRow node={props.node} st={st()!} />
+          </Show>
+        </Group>
+      </Show>
+      <Show when={has("key") && st()}>
+        {(x) => (
+          <Group icon="keyboard" tone="violet" title={t("control.group.keys")}>
+            <KeyRow node={props.node} st={x()} />
+          </Group>
+        )}
+      </Show>
+      <Group icon="connect" tone="cyan" title={t("control.openLink")}>
+        <form class="stack" onSubmit={send}>
+          <div class="composer">
+            <input
+              type="text"
+              inputMode="url"
+              placeholder={t("control.linkPlaceholder")}
+              value={url()}
+              onInput={(e) => setUrl(e.currentTarget.value)}
+              aria-label={t("control.linkLabel")}
+            />
+            <button class="btn btn-soft" type="submit" disabled={busy() || !url().trim()}>
+              {t("control.send")}
+            </button>
+          </div>
+        </form>
+      </Group>
+    </div>
+  );
+}
+
+/** One card of Find & control: an icon, a title, its controls. */
+function Group(props: { icon: IconName; tone: Tone; title: string; children: JSX.Element }) {
+  return (
+    <section class="tile control-group">
+      <div class="dash-head">
+        <Icon name={props.icon} tone={props.tone} />
+        <h3>{props.title}</h3>
+      </div>
+      {props.children}
+    </section>
   );
 }
 
@@ -1766,7 +1907,8 @@ function TransferRow(props: { x: Transfer; device: string }) {
 }
 
 /** Buttons for the actions a device listed in its status. */
-function Controls(props: { node: string; st: DeviceStatus }) {
+/** Volume, mute, play/pause and the ringer mode. */
+function SoundControls(props: { node: string; st: DeviceStatus }) {
   const has = (a: string) => props.st.actions.includes(a);
   const run = (name: string, args: Record<string, unknown>) => () =>
     runAction(props.node, name, args).catch((e) => toast(friendlyError(e), "error"));
@@ -1777,11 +1919,6 @@ function Controls(props: { node: string; st: DeviceStatus }) {
   ] as const;
   return (
     <div class="stack">
-      <Show when={has("flashlight")}>
-        <button class="btn btn-soft btn-block" onClick={run("flashlight", { on: !props.st.torch })}>
-          {props.st.torch ? t("control.torchOff") : t("control.torchOn")}
-        </button>
-      </Show>
       <Show when={has("volume") || has("mute")}>
         <div class="row">
           <span class="small muted grow">
@@ -1814,24 +1951,6 @@ function Controls(props: { node: string; st: DeviceStatus }) {
             {t("control.next")}
           </button>
         </div>
-      </Show>
-      <Show when={has("dial")}>
-        <DialRow node={props.node} />
-      </Show>
-      <Show when={has("radio")}>
-        <RadioRow node={props.node} st={props.st} />
-      </Show>
-      <Show when={has("key")}>
-        <KeyRow node={props.node} st={props.st} />
-      </Show>
-      <Show when={has("wifi")}>
-        <WifiList node={props.node} st={props.st} />
-      </Show>
-      <Show when={has("locate")}>
-        <LocateRow node={props.node} st={props.st} />
-      </Show>
-      <Show when={has("screen_settings")}>
-        <ScreenSettingsRow node={props.node} st={props.st} />
       </Show>
       <Show when={has("ringer")}>
         <div class="row" role="group" aria-label={t("control.ringerLabel")}>

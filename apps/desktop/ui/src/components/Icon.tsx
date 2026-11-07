@@ -8,6 +8,19 @@
 import type { Component } from "solid-js";
 import type { LucideProps } from "lucide-solid";
 import ActivityIcon from "lucide-solid/icons/activity";
+import ChevronDownIcon from "lucide-solid/icons/chevron-down";
+import ChevronRightIcon from "lucide-solid/icons/chevron-right";
+import CircleCheckIcon from "lucide-solid/icons/circle-check";
+import CircleXIcon from "lucide-solid/icons/circle-x";
+import CpuIcon from "lucide-solid/icons/cpu";
+import HardDriveIcon from "lucide-solid/icons/hard-drive";
+import MemoryStickIcon from "lucide-solid/icons/memory-stick";
+import WrenchIcon from "lucide-solid/icons/wrench";
+import MousePointer2Icon from "lucide-solid/icons/mouse-pointer-2";
+import PhoneCallIcon from "lucide-solid/icons/phone-call";
+import ShieldHalfIcon from "lucide-solid/icons/shield-half";
+import ArrowRightIcon from "lucide-solid/icons/arrow-right";
+import BellDotIcon from "lucide-solid/icons/bell-dot";
 import AppWindowIcon from "lucide-solid/icons/app-window";
 import ArchiveIcon from "lucide-solid/icons/archive";
 import ArrowUpDownIcon from "lucide-solid/icons/arrow-up-down";
@@ -171,16 +184,46 @@ const ICONS = {
   "link-asleep": MoonIcon,
   "link-failed": TriangleExclamationPointIcon,
   "link-offline": CircleOffIcon,
+  "chevron-down": ChevronDownIcon,
+  "chevron-right": ChevronRightIcon,
+  "ok": CircleCheckIcon,
+  "no": CircleXIcon,
+  "cpu": CpuIcon,
+  "storage": HardDriveIcon,
+  "memory": MemoryStickIcon,
+  "tools": WrenchIcon,
+  "remote": MousePointer2Icon,
+  "call": PhoneCallIcon,
+  "security": ShieldHalfIcon,
+  "arrow-right": ArrowRightIcon,
+  "quick": ZapIcon,
+  "bell-dot": BellDotIcon,
+  "find": MapPinIcon,
+  "home": LayoutDashboardIcon,
 } satisfies Record<string, Component<LucideProps>>;
 
 export type IconName = keyof typeof ICONS;
 
+/** A category's colour (tokens --c-*): files blue, messages violet, calls
+ *  green, alerts amber, danger red, devices cyan. */
+export type Tone = "blue" | "violet" | "green" | "amber" | "red" | "cyan";
+
+/** An icon in a round, softly tinted chip (dashboard rows, cards). */
+export function IconChip(props: { name: IconName; tone?: Tone; size?: number; class?: string }) {
+  return (
+    <span class={`icon-chip ${props.tone ? `chip-${props.tone}` : ""} ${props.class ?? ""}`} aria-hidden="true">
+      <Icon name={props.name} size={props.size ?? 18} />
+    </span>
+  );
+}
+
 /** 18 px in nav, tabs and buttons (default), 20 px on setting rows, 40–48 px
  *  in empty states. */
-export function Icon(props: { name: IconName; size?: number; class?: string }) {
+export function Icon(props: { name: IconName; size?: number; class?: string; tone?: Tone }) {
   const Glyph = () => {
     const C = ICONS[props.name];
-    return <C size={props.size ?? 18} strokeWidth={1.8} class={`icon ${props.class ?? ""}`} aria-hidden="true" />;
+    const tone = props.tone ? ` tone-${props.tone}` : "";
+    return <C size={props.size ?? 18} strokeWidth={1.8} class={`icon${tone} ${props.class ?? ""}`} aria-hidden="true" />;
   };
   return <>{Glyph()}</>;
 }

@@ -14,12 +14,18 @@ export type MenuItem = {
   /** Shown in the danger colour, after a divider (e.g. Remove device). */
   danger?: boolean;
   hint?: string;
+  /** Before it, a divider (a new group). */
+  divider?: boolean;
 };
 
 export function MenuButton(props: {
   label: string;
   items: MenuItem[];
   children: JSX.Element;
+  /** The button's look (default: a small ghost icon button). */
+  triggerClass?: string;
+  /** The button shows its label as words (then no aria-label). */
+  labelled?: boolean;
   /** Screenshot mode: start open. */
   startOpen?: boolean;
 }) {
@@ -75,9 +81,9 @@ export function MenuButton(props: {
       <button
         ref={button}
         type="button"
-        class="btn btn-ghost btn-sm btn-icon"
-        aria-label={props.label}
-        title={props.label}
+        class={props.triggerClass ?? "btn btn-ghost btn-sm btn-icon"}
+        aria-label={props.labelled ? undefined : props.label}
+        title={props.labelled ? undefined : props.label}
         aria-haspopup="menu"
         aria-expanded={open()}
         aria-controls={open() ? id : undefined}
@@ -96,7 +102,7 @@ export function MenuButton(props: {
           <For each={props.items}>
             {(item) => (
               <>
-                <Show when={item.danger}>
+                <Show when={item.danger || item.divider}>
                   <div class="menu-sep" role="separator" />
                 </Show>
                 <button

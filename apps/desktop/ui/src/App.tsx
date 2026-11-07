@@ -45,7 +45,10 @@ import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key, type PluralKey } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
-import { Icon, type IconName } from "./components/Icon";
+import { Icon, type IconName, type Tone } from "./components/Icon";
+import { DeviceIcon } from "./components/DeviceIcon";
+import { openPalette } from "./components/CommandPalette";
+import { Tabs } from "./components/Tabs";
 import { HotspotAsk } from "./components/HotspotAsk";
 import { PrintAsk } from "./components/PrintAsk";
 import { PermissionAsk, PermissionNotice } from "./components/PeerPermissions";
@@ -71,7 +74,20 @@ type View =
   | { name: "search"; query?: string };
 
 /** The places the sidebar opens with nothing more to say. */
-type SimplePlace = "home" | "activity" | "transfers" | "notes" | "timers" | "readLater" | "search" | "settings" | "help";
+type SimplePlace =
+  | "home"
+  | "linksMap"
+  | "activity"
+  | "transfers"
+  | "notes"
+  | "timers"
+  | "readLater"
+  | "search"
+  | "settings"
+  | "health"
+  | "help";
+
+const isMac = /mac/i.test(navigator.platform || navigator.userAgent);
 
 export default function App() {
   // null while checking for a saved session, so sign-in doesn't flash.
@@ -205,7 +221,7 @@ export default function App() {
         // The tab that holds it: chat, clipboard history, notification
         // history, the folder browser.
         if (f.kind === "messages") openDevice(f.node, "messages", "chat");
-        else if (f.kind === "notifications") openDevice(f.node, "notifications", "notification-history");
+        else if (f.kind === "notifications") openDevice(f.node, "messages", "notification-history");
         else openDevice(f.node, "files", f.kind === "clipboard" ? "clipboard-history" : "browse");
         return revealFound({ kind: f.kind, id: f.id, node: f.node }, missing);
       case "transfers":
@@ -245,6 +261,10 @@ export default function App() {
     });
     onCleanup(() => off.then((f) => f()));
   });
+  // The bell: what Activity got since you last looked (this session).
+  const [seenAt, setSeenAt] = createSignal(Date.now());
+  createEffect(on(() => view().name, (n) => n === "activity" && setSeenAt(Date.now())));
+  const fresh = () => (view().name === "activity" ? 0 : state.activity.filter((a) => a.ts > seenAt()).length);
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
   const connected = () => state.peers.filter((p) => state.links[p.node_id]).length;
   // Running timers (ended ones too, until stopped).
@@ -254,20 +274,34 @@ export default function App() {
 
   /** One place in the sidebar, with its count (and the count in words for
    *  screen readers). */
-  const NavItem = (p: { place: SimplePlace; icon: IconName; label: Key; active: boolean; count?: number; countWords?: PluralKey }) => (
+  const NavItem = (p: {
+    place: SimplePlace;
+    icon: IconName;
+    tone?: Tone;
+    label: Key;
+    active: boolean;
+    count?: number;
+    countWords?: PluralKey;
+    /** The count is a problem (red). */
+    alert?: boolean;
+    onClick?: () => void;
+  }) => (
     <li>
       <button
         class={`nav-item ${p.active ? "active" : ""}`}
         aria-current={p.active ? "page" : undefined}
-        onClick={() => go({ name: p.place })}
+        title={t(p.label)}
+        onClick={() => (p.onClick ? p.onClick() : go({ name: p.place }))}
       >
-        <Icon name={p.icon} />
+        <Icon name={p.icon} tone={p.tone} />
         <span class="nav-label">{t(p.label)}</span>
         <Show when={(p.count ?? 0) > 0}>
-          <span class="nav-count" aria-hidden="true">
+          <span class="nav-count" classList={{ "nav-count-alert": !!p.alert }} aria-hidden="true">
             {p.count}
           </span>
-          <Show when={p.countWords}>{(k) => <span class="sr-only">, {tn(k(), p.count ?? 0)}</span>}</Show>
+          <Show when={p.countWords} fallback={<span class="sr-only">, {p.count}</span>}>
+            {(k) => <span class="sr-only">, {tn(k(), p.count ?? 0)}</span>}
+          </Show>
         </Show>
       </button>
     </li>
@@ -289,21 +323,42 @@ export default function App() {
                 <Tagline />
               </span>
             </div>
-            {/* Main places, then the tools under a small label; Settings,
-                Help and the health check's pill sit at the bottom. */}
+            {/* Groups, as the places go together: devices; what moves
+                between them; doing things; keeping safe. */}
             <ul class="nav-list">
-              <NavItem place="home" icon="devices" label="nav.devices" active={is("home") || is("linksMap")} count={connected()} countWords="a11y.devicesConnected" />
-              <NavItem place="activity" icon="activity" label="nav.activity" active={is("activity")} />
-              <NavItem place="transfers" icon="transfers" label="nav.transfers" active={is("transfers")} count={activeTransfers()} countWords="a11y.transfersActive" />
+              <NavItem place="home" icon="devices" tone="cyan" label="nav.devices" active={is("home")} count={connected()} countWords="a11y.devicesConnected" />
+              <NavItem place="linksMap" icon="map" tone="cyan" label="nav.connections" active={is("linksMap")} />
             </ul>
-            <h2 class="nav-group" id="nav-tools">
-              {t("nav.tools")}
-            </h2>
-            <ul class="nav-list" aria-labelledby="nav-tools">
-              <NavItem place="notes" icon="notes" label="nav.notes" active={is("notes")} />
-              <NavItem place="timers" icon="timers" label="nav.timers" active={is("timers")} count={activeTimers()} countWords="a11y.timersRunning" />
-              <NavItem place="readLater" icon="readLater" label="nav.readLater" active={is("readLater")} count={unreadCount()} countWords="a11y.unreadLinks" />
+            <hr class="nav-divider" />
+            <ul class="nav-list">
+              <NavItem place="transfers" icon="transfers" tone="blue" label="nav.files" active={is("transfers")} count={activeTransfers()} countWords="a11y.transfersActive" />
+              <NavItem
+                place="notes"
+                icon="notes"
+                tone="amber"
+                label="nav.notesGroup"
+                active={is("notes") || is("timers") || is("readLater")}
+                count={activeTimers() + unreadCount()}
+              />
+              <NavItem place="activity" icon="activity" tone="violet" label="nav.activity" active={is("activity")} />
+            </ul>
+            <hr class="nav-divider" />
+            <ul class="nav-list">
+              <NavItem
+                place="settings"
+                icon="workflow"
+                tone="violet"
+                label="nav.automations"
+                active={false}
+                onClick={() => goPlace("settings", "settings-automations")}
+              />
               <NavItem place="search" icon="search" label="nav.search" active={is("search")} />
+            </ul>
+            <hr class="nav-divider" />
+            <ul class="nav-list">
+              <NavItem place="health" icon="security" tone="green" label="nav.securityHealth" active={is("health")} count={badCount()} alert />
+              <NavItem place="settings" icon="settings" label="nav.settings" active={is("settings") || is("developer") || is("setup")} />
+              <NavItem place="help" icon="help" label="nav.help" active={is("help")} />
             </ul>
             {/* Pop-ups held while a phone is on Do Not Disturb. */}
             <Show when={state.quietPhones.length > 0}>
@@ -330,30 +385,66 @@ export default function App() {
                 </button>
               </div>
             </Show>
-            <div class="nav-bottom">
-              <ul class="nav-list">
-                <NavItem place="settings" icon="settings" label="nav.settings" active={is("settings") || is("developer") || is("health") || is("setup")} />
-                <NavItem place="help" icon="help" label="nav.help" active={is("help")} />
-              </ul>
-              {/* The health check found something red: the one place it shows. */}
-              <Show when={badCount() > 0}>
-                <button
-                  class="health-badge small"
-                  aria-current={is("health") ? "page" : undefined}
-                  title={t("health.homeBody", { n: badCount() })}
-                  onClick={() => go({ name: "health" })}
-                >
-                  <Icon name="alert" />
-                  <span class="health-badge-text">{t("health.badge")}</span>
-                  <span class="nav-count health-count">{badCount()}</span>
-                </button>
-              </Show>
-              <div class="sidebar-foot muted small">{niceName(state.me?.name ?? "")}</div>
-            </div>
+            {/* This computer: its name, and a way to its settings. */}
+            <button class="this-device" onClick={() => goPlace("settings", "settings-device")}>
+              <span class="this-device-icon" aria-hidden="true">
+                <DeviceIcon icon={state.ownIcon} size={22} />
+              </span>
+              <span class="this-device-text">
+                <strong>{niceName(state.me?.name ?? "")}</strong>
+                <span class="muted small">{t("settings.thisDevice")}</span>
+              </span>
+              <Icon name="chevron-right" />
+            </button>
           </nav>
           <main class="content" id="main" tabIndex={-1} ref={main}>
+            {/* Search anything (the command palette), what's new, you. */}
+            <header class="topbar">
+              <button class="topbar-search" onClick={openPalette} aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}>
+                <Icon name="search" />
+                <span class="grow">{t("topbar.search")}</span>
+                <kbd class="topbar-kbd">{isMac ? "⌘K" : "Ctrl K"}</kbd>
+              </button>
+              <button
+                class="topbar-btn"
+                aria-label={tn("topbar.activityNew", fresh())}
+                title={tn("topbar.activityNew", fresh())}
+                onClick={() => go({ name: "activity" })}
+              >
+                <Icon name="notifications" />
+                <Show when={fresh() > 0}>
+                  <span class="topbar-count" aria-hidden="true">
+                    {fresh() > 99 ? "99+" : fresh()}
+                  </span>
+                </Show>
+              </button>
+              <button
+                class="topbar-avatar"
+                aria-label={t("topbar.account", { name: state.account.username || "…" })}
+                title={t("topbar.account", { name: state.account.username || "…" })}
+                onClick={() => goPlace("settings", "settings-account")}
+              >
+                {(state.account.username || "?").slice(0, 1).toUpperCase()}
+              </button>
+            </header>
             <UpdateBanner />
             <KeyRotationBanner />
+            {/* Notes, Timers and Read later: one place, three tabs. */}
+            <Show when={is("notes") || is("timers") || is("readLater")}>
+              <div class="tool-tabs">
+                <Tabs
+                  label={t("nav.notesGroup")}
+                  idBase="tools"
+                  tabs={[
+                    { id: "notes", label: t("nav.notes"), icon: "notes" },
+                    { id: "timers", label: t("nav.timers"), icon: "timers", count: activeTimers() },
+                    { id: "readLater", label: t("nav.readLater"), icon: "readLater", count: unreadCount() },
+                  ]}
+                  selected={view().name}
+                  onSelect={(id) => go({ name: id as "notes" | "timers" | "readLater" })}
+                />
+              </div>
+            </Show>
             <Switch>
               <Match when={view().name === "home"}>
                 <Home
@@ -378,6 +469,7 @@ export default function App() {
                     tab={(v() as { tab?: Ask }).tab}
                     onBack={() => go({ name: "home" })}
                     onHealth={() => go({ name: "health" })}
+                    onActivity={() => go({ name: "activity" })}
                   />
                 )}
               </Match>

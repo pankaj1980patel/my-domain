@@ -14,6 +14,7 @@ import { unwrap } from "../lib/core";
 import { friendlyError, niceName, timeAgo } from "../lib/words";
 import { rememberFocus, trapTab } from "../lib/a11y";
 import { toast } from "./ui";
+import { SettingRow } from "./SettingRow";
 import { t, type Key } from "../i18n";
 
 const STRENGTH = ["keyRotation.strength0", "keyRotation.strength1", "keyRotation.strength2", "keyRotation.strength3", "keyRotation.strength4"] as const;
@@ -72,7 +73,7 @@ function ConfirmDialog(props: {
 }
 
 /** "Change account password": the form, then a confirm saying what happens. */
-function ChangePassword() {
+export function ChangePassword() {
   const [open, setOpen] = createSignal(false);
   const [current, setCurrent] = createSignal("");
   const [next, setNext] = createSignal("");
@@ -128,16 +129,14 @@ function ChangePassword() {
   };
   return (
     <>
-      <h3>{t("account.passwordTitle")}</h3>
-      <p class="muted small">{t("account.passwordHint")}</p>
-      <Show
-        when={open()}
-        fallback={
-          <button class="btn btn-ghost" onClick={() => setOpen(true)}>
+      <SettingRow icon="key" label={t("account.passwordTitle")} hint={t("account.passwordHint")}>
+        <Show when={!open()}>
+          <button class="btn btn-soft btn-sm" onClick={() => setOpen(true)}>
             {t("account.change")}
           </button>
-        }
-      >
+        </Show>
+      </SettingRow>
+      <Show when={open()}>
         <form class="stack" onSubmit={submit}>
           <input
             type="password"
@@ -203,7 +202,7 @@ function ChangePassword() {
 }
 
 /** "Sign out all devices", with a confirm (and the password, to stay in here). */
-function SignOutAll() {
+export function SignOutAll() {
   const [asking, setAsking] = createSignal(false);
   const [password, setPassword] = createSignal("");
   const [busy, setBusy] = createSignal(false);
@@ -223,11 +222,11 @@ function SignOutAll() {
   };
   return (
     <>
-      <h3>{t("account.signOutAll")}</h3>
-      <p class="muted small">{t("account.signOutAllHint")}</p>
-      <button class="btn btn-ghost" onClick={() => setAsking(true)}>
-        {t("account.signOutAll")}
-      </button>
+      <SettingRow icon="disconnect" label={t("account.signOutAll")} hint={t("account.signOutAllHint")}>
+        <button class="btn btn-danger btn-sm" onClick={() => setAsking(true)}>
+          {t("account.signOutAll")}
+        </button>
+      </SettingRow>
       <Show when={asking()}>
         <ConfirmDialog
           id="sign-out-all"
@@ -263,7 +262,7 @@ function sessionName(s: AccountSession): string {
 }
 
 /** The account's signed-in sessions, each with "Sign out". */
-function Sessions() {
+export function Sessions() {
   const [list, setList] = createSignal<AccountSession[] | null>(null);
   const [note, setNote] = createSignal("");
   const [asking, setAsking] = createSignal<AccountSession | null>(null);

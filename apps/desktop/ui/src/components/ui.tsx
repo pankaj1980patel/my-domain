@@ -1,8 +1,8 @@
 // Small shared pieces: toasts, the status pill, the device card.
 
 import { createSignal, For, Show, type JSX } from "solid-js";
-import { peerName, state, type Peer } from "../lib/core";
-import { DeviceAvatar } from "./DeviceLabel";
+import { peerIcon, peerName, state, type Peer } from "../lib/core";
+import { DeviceIcon } from "./DeviceIcon";
 import { linkLabel, linkState, qualityLabel, type LinkState } from "../lib/words";
 import type { Quality } from "../bindings";
 import { t, tn } from "../i18n";
@@ -139,7 +139,11 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
     // anywhere else on the card opens it too.
     <article class="device-card" data-drop-node={node()} onClick={props.onOpen}>
       <div class="device-card-top">
-        <DeviceAvatar node={node()} />
+        {/* The device's art (its wallpaper when known: DeviceArt drops in
+            here); its icon until then. */}
+        <div class="device-art device-art-sm" aria-hidden="true">
+          <DeviceIcon icon={peerIcon(node())} size={30} />
+        </div>
         <div class="device-main">
           <h2 class="device-card-name">
             <button
@@ -156,6 +160,12 @@ export function DeviceCard(props: { peer: Peer; onOpen: () => void; onConnect: (
           </h2>
           <span class="device-card-state" id={`device-card-state-${node()}`}>
             <StatusPill node={node()} />
+            <Show when={state.status[node()]?.battery !== undefined}>
+              <span class="chip chip-sm">
+                <Icon name="battery" size={13} />
+                {state.status[node()]!.battery}%
+              </span>
+            </Show>
             <Show when={unread() > 0}>
               <span class="sr-only">, {tn("device.unread", unread())}</span>
             </Show>

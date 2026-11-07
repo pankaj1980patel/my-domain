@@ -118,6 +118,15 @@
   --danger: #fb7185;
   --danger-soft: rgba(251, 113, 133, 0.13);
 
+  /* Category colours for icons (files blue, messages violet, calls green,
+     alerts amber, danger red, devices cyan). Icons and small fills only. */
+  --c-blue: #60a5fa;
+  --c-violet: #a78bfa;
+  --c-green: #34d399;
+  --c-amber: #ffc857;
+  --c-red: #fb7185;
+  --c-cyan: #22c7f2;
+
   /* Elevation and glow */
   --shadow-1: none;
   --shadow-2: 0 1px 2px rgba(0, 0, 0, 0.3);
@@ -332,6 +341,14 @@
   --warning-soft: rgba(245, 185, 66, 0.18);
   --danger: #be123c; /* was #e11d48 (4.1:1 on --surface-2) */
   --danger-soft: rgba(225, 29, 72, 0.1);
+
+  /* Category colours, darkened to 4.5:1 or more on Cloud. */
+  --c-blue: #1d4ed8;
+  --c-violet: #6d28d9;
+  --c-green: #047857;
+  --c-amber: #9a4508;
+  --c-red: #be123c;
+  --c-cyan: #0369a1;
 
   --shadow-2: 0 1px 2px rgba(16, 33, 61, 0.08);
   --shadow-3: 0 18px 50px rgba(16, 33, 61, 0.14);

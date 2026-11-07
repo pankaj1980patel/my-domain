@@ -44,38 +44,28 @@ import { OwnFingerprint } from "../components/VerifyDevice";
 import { RemovedDevicesSetting } from "../components/RemovedDevices";
 import { PermissionsSummary } from "../components/PeerPermissions";
 import { KeyRotationSetting } from "../components/KeyRotation";
-import { AccountSecurity } from "../components/Account";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
 import { setupAct } from "../lib/health";
 import { fold, queryWords } from "../lib/search";
 import { SettingRow, SwitchRow } from "../components/SettingRow";
-import { Icon, type IconName } from "../components/Icon";
+import { Icon, IconChip, type IconName, type Tone } from "../components/Icon";
+import { ChangePassword, Sessions, SignOutAll } from "../components/Account";
 
 /** The categories, in the list's order. */
 const CATEGORIES = [
-  { id: "general", label: "settings.cat.general", icon: "settings" },
-  { id: "account", label: "settings.cat.account", icon: "shield" },
-  { id: "devices", label: "settings.cat.devices", icon: "devices" },
-  { id: "clipboard", label: "settings.cat.clipboard", icon: "clipboard" },
-  { id: "notifications", label: "settings.cat.notifications", icon: "notifications" },
-  { id: "automation", label: "settings.cat.automation", icon: "workflow" },
-  { id: "appearance", label: "settings.cat.appearance", icon: "palette" },
-  { id: "advanced", label: "settings.cat.advanced", icon: "code" },
-] as const satisfies readonly { id: string; label: Key; icon: IconName }[];
+  { id: "general", label: "settings.cat.general", icon: "settings", tone: "cyan" },
+  { id: "account", label: "settings.cat.account", icon: "shield", tone: "green" },
+  { id: "devices", label: "settings.cat.devices", icon: "devices", tone: "cyan" },
+  { id: "clipboard", label: "settings.cat.clipboard", icon: "clipboard", tone: "blue" },
+  { id: "notifications", label: "settings.cat.notifications", icon: "notifications", tone: "violet" },
+  { id: "automation", label: "settings.cat.automation", icon: "workflow", tone: "amber" },
+  { id: "appearance", label: "settings.cat.appearance", icon: "palette", tone: "violet" },
+  { id: "advanced", label: "settings.cat.advanced", icon: "code", tone: "blue" },
+] as const satisfies readonly { id: string; label: Key; icon: IconName; tone: Tone }[];
 type CategoryId = (typeof CATEGORIES)[number]["id"];
 
-/** The category last open (this computer only). */
-const CATEGORY_STORE = "md.settingsCategory";
-function savedCategory(): CategoryId {
-  try {
-    const v = localStorage.getItem(CATEGORY_STORE);
-    return CATEGORIES.find((c) => c.id === v)?.id ?? "general";
-  } catch {
-    return "general";
-  }
-}
 
 
 /** Which OS's location permission the "find my computer" hint explains. */
@@ -180,17 +170,13 @@ export default function Settings(props: {
   };
 
   // --- categories and search ------------------------------------------------
-  const [cat, setCat] = createSignal<CategoryId>(savedCategory());
+  // null: the landing (every category as a card).
+  const [cat, setCat] = createSignal<CategoryId | null>(null);
   const [query, setQuery] = createSignal("");
   const [found, setFound] = createSignal<Record<string, number>>({});
-  const pick = (id: CategoryId) => {
+  const pick = (id: CategoryId | null) => {
     setCat(id);
     setQuery("");
-    try {
-      localStorage.setItem(CATEGORY_STORE, id);
-    } catch {
-      /* no storage: General next time */
-    }
     // On one column the list sits above: bring the chosen section up.
     requestAnimationFrame(() => {
       if (body && body.getBoundingClientRect().top > window.innerHeight * 0.6) body.scrollIntoView({ block: "start" });
@@ -314,17 +300,16 @@ export default function Settings(props: {
         icon: "user",
         title: "settings.account",
         body: () => (
-          <article class="tile" id="settings-account">
-            <h2>{t("settings.account")}</h2>
-            <p class="muted small">{tRich("settings.signedInAs", { name: <strong>{state.account.username || "…"}</strong> })}</p>
-            <div class="join-actions">
-              <AddDevice />
-              <button class="btn btn-ghost" onClick={signOut}>
-                {t("settings.signOut")}
-              </button>
-            </div>
-            <AccountSecurity />
-          </article>
+          <>
+            <article class="tile" id="settings-account">
+              <h2>{t("settings.account")}</h2>
+              <SettingRow icon="user" label={state.account.username || "…"} hint={state.account.server || t("settings.account")}>
+                <AddDevice />
+              </SettingRow>
+              <ChangePassword />
+              <Sessions />
+            </article>
+          </>
         ),
       },
       {
@@ -426,6 +411,26 @@ export default function Settings(props: {
               </form>
             </Show>
           </article>
+        ),
+      },
+      {
+        // Apart from the rest, at the end: what signs devices out.
+        id: "danger",
+        icon: "alert",
+        title: "settings.danger",
+        body: () => (
+            <article class="tile danger-zone" id="settings-danger">
+              <h2>
+                <Icon name="alert" tone="red" />
+                {t("settings.danger")}
+              </h2>
+              <SettingRow icon="disconnect" label={t("settings.signOut")} hint={t("settings.signOutHint")}>
+                <button class="btn btn-danger btn-sm" onClick={signOut}>
+                  {t("settings.signOut")}
+                </button>
+              </SettingRow>
+              <SignOutAll />
+            </article>
         ),
       },
     ],
@@ -706,6 +711,18 @@ export default function Settings(props: {
             onKeyDown={(e) => e.key === "Escape" && query() && (e.preventDefault(), setQuery(""))}
           />
           <ul class="settings-cats">
+            <li>
+              <button
+                type="button"
+                class="nav-item settings-cat-btn"
+                classList={{ active: !searching() && cat() === null }}
+                aria-current={!searching() && cat() === null ? "true" : undefined}
+                onClick={() => pick(null)}
+              >
+                <Icon name="home" />
+                <span class="nav-label">{t("device.tab.overview")}</span>
+              </button>
+            </li>
             <For each={CATEGORIES}>
               {(c) => (
                 <li>
@@ -716,7 +733,7 @@ export default function Settings(props: {
                     aria-current={!searching() && cat() === c.id ? "true" : undefined}
                     onClick={() => pick(c.id)}
                   >
-                    <Icon name={c.icon} />
+                    <Icon name={c.icon} tone={c.tone} />
                     <span class="nav-label">{t(c.label)}</span>
                     <Show when={searching() && found()[c.id]}>
                       <span class="nav-count">{found()[c.id]}</span>
@@ -733,6 +750,23 @@ export default function Settings(props: {
             <p class="muted settings-none" role="status">
               {t("settings.noMatch", { query: query().trim() })}
             </p>
+          </Show>
+          {/* The landing: every category as a card, what's in it below its name. */}
+          <Show when={cat() === null && !searching()}>
+            <div class="cat-grid">
+              <For each={CATEGORIES}>
+                {(c) => (
+                  <button class="tile cat-card" onClick={() => pick(c.id)}>
+                    <IconChip name={c.icon} tone={c.tone} size={22} />
+                    <span class="cat-card-text">
+                      <strong>{t(c.label)}</strong>
+                      <span class="muted small">{SECTIONS[c.id].map((x) => t(x.title)).join(" · ")}</span>
+                    </span>
+                    <Icon name="chevron-right" />
+                  </button>
+                )}
+              </For>
+            </div>
           </Show>
           <For each={CATEGORIES}>{(c) => <Category id={c.id} />}</For>
         </div>

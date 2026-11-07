@@ -265,6 +265,12 @@ function deviceCommands(node: string, name: string, onDevice: (node: string) => 
   return out;
 }
 
+let opener: (() => void) | null = null;
+/** Open the palette (the top bar's search field; same as Cmd/Ctrl+K). */
+export function openPalette() {
+  opener?.();
+}
+
 export default function CommandPalette(props: {
   onDevice: (node: string) => void;
   onPlace: (place: Place, section?: string) => void;
@@ -299,6 +305,7 @@ export default function CommandPalette(props: {
     // would wake it by push just for this).
     for (const p of state.peers) if (state.links[p.node_id]) requestStatus(p.node_id).catch(() => {});
   };
+  opener = () => (open() ? close() : show());
   const close = () => {
     setOpen(false);
     returnFocus?.focus?.();
