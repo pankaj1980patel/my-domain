@@ -171,39 +171,7 @@ export default function Home(props: {
       <div class="home-body" classList={{ "with-rail": rail() }}>
         <div class="home-left">
           <Show when={!props.onlyDevices && state.peers.length > 0}>
-            <div class="home-stats">
-              <div class="tile stat-card">
-                <Ring pct={state.peers.length ? (online() / state.peers.length) * 100 : 0} />
-                <div class="stat-text">
-                  <strong class="stat-value">{state.peers.length}</strong>
-                  <span class="small muted">{t("home.total")}</span>
-                </div>
-              </div>
-              <div class="tile stat-card">
-                <span class="stat-dot" aria-hidden="true" />
-                <div class="stat-text">
-                  <strong class="stat-value">{online()}</strong>
-                  <span class="small muted">{t("home.online")}</span>
-                </div>
-              </div>
-              <button class="tile stat-card stat-link" onClick={props.onHealth}>
-                <IconChip name="alert" tone={badCount() > 0 ? "amber" : "green"} size={20} />
-                <span class="stat-text">
-                  <strong class="stat-value">{badCount()}</strong>
-                  <span class="small muted">{badCount() > 0 ? t("home.issues") : t("home.noIssues")}</span>
-                </span>
-              </button>
-              <div class="tile stat-card">
-                <IconChip name="link-direct" tone="violet" size={20} />
-                <div class="stat-text">
-                  <strong class="stat-value">{direct()}</strong>
-                  <span class="small muted">{t("home.direct")}</span>
-                  <Show when={relayed() > 0}>
-                    <span class="small stat-sub">{t("home.relayed", { n: relayed() })}</span>
-                  </Show>
-                </div>
-              </div>
-            </div>
+            <DeviceStats onHealth={props.onHealth} />
           </Show>
 
           {/* Which devices, in what order, as a list or a grid. */}
@@ -568,7 +536,7 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
 }
 
 /** Add device: the existing invite flow (QR code and code) in a dialog. */
-function AddDialog(props: { onClose: () => void }) {
+export function AddDialog(props: { onClose: () => void }) {
   let box: HTMLDivElement | undefined;
   const restore = rememberFocus();
   const close = () => {
@@ -595,5 +563,48 @@ function AddDialog(props: { onClose: () => void }) {
         </div>
       </div>
     </Portal>
+  );
+}
+
+/** The four counts: devices (ring: the share online), online, issues from
+ *  the health check (opens it), direct links. */
+export function DeviceStats(props: { onHealth: () => void }) {
+  const online = () => state.peers.filter((p) => !!state.links[p.node_id]).length;
+  const relayed = () => state.peers.filter((p) => state.links[p.node_id] === "relay").length;
+  const direct = () => online() - relayed();
+  return (
+    <div class="home-stats">
+      <div class="tile stat-card">
+        <Ring pct={state.peers.length ? (online() / state.peers.length) * 100 : 0} />
+        <div class="stat-text">
+          <strong class="stat-value">{state.peers.length}</strong>
+          <span class="small muted">{t("home.total")}</span>
+        </div>
+      </div>
+      <div class="tile stat-card">
+        <span class="stat-dot" aria-hidden="true" />
+        <div class="stat-text">
+          <strong class="stat-value">{online()}</strong>
+          <span class="small muted">{t("home.online")}</span>
+        </div>
+      </div>
+      <button class="tile stat-card stat-link" onClick={props.onHealth}>
+        <IconChip name="alert" tone={badCount() > 0 ? "amber" : "green"} size={20} />
+        <span class="stat-text">
+          <strong class="stat-value">{badCount()}</strong>
+          <span class="small muted">{badCount() > 0 ? t("home.issues") : t("home.noIssues")}</span>
+        </span>
+      </button>
+      <div class="tile stat-card">
+        <IconChip name="link-direct" tone="violet" size={20} />
+        <div class="stat-text">
+          <strong class="stat-value">{direct()}</strong>
+          <span class="small muted">{t("home.direct")}</span>
+          <Show when={relayed() > 0}>
+            <span class="small stat-sub">{t("home.relayed", { n: relayed() })}</span>
+          </Show>
+        </div>
+      </div>
+    </div>
   );
 }

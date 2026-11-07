@@ -6832,3 +6832,427 @@ html.kvm-window body {
   gap: 4px var(--s-4);
   padding: var(--s-2) var(--s-4);
 }
+
+/* =============================================================================
+   Round 4: every screen after the design boards.
+   ============================================================================= */
+
+/* Every page header: icon tile, title and subtitle, the action on the right. */
+.page-head {
+  align-items: center;
+  gap: var(--s-4);
+}
+.page-head .head-tile {
+  flex: none;
+}
+.page-head h1 {
+  font-size: var(--text-2xl);
+}
+.page-head .muted {
+  margin: 2px 0 0;
+}
+.page {
+  max-width: 1180px;
+}
+
+/* Overview. */
+.dash-page {
+  gap: var(--s-3);
+}
+.ov-quick .quick-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.ov-quick .quick-tile {
+  min-height: 74px;
+}
+.ov-cols {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.ov-left {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+  min-height: 0;
+}
+.ov-strip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--s-2);
+}
+.ov-device {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-width: 0;
+  padding: var(--s-2);
+  text-align: left;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-2) 60%, transparent);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.ov-device:hover {
+  background: var(--surface-2);
+}
+.ov-device-text {
+  display: grid;
+  min-width: 0;
+}
+.ov-device-text strong {
+  font-size: var(--text-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ov-device-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.ov-device-state .hero-dot {
+  width: 7px;
+  height: 7px;
+}
+.ov-more {
+  justify-content: center;
+  font-weight: 700;
+  color: var(--accent-fg);
+}
+.ov-next {
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+}
+.ov-tips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.ov-tip {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.ov-tip:hover {
+  background: var(--surface-2);
+}
+.ov-tip .grow {
+  display: grid;
+  gap: 2px;
+}
+.ov-tip > .icon {
+  color: var(--text-3);
+}
+
+/* Messages & notifications. */
+.msg-page {
+  gap: var(--s-3);
+}
+.msg-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.msg-list {
+  list-style: none;
+  margin: 0;
+  padding: var(--s-2);
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  overflow-y: auto;
+  border-radius: var(--r-lg);
+  background: var(--card-bg);
+}
+.msg-item {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+.msg-item:hover {
+  background: var(--surface-2);
+}
+.msg-item[aria-current="true"] {
+  background: var(--accent-bg);
+}
+.msg-item-text {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+.msg-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.msg-item-top strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-preview {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.msg-preview .hero-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+}
+.msg-pane {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+.msg-pane-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-2);
+}
+.msg-pane > .tile {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.msg-pane > .tile .thread {
+  flex: 1 1 0;
+  max-height: none;
+}
+.msg-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+}
+
+/* Automations, Files: tabs over a panel that scrolls. */
+.auto-page,
+.page-fit:has(> .drop-zone) {
+  gap: var(--s-3);
+}
+.drop-zone {
+  display: grid;
+  justify-items: center;
+  gap: var(--s-2);
+  padding: var(--s-5);
+  text-align: center;
+  color: var(--text-2);
+  border: 1.5px dashed color-mix(in srgb, var(--c-blue) 45%, transparent);
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--c-blue) 6%, transparent);
+}
+.drop-zone .row {
+  gap: var(--s-2);
+  justify-content: center;
+}
+.device-chip {
+  padding-left: 6px;
+}
+
+/* Security & health. */
+.sec-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--s-3);
+}
+.sec-left {
+  display: grid;
+  gap: var(--s-3);
+  align-content: start;
+  min-height: 0;
+  overflow-y: auto;
+}
+.sec-status {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  background: color-mix(in srgb, var(--c-green) 9%, var(--card-bg));
+}
+.sec-status.sec-bad {
+  background: color-mix(in srgb, var(--c-amber) 9%, var(--card-bg));
+}
+.sec-status .icon-chip {
+  width: 56px;
+  height: 56px;
+}
+.sec-status .grow {
+  display: grid;
+  gap: 2px;
+}
+.sec-word {
+  font-size: var(--text-xl);
+  font-weight: 800;
+}
+.sec-actions {
+  display: grid;
+  gap: var(--s-2);
+}
+.sec-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.sec-stats .stat-card {
+  padding: var(--s-3);
+}
+.sec-when {
+  font-size: var(--text-md);
+}
+.sec-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+.sec-row {
+  font: inherit;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  color: var(--text);
+  background: var(--card-bg);
+  border: none;
+  border-radius: var(--r-lg);
+  cursor: pointer;
+}
+.sec-row:hover {
+  background: var(--surface-2);
+}
+.sec-row .grow {
+  display: grid;
+  gap: 2px;
+}
+.sec-row > .icon {
+  color: var(--text-3);
+}
+.health-page > .sec-body > .sec-checks {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Connections: health in the header. */
+.conn-health {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-2) var(--s-4);
+  border-radius: var(--r-lg);
+  background: var(--card-bg);
+}
+.conn-health-text,
+.conn-health-stat {
+  display: grid;
+}
+.links-map-page .map-canvas svg {
+  max-height: calc(100vh - 360px);
+}
+
+/* Help: three cards over the topics. */
+.help-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+.help-card {
+  font: inherit;
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  text-align: left;
+  color: var(--text);
+  cursor: pointer;
+}
+.help-card:hover,
+.help-card[aria-current="true"] {
+  background: var(--surface-2);
+}
+.help-card .grow {
+  display: grid;
+  gap: 2px;
+}
+
+@media (max-width: 1000px) {
+  .ov-cols,
+  .sec-body,
+  .msg-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ov-strip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .help-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 720px) {
+  .ov-quick .quick-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .sec-stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.ov-device {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  padding: var(--s-2) 4px;
+}
+.ov-device-text {
+  justify-items: center;
+  max-width: 100%;
+}
+.links-map-page .links-map {
+  max-height: calc(100vh - 330px);
+  width: 100%;
+}
+.ov-device-text {
+  width: 100%;
+}
+.ov-device-text strong {
+  display: block;
+  max-width: 100%;
+}

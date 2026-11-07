@@ -8,6 +8,7 @@
 // the reminder; a bell marks it in the list, and "Upcoming" lists those
 // still to come, soonest first.
 
+import { Icon } from "../components/Icon";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from "solid-js";
 import {
   addItem,
@@ -120,7 +121,10 @@ export default function Notes(props: { request?: NoteRequest }) {
   return (
     <section class="page notes-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="notes" size={26} tone="amber" />
+        </span>
+        <div class="grow">
           <h1>
             {t("notes.title")} <HelpLink topic="notes" />
           </h1>

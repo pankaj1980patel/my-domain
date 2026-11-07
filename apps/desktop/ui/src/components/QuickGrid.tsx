@@ -13,7 +13,13 @@ import { t } from "../i18n";
 
 type Action = { icon: IconName; tone: Tone; label: string; run: () => unknown; off?: string };
 
-export function QuickGrid(props: { node: string; vertical?: boolean; onGo: (tab: string, tile?: string) => void }) {
+export function QuickGrid(props: {
+  node: string;
+  vertical?: boolean;
+  onGo: (tab: string, tile?: string) => void;
+  /** The Overview's row: "Create note" in place of Ring and Find. */
+  onNote?: () => void;
+}) {
   const st = () => state.status[props.node];
   const name = () => peerName(props.node);
   const has = (a: string) => !!st()?.actions.includes(a);
@@ -21,7 +27,7 @@ export function QuickGrid(props: { node: string; vertical?: boolean; onGo: (tab:
     runAction(props.node, "locate", {})
       .then(() => toast(t("locate.asking")))
       .catch((e) => toast(friendlyError(e), "error"));
-  const actions = (): Action[] => [
+  const all = (): Action[] => [
     { icon: "send-file", tone: "blue", label: t("quick.sendFile"), run: () => quickSendFile(props.node) },
     { icon: "send-clip", tone: "cyan", label: t("quick.sendClipboard"), run: () => quickSendClipboard(props.node) },
     {
@@ -51,6 +57,12 @@ export function QuickGrid(props: { node: string; vertical?: boolean; onGo: (tab:
           : t("locate.offOn", { name: name() }),
     },
   ];
+  const actions = (): Action[] => {
+    const list = all();
+    if (!props.onNote) return list;
+    const note = props.onNote;
+    return [...list.slice(0, 4), { icon: "notes", tone: "amber", label: t("quick.note"), run: note }];
+  };
   return (
     <div class="quick-grid" classList={{ "quick-list": !!props.vertical }}>
       <For each={actions()}>

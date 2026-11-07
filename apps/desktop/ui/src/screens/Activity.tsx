@@ -23,7 +23,8 @@ import {
   type ActivityTarget,
 } from "../lib/activity";
 import { Empty, toast } from "../components/ui";
-import { Icon } from "../components/Icon";
+import { Icon, IconChip } from "../components/Icon";
+import { KIND_TONE } from "../components/RecentActivity";
 import { t } from "../i18n";
 
 const PAGE = 50;
@@ -139,7 +140,10 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
   return (
     <section class="page page-fit activity-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="activity" size={26} tone="violet" />
+        </span>
+        <div class="grow">
           <h1>{t("activity.title")}</h1>
           <p class="muted">{t("activity.subtitle")}</p>
         </div>
@@ -197,15 +201,19 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
         />
       </div>
       <div class="search-filters" role="group" aria-label={t("activity.filters")}>
-        <label class="search-filter">
-          <span class="small muted">{t("activity.filterKind")}</span>
-          <select value={kind()} onChange={(e) => setKind(e.currentTarget.value as ActivityKind | "")}>
-            <option value="">{t("activity.anyKind")}</option>
-            <For each={ACTIVITY_KINDS.filter((k) => !hidden().includes(k))}>
-              {(k) => <option value={k}>{t(ACTIVITY_KIND_LABEL[k])}</option>}
-            </For>
-          </select>
-        </label>
+        {/* What kind: one chip each (the kinds hidden from the timeline aren't offered). */}
+        <div class="home-filters" role="group" aria-label={t("activity.filterKind")}>
+          <button class="filter-chip" aria-pressed={kind() === ""} onClick={() => setKind("")}>
+            {t("activity.anyKind")}
+          </button>
+          <For each={ACTIVITY_KINDS.filter((k) => !hidden().includes(k))}>
+            {(k) => (
+              <button class="filter-chip" aria-pressed={kind() === k} onClick={() => setKind(k)}>
+                {t(ACTIVITY_KIND_LABEL[k])}
+              </button>
+            )}
+          </For>
+        </div>
         <label class="search-filter">
           <span class="small muted">{t("activity.filterDevice")}</span>
           <select value={node()} onChange={(e) => setNode(e.currentTarget.value)}>
@@ -264,9 +272,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
                     const target = activityTarget(a);
                     return (
                       <li class="activity-item activity-row" classList={{ "tone-error": activityFailed(a) }}>
-                        <span class="activity-glyph" aria-hidden="true">
-                          <Icon name={activityIcon(a)} />
-                        </span>
+                        <IconChip name={activityIcon(a)} tone={KIND_TONE[a.kind] ?? "cyan"} />
                         <button class="activity-main" disabled={!target} onClick={() => open(a)}>
                           <span class="activity-text">{activityText(a, deviceOf(a))}</span>
                           <span class="activity-meta small muted">

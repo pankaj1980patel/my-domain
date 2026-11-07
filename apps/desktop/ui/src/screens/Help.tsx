@@ -2,11 +2,13 @@
 // can't do, from docs/help. A search box (every word, in the title, keywords
 // or text), the topic list, and the chosen topic.
 
+import { Icon, IconChip, type IconName, type Tone } from "../components/Icon";
 import { createEffect, createMemo, createSignal, For, Match, on, Show, Switch } from "solid-js";
 import { helpTarget, type Block, type Inline } from "../help/markdown";
 import { searchTopics } from "../help/search";
 import { topicById, TOPICS } from "../help/topics";
 import { t } from "../i18n";
+import type { Key } from "../i18n";
 
 function Inlines(props: { nodes: Inline[]; onTopic: (id: string) => void }) {
   return (
@@ -120,6 +122,12 @@ function Blocks(props: { blocks: Block[]; onTopic: (id: string) => void }) {
   );
 }
 
+const HELP_CARDS: { topic: string; icon: IconName; tone: Tone; title: Key; body: Key }[] = [
+  { topic: "getting-started", icon: "home", tone: "cyan", title: "help.cardStart", body: "help.cardStartBody" },
+  { topic: "messages-clipboard", icon: "quick", tone: "violet", title: "help.cardFeatures", body: "help.cardFeaturesBody" },
+  { topic: "privacy", icon: "shield", tone: "green", title: "help.cardPrivacy", body: "help.cardPrivacyBody" },
+];
+
 export default function Help(props: { topic?: string; onTopic: (id: string) => void }) {
   const [query, setQuery] = createSignal("");
   const shown = createMemo(() => searchTopics(TOPICS, query()));
@@ -144,7 +152,10 @@ export default function Help(props: { topic?: string; onTopic: (id: string) => v
   return (
     <section class="page page-fit help-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="help" size={26} tone="cyan" />
+        </span>
+        <div class="grow">
           <h1>{t("help.title")}</h1>
           <p class="muted">{t("help.subtitle")}</p>
         </div>
@@ -160,6 +171,21 @@ export default function Help(props: { topic?: string; onTopic: (id: string) => v
         value={query()}
         onInput={(e) => setQuery(e.currentTarget.value)}
       />
+
+      {/* Where to start: three cards, each opening its topic. */}
+      <div class="help-cards">
+        <For each={HELP_CARDS}>
+          {(c) => (
+            <button class="tile help-card" aria-current={props.topic === c.topic ? "true" : undefined} onClick={() => props.onTopic(c.topic)}>
+              <IconChip name={c.icon} tone={c.tone} />
+              <span class="grow">
+                <strong>{t(c.title)}</strong>
+                <span class="muted small">{t(c.body)}</span>
+              </span>
+            </button>
+          )}
+        </For>
+      </div>
 
       <div class="help-layout">
         <nav class="help-topics" aria-label={t("help.topics")}>

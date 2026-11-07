@@ -22,6 +22,9 @@ import { initRemoteDownloads } from "./lib/remoteDownload";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
 import SignIn from "./screens/SignIn";
 import Home from "./screens/Home";
+import Dashboard from "./screens/Dashboard";
+import Messages from "./screens/Messages";
+import Automations from "./screens/Automations";
 import Device from "./screens/Device";
 import Activity from "./screens/Activity";
 import Transfers from "./screens/Transfers";
@@ -59,6 +62,9 @@ type Ask = { id: string; tile?: string; at: number };
 
 type View =
   | { name: "home"; only?: boolean }
+  | { name: "overview" }
+  | { name: "messages" }
+  | { name: "automations" }
   | { name: "device"; node: string; tab?: Ask }
   | { name: "notes"; request?: NoteRequest }
   | { name: "timers" }
@@ -76,6 +82,9 @@ type View =
 /** The places the sidebar opens with nothing more to say. */
 type SimplePlace =
   | "home"
+  | "overview"
+  | "messages"
+  | "automations"
   | "linksMap"
   | "activity"
   | "transfers"
@@ -112,14 +121,17 @@ export default function App() {
     if (signedIn()) return;
     resume().then((yes) => (yes ? signedInNow() : setSignedIn(false)), () => setSignedIn(false));
   };
-  const [view, setView] = createSignal<View>(import.meta.env.MODE === "mock" ? mockView() : { name: "home" });
+  const [view, setView] = createSignal<View>(import.meta.env.MODE === "mock" ? mockView() : { name: "overview" });
   let main: HTMLElement | undefined;
   const go = (v: View) => setView(v);
   // A new screen: the window title names it, and focus moves to its content
   // when it was in the sidebar or got lost with the old screen (keyboard and
   // screen reader users land on the new page, not back at the top).
   const titles: Record<View["name"], Key> = {
-    home: "nav.devices",
+    home: "nav.allDevices",
+    overview: "nav.overview",
+    messages: "msg.title",
+    automations: "automation.title",
     device: "nav.devices",
     notes: "nav.notes",
     timers: "nav.timers",
@@ -173,6 +185,8 @@ export default function App() {
     onMap: () => go({ name: "linksMap" }),
     onSettings: (section) => goPlace("settings", section),
     onHelp: (topic) => go({ name: "help", topic }),
+    onActivity: () => go({ name: "activity" }),
+    onDevices: () => go({ name: "home" }),
   };
   // The health check runs while signed in (the sidebar's badge).
   createEffect(
@@ -228,6 +242,7 @@ export default function App() {
         go({ name: "transfers" });
         return revealFound({ kind: f.kind, id: f.id, node: f.node }, missing);
       case "automations":
+        return go({ name: "automations" });
       case "schedules":
       case "shortcuts":
         return goPlace("settings", `settings-${f.kind}`);
@@ -265,6 +280,8 @@ export default function App() {
   const [seenAt, setSeenAt] = createSignal(Date.now());
   createEffect(on(() => view().name, (n) => n === "activity" && setSeenAt(Date.now())));
   const fresh = () => (view().name === "activity" ? 0 : state.activity.filter((a) => a.ts > seenAt()).length);
+  // Messages that came in this session, on every device.
+  const unreadMessages = () => state.messages.filter((m) => m.dir === "in").length;
   const is = (n: View["name"]) => view().name === n || (n === "home" && view().name === "device");
   const connected = () => state.peers.filter((p) => state.links[p.node_id]).length;
   // Running timers (ended ones too, until stopped).
@@ -326,22 +343,22 @@ export default function App() {
             {/* Groups, as the places go together: devices; what moves
                 between them; doing things; keeping safe. */}
             <ul class="nav-list">
-              <NavItem place="home" icon="home" tone="cyan" label="nav.overview" active={view().name === "home" && !(view() as { only?: boolean }).only} />
+              <NavItem place="overview" icon="home" tone="cyan" label="nav.overview" active={view().name === "overview"} />
               <NavItem
                 place="home"
                 icon="devices"
                 tone="cyan"
                 label="nav.allDevices"
-                active={(view().name === "home" && !!(view() as { only?: boolean }).only) || view().name === "device"}
+                active={is("home")}
                 count={connected()}
                 countWords="a11y.devicesConnected"
-                onClick={() => go({ name: "home", only: true })}
               />
               <NavItem place="linksMap" icon="map" tone="cyan" label="nav.connections" active={is("linksMap")} />
             </ul>
             <hr class="nav-divider" />
             <ul class="nav-list">
               <NavItem place="transfers" icon="transfers" tone="blue" label="nav.files" active={is("transfers")} count={activeTransfers()} countWords="a11y.transfersActive" />
+              <NavItem place="messages" icon="chat" tone="violet" label="nav.messages" active={is("messages")} count={unreadMessages()} />
               <NavItem
                 place="notes"
                 icon="notes"
@@ -354,14 +371,7 @@ export default function App() {
             </ul>
             <hr class="nav-divider" />
             <ul class="nav-list">
-              <NavItem
-                place="settings"
-                icon="workflow"
-                tone="violet"
-                label="nav.automations"
-                active={false}
-                onClick={() => goPlace("settings", "settings-automations")}
-              />
+              <NavItem place="automations" icon="workflow" tone="violet" label="nav.automations" active={is("automations")} />
               <NavItem place="search" icon="search" label="nav.search" active={is("search")} />
             </ul>
             <hr class="nav-divider" />
@@ -467,6 +477,24 @@ export default function App() {
                     onActivity={() => go({ name: "activity" })}
                   />
                 )}
+              </Match>
+              <Match when={view().name === "overview"}>
+                <Dashboard
+                  onOpen={openDevice}
+                  onAllDevices={() => go({ name: "home" })}
+                  onHealth={() => go({ name: "health" })}
+                  onActivity={() => go({ name: "activity" })}
+                  onSettings={(section) => goPlace("settings", section)}
+                  onAutomations={() => go({ name: "automations" })}
+                  onNote={() => openNote(null)}
+                  onSetup={() => go({ name: "setup" })}
+                />
+              </Match>
+              <Match when={view().name === "messages"}>
+                <Messages onOpen={(node) => openDevice(node)} />
+              </Match>
+              <Match when={view().name === "automations"}>
+                <Automations />
               </Match>
               <Match when={view().name === "health"}>
                 <Health {...healthNav} />
@@ -589,6 +617,9 @@ function mockView(): View {
       return { name, query: p.get("q") ?? undefined };
     case "notes":
       return p.get("note") ? { name, request: { id: p.get("note"), at: Date.now() } } : { name };
+    case "overview":
+    case "messages":
+    case "automations":
     case "timers":
     case "readLater":
     case "linksMap":

@@ -3,7 +3,8 @@
 // Opened from Settings, the sidebar's badge, Home's card and a device's
 // page when something is wrong there.
 
-import { createSignal, For, Show } from "solid-js";
+import { Icon } from "../components/Icon";
+import { createSignal, For, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { connect, unwrap } from "../lib/core";
 import {
@@ -20,13 +21,20 @@ import {
 import { friendlyError, timeAgo } from "../lib/words";
 import { toast } from "../components/ui";
 import { HelpLink } from "../help/HelpLink";
-import { t } from "../i18n";
+import { t, tn } from "../i18n";
+import { IconChip } from "../components/Icon";
+import { isVerified } from "../lib/verify";
+import { state } from "../lib/core";
 
 export type HealthNav = {
   onDevice: (node: string) => void;
   onMap: () => void;
   onSettings: (section: string) => void;
   onHelp: (topic: string) => void;
+  /** The security log: Activity. */
+  onActivity?: () => void;
+  /** All devices (to verify them). */
+  onDevices?: () => void;
 };
 
 /** What a check's button does. */
@@ -140,6 +148,9 @@ export function HealthRow(props: { check: HealthCheck; nav: HealthNav }) {
 }
 
 export default function Health(props: HealthNav) {
+  const verified = () => state.peers.filter((p) => isVerified(p.node_id)).length;
+  const [sessions, setSessions] = createSignal<number | null>(null);
+  onMount(() => unwrap(commands.accountSessions()).then((l) => setSessions(l.length), () => {}));
   const summary = () => {
     const r = report();
     if (!r) return "";
@@ -152,19 +163,106 @@ export default function Health(props: HealthNav) {
   return (
     <section class="page page-fit health-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="security" size={26} tone="green" />
+        </span>
+        <div class="grow">
           <h1>
-            {t("health.title")} <HelpLink topic="troubleshooting" />
+            {t("nav.securityHealth")} <HelpLink topic="troubleshooting" />
           </h1>
-          <p class="muted">{t("health.subtitle")}</p>
+          <p class="muted">{t("sec.sub")}</p>
         </div>
-        <button class="btn btn-primary" disabled={running()} onClick={() => runHealth(true)}>
-          {running() ? t("health.running") : t("health.rerun")}
-        </button>
       </header>
+      <div class="sec-body">
+      <div class="sec-left">
+        {/* The verdict, then what it rests on. */}
+        <section class="tile sec-status" classList={{ "sec-bad": (report()?.bad ?? 0) > 0 }}>
+          <IconChip name={(report()?.bad ?? 0) > 0 ? "alert" : "verify"} tone={(report()?.bad ?? 0) > 0 ? "amber" : "green"} size={30} />
+          <div class="grow">
+            <span class="small muted">{t("sec.overall")}</span>
+            <strong class="sec-word">
+              {(report()?.bad ?? 0) + (report()?.warn ?? 0) > 0
+                ? tn("dash.problems", (report()?.bad ?? 0) + (report()?.warn ?? 0))
+                : t("sec.allGood")}
+            </strong>
+            <span class="small muted">{summary()}</span>
+          </div>
+          <div class="sec-actions">
+            <button class="btn btn-primary btn-sm" disabled={running()} onClick={() => runHealth(true)}>
+              <Icon name="health" />
+              {running() ? t("health.running") : t("sec.runFull")}
+            </button>
+            <Show when={props.onActivity}>
+              <button class="btn btn-soft btn-sm" onClick={() => props.onActivity?.()}>
+                <Icon name="activity" />
+                {t("sec.log")}
+              </button>
+            </Show>
+          </div>
+        </section>
+        <div class="sec-stats">
+          <div class="tile stat-card">
+            <IconChip name="verify" tone="green" />
+            <div class="stat-text">
+              <strong class="stat-value">
+                {verified()} / {state.peers.length}
+              </strong>
+              <span class="small muted">{t("sec.verified")}</span>
+            </div>
+          </div>
+          <div class="tile stat-card">
+            <IconChip name="user" tone="blue" />
+            <div class="stat-text">
+              <strong class="stat-value">{sessions() ?? "—"}</strong>
+              <span class="small muted">{t("sec.sessions")}</span>
+            </div>
+          </div>
+          <div class="tile stat-card">
+            <IconChip name="clock" tone="violet" />
+            <div class="stat-text">
+              <strong class="stat-value sec-when">{ranAt() ? timeAgo(ranAt()) : "—"}</strong>
+              <span class="small muted">{t("sec.lastCheck")}</span>
+            </div>
+          </div>
+        </div>
+        <ul class="sec-rows">
+          <li>
+            <button class="sec-row" onClick={() => props.onSettings("settings-permissions")}>
+              <IconChip name="lock" tone="amber" />
+              <span class="grow">
+                <strong>{t("perm.summaryTitle")}</strong>
+                <span class="muted small">{t("sec.permsBody")}</span>
+              </span>
+              <Icon name="chevron-right" />
+            </button>
+          </li>
+          <li>
+            <button class="sec-row" onClick={() => (props.onDevices ? props.onDevices() : props.onMap())}>
+              <IconChip name="verify" tone="green" />
+              <span class="grow">
+                <strong>{t("sec.verification")}</strong>
+                <span class="muted small">{t("sec.verificationBody", { n: verified(), total: state.peers.length })}</span>
+              </span>
+              <Icon name="chevron-right" />
+            </button>
+          </li>
+          <li>
+            <button class="sec-row" onClick={() => props.onSettings("settings-key")}>
+              <IconChip name="key" tone="blue" />
+              <span class="grow">
+                <strong>{t("sec.encryption")}</strong>
+                <span class="muted small">{t("sec.encryptionBody")}</span>
+              </span>
+              <Icon name="chevron-right" />
+            </button>
+          </li>
+        </ul>
+      </div>
       <Show when={report()} fallback={<p class="muted">{t("health.running")}</p>}>
         {(r) => (
-          <article class="tile">
+          <article class="tile sec-checks">
+            <h2>{t("sec.checks")}</h2>
+            <p class="muted small">{t("health.subtitle")}</p>
             <p role="status">
               <strong>{summary()}</strong>
               <Show when={ranAt()}>
@@ -177,6 +275,7 @@ export default function Health(props: HealthNav) {
           </article>
         )}
       </Show>
+      </div>
     </section>
   );
 }

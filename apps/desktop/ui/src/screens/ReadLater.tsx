@@ -5,6 +5,7 @@
 // fetched from the web: a link shows the title it was saved with, else its
 // host.
 
+import { Icon } from "../components/Icon";
 import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import {
   deleteLink,
@@ -74,7 +75,10 @@ export default function ReadLater() {
   return (
     <section class="page read-later-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="readLater" size={26} tone="amber" />
+        </span>
+        <div class="grow">
           <h1>
             {t("readLater.title")} <HelpLink topic="read-later" />
           </h1>

@@ -4,6 +4,7 @@
 // counting down, and Pause, Resume, +1 min, Cancel and Stop work from any
 // of them.
 
+import { Icon } from "../components/Icon";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { peerName, state } from "../lib/core";
@@ -238,7 +239,10 @@ export default function Timers() {
   return (
     <section class="page timers-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="timers" size={26} tone="amber" />
+        </span>
+        <div class="grow">
           <h1>
             {t("timers.title")} <HelpLink topic="timers" />
           </h1>

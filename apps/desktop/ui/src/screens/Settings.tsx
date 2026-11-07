@@ -698,7 +698,13 @@ export default function Settings(props: {
   return (
     <section class="page page-wide">
       <header class="page-head">
-        <h1>{t("settings.title")}</h1>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="settings" size={26} tone="blue" />
+        </span>
+        <div class="grow">
+          <h1>{t("settings.title")}</h1>
+          <p class="muted">{t("settings.subtitle")}</p>
+        </div>
       </header>
 
       <div class="settings-layout">

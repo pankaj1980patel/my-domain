@@ -6,6 +6,15 @@
 // overall progress; its files open underneath. Each row under way can be
 // paused, resumed or cancelled; a failed one sent from here can be retried.
 
+import { Icon } from "../components/Icon";
+import { Tabs, panelProps } from "../components/Tabs";
+import { MenuButton, type MenuItem } from "../components/Menu";
+import { quickSendFile, quickSendFolder } from "../lib/quickActions";
+import BrowseTile from "./device/BrowseTile";
+import PhotosTile from "./device/PhotosTile";
+import { SyncSetting } from "../components/SyncSetting";
+import DeviceArt from "../components/DeviceArt";
+import { peerIcon } from "../lib/core";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { commands, type TransferEntry_Serialize as Entry } from "../bindings";
 import { cancelFile, pauseTransfer, peerName, retryTransfer, sendFile, state, unwrap } from "../lib/core";
@@ -69,6 +78,23 @@ export default function Transfers() {
   const active = createMemo(() => top().filter((e) => e.state === "active"));
   const finished = createMemo(() => top().filter((e) => e.state !== "active"));
 
+  type FilesTab = "transfers" | "mine" | "device" | "photos" | "sync";
+  const [tab, setTab] = createSignal<FilesTab>("transfers");
+  const received = createMemo(() => finished().filter((e) => e.incoming && e.state !== "failed"));
+  // Devices whose folders or photos can be looked at from here.
+  const browsable = () => state.peers.map((p) => p.node_id).filter((n) => (state.status[n]?.sharedFolders ?? 0) > 0);
+  const withPhotos = () => state.peers.map((p) => p.node_id).filter((n) => !!state.status[n]?.actions.includes("gallery"));
+  const [picked, setPicked] = createSignal<string | null>(null);
+  const pickFor = () => {
+    const list = tab() === "device" ? browsable() : withPhotos();
+    const p = picked();
+    return p && list.includes(p) ? p : list[0] ?? null;
+  };
+  const sendMenu = (): MenuItem[] =>
+    state.peers.map((p) => ({ icon: "devices" as const, label: peerName(p.node_id), onSelect: () => quickSendFile(p.node_id) }));
+  const folderMenu = (): MenuItem[] =>
+    state.peers.map((p) => ({ icon: "devices" as const, label: peerName(p.node_id), onSelect: () => quickSendFolder(p.node_id) }));
+
   const clear = () =>
     commands
       .transferClearFinished()
@@ -78,18 +104,53 @@ export default function Transfers() {
   return (
     <section class="page page-fit">
       <header class="page-head">
-        <div>
-          <h1>{t("transfers.title")}</h1>
-          <p class="muted">{t("transfers.subtitle")}</p>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="transfers" size={26} tone="blue" />
+        </span>
+        <div class="grow">
+          <h1>{t("files.pageTitle")}</h1>
+          <p class="muted">{t("files.pageSub")}</p>
         </div>
-        <Show when={finished().length > 0}>
-          <button class="btn btn-ghost btn-sm" onClick={clear}>
-            {t("transfers.clear")}
-          </button>
-        </Show>
+        <MenuButton label={t("files.sendTo")} labelled triggerClass="btn btn-primary" items={sendMenu()}>
+          <Icon name="send-file" />
+          {t("files.sendTo")}
+          <Icon name="chevron-down" size={16} />
+        </MenuButton>
       </header>
-      {/* The lists scroll in their own panel; the page stays put. */}
-      <div class="page-scroll">
+      <Tabs
+        label={t("files.pageTitle")}
+        idBase="files"
+        tabs={[
+          { id: "transfers", label: t("transfers.title"), icon: "transfers", count: active().length },
+          { id: "mine", label: t("files.mine"), icon: "download" },
+          { id: "device", label: t("browse.title"), icon: "folder-open" },
+          { id: "photos", label: t("photos.title"), icon: "image" },
+          { id: "sync", label: t("sync.title"), icon: "folder-sync" },
+        ]}
+        selected={tab()}
+        onSelect={(id) => setTab(id as FilesTab)}
+      />
+      {/* Each tab scrolls in its own panel; the page stays put. */}
+      <div class="page-scroll" {...panelProps("files", tab())}>
+      <Show when={tab() === "transfers"}>
+      {/* Drop files anywhere in the window (or choose them) to send. */}
+      <div class="drop-zone">
+        <Icon name="send-file" size={28} tone="blue" />
+        <span>{t("files.dropHint")}</span>
+        <div class="row">
+          <MenuButton label={t("files.chooseFiles")} labelled triggerClass="btn btn-soft btn-sm" items={sendMenu()}>
+            {t("files.chooseFiles")}
+          </MenuButton>
+          <MenuButton label={t("files.chooseFolder")} labelled triggerClass="btn btn-soft btn-sm" items={folderMenu()}>
+            {t("files.chooseFolder")}
+          </MenuButton>
+          <Show when={finished().length > 0}>
+            <button class="btn btn-ghost btn-sm" onClick={clear}>
+              {t("transfers.clear")}
+            </button>
+          </Show>
+        </div>
+      </div>
       <Show
         when={top().length > 0}
         fallback={
@@ -110,6 +171,29 @@ export default function Transfers() {
             <For each={finished()}>{(e) => <FinishedRow e={e} clock={clock()} files={filesOf(e.id)} onChange={refresh} />}</For>
           </ul>
         </Show>
+      </Show>
+      </Show>
+      {/* What came in, newest first, each with its own Show / Open. */}
+      <Show when={tab() === "mine"}>
+        <Show when={received().length} fallback={<p class="muted small">{t("files.noneReceived")}</p>}>
+          <ul class="xfer-list">
+            <For each={received()}>{(e) => <FinishedRow e={e} clock={clock()} files={filesOf(e.id)} onChange={refresh} />}</For>
+          </ul>
+        </Show>
+      </Show>
+      <Show when={tab() === "device" || tab() === "photos"}>
+        <DevicePicker
+          devices={tab() === "device" ? browsable() : withPhotos()}
+          chosen={pickFor()}
+          onPick={setPicked}
+          empty={tab() === "device" ? t("files.noBrowse") : t("files.noPhotos")}
+        />
+        <Show when={pickFor()} keyed>
+          {(n) => (tab() === "device" ? <BrowseTile node={n} /> : <PhotosTile node={n} />)}
+        </Show>
+      </Show>
+      <Show when={tab() === "sync"}>
+        <SyncSetting />
       </Show>
       </div>
     </section>
@@ -368,5 +452,23 @@ function FinishedRow(props: { e: Entry; clock: number; files: Entry[]; onChange:
         <BatchFiles files={props.files} name={props.e.name} />
       </Show>
     </li>
+  );
+}
+
+/** Which device: one chip each (with its picture). */
+function DevicePicker(props: { devices: string[]; chosen: string | null; onPick: (n: string) => void; empty: string }) {
+  return (
+    <Show when={props.devices.length} fallback={<p class="muted small">{props.empty}</p>}>
+      <div class="home-filters" role="group">
+        <For each={props.devices}>
+          {(n) => (
+            <button class="filter-chip device-chip" aria-pressed={props.chosen === n} onClick={() => props.onPick(n)}>
+              <DeviceArt node={n} icon={peerIcon(n)} size={20} />
+              {peerName(n)}
+            </button>
+          )}
+        </For>
+      </div>
+    </Show>
   );
 }

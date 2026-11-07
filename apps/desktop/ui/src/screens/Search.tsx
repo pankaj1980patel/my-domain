@@ -4,6 +4,8 @@
 // group from the box, Enter opens one where it lives; "Show all" on a group
 // narrows to it. Only data on this computer is searched.
 
+import { Icon } from "../components/Icon";
+import { MenuButton } from "../components/Menu";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show } from "solid-js";
 import { peerName, state } from "../lib/core";
 import { FOUND_KINDS, KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup, type FoundKind } from "../lib/search";
@@ -21,6 +23,8 @@ type When = "any" | "today" | "week" | "month" | "custom";
 // Kept while the app runs, so coming back from a result finds them as left.
 const [query, setQuery] = createSignal("");
 const [kind, setKind] = createSignal<FoundKind | "">("");
+/** The kinds with a chip of their own. */
+const MAIN_KINDS: FoundKind[] = ["devices", "transfers", "messages", "notes", "automations", "settings"];
 const [node, setNode] = createSignal("");
 const [when, setWhen] = createSignal<When>("any");
 const [from, setFrom] = createSignal("");
@@ -183,7 +187,10 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
   return (
     <section class="page page-fit search-page">
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="search" size={26} tone="blue" />
+        </span>
+        <div class="grow">
           <h1>{t("search.title")}</h1>
           <p class="muted">{t("search.subtitle")}</p>
         </div>
@@ -208,13 +215,28 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
         />
       </div>
       <div class="search-filters" role="group" aria-label={t("search.filters")}>
-        <label class="search-filter">
-          <span class="small muted">{t("search.filterKind")}</span>
-          <select value={kind()} onChange={(e) => setKind(e.currentTarget.value as FoundKind | "")}>
-            <option value="">{t("search.anyKind")}</option>
-            <For each={[...FOUND_KINDS]}>{(k) => <option value={k}>{t(KIND_LABEL[k])}</option>}</For>
-          </select>
-        </label>
+        {/* What kind: the main ones as chips, the rest under More. */}
+        <div class="home-filters search-chips" role="group" aria-label={t("search.filterKind")}>
+          <button class="filter-chip" aria-pressed={kind() === ""} onClick={() => setKind("")}>
+            {t("search.anyKind")}
+          </button>
+          <For each={MAIN_KINDS}>
+            {(k) => (
+              <button class="filter-chip" aria-pressed={kind() === k} onClick={() => setKind(k)}>
+                {t(KIND_LABEL[k])}
+              </button>
+            )}
+          </For>
+          <MenuButton
+            label={t("search.moreKinds")}
+            labelled
+            triggerClass="filter-chip"
+            items={FOUND_KINDS.filter((k) => !MAIN_KINDS.includes(k)).map((k) => ({ label: t(KIND_LABEL[k]), onSelect: () => setKind(k) }))}
+          >
+            {kind() && !MAIN_KINDS.includes(kind() as FoundKind) ? t(KIND_LABEL[kind() as FoundKind]) : t("search.moreKinds")}
+            <Icon name="chevron-down" size={14} />
+          </MenuButton>
+        </div>
         <label class="search-filter">
           <span class="small muted">{t("search.filterDevice")}</span>
           <select value={node()} onChange={(e) => setNode(e.currentTarget.value)}>

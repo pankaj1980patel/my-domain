@@ -11,7 +11,7 @@ import { Icon, IconChip, type Tone } from "./Icon";
 import { t } from "../i18n";
 
 /** Activity kinds by colour: files blue, messages violet, calls green... */
-const KIND_TONE: Record<string, Tone> = {
+export const KIND_TONE: Record<string, Tone> = {
   files: "blue",
   clipboard: "cyan",
   messages: "violet",

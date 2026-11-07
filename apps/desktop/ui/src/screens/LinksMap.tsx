@@ -6,6 +6,7 @@
 // The same is listed as text below the picture (the picture itself is one
 // image to a screen reader; the list's buttons open the same details).
 
+import { Icon } from "../components/Icon";
 import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import { peerIcon, peerName, state } from "../lib/core";
 import { DeviceIcon } from "../components/DeviceIcon";
@@ -16,6 +17,7 @@ import KeyChangeBanner from "../components/KeyChangeBanner";
 import { VerifiedBadge } from "../components/VerifyDevice";
 import { t, type Key } from "../i18n";
 import { Tabs, panelProps } from "../components/Tabs";
+import { IconChip } from "../components/Icon";
 
 type Pick = { kind: "device"; node: string } | { kind: "edge"; id: string } | null;
 
@@ -84,6 +86,19 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
   const [pick, setPick] = createSignal<Pick>(null);
   // The map and the list are two tabs, so the page fits the window.
   const [view, setView] = createSignal<"map" | "list">("map");
+  // Average round trip and loss over the measured links; ok when every
+  // device is connected and none goes through the relay.
+  const health = () => {
+    const v = mapView();
+    if (!v || v.map.devices.length === 0) return null;
+    const links = v.map.devices.map((d) => d.link).filter((l) => l != null);
+    const rtts = links.map((l) => l!.rtt_ms).filter((x): x is number => x != null);
+    const losses = links.map((l) => l!.loss_pct).filter((x): x is number => x != null);
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+    const ok = v.map.devices.every((d) => d.link && d.link.how !== "relay");
+    const loss = avg(losses);
+    return { ok, rtt: avg(rtts) != null ? Math.round(avg(rtts)!) : null, loss: loss != null ? Math.round(loss * 10) / 10 : null };
+  };
   onMount(() => {
     const stop = watchMap();
     onCleanup(stop);
@@ -100,12 +115,40 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
   return (
     <section class="page links-map-page" onKeyDown={onKey}>
       <header class="page-head">
-        <div>
+        <span class="head-tile" aria-hidden="true">
+          <Icon name="map" size={26} tone="cyan" />
+        </span>
+        <div class="grow">
           <h1>
-            {t("map.title")} <HelpLink topic="troubleshooting" />
+            {t("nav.connections")} <HelpLink topic="troubleshooting" />
           </h1>
-          <p class="muted">{t("map.subtitle")}</p>
+          <p class="muted" title={t("map.subtitle")}>{t("map.sub2")}</p>
         </div>
+        {/* Connection health: only what's measured (QUIC round trips and
+            loss); no bandwidth. */}
+        <Show when={health()}>
+          {(h) => (
+            <div class="conn-health" role="group" aria-label={t("map.health")}>
+              <IconChip name={h().ok ? "verify" : "alert"} tone={h().ok ? "green" : "amber"} />
+              <span class="conn-health-text">
+                <strong>{t("map.health")}</strong>
+                <span class="muted small">{h().ok ? t("map.healthGood") : t("map.healthMixed")}</span>
+              </span>
+              <Show when={h().rtt != null}>
+                <span class="conn-health-stat">
+                  <span class="muted small">{t("home.latency")}</span>
+                  <strong>{h().rtt} ms</strong>
+                </span>
+              </Show>
+              <Show when={h().loss != null}>
+                <span class="conn-health-stat">
+                  <span class="muted small">{t("map.loss")}</span>
+                  <strong>{h().loss}%</strong>
+                </span>
+              </Show>
+            </div>
+          )}
+        </Show>
       </header>
 
       <Show when={mapView()} fallback={<p class="muted">{t("map.loading")}</p>}>
@@ -118,8 +161,8 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
               label={t("map.title")}
               idBase="map"
               tabs={[
-                { id: "map", label: t("map.tabMap"), icon: "map" },
-                { id: "list", label: t("map.listTitle"), icon: "apps" },
+                { id: "map", label: t("map.topology"), icon: "map" },
+                { id: "list", label: t("map.listTab"), icon: "list" },
               ]}
               selected={view()}
               onSelect={(id) => setView(id as "map" | "list")}

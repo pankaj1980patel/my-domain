@@ -856,7 +856,7 @@ function ArrangePage(props: {
 /** Saved messages loaded at first, and per step back. */
 const CHAT_PAGE = 100;
 
-function ChatTile(props: { node: string }) {
+export function ChatTile(props: { node: string }) {
   const [text, setText] = createSignal("");
   const [busy, setBusy] = createSignal(false);
   // Saved messages (chat_history.rs) from before this session's own,
@@ -1012,7 +1012,7 @@ function ChatTile(props: { node: string }) {
   );
 }
 
-function NotificationsTile(props: { node: string }) {
+export function NotificationsTile(props: { node: string }) {
   const [groups, setGroups] = createSignal<NotifGroup[]>([]);
   const [prefs, setPrefs] = createSignal<NotifPrefs>({ private_mode: true, only_locked: false });
   const load = () => phoneNotifications(props.node).then(setGroups, () => {});
@@ -1729,7 +1729,7 @@ function NotifyTile() {
   );
 }
 
-function AppsTile(props: { node: string }) {
+export function AppsTile(props: { node: string }) {
   const [q, setQ] = createSignal("");
   const data = () => state.apps[props.node];
   const name = () => peerName(props.node);
