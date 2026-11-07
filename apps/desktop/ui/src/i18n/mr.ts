@@ -2484,4 +2484,5 @@ export const mr: Partial<Messages> = {
   "nav.overview": "सारांश",
   "nav.allDevices": "सर्व डिव्हाइस",
   "dash.problems": { one: "{count} समस्या आढळली", other: "{count} समस्या आढळल्या" },
+  "quick.screen": "स्क्रीन",
 };

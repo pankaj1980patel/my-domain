@@ -6,10 +6,11 @@
 // security check. `onlyDevices` (the sidebar's "All devices") shows the
 // header, the filter bar and the devices alone.
 
+import DeviceArt, { frameOf } from "../components/DeviceArt";
 import { createEffect, createMemo, createSignal, For, on, onMount, Show } from "solid-js";
 import { Portal } from "solid-js/web";
 import { commands } from "../bindings";
-import { connect, peerName, refreshDevices, state, type Peer } from "../lib/core";
+import { connect, peerIcon, peerName, refreshDevices, state, type Peer } from "../lib/core";
 import { friendlyError, humanSize, timeAgo } from "../lib/words";
 import { Empty, linkStateOf, toast } from "../components/ui";
 import { t, tn } from "../i18n";
@@ -379,7 +380,7 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
   type Act = { icon: IconName; label: string; run: () => unknown; off?: string };
   const screen = (): Act => ({
     icon: "screen",
-    label: t("quick.viewScreen"),
+    label: t("quick.screen"),
     run: () => props.onOpen(node(), "remote", "screen"),
     off: has("screen") ? undefined : t("quick.noScreen", { name: name() }),
   });
@@ -431,11 +432,15 @@ const opener = (onOpen: () => void) => (e: MouseEvent) => {
  *  line, three actions and More. */
 function HomeCard(props: { peer: Peer; chosen: boolean; seen: number | null; onOpen: Open }) {
   const d = useDevice(props);
+  // A laptop or monitor is wide: drawn a little lower, so the card's
+  // buttons keep their room.
+  const wide = () => ["laptop", "monitor"].includes(frameOf(peerIcon(d.node())));
   return (
     <article class="tile home-card" classList={{ chosen: props.chosen }} data-drop-node={d.node()} onClick={opener(() => props.onOpen(d.node()))}>
-      {/* The device's picture: DeviceArt (wallpaper in a device frame)
-          drops in here. */}
-      <div class="device-art home-art" data-node={d.node()} aria-hidden="true" />
+      {/* The device as it looks: its frame with its wallpaper. */}
+      <div class="device-art home-art">
+        <DeviceArt node={d.node()} icon={peerIcon(d.node())} size={wide() ? 64 : 84} />
+      </div>
       <div class="home-card-main">
         <div class="home-card-top">
           <h2 class="device-card-name">
@@ -477,7 +482,7 @@ function HomeCard(props: { peer: Peer; chosen: boolean; seen: number | null; onO
             {(a) => (
               <button class="btn btn-soft btn-sm" disabled={!!a.off} title={a.off ?? a.label} onClick={() => a.run()}>
                 <Icon name={a.icon} size={16} />
-                {a.label}
+                <span class="btn-label">{a.label}</span>
                 <Show when={a.off}>
                   <span class="sr-only">{t("a11y.unavailable", { reason: a.off ?? "" })}</span>
                 </Show>
@@ -515,7 +520,9 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
   );
   return (
     <li class="tile home-row" classList={{ chosen: props.chosen }} data-drop-node={d.node()} onClick={opener(() => props.onOpen(d.node()))}>
-      <div class="device-art home-art-sm" data-node={d.node()} aria-hidden="true" />
+      <div class="device-art home-art-sm">
+        <DeviceArt node={d.node()} icon={peerIcon(d.node())} size={48} />
+      </div>
       <div class="home-row-main">
         <div class="home-card-top">
           <h2 class="device-card-name">

@@ -2485,4 +2485,5 @@ export const gu: Partial<Messages> = {
   "nav.overview": "સારાંશ",
   "nav.allDevices": "બધા ડિવાઇસ",
   "dash.problems": { one: "{count} સમસ્યા મળી", other: "{count} સમસ્યાઓ મળી" },
+  "quick.screen": "સ્ક્રીન",
 };

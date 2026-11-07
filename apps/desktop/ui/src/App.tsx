@@ -3,6 +3,7 @@
 // the health check's pill at the bottom. A device opens its page (in tabs);
 // the Developer screen is hidden.
 
+import DeviceArt from "./components/DeviceArt";
 import { createEffect, createSignal, Match, on, onCleanup, onMount, Show, Switch } from "solid-js";
 import { dismissRing, onOpenDevice, onQuickOpen, peerName, resume, signOut, state } from "./lib/core";
 import { listen } from "@tauri-apps/api/event";
@@ -46,7 +47,6 @@ import { t, tn, type Key, type PluralKey } from "./i18n";
 import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 import { Icon, type IconName, type Tone } from "./components/Icon";
-import { DeviceIcon } from "./components/DeviceIcon";
 import { openPalette } from "./components/CommandPalette";
 import { Tabs } from "./components/Tabs";
 import { HotspotAsk } from "./components/HotspotAsk";
@@ -397,8 +397,8 @@ export default function App() {
             </Show>
             {/* This computer: its name, and a way to its settings. */}
             <button class="this-device" onClick={() => goPlace("settings", "settings-device")}>
-              <span class="this-device-icon" aria-hidden="true">
-                <DeviceIcon icon={state.ownIcon} size={22} />
+              <span class="this-device-icon">
+                <DeviceArt icon={state.ownIcon} size={40} />
               </span>
               <span class="this-device-text">
                 <strong>{niceName(state.me?.name ?? "")}</strong>

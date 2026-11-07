@@ -2484,4 +2484,5 @@ export const ta: Partial<Messages> = {
   "nav.overview": "மேலோட்டம்",
   "nav.allDevices": "எல்லாச் சாதனங்களும்",
   "dash.problems": { one: "{count} சிக்கல் கண்டறியப்பட்டது", other: "{count} சிக்கல்கள் கண்டறியப்பட்டன" },
+  "quick.screen": "திரை",
 };

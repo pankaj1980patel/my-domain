@@ -6,8 +6,8 @@
 import { createEffect, createSignal, For, on, Show, type JSX } from "solid-js";
 import { commands, type PeerPermissions } from "../../bindings";
 import { peerModel, peerName, state, type Space } from "../../lib/core";
-import { checkTitle, deviceProblems, runHealth, running } from "../../lib/health";
-import { humanSize, linkLabel } from "../../lib/words";
+import { checkTitle, deviceProblems, howLabel, runHealth, running } from "../../lib/health";
+import { humanSize } from "../../lib/words";
 import { linkStateOf } from "../../components/ui";
 import { Icon, IconChip, type IconName, type Tone } from "../../components/Icon";
 import { osName } from "../../lib/deviceInfo";
@@ -84,7 +84,7 @@ export default function Overview(props: {
             icon={live() ? "wifi" : "link-offline"}
             value={live() ? t("dash.online") : t("dash.offline")}
             label={t("dash.connection")}
-            sub={linkLabel(s())}
+            sub={s() === "relay" ? howLabel("relay") : undefined}
           />
         </div>
 

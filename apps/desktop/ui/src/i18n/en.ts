@@ -2496,6 +2496,7 @@ export const en = {
   "nav.overview": "Overview",
   "nav.allDevices": "All devices",
   "dash.problems": { one: "{count} problem found", other: "{count} problems found" },
+  "quick.screen": "Screen",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */

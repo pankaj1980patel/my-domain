@@ -1,5 +1,6 @@
 // One device: its status, then a tile per feature.
 
+import DeviceArt, { frameOf } from "../components/DeviceArt";
 import { createEffect, createMemo, createSignal, For, on, onCleanup, onMount, Show, type JSX } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
 import { commands } from "../bindings";
@@ -63,7 +64,6 @@ import { Tabs, panelProps } from "../components/Tabs";
 import { Icon, type IconName, type Tone } from "../components/Icon";
 import { quickGetClipboard, quickRing, quickSendClipboard, quickSendFile, quickSendFolder } from "../lib/quickActions";
 import Overview, { DeviceFacts } from "./device/Overview";
-import { DeviceIcon } from "../components/DeviceIcon";
 import { osName } from "../lib/deviceInfo";
 import { howLabel } from "../lib/health";
 import { focusSoon, rememberFocus, trapTab } from "../lib/a11y";
@@ -384,7 +384,8 @@ export default function Device(props: {
         .linksMap()
         .then((v) => {
           const d = v.map.devices.find((x) => x.node_id === node);
-          if (node === props.node) setSeen(d ? { ago: d.last_seen_ago_s, how: d.state } : null);
+          const how = v.edges.find((e) => e.mine && e.b === node)?.how ?? "";
+          if (node === props.node) setSeen(d ? { ago: d.last_seen_ago_s, how } : null);
         })
         .catch(() => {});
     }),
@@ -394,7 +395,7 @@ export default function Device(props: {
     const ssid = state.status[props.node]?.wifiSsid;
     if (ssid) return ssid;
     const how = seen()?.how;
-    return live() && how ? howLabel(how) : "";
+    return live() && how && how !== "none" ? howLabel(how) : "";
   };
   const statusTone = () => (s() === "direct" ? "green" : s() === "relay" ? "amber" : s() === "failed" ? "red" : "muted");
   const mockMenu = import.meta.env.MODE === "mock" && new URLSearchParams(location.search).get("menu") === "1";
@@ -431,10 +432,14 @@ export default function Device(props: {
           {/* The hero: the device's picture, its name, how it's linked, a
               few facts; the link control, Quick actions and "more". */}
           <header class="device-hero">
-            {/* The device's art (its wallpaper when known: components/
-                DeviceArt.tsx drops in here); its icon until then. */}
-            <div class="device-art" aria-hidden="true">
-              <DeviceIcon icon={peerIcon(props.node)} size={64} />
+            {/* The device as it looks: its frame with its wallpaper. */}
+            <div class="device-art">
+              <DeviceArt
+                node={props.node}
+                icon={peerIcon(props.node)}
+                size={["laptop", "monitor"].includes(frameOf(peerIcon(props.node))) ? 112 : "large"}
+                title={peerName(props.node)}
+              />
             </div>
             <div class="hero-main">
               <div class="label-title">
@@ -1629,14 +1634,14 @@ function ControlTile(props: { node: string }) {
           <DialRow node={props.node} />
         </Group>
       </Show>
-      <Show when={st() && (has("radio") || has("wifi"))}>
-        <Group icon="wifi" tone="blue" title={t("control.group.radios")}>
-          <Show when={has("radio")}>
-            <RadioRow node={props.node} st={st()!} />
-          </Show>
-          <Show when={has("wifi")}>
-            <WifiList node={props.node} st={st()!} />
-          </Show>
+      <Show when={st() && has("radio")}>
+        <Group icon="bluetooth" tone="blue" title={t("control.group.radios")}>
+          <RadioRow node={props.node} st={st()!} />
+        </Group>
+      </Show>
+      <Show when={st() && has("wifi")}>
+        <Group icon="wifi" tone="blue" title={t("control.radio.wifi")}>
+          <WifiList node={props.node} st={st()!} />
         </Group>
       </Show>
       <Show when={st() && (has("flashlight") || has("screen_settings"))}>

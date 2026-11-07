@@ -2484,4 +2484,5 @@ export const es: Partial<Messages> = {
   "nav.overview": "Resumen",
   "nav.allDevices": "Todos los dispositivos",
   "dash.problems": { one: "{count} problema encontrado", other: "{count} problemas encontrados" },
+  "quick.screen": "Pantalla",
 };

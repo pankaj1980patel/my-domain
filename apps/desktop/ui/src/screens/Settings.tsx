@@ -15,6 +15,7 @@ import { chatKeep, setChatKeep, setClipSync, signOut, state, unwrap } from "../l
 import { friendlyError, niceName } from "../lib/words";
 import { toast } from "../components/ui";
 import { ThemePicker } from "../components/ThemePicker";
+import { WallpaperShareSetting } from "../components/DeviceArt";
 import { ShortcutSetting } from "../components/ShortcutSetting";
 import { ScheduleList } from "../components/ScheduleList";
 import { AutomationList } from "../components/AutomationList";
@@ -603,6 +604,7 @@ export default function Settings(props: {
             <h2>{t("settings.appearance")}</h2>
             <p class="muted small">{t("settings.appearanceHint")}</p>
             <ThemePicker />
+            <WallpaperShareSetting />
             <SettingRow icon="languages" label={t("settings.language")} hint={t("settings.languageHint")}>
               <select aria-label={t("settings.language")} onChange={(e) => setLanguagePref(e.currentTarget.value as LangPref)}>
                 <option value="system" selected={languagePref() === "system"}>

@@ -6750,3 +6750,85 @@ html.kvm-window body {
 .home-actions .btn {
   font-size: var(--text-xs);
 }
+
+/* DeviceArt draws the device (frame and wallpaper) itself: its slot only
+   places it. */
+.device-art,
+.device-art-sm,
+.home-art,
+.home-art-sm {
+  width: auto;
+  height: auto;
+  display: grid;
+  place-items: center;
+  background: none;
+  border-radius: 0;
+  overflow: visible;
+  flex: none;
+}
+.home-art {
+  min-width: 96px;
+}
+.home-art-sm {
+  min-width: 52px;
+}
+.device-hero .device-art {
+  min-width: 128px;
+  min-height: 160px;
+}
+.this-device-icon {
+  background: none;
+  width: 44px;
+}
+.home-row {
+  grid-template-columns: 84px minmax(170px, 1fr) auto auto;
+}
+.home-art {
+  min-width: 120px;
+}
+.home-art {
+  min-width: 0;
+}
+.home-actions {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.home-actions .btn {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.home-actions .btn-icon {
+  flex: none;
+}
+.btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-row {
+  grid-template-columns: 76px minmax(140px, 1fr) auto auto;
+}
+.home-stat {
+  padding: 0 8px;
+  gap: 4px;
+}
+.home-stats-chips {
+  gap: 4px;
+}
+.home-actions {
+  gap: 4px;
+}
+.home-actions .btn {
+  padding: 0 7px;
+}
+.device-hero .device-art {
+  min-width: 0;
+}
+.hero-side {
+  max-width: 380px;
+}
+.hero-facts-list {
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px var(--s-4);
+  padding: var(--s-2) var(--s-4);
+}

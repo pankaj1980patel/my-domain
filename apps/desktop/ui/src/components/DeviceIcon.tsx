@@ -88,7 +88,9 @@ const laptop = (mac: boolean) => (
   </>
 );
 
-const monitor = (
+// Factories, not shared constants: a JSX constant is one DOM node, so it
+// would only show in one icon at a time.
+const monitor = () => (
   <>
     <rect x="3" y="4" width="18" height="12" rx="1.5" />
     <path d="M8 20h8M12 16v4" />
@@ -196,7 +198,7 @@ export function DeviceIcon(props: { icon: string; size?: number; title?: string 
           case "win_desktop":
             return (
               <>
-                {monitor}
+                {monitor()}
                 <OsMark mark="windows" x={12} y={10} />
               </>
             );
@@ -209,7 +211,7 @@ export function DeviceIcon(props: { icon: string; size?: number; title?: string 
               </>
             );
           case "desktop":
-            return monitor;
+            return monitor();
           case "tv":
             return (
               <>
