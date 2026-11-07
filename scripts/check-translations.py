@@ -11,6 +11,9 @@ Desktop: every key in ui/src/i18n/en.ts must exist in each other catalogue
 (Unknown keys and wrong shapes are already tsc errors: catalogues are typed
 Partial<Messages>.)
 
+Both: every language found (values-XX, i18n/XX.ts) must be offered — listed in
+res/xml/locales_config.xml, and imported + in LANGUAGES in i18n/index.ts.
+
 Usage: scripts/check-translations.py [--allow-missing]
   --allow-missing  report keys a language lacks (they show in English) as
                    warnings, not errors; other problems still fail.
@@ -129,8 +132,15 @@ PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
 def ts_string(tok: str) -> str:
-    """A TS string literal's text (enough of the escapes for placeholders)."""
-    return re.sub(r"\\(.)", r"\1", tok[1:-1])
+    """A TS string literal's text (\\uXXXX, \\n, \\t and \\<char>)."""
+    esc = {"n": "\n", "t": "\t", "r": "\r"}
+
+    def one(m: re.Match) -> str:
+        if m.group(1):
+            return chr(int(m.group(1), 16))
+        return esc.get(m.group(2), m.group(2))
+
+    return re.sub(r"\\(?:u([0-9a-fA-F]{4})|(.))", one, tok[1:-1], flags=re.S)
 
 
 def load_ts(path: Path, name: str) -> dict:
@@ -207,10 +217,36 @@ def check_desktop(allow_missing: bool) -> None:
                 errors.append(f"desktop {lang}: {k} placeholders {placeholders(tv)} != English {placeholders(ev)}")
 
 
+def check_registered() -> None:
+    """Every language with strings is also offered: Android's locales_config.xml
+    (Android 13+ per-app language) and the desktop's index.ts (imported, in
+    `catalogues`, and in the Settings picker's LANGUAGES)."""
+    cfg = RES / "xml/locales_config.xml"
+    try:
+        locales = {el.get("{http://schemas.android.com/apk/res/android}name") for el in ET.parse(cfg).getroot()}
+    except (ET.ParseError, OSError) as e:
+        errors.append(f"android: cannot read {cfg}: {e}")
+        locales = set()
+    for p in sorted(RES.glob("values-*/strings.xml")):
+        lang = p.parent.name.removeprefix("values-")
+        if locales and lang not in locales:
+            errors.append(f"android {lang}: not listed in res/xml/locales_config.xml")
+    index = (I18N / "index.ts").read_text(encoding="utf-8")
+    for p in sorted(I18N.glob("*.ts")):
+        lang = p.stem
+        if lang == "index":
+            continue
+        if not re.search(rf'\{{\s*id:\s*"{lang}"', index):
+            errors.append(f"desktop {lang}: not in LANGUAGES (index.ts)")
+        if lang != "en" and not re.search(rf'import \{{ {lang} \}} from "\./{lang}"', index):
+            errors.append(f"desktop {lang}: not imported in index.ts")
+
+
 def main() -> int:
     allow = "--allow-missing" in sys.argv[1:]
     check_android(allow)
     check_desktop(allow)
+    check_registered()
     for w in warnings:
         print("warning:", w)
     for e in errors:

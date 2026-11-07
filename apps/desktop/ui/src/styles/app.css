@@ -3291,15 +3291,19 @@ input[type="checkbox"][role="switch"]:not(:checked) {
   margin: 0;
 }
 
-/* ---- Languages (Hindi): Devanagari fonts + the Settings language row ---- */
-/* Inter has no Devanagari glyphs, so name each system's Devanagari face right
-   after it: Kohinoor / Devanagari Sangam (macOS), Nirmala UI (Windows), Noto
-   Sans / Lohit Devanagari (Linux). Latin text still renders in Inter. */
+/* ---- Languages: Indic script fonts + the Settings language row ---- */
+/* Inter has no Devanagari (Hindi, Marathi), Gujarati or Tamil glyphs, so name
+   each system's face for those scripts right after it: Kohinoor / Sangam MN
+   (macOS), Nirmala UI (Windows, all three), Noto Sans / Lohit (Linux). The
+   browser picks per character, so Latin text still renders in Inter. */
 :root {
-  --font: "Inter Variable", Inter, "Kohinoor Devanagari", "Devanagari Sangam MN", "Nirmala UI", "Noto Sans Devanagari", "Lohit Devanagari", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  --font: "Inter Variable", Inter, "Kohinoor Devanagari", "Devanagari Sangam MN", "Kohinoor Gujarati", "Gujarati Sangam MN", "Tamil Sangam MN", "Nirmala UI", "Noto Sans Devanagari", "Noto Sans Gujarati", "Noto Sans Tamil", "Lohit Devanagari", "Lohit Gujarati", "Lohit Tamil", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
 }
-/* Devanagari's vowel signs sit above and below the line: give them room. */
-html:lang(hi) body {
+/* Indic vowel signs sit above and below the line: give them room. */
+html:lang(hi) body,
+html:lang(mr) body,
+html:lang(gu) body,
+html:lang(ta) body {
   line-height: 1.65;
 }
 .language-row {

@@ -2,13 +2,18 @@
 // typed from en.ts, so a typo is a compile error. No library: a catalogue is
 // a plain object and plurals use the platform's Intl.PluralRules.
 //
-// Languages: English (en.ts, the source) and Hindi (hi.ts). The language
-// follows the system (navigator.languages: hi* picks Hindi) unless Settings
-// overrides it; the choice is remembered in localStorage. A key a language
+// Languages: English (en.ts, the source), Hindi (hi.ts), Marathi (mr.ts),
+// Gujarati (gu.ts), Tamil (ta.ts) and Spanish (es.ts). The language follows
+// the system (the first of navigator.languages whose base code we have, e.g.
+// mr-IN picks Marathi) unless Settings overrides it; the choice is remembered in localStorage. A key a language
 // doesn't have yet (e.g. one added after it was translated) shows in English.
 
 import { en, type Messages } from "./en";
 import { hi } from "./hi";
+import { mr } from "./mr";
+import { gu } from "./gu";
+import { ta } from "./ta";
+import { es } from "./es";
 
 /** Keys with a plain string value. */
 export type Key = { [K in keyof Messages]: Messages[K] extends string ? K : never }[keyof Messages];
@@ -19,7 +24,7 @@ export type Params = Record<string, string | number>;
 /** A translation: any subset of the English keys, same shapes. */
 export type Catalogue = Partial<Messages>;
 
-export type Lang = "en" | "hi";
+export type Lang = "en" | "hi" | "mr" | "gu" | "ta" | "es";
 /** The Settings choice: follow the system, or a fixed language. */
 export type LangPref = "system" | Lang;
 
@@ -27,9 +32,13 @@ export type LangPref = "system" | Lang;
 export const LANGUAGES: { id: Lang; name: string }[] = [
   { id: "en", name: "English" },
   { id: "hi", name: "हिन्दी" },
+  { id: "mr", name: "मराठी" },
+  { id: "gu", name: "ગુજરાતી" },
+  { id: "ta", name: "தமிழ்" },
+  { id: "es", name: "Español" },
 ];
 
-const catalogues: Record<Lang, Catalogue> = { en, hi };
+const catalogues: Record<Lang, Catalogue> = { en, hi, mr, gu, ta, es };
 const STORAGE_KEY = "md.language";
 
 let lang: Lang = "en";
@@ -50,7 +59,7 @@ export function systemLanguage(): Lang {
 export function languagePref(): LangPref {
   try {
     const v = localStorage.getItem(STORAGE_KEY);
-    return v === "en" || v === "hi" ? v : "system";
+    return v && v in catalogues ? (v as Lang) : "system";
   } catch {
     return "system";
   }

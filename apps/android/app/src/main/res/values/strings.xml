@@ -282,8 +282,8 @@
     <string name="settings_appearance">Appearance</string>
     <string name="settings_appearance_hint">How my-domain looks on this phone.</string>
     <string name="settings_language">Language</string>
-    <string name="settings_language_hint">my-domain follows your phone’s language (English or Hindi). To use another one just for this app, choose it here.</string>
-    <string name="settings_language_hint_old">my-domain follows your phone’s language (English or Hindi). Help topics are in English for now.</string>
+    <string name="settings_language_hint">my-domain follows your phone’s language when it has it. To use another one just for this app, choose it here.</string>
+    <string name="settings_language_hint_old">my-domain follows your phone’s language when it has it. Help topics are in English for now.</string>
     <!-- Themes: the brand kit's five palettes (docs/design/theme.md) -->
     <string name="theme_cosmic_blue">Cosmic Blue</string>
     <string name="theme_cosmic_blue_desc">The brand look: deep navy, vivid blue</string>

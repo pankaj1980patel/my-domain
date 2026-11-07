@@ -543,9 +543,10 @@ fun SettingsScreen(
     }
 }
 
-/** The app's language: it follows the phone's language (English or Hindi,
- *  res/values-hi). On Android 13+ the system's per-app language page
- *  (res/xml/locales_config.xml) can override it; this opens that page. */
+/** The app's language: it follows the phone's language (English, Hindi,
+ *  Marathi, Gujarati, Tamil or Spanish: res/values-XX). On Android 13+ the
+ *  system's per-app language page (res/xml/locales_config.xml) can override
+ *  it; this opens that page. */
 @Composable
 private fun LanguageSetting() {
     val ctx = LocalContext.current

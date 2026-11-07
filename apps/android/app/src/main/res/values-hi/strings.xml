@@ -284,8 +284,8 @@
     <string name="settings_appearance">रूप-रंग</string>
     <string name="settings_appearance_hint">इस फ़ोन पर my-domain कैसा दिखता है।</string>
     <string name="settings_language">भाषा</string>
-    <string name="settings_language_hint">my-domain आपके फ़ोन की भाषा (अंग्रेज़ी या हिन्दी) में चलता है। सिर्फ़ इस ऐप के लिए दूसरी भाषा चुनने के लिए, यहाँ चुनें।</string>
-    <string name="settings_language_hint_old">my-domain आपके फ़ोन की भाषा (अंग्रेज़ी या हिन्दी) में चलता है। मदद वाले लेख अभी अंग्रेज़ी में हैं।</string>
+    <string name="settings_language_hint">my-domain आपके फ़ोन की भाषा में चलता है, अगर वह उपलब्ध हो। सिर्फ़ इस ऐप के लिए दूसरी भाषा चुनने के लिए, यहाँ चुनें।</string>
+    <string name="settings_language_hint_old">my-domain आपके फ़ोन की भाषा में चलता है, अगर वह उपलब्ध हो। मदद वाले लेख अभी अंग्रेज़ी में हैं।</string>
     <!-- Themes: the brand kit's five palettes (docs/design/theme.md) -->
     <string name="theme_cosmic_blue">कॉस्मिक ब्लू</string>
     <string name="theme_cosmic_blue_desc">ब्रांड लुक: गहरा नेवी, चटक नीला</string>
