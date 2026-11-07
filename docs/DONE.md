@@ -1,6 +1,6 @@
 # What's done
 
-Status as of **2026-11-02**. Everything below is committed on the `monorepo`
+Status as of **2026-11-07**. Everything below is committed on the `monorepo`
 branch, and was built and tested unless a line says otherwise. What's still
 left is in [PENDING.md](PENDING.md).
 
@@ -1626,3 +1626,14 @@ its answers had nowhere to go.
 - **Desktop FCM recovers by itself.** When Google rejects a saved push token,
   the app registers a new one and runs the self-test again. Before, push
   stayed broken until someone deleted `fcm_creds.json` by hand.
+
+## Redesign, wallpapers, website (2026-11-07)
+
+- **Desktop redesign** after the user's design boards (`.claude/design-refs/`, kept locally):
+  - Overview dashboard; All devices (grid or list); per-device tabs with a slim header off Overview; Messages & notifications, Automations, Security & health, Connections, Files & transfers screens; Notes, Timers and Read later tabs.
+  - Lucide icons with semantic colours, quiet borders, a sidebar that becomes an icon rail under 1100 px; window min 960×640.
+  - A 91-issue design review was applied, along with the user's 10 layout decisions.
+- **Device wallpapers:** each device can share its wallpaper (desktop: a small picture; Android: the lock-screen colours), drawn inside a phone, tablet, laptop or monitor frame. Devices that share nothing get built-in deep-space art, and devices that never said what they are get their kind guessed from the name. Setting: "Share my wallpaper with my devices".
+- **Android redesign:** bottom tabs Home · Devices · Activity · More; Home hero and four quick actions; device pill tabs with a Settings tab; Lucide icons; a 58-issue design review plus 5 decisions applied. Debug screen shortcuts (`md_screen`, `md_tab`) work again, and the screenshot script hides notifications.
+- **Website** in `site/`, published by `.github/workflows/pages.yml` to GitHub Pages, with desktop and Android galleries (sample data) and desktop walkthrough videos.
+- **Server** redeployed (latest CI build), health check ok.
