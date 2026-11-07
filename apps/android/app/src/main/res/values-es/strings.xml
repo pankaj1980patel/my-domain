@@ -1459,6 +1459,9 @@
     <string name="nearby_settings_title">Modo cercano</string>
     <string name="nearby_switch">Usar el modo cercano para contenido multimedia</string>
     <string name="nearby_switch_hint">Mientras se transmite audio, una pantalla o la cámara con un dispositivo en la misma Wi-Fi (o al alcance del Bluetooth), pasa a una conexión directa en tu red para reducir el retraso, sin cortes. Si esa conexión se cae, vuelve por donde venía.</string>
+    <string name="wallpaper_title">Fondo de pantalla</string>
+    <string name="wallpaper_switch">Compartir mi fondo de pantalla con mis dispositivos</string>
+    <string name="wallpaper_hint">Tus ordenadores muestran los colores del fondo de pantalla de este teléfono en su tarjeta, y también la imagen cuando Android deja que esta app la lea (no pide nada más). Desactivado: no se envía nada y olvidan el que tenían.</string>
     <string name="audio_route_label">Enviar audio por</string>
     <string name="audio_route_auto">Automático (primero Wi-Fi, Bluetooth sin conexión)</string>
     <string name="audio_route_wifi">Solo Wi-Fi o internet</string>

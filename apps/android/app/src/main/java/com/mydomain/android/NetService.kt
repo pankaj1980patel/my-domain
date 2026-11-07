@@ -126,6 +126,9 @@ class NetService : Service() {
         // What kind of device this is (phone, tablet, foldable, TV; its
         // model): your other devices draw its icon from it.
         Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
+        // Its wallpaper look, for its tile on your computers (Settings:
+        // "Share my wallpaper with my devices").
+        PhoneWallpaper.start(this)
         // This app's version, for your other devices' health check.
         Core.engine()?.let { e -> runCatching { e.setAppVersion(BuildConfig.VERSION_NAME) } }
         PhotoBackup.start(this)

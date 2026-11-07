@@ -292,6 +292,8 @@ export const es: Partial<Messages> = {
   "nearby.latencyWas": "{ms} ms (antes {was} ms)",
   "nearby.setting": "Usar el modo cercano para multimedia",
   "nearby.settingHint": "Cuando el otro dispositivo está en esta red o al alcance del Bluetooth, el audio, las pantallas y la cámara pasan a un enlace local directo con menos retraso.",
+  "wallpaper.setting": "Compartir mi fondo de pantalla con mis dispositivos",
+  "wallpaper.settingHint": "Tus otros dispositivos muestran el fondo de pantalla de este ordenador en su tarjeta: una copia pequeña y sus colores. Desactivado: no se envía nada y olvidan el que tenían.",
   "audioRoute.label": "Enviar el audio por",
   "audioRoute.auto": "Auto (primero Wi-Fi, Bluetooth sin conexión)",
   "audioRoute.wifi": "Solo Wi-Fi o internet",

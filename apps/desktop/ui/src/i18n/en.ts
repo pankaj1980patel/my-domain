@@ -292,6 +292,8 @@ export const en = {
   "nearby.latencyWas": "{ms} ms (was {was} ms)",
   "nearby.setting": "Use nearby mode for media",
   "nearby.settingHint": "When the other device is on this network or in Bluetooth range, audio, screens and the camera move to a direct local link and wait less.",
+  "wallpaper.setting": "Share my wallpaper with my devices",
+  "wallpaper.settingHint": "Your other devices show this computer’s wallpaper in its tile: a small copy and its colours. Off: nothing is sent, and they forget the one they had.",
   "audioRoute.label": "Send audio over",
   "audioRoute.auto": "Auto (Wi-Fi first, Bluetooth when offline)",
   "audioRoute.wifi": "Wi-Fi or internet only",

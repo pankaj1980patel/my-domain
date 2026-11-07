@@ -1443,6 +1443,9 @@
     <string name="nearby_settings_title">जवळचा मोड</string>
     <string name="nearby_switch">मीडियासाठी जवळचा मोड वापरा</string>
     <string name="nearby_switch_hint">एकाच Wi-Fi वरील (किंवा Bluetooth च्या रेंजमधील) डिव्हाइससोबत ऑडिओ, स्क्रीन किंवा कॅमेरा स्ट्रीम होत असताना, कमी विलंबासाठी तो तुमच्या नेटवर्कवरील थेट लिंकवर जातो, खंड न पडता. ती लिंक तुटली तर तो आलेल्या मार्गाने परत जातो.</string>
+    <string name="wallpaper_title">वॉलपेपर</string>
+    <string name="wallpaper_switch">माझा वॉलपेपर माझ्या डिव्हाइसेससोबत शेअर करा</string>
+    <string name="wallpaper_hint">तुमचे कॉम्प्युटर या फोनच्या वॉलपेपरचे रंग त्याच्या टाइलमध्ये दाखवतात, आणि Android या ॲपला वाचू देत असेल तर चित्रही (ते आणखी काही मागत नाही). बंद असल्यास काहीही पाठवले जात नाही आणि आधीचा वॉलपेपर ते विसरतात.</string>
     <string name="audio_route_label">ऑडिओ यावरून पाठवा</string>
     <string name="audio_route_auto">आपोआप (आधी Wi-Fi, ऑफलाइन असताना Bluetooth)</string>
     <string name="audio_route_wifi">फक्त Wi-Fi किंवा इंटरनेट</string>

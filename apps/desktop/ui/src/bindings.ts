@@ -841,6 +841,22 @@ export const commands = {
 	 *  link (the badge), its latency now and before the last move.
 	 */
 	nearbyStatus: (nodeId: string) => __TAURI_INVOKE<NearbyStatus_Serialize>("nearby_status", { nodeId }),
+	/**  Whether this computer shares its wallpaper with your other devices. */
+	shareWallpaper: () => __TAURI_INVOKE<boolean>("share_wallpaper"),
+	/**
+	 *  Share this computer's wallpaper, or stop (your other devices then
+	 *  forget it). Kept.
+	 */
+	setShareWallpaper: (on: boolean) => __TAURI_INVOKE<void>("set_share_wallpaper", { on }),
+	/**
+	 *  The wallpaper look each of your devices shared (colours, maybe a small
+	 *  picture as a `data:` URL), by node id. Changes come as
+	 *  `wallpaper-changed` events (`{node, wallpaper}`; `wallpaper` null when
+	 *  it stopped sharing).
+	 */
+	wallpapers: () => __TAURI_INVOKE<{ [key in string]: Wallpaper_Serialize }>("wallpapers"),
+	/**  This computer's own look, as shared (null: nothing shared). */
+	ownWallpaper: () => __TAURI_INVOKE<Wallpaper_Serialize | null>("own_wallpaper"),
 	/**  The devices whose key changed, newest first (dismissed ones marked). */
 	keyChanges: () => __TAURI_INVOKE<KeyChange[]>("key_changes"),
 	/**
@@ -4729,6 +4745,50 @@ export type WakeSetting_Serialize = {
 	womp: boolean | null,
 	/**  The cards it would list now. */
 	ifaces: WolIface[],
+};
+
+/**
+ *  A device's wallpaper look (`features::wallpaper`): a few dominant
+ *  colours and, when that device could read it, a small picture.
+ */
+export type Wallpaper = Wallpaper_Serialize | Wallpaper_Deserialize;
+
+/**
+ *  A device's wallpaper look (`features::wallpaper`): a few dominant
+ *  colours and, when that device could read it, a small picture.
+ */
+export type Wallpaper_Deserialize = {
+	/**  Short content hash (16 hex characters). */
+	hash: string,
+	/**
+	 *  Up to 4 colours, `#rrggbb`, the one most seen first (may be empty
+	 *  when there's a picture).
+	 */
+	colors?: string[],
+	/**
+	 *  The picture as a `data:image/...;base64,` URL (JPEG, WebP or PNG,
+	 *  about 320 px on the long side), if that device could read it.
+	 */
+	image?: string | null,
+};
+
+/**
+ *  A device's wallpaper look (`features::wallpaper`): a few dominant
+ *  colours and, when that device could read it, a small picture.
+ */
+export type Wallpaper_Serialize = {
+	/**  Short content hash (16 hex characters). */
+	hash: string,
+	/**
+	 *  Up to 4 colours, `#rrggbb`, the one most seen first (may be empty
+	 *  when there's a picture).
+	 */
+	colors: string[],
+	/**
+	 *  The picture as a `data:image/...;base64,` URL (JPEG, WebP or PNG,
+	 *  about 320 px on the long side), if that device could read it.
+	 */
+	image: string | null,
 };
 
 /**  What Settings shows. */

@@ -61,6 +61,7 @@ pub mod share;
 pub mod signal_fwd;
 pub mod timers;
 pub mod wake;
+pub mod wallpaper;
 pub mod wifi_direct;
 
 use std::collections::HashMap;
@@ -234,6 +235,7 @@ impl<P: Platform> ControlRegistry<P> {
         r.register(Arc::new(screen::ScreenHandler));
         r.register(Arc::new(perms::PermsHandler));
         r.register(Arc::new(audio_share::AudioShareHandler));
+        r.register(Arc::new(wallpaper::WallpaperHandler));
         if folder_sync {
             r.register(Arc::new(folder_sync::FolderSyncHandler));
         }

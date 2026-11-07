@@ -292,6 +292,21 @@ fun NearbySettingsTile() {
     }
 }
 
+/** "Share my wallpaper with my devices" (PhoneWallpaper), on by default:
+ *  your computers draw this phone's tile from its wallpaper. */
+@Composable
+fun WallpaperSettingsTile() {
+    val ctx = LocalContext.current
+    var on by remember { mutableStateOf(com.mydomain.android.PhoneWallpaper.enabled(ctx)) }
+    Tile(title = stringResource(R.string.wallpaper_title)) {
+        SwitchRow(stringResource(R.string.wallpaper_switch), on) {
+            on = it
+            com.mydomain.android.PhoneWallpaper.set(ctx, it)
+        }
+        Muted(stringResource(R.string.wallpaper_hint))
+    }
+}
+
 /** Print from the phone on a computer's printer (PrintToComputer): which
  *  computers print for it, and the way to Android's printing settings,
  *  where the print service is turned on. */
@@ -495,6 +510,7 @@ fun SettingsScreen(
         Box(Modifier.foundMark(focus == "location")) { LocationSettingsTile() }
         Box(Modifier.foundMark(focus == "camera")) { CameraSettingsTile() }
         Box(Modifier.foundMark(focus == "nearby")) { NearbySettingsTile() }
+        Box(Modifier.foundMark(focus == "wallpaper")) { WallpaperSettingsTile() }
         Box(Modifier.foundMark(focus == "wifi-direct")) { WifiDirectTile() }
         Box(Modifier.foundMark(focus == "print")) { PrintSettingsTile() }
         Box(Modifier.foundMark(focus == "remote-download")) { RemoteDownloadSettingsTile() }

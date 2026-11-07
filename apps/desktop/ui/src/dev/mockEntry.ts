@@ -5,7 +5,8 @@
 
 const params = new URLSearchParams(location.search);
 
-const start = () => import("../index");
+// ?preview=deviceArt: only the wallpaper tiles (deviceArtPreview.tsx).
+const start = () => (params.get("preview") === "deviceArt" ? import("./deviceArtPreview") : import("../index"));
 
 if (params.get("mock") === "1") {
   import("./mockTauri").then((m) => {

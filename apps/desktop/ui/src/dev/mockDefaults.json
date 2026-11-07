@@ -1106,6 +1106,10 @@
   "before_ms": null,
   "rtt_ms": null
  },
+ "share_wallpaper": false,
+ "set_share_wallpaper": null,
+ "wallpapers": {},
+ "own_wallpaper": null,
  "key_changes": [],
  "trust_new_key": null,
  "dismiss_key_change": false,

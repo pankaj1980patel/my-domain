@@ -36,6 +36,7 @@ pub use ble::MEDIA_QUEUE as BLE_MEDIA_QUEUE;
 pub(crate) use ble::{ble_linked, ble_send_media, is_ble_link};
 mod control;
 mod device_kind;
+mod wallpaper;
 mod diag;
 mod health;
 mod join;

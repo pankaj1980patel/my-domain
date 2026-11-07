@@ -2228,6 +2228,29 @@ impl MdEngine {
         serde_json::to_string(&self.inner.device_kinds()).unwrap_or_else(|_| "{}".into())
     }
 
+    // --- the wallpaper look (mdcore features::wallpaper) ---
+
+    /// This phone's wallpaper look for your other devices: its colours
+    /// (`#rrggbb`, from WallpaperColors) and, only when Android let the
+    /// app read it, a small JPEG (at most 48 KB; bigger is left out). Only
+    /// a change is sent.
+    pub fn set_wallpaper(&self, colors: Vec<String>, image: Option<Vec<u8>>) {
+        self.inner.set_wallpaper(colors, image);
+    }
+
+    /// Share no wallpaper ("Share my wallpaper" off): your other devices
+    /// forget the one they had.
+    pub fn clear_wallpaper(&self) {
+        self.inner.clear_wallpaper();
+    }
+
+    /// What each of your devices shared, as JSON: node id -> `{hash,
+    /// colors, image}` (`image` a `data:` URL or null). Changes arrive as
+    /// `wallpaper` events (`{node, wallpaper}`; null when it stopped).
+    pub fn wallpapers_json(&self) -> String {
+        serde_json::to_string(&self.inner.wallpapers()).unwrap_or_else(|_| "{}".into())
+    }
+
     // --- first-run setup and the health check (mdcore features::onboarding,
     // features::health, features::app_info) ---
 

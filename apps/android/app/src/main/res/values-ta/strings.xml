@@ -1443,6 +1443,9 @@
     <string name="nearby_settings_title">அருகாமைப் பயன்முறை</string>
     <string name="nearby_switch">மீடியாவுக்கு அருகாமைப் பயன்முறையைப் பயன்படுத்து</string>
     <string name="nearby_switch_hint">ஒரே Wi-Fi இல் (அல்லது Bluetooth வரம்பில்) உள்ள சாதனத்துடன் ஒலி, திரை அல்லது கேமரா ஸ்ட்ரீம் ஆகும்போது, குறைவான தாமதத்திற்காக அது இடைவெளியின்றி உங்கள் நெட்வொர்க்கில் நேரடி இணைப்புக்கு மாறும். அந்த இணைப்பு துண்டிக்கப்பட்டால், வந்த வழியிலேயே திரும்பும்.</string>
+    <string name="wallpaper_title">வால்பேப்பர்</string>
+    <string name="wallpaper_switch">என் வால்பேப்பரை என் சாதனங்களுடன் பகிர்</string>
+    <string name="wallpaper_hint">உங்கள் கணினிகள் இந்த ஃபோனின் வால்பேப்பர் நிறங்களை அதன் டைலில் காட்டும், Android இந்த ஆப்பைப் படிக்க அனுமதித்தால் படத்தையும் காட்டும் (இது வேறு எதையும் கேட்காது). அணைத்திருந்தால் எதுவும் அனுப்பப்படாது, முன்பு இருந்ததை அவை மறந்துவிடும்.</string>
     <string name="audio_route_label">ஒலியை அனுப்பும் வழி</string>
     <string name="audio_route_auto">தானியங்கு (முதலில் Wi-Fi, ஆஃப்லைனில் Bluetooth)</string>
     <string name="audio_route_wifi">Wi-Fi அல்லது இணையம் மட்டும்</string>

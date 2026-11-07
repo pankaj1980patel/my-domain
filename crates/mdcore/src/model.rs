@@ -448,6 +448,23 @@ pub struct DeviceKind {
     pub icon: String,
 }
 
+/// A device's wallpaper look (`features::wallpaper`): a few dominant
+/// colours and, when that device could read it, a small picture.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+pub struct Wallpaper {
+    /// Short content hash (16 hex characters).
+    pub hash: String,
+    /// Up to 4 colours, `#rrggbb`, the one most seen first (may be empty
+    /// when there's a picture).
+    #[serde(default)]
+    pub colors: Vec<String>,
+    /// The picture as a `data:image/...;base64,` URL (JPEG, WebP or PNG,
+    /// about 320 px on the long side), if that device could read it.
+    #[serde(default)]
+    pub image: Option<String>,
+}
+
 /// A note in the notepad shared between your devices (`features::notes`):
 /// `Engine::notes`, and the `NotesChanged` event.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

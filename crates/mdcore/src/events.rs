@@ -374,6 +374,12 @@ pub enum CoreEvent {
         node: String,
         device: crate::model::DeviceKind,
     },
+    /// A device shared a new wallpaper look, or stopped sharing it
+    /// (`wallpaper: None`; `features::wallpaper`).
+    Wallpaper {
+        node: String,
+        wallpaper: Option<crate::model::Wallpaper>,
+    },
     /// Notes changed by your other devices (`features::notes`): the
     /// changed or new ones (conflict copies included) and the ids of ones
     /// deleted. Saving a note here makes no event.
@@ -664,6 +670,7 @@ impl CoreEvent {
             CoreEvent::Dnd { .. } => "dnd-changed",
             CoreEvent::LabelsChanged { .. } => "labels-changed",
             CoreEvent::DeviceKind { .. } => "device-kind",
+            CoreEvent::Wallpaper { .. } => "wallpaper-changed",
             CoreEvent::NotesChanged { .. } => "notes-changed",
             CoreEvent::TimersChanged { .. } => "timers-changed",
             CoreEvent::ReadLaterChanged { .. } => "read-later-changed",

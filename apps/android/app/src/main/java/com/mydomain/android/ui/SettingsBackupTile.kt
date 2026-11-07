@@ -129,8 +129,9 @@ private object SettingsBackupIo {
             }
         }
         withContext(Dispatchers.IO) { edit.commit() }
-        // The core keeps its own copy of this one.
+        // The core keeps its own copy of these.
         com.mydomain.android.NearbyMode.apply(ctx)
+        com.mydomain.android.PhoneWallpaper.report(ctx)
         if ("automations" in chosen) {
             val text = b.sections["automations"]?.get("automations") as? String
             if (text != null) {

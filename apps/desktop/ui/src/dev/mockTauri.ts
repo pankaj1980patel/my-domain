@@ -805,6 +805,43 @@ const SHORTCUTS = {
   saved: "",
 };
 
+/** A made-up wallpaper for the sample MacBook: a dusk sky, a sun and two
+ *  rows of hills, drawn on a canvas (320 × 200 JPEG, like a real one). */
+let wallpaperUrl: string | null = null;
+function sampleWallpaper(): string | null {
+  if (wallpaperUrl) return wallpaperUrl;
+  const c = document.createElement("canvas");
+  c.width = 320;
+  c.height = 200;
+  const g = c.getContext("2d");
+  if (!g) return null;
+  const sky = g.createLinearGradient(0, 0, 0, 200);
+  sky.addColorStop(0, "#1c2550");
+  sky.addColorStop(0.55, "#b5577a");
+  sky.addColorStop(1, "#f4a76b");
+  g.fillStyle = sky;
+  g.fillRect(0, 0, 320, 200);
+  const sun = g.createRadialGradient(214, 118, 4, 214, 118, 60);
+  sun.addColorStop(0, "rgba(255,236,190,1)");
+  sun.addColorStop(0.35, "rgba(255,200,140,0.8)");
+  sun.addColorStop(1, "rgba(255,200,140,0)");
+  g.fillStyle = sun;
+  g.fillRect(0, 0, 320, 200);
+  const hills = (y: number, amp: number, color: string, phase: number) => {
+    g.beginPath();
+    g.moveTo(0, 200);
+    for (let x = 0; x <= 320; x += 8) g.lineTo(x, y + Math.sin(x / 47 + phase) * amp + Math.sin(x / 19 + phase * 2) * amp * 0.3);
+    g.lineTo(320, 200);
+    g.closePath();
+    g.fillStyle = color;
+    g.fill();
+  };
+  hills(140, 10, "#5a3a5e", 0.4);
+  hills(162, 8, "#2b2140", 1.9);
+  wallpaperUrl = c.toDataURL("image/jpeg", 0.8);
+  return wallpaperUrl;
+}
+
 // --- command answers ---------------------------------------------------------
 
 const ready = () => new URLSearchParams(location.search).get("view") !== "signIn";
@@ -825,6 +862,16 @@ const FIXTURES: Record<string, Handler> = {
   device_kinds: () => KINDS,
   own_device_kind: () => ({ os: "macos", form: "desktop", model: "Mac mini", maker: "Apple", icon: "mac_desktop" }),
   get_device_labels: () => ({ [PIXEL]: { color: "teal" } }),
+  // Wallpaper looks (DeviceArt): the phone shares only its colours (a
+  // gradient), the MacBook a small picture (drawn here, not a photo). The
+  // office PC, the lab laptop and this computer share nothing: they show
+  // their built-in wallpapers.
+  wallpapers: () => ({
+    [PIXEL]: { hash: "5a1e0c9d2b7f4e31", colors: ["#284a7a", "#8fb4e6", "#f0b49c"], image: null },
+    [MACBOOK]: { hash: "c3d2e1f0a9b8c7d6", colors: ["#23305e", "#e3875a", "#f6c79a"], image: sampleWallpaper() },
+  }),
+  own_wallpaper: () => null,
+  share_wallpaper: () => true,
   link_stats: () =>
     Object.entries(LINKS).map(([node_id, transport]) => ({
       node_id,

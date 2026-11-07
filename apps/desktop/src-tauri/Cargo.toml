@@ -71,6 +71,10 @@ png = "0.17"
 # image pulls them in): no new crates.
 zune-jpeg = "0.5"
 zune-core = "0.5"
+# This computer's wallpaper as a small JPEG for your other devices
+# (`wallpaper.rs`): the image version arboard already pulls in, with the
+# JPEG and PNG codecs md-portal uses (their crates are in Cargo.lock).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 # Native FCM receiver: simulates an Android/web client to obtain an FCM token
 # and receive data messages over a persistent MTalk connection (no browser /
 # service worker needed). Blocking (reqwest blocking), so it runs in its own

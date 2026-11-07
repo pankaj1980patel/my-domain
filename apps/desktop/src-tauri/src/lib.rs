@@ -47,6 +47,7 @@ mod location;
 mod media_ctl;
 mod mute_here;
 mod nearby;
+mod wallpaper;
 mod note_reminders;
 mod notes;
 mod notif_history;
@@ -2006,6 +2007,10 @@ fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         nearby::nearby_media,
         nearby::set_nearby_media,
         nearby::nearby_status,
+        wallpaper::share_wallpaper,
+        wallpaper::set_share_wallpaper,
+        wallpaper::wallpapers,
+        wallpaper::own_wallpaper,
         key_changes::key_changes,
         key_changes::trust_new_key,
         key_changes::dismiss_key_change,
@@ -2172,6 +2177,8 @@ pub fn run() {
                     // phone (`mute_here.rs`).
                     mute_here::init(&handle);
                     app.manage(engine);
+                    // "Share my wallpaper with my devices" (`wallpaper.rs`).
+                    wallpaper::init(&handle);
                 }
                 Err(e) => {
                     eprintln!("failed to start networking: {e}");

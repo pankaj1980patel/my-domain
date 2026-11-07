@@ -1443,6 +1443,9 @@
     <string name="nearby_settings_title">Nearby mode</string>
     <string name="nearby_switch">Use nearby mode for media</string>
     <string name="nearby_switch_hint">While audio, a screen or the camera streams with a device on the same Wi-Fi (or in Bluetooth range), it moves to a direct link on your network for less delay, without a gap. If that link drops, it goes back the way it came.</string>
+    <string name="wallpaper_title">Wallpaper</string>
+    <string name="wallpaper_switch">Share my wallpaper with my devices</string>
+    <string name="wallpaper_hint">Your computers show this phone’s wallpaper colours in its tile, and the picture too when Android lets this app read it (it asks for nothing more). Off: nothing is sent, and they forget the one they had.</string>
     <string name="audio_route_label">Send audio over</string>
     <string name="audio_route_auto">Auto (Wi-Fi first, Bluetooth when offline)</string>
     <string name="audio_route_wifi">Wi-Fi or internet only</string>

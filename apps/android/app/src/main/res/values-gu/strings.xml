@@ -1443,6 +1443,9 @@
     <string name="nearby_settings_title">નજીકનો મોડ</string>
     <string name="nearby_switch">મીડિયા માટે નજીકનો મોડ વાપરો</string>
     <string name="nearby_switch_hint">જ્યારે એક જ Wi-Fi પરના (કે Bluetooth રેન્જમાંના) ડિવાઇસ સાથે ઑડિયો, સ્ક્રીન કે કૅમેરા સ્ટ્રીમ થાય, ત્યારે ઓછા વિલંબ માટે તે કોઈ ખલેલ વિના તમારા નેટવર્ક પરની સીધી લિંક પર જાય છે. જો તે લિંક તૂટે, તો તે જે રીતે આવ્યું હતું તે રીતે પાછું જાય છે.</string>
+    <string name="wallpaper_title">વૉલપેપર</string>
+    <string name="wallpaper_switch">મારું વૉલપેપર મારા ડિવાઇસ સાથે શેર કરો</string>
+    <string name="wallpaper_hint">તમારા કમ્પ્યુટર આ ફોનના વૉલપેપરના રંગો તેની ટાઇલમાં બતાવે છે, અને Android આ ઍપને વાંચવા દે ત્યારે ચિત્ર પણ (તે બીજું કંઈ માગતી નથી). બંધ હોય ત્યારે કંઈ મોકલાતું નથી, અને પહેલાંનું વૉલપેપર તેઓ ભૂલી જાય છે.</string>
     <string name="audio_route_label">ઑડિયો આના દ્વારા મોકલો</string>
     <string name="audio_route_auto">આપમેળે (પહેલાં Wi-Fi, ઑફલાઇન હોય ત્યારે Bluetooth)</string>
     <string name="audio_route_wifi">ફક્ત Wi-Fi કે ઇન્ટરનેટ</string>

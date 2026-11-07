@@ -27,7 +27,8 @@
 //! `wol` when it sends Wake-on-LAN packets for the others
 //! (`features::wake`), and `print: 1` when it prints for your phones
 //! (`features::print`), and `device`, what kind of device it is
-//! (`features::device_kind`).
+//! (`features::device_kind`), and `wallpaper`, the hash of its wallpaper
+//! look or `""` (`features::wallpaper`).
 //! A host that pushes `boot_at` (unix seconds it started) has it turned
 //! into `uptime_s` at reply time, so the uptime is right however long ago
 //! the status was pushed (it's pushed only when something changes).
@@ -124,6 +125,8 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 super::wake::extend_status(ctx, &mut status);
                 // What kind of device it is (its icon).
                 super::device_kind::extend_status(ctx, &mut status);
+                // Its wallpaper look, as a hash (the look goes on change).
+                super::wallpaper::extend_status(ctx, &mut status);
                 // Which app it runs (the health check's version line).
                 super::app_info::extend_status(ctx, &mut status);
                 // It's looking at this device: tell it when the song changes.
@@ -189,6 +192,7 @@ impl<P: Platform> ControlHandler<P> for DeviceHandler {
                 );
                 super::media::saw(ctx, &from, &status["now_playing"]);
                 super::app_info::remember(ctx, &from, &status);
+                super::wallpaper::remember(ctx, &from, &status[super::wallpaper::FLAG]);
                 ctx.sink.emit(CoreEvent::DeviceStatus { from, status });
             }
             // What acts on this device: only for devices in its list.

@@ -41,6 +41,7 @@ object SettingsBackup {
         "share_location" to Pref("preferences", Type.BOOL),
         "camera_keep_locked" to Pref("preferences", Type.BOOL),
         "nearby_media" to Pref("preferences", Type.BOOL),
+        "share_wallpaper" to Pref("preferences", Type.BOOL),
         "wifi_direct" to Pref("preferences", Type.BOOL),
         // The switch only: the key itself is in the Keystore, never here.
         "automation_apps" to Pref("preferences", Type.BOOL),

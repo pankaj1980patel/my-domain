@@ -1440,6 +1440,9 @@
     <string name="nearby_settings_title">पास वाला मोड</string>
     <string name="nearby_switch">मीडिया के लिए पास वाला मोड इस्तेमाल करें</string>
     <string name="nearby_switch_hint">जब ऑडियो, स्क्रीन या कैमरा किसी ऐसे डिवाइस के साथ चल रहा हो जो उसी Wi-Fi पर (या Bluetooth की पहुँच में) है, तो वह बिना रुके आपके नेटवर्क पर सीधे लिंक पर चला जाता है, ताकि देरी कम हो। अगर वह लिंक टूट जाए, तो वह पहले वाले रास्ते पर लौट आता है।</string>
+    <string name="wallpaper_title">वॉलपेपर</string>
+    <string name="wallpaper_switch">मेरा वॉलपेपर मेरे डिवाइसों के साथ शेयर करें</string>
+    <string name="wallpaper_hint">आपके कंप्यूटर इस फ़ोन के वॉलपेपर के रंग उसकी टाइल में दिखाते हैं, और जब Android इस ऐप को उसे पढ़ने दे तो तस्वीर भी (यह कोई और अनुमति नहीं माँगता)। बंद होने पर कुछ नहीं भेजा जाता, और वे पहले वाला भूल जाते हैं।</string>
     <string name="audio_route_label">आवाज़ भेजें</string>
     <string name="audio_route_auto">अपने आप (पहले Wi-Fi, ऑफ़लाइन होने पर ब्लूटूथ)</string>
     <string name="audio_route_wifi">सिर्फ़ Wi-Fi या इंटरनेट</string>
