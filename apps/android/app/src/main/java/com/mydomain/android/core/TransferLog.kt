@@ -23,8 +23,12 @@ object TransferLog {
     private const val FILE = "transfer-history.json"
     private const val SAVE_DELAY_MS = 3_000L
 
-    /** Under way first, then the finished ones (changed on the main thread). */
-    var list by mutableStateOf<List<TransferRecord>>(emptyList()); private set
+    private var all by mutableStateOf<List<TransferRecord>>(emptyList())
+
+    /** Under way first, then the finished ones (changed on the main
+     *  thread); [SampleData]'s in sample mode (debug screenshots), never
+     *  the real ones then. */
+    val list: List<TransferRecord> get() = if (Core.sample) SampleData.transferRecords() else all
 
     private val book = TransferBook()
     private val main = Handler(Looper.getMainLooper())
@@ -49,7 +53,7 @@ object TransferLog {
                 val newer = book.saved().isNotEmpty()
                 book.addSaved(saved)
                 // Finished while it was reading: write them all again.
-                if (newer) changed(save = true) else list = book.list
+                if (newer) changed(save = true) else all = book.list
             }
         }
     }
@@ -125,11 +129,12 @@ object TransferLog {
 
     /** Forget the finished and failed transfers (main thread). */
     fun clearFinished() {
+        if (Core.sample) return
         if (book.clearFinished()) changed(save = true)
     }
 
     private fun changed(save: Boolean) {
-        list = book.list
+        all = book.list
         if (save) scheduleSave()
     }
 

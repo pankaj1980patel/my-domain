@@ -18,16 +18,24 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.content.ContextCompat
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DebugScreen
+import com.mydomain.android.core.DebugScreens
 import com.mydomain.android.core.JoinLinks
 import com.mydomain.android.core.KeyVerifyPlan
 import com.mydomain.android.core.RemoteDownloads
 import com.mydomain.android.core.Verify
 import com.mydomain.android.ui.App
 import com.mydomain.android.ui.MdTheme
+import com.mydomain.android.ui.ThemeId
+import com.mydomain.android.ui.ThemeStore
 
 data class DevCredentials(val server: String, val user: String, val pass: String, val key: String)
 
 private const val ASK_WIFI_SCAN = 1002
+
+/** Debug builds' sample mode (screenshots): the screens' preferences, apart
+ *  from the real ones. */
+private const val SAMPLE_PREFS = "md-sample"
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -40,6 +48,14 @@ class MainActivity : ComponentActivity() {
         }
         Core.init(this)
         enableEdgeToEdge()
+        // Debug builds: sample devices and a screen straight from adb
+        // (scripts/screenshots-android.sh). No prompts or service then.
+        if (debugLaunch(intent)) {
+            // Its own preferences: the sign-in screen mustn't show the real
+            // account (removed again when sample mode ends).
+            setContent { MdTheme { App(getSharedPreferences(SAMPLE_PREFS, Context.MODE_PRIVATE)) } }
+            return
+        }
 
         // Ask for READ_PHONE_STATE so a later launch can use the IMEI as the
         // device id (this launch falls back to ANDROID_ID: the service, which
@@ -236,6 +252,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == DeviceActions.ACTION_STOP_RING) DeviceActions.stopRing()
+        if (debugLaunch(intent)) return
         openSettings(intent)
         askWifiScan(intent)
         openDevice(intent)
@@ -264,6 +281,36 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         Core.setVisible(false)
+    }
+
+    /**
+     * Debug builds only: `--ez md_sample true` shows [SampleData]'s made-up
+     * devices (in memory, nothing saved; the real ones come back on a
+     * launch without it), `--es md_screen <name>` (with `md_device`,
+     * `md_topic`, `md_query`) opens that screen ([DebugScreens]). True when
+     * sample mode is on (no permission prompts or service start then).
+     */
+    private fun debugLaunch(intent: Intent?): Boolean {
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0 || intent == null) return false
+        val screen = DebugScreens.parse(
+            intent.getStringExtra("md_screen"),
+            device = intent.getStringExtra("md_device"),
+            topic = intent.getStringExtra("md_topic"),
+            query = intent.getStringExtra("md_query"),
+        )
+        val sample = intent.getBooleanExtra("md_sample", false)
+        if (sample) {
+            Core.startSample(signedIn = screen?.screen != DebugScreen.SIGN_IN)
+        } else if (Core.sample) {
+            Core.endSample()
+            deleteSharedPreferences(SAMPLE_PREFS)
+        }
+        if (screen != null) Core.showScreen = screen
+        when (intent.getStringExtra("md_theme")) {
+            "light" -> ThemeStore.preview(ThemeId.Light)
+            "dark" -> ThemeStore.preview(ThemeId.CosmicBlue)
+        }
+        return sample
     }
 
     /** Device-lab test account from launch extras (scripts/lab/android.sh

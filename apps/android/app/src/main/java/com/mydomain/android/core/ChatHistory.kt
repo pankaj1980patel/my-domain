@@ -113,21 +113,24 @@ object ChatHistory {
     /** [node]'s messages before message [before] (the newest without it):
      *  the last [limit], oldest first (main thread). Read from a composable,
      *  it redraws on every change ([version]). */
-    fun page(node: String, before: String?, limit: Int): ChatPage = version.let { log.page(node, before, limit) }
+    fun page(node: String, before: String?, limit: Int): ChatPage =
+        version.let { if (Core.sample) ChatPage(emptyList(), more = false, kept = 0) else log.page(node, before, limit) }
 
     /** A copy of every kept message, oldest first per device (main thread).
      *  Read only: for a search over this phone's messages; read from a
      *  composable, it redraws on every change. */
-    fun snapshot(): List<ChatEntry> = version.let { log.snapshot() }
+    fun snapshot(): List<ChatEntry> = version.let { if (Core.sample) emptyList() else log.snapshot() }
 
     /** Forget [node]'s messages (main thread). */
     fun clear(node: String) {
+        if (Core.sample) return
         if (log.clear(node)) changed()
     }
 
     /** Turn the history on or off; off also forgets everything kept, on
      *  this phone's storage too, now (main thread). */
     fun setEnabled(ctx: Context, on: Boolean) {
+        if (Core.sample) return
         enabled = on
         prefs(ctx).edit().putBoolean(PREF, on).apply()
         if (!on) {

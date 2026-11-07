@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.mydomain.android.R
 import com.mydomain.android.core.Account
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.DebugScreen
 import com.mydomain.android.core.Findable
 import com.mydomain.android.core.FoundKind
 import com.mydomain.android.core.Health
@@ -320,6 +321,48 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             foundNote = id
             tab = Tab.Notes
             Core.showNote = null
+        }
+    }
+
+    // Debug builds: a screen asked for from adb (md_screen; screenshots).
+    LaunchedEffect(Core.showScreen) {
+        val want = Core.showScreen ?: return@LaunchedEffect
+        Core.showScreen = null
+        device = null
+        deviceFocus = null
+        developer = false
+        automations = false
+        transfers = false
+        setup = false
+        timers = false
+        readLater = false
+        linksMap = false
+        health = false
+        onboarding = false
+        help = false
+        helpTopic = null
+        leaveSearch()
+        tab = Tab.Devices
+        when (want.screen) {
+            DebugScreen.HOME, DebugScreen.SIGN_IN -> Unit
+            DebugScreen.NOTES -> tab = Tab.Notes
+            DebugScreen.ACTIVITY -> tab = Tab.Activity
+            DebugScreen.SETTINGS -> tab = Tab.Settings
+            DebugScreen.DEVICE -> device = want.device
+            DebugScreen.DEVELOPER -> developer = true
+            DebugScreen.AUTOMATIONS -> automations = true
+            DebugScreen.TRANSFERS -> transfers = true
+            DebugScreen.SETUP_PHONE -> setup = true
+            DebugScreen.TIMERS -> timers = true
+            DebugScreen.READ_LATER -> readLater = true
+            DebugScreen.LINKS_MAP -> linksMap = true
+            DebugScreen.HEALTH -> health = true
+            DebugScreen.ONBOARDING -> onboarding = true
+            DebugScreen.HELP -> openHelp(want.topic)
+            DebugScreen.SEARCH -> {
+                searchQuery = want.query.orEmpty()
+                search = true
+            }
         }
     }
 

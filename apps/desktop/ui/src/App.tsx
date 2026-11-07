@@ -87,7 +87,7 @@ export default function App() {
     if (signedIn()) return;
     resume().then((yes) => (yes ? signedInNow() : setSignedIn(false)), () => setSignedIn(false));
   };
-  const [view, setView] = createSignal<View>({ name: "home" });
+  const [view, setView] = createSignal<View>(import.meta.env.MODE === "mock" ? mockView() : { name: "home" });
   let main: HTMLElement | undefined;
   const go = (v: View) => setView(v);
   // A new screen: the window title names it, and focus moves to its content
@@ -494,6 +494,37 @@ export default function App() {
       <Toasts />
     </>
   );
+}
+
+/** Screenshot mode only (`vite --mode mock`, ?mock=1; the check on MODE drops
+ *  this from the real build): the screen named by ?view= (with ?device=,
+ *  ?topic=, ?q=), so scripts/screenshots-desktop.sh can open each one. */
+function mockView(): View {
+  const p = new URLSearchParams(location.search);
+  if (p.get("mock") !== "1") return { name: "home" };
+  const name = p.get("view") ?? "home";
+  switch (name) {
+    case "device":
+      return { name, node: p.get("device") ?? "" };
+    case "help":
+      return { name, topic: p.get("topic") ?? undefined };
+    case "search":
+      return { name, query: p.get("q") ?? undefined };
+    case "notes":
+      return p.get("note") ? { name, request: { id: p.get("note"), at: Date.now() } } : { name };
+    case "timers":
+    case "readLater":
+    case "linksMap":
+    case "health":
+    case "setup":
+    case "activity":
+    case "transfers":
+    case "settings":
+    case "developer":
+      return { name };
+    default:
+      return { name: "home" };
+  }
 }
 
 /** Another device is looking for this one: any click silences it. Stop takes

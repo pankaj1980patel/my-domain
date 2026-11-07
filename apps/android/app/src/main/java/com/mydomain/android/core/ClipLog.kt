@@ -43,8 +43,11 @@ object ClipLog {
     const val PICTURE_DIR = "clip-images"
     private const val SAVE_DELAY_MS = 3_000L
 
-    /** The clips, newest first (changed on the main thread). */
-    var list by mutableStateOf<List<ClipRecord>>(emptyList()); private set
+    private var all by mutableStateOf<List<ClipRecord>>(emptyList())
+
+    /** The clips, newest first (changed on the main thread); none in sample
+     *  mode (debug screenshots), never the real ones then. */
+    val list: List<ClipRecord> get() = if (Core.sample) emptyList() else all
 
     /** "Keep a clipboard history". */
     var enabled by mutableStateOf(true); private set
@@ -90,7 +93,7 @@ object ClipLog {
                     // Clips kept while it was reading may have been written
                     // without the older ones: write them all again.
                     if (newer) changed() else {
-                        list = book.list
+                        all = book.list
                         forgetDropped()
                     }
                 }
@@ -212,18 +215,20 @@ object ClipLog {
 
     /** Forget [node]'s clips (main thread). */
     fun clear(node: String) {
+        if (Core.sample) return
         if (book.clear(node)) changed()
     }
 
     /** Turn the history on or off; off also forgets everything kept, on
      *  this phone's storage too, now (main thread). */
     fun setEnabled(ctx: Context, on: Boolean) {
+        if (Core.sample) return
         enabled = on
         prefs(ctx).edit().putBoolean(PREF, on).apply()
         if (!on) {
             book.clearAll()
             book.takeDropped()
-            list = book.list
+            all = book.list
             val f = file ?: return
             val pics = pictureDir
             io.execute {
@@ -236,7 +241,7 @@ object ClipLog {
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("md", Context.MODE_PRIVATE)
 
     private fun changed() {
-        list = book.list
+        all = book.list
         forgetDropped()
         scheduleSave()
     }

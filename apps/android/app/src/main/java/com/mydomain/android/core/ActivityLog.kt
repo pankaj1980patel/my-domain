@@ -82,26 +82,30 @@ object ActivityLog {
     }
 
     /** The record's entries, newest first (main thread; read from a composable it redraws). */
-    fun entries(): List<ActivityEntry> = version.let { rec.entries }
+    fun entries(): List<ActivityEntry> = version.let { if (Core.sample) SampleData.activityLog() else rec.entries }
 
     /** The kinds hidden. */
-    fun hidden(): List<String> = version.let { rec.hidden }
+    fun hidden(): List<String> = version.let { if (Core.sample) emptyList() else rec.hidden }
 
     /** Since when the view was cleared, if it was. */
-    fun clearedAt(): Long? = version.let { rec.clearedAt }
+    fun clearedAt(): Long? = version.let { if (Core.sample) null else rec.clearedAt }
 
+    // Sample mode (debug screenshots) changes nothing kept.
     fun setHidden(kinds: Collection<String>) {
+        if (Core.sample) return
         rec.setHidden(kinds)
         changed()
     }
 
     /** "Clear activity": only this record goes; the histories stay. */
     fun clear() {
+        if (Core.sample) return
         rec.clear(System.currentTimeMillis())
         changed()
     }
 
     fun restore() {
+        if (Core.sample) return
         rec.restore()
         changed()
     }
@@ -119,9 +123,9 @@ object ActivityLog {
             },
             links = ReadLater.byId.values.map(ReadLater::item),
             timers = Timers.byId.values.map { TimerSource(it.id, it.label, it.durationMs, it.createdAt, it.by.takeIf { b -> b in known }) },
-            log = rec.entries,
+            log = entries(),
         )
-        return ActivityFeed.page(src, q, rec.hidden, rec.clearedAt)
+        return ActivityFeed.page(src, q, hidden(), clearedAt())
     }
 
     private fun changed() {

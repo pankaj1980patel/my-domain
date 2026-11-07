@@ -245,6 +245,13 @@ object ThemeStore {
         current = ThemeId.fromKey(prefs.getString(PREF_KEY, null))
     }
 
+    /** Debug builds' screenshots (`--es md_theme light|dark`): this theme
+     *  for now, not saved. */
+    fun preview(id: ThemeId) {
+        loaded = true
+        current = id
+    }
+
     /** Switch now and remember it for the next launch. */
     fun set(prefs: SharedPreferences, id: ThemeId) {
         current = id

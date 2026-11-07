@@ -1,0 +1,1236 @@
+{
+ "get_identity": {
+  "node_id": "",
+  "name": "",
+  "ip": "",
+  "tcp_port": 0,
+  "udp_port": 0,
+  "ws_port": 0,
+  "quic_port": 0
+ },
+ "get_peers": [],
+ "get_saved_session": {
+  "server_url": "",
+  "username": ""
+ },
+ "dev_credentials": null,
+ "link_stats": [],
+ "is_ready": false,
+ "session_info": {
+  "username": null,
+  "server_url": null,
+  "has_key": false
+ },
+ "auth_register": null,
+ "auth_login": null,
+ "set_encryption_key": null,
+ "update_encryption_key": null,
+ "generate_key": "",
+ "join_invite": {
+  "link": "",
+  "code": "",
+  "expires_in": 0,
+  "qr_size": 0,
+  "qr_path": ""
+ },
+ "join_status": {
+  "state": "",
+  "name": null
+ },
+ "join_cancel": null,
+ "join_with_code": null,
+ "join_with_link": null,
+ "logout": null,
+ "refresh_from_server": null,
+ "scan_lan": null,
+ "send_message": "",
+ "enable_clipboard_sync": null,
+ "disable_clipboard_sync": null,
+ "clipboard_sync_enabled": false,
+ "get_clipboard": "",
+ "add_manual_peer": null,
+ "remove_peer": null,
+ "share_notification": null,
+ "share_call_notification": null,
+ "share_call_history": null,
+ "connect": null,
+ "disconnect": null,
+ "reconnect": null,
+ "open_map": null,
+ "firewall_check": {
+  "outbound_ok": false,
+  "inbound_blocked": false
+ },
+ "fcm_selftest": "",
+ "report_firewall": null,
+ "on_signal": null,
+ "request_apps": null,
+ "subscribe_apps": null,
+ "notification_action": "",
+ "notification_history": {
+  "entries": [],
+  "total": 0,
+  "kept": 0,
+  "apps": []
+ },
+ "clear_notification_history": null,
+ "muted_apps": [],
+ "set_muted_apps": [],
+ "phone_notifications": [],
+ "forget_phone_notification": null,
+ "phone_notif_prefs": {
+  "private_mode": false,
+  "only_locked": false
+ },
+ "set_phone_notif_prefs": null,
+ "chat_history": {
+  "entries": [],
+  "more": false,
+  "kept": 0
+ },
+ "clear_chat_history": null,
+ "chat_history_enabled": false,
+ "set_chat_history_enabled": null,
+ "clip_history": {
+  "entries": [],
+  "total": 0,
+  "kept": 0,
+  "pictures": []
+ },
+ "clear_clip_history": null,
+ "clip_history_enabled": false,
+ "set_clip_history_enabled": null,
+ "clip_privacy": {
+  "hide_concealed": false,
+  "excluded": [],
+  "last_app": null,
+  "detects": false,
+  "knows_apps": false
+ },
+ "set_clip_hide_concealed": null,
+ "set_clip_excluded_apps": [],
+ "clip_picture": "",
+ "copy_clip_picture": null,
+ "send_clip_picture": "",
+ "save_clip_picture": null,
+ "request_status": "",
+ "ring_device": "",
+ "open_url_on": "",
+ "open_url_in_app": "",
+ "search_on": "",
+ "send_file": "",
+ "send_folder": 0,
+ "cancel_file": null,
+ "transfer_list": [],
+ "transfer_pause": null,
+ "transfer_retry": "",
+ "send_batch": {
+  "id": "",
+  "count": 0
+ },
+ "transfer_clear_finished": null,
+ "transfer_reveal": null,
+ "send_text": "",
+ "list_folder": "",
+ "download_file": "",
+ "shared_folders": [],
+ "pick_file": null,
+ "pick_folder": null,
+ "run_action": "",
+ "clipboard_history": "",
+ "clear_clipboard_history": null,
+ "copy_to_clipboard": null,
+ "reveal_file": null,
+ "open_file": null,
+ "notifications_enabled": false,
+ "set_notifications_enabled": null,
+ "list_gallery": "",
+ "download_gallery_item": "",
+ "battery_alerts": {
+  "enabled": false,
+  "low": 0,
+  "charged": 0
+ },
+ "set_battery_alerts": null,
+ "keep_awake": "",
+ "follow_phone_dnd": false,
+ "set_follow_phone_dnd": null,
+ "share_location": false,
+ "set_share_location": null,
+ "current_wifi_name": null,
+ "share_wifi_to": "",
+ "location_available": false,
+ "wake_setting": {
+  "on": false,
+  "os": "",
+  "womp": null,
+  "ifaces": []
+ },
+ "set_wake_setting": {
+  "on": false,
+  "os": "",
+  "womp": null,
+  "ifaces": []
+ },
+ "can_wake": false,
+ "wake_device": {
+  "sent": [],
+  "relays": []
+ },
+ "wifi_direct_setting": {
+  "on": false,
+  "supported": false,
+  "hotspot": "ask",
+  "hotspot_supported": false
+ },
+ "set_wifi_direct": {
+  "on": false,
+  "supported": false,
+  "hotspot": "ask",
+  "hotspot_supported": false
+ },
+ "set_phone_hotspot": {
+  "on": false,
+  "supported": false,
+  "hotspot": "ask",
+  "hotspot_supported": false
+ },
+ "print_setting": {
+  "allow": false,
+  "ask": false,
+  "supported": false,
+  "printers": []
+ },
+ "set_print_allow": {
+  "allow": false,
+  "ask": false,
+  "supported": false,
+  "printers": []
+ },
+ "set_print_ask": {
+  "allow": false,
+  "ask": false,
+  "supported": false,
+  "printers": []
+ },
+ "print_answer": null,
+ "hotspot_consent": null,
+ "tray_battery_setting": {
+  "on": false,
+  "badge": false,
+  "phone": "",
+  "phones": []
+ },
+ "set_tray_battery": null,
+ "away_lock": {
+  "on": false,
+  "minutes": 0,
+  "can_lock": false
+ },
+ "set_away_lock": null,
+ "list_shortcuts": {
+  "bindings": [],
+  "unavailable": false,
+  "mac": false,
+  "saved": ""
+ },
+ "check_shortcut_keys": {
+  "keys": "",
+  "label": ""
+ },
+ "save_shortcut": {
+  "bindings": [],
+  "unavailable": false,
+  "mac": false,
+  "saved": ""
+ },
+ "delete_shortcut": {
+  "bindings": [],
+  "unavailable": false,
+  "mac": false,
+  "saved": ""
+ },
+ "pause_shortcuts": null,
+ "list_schedules": [],
+ "add_schedule": {
+  "id": "",
+  "node": "",
+  "action": "",
+  "args": "",
+  "label": "",
+  "time": "",
+  "days": [],
+  "enabled": false,
+  "last_run": null
+ },
+ "update_schedule": {
+  "id": "",
+  "node": "",
+  "action": "",
+  "args": "",
+  "label": "",
+  "time": "",
+  "days": [],
+  "enabled": false,
+  "last_run": null
+ },
+ "delete_schedule": null,
+ "run_schedule_now": "",
+ "local_actions": {
+  "node": "",
+  "actions": []
+ },
+ "run_local_action": "",
+ "list_automations": [],
+ "add_automation": {
+  "id": "",
+  "trigger": {
+   "kind": "",
+   "node": "",
+   "level": null
+  },
+  "node": "",
+  "action": "",
+  "args": "",
+  "label": "",
+  "enabled": false,
+  "last_fired": null
+ },
+ "update_automation": {
+  "id": "",
+  "trigger": {
+   "kind": "",
+   "node": "",
+   "level": null
+  },
+  "node": "",
+  "action": "",
+  "args": "",
+  "label": "",
+  "enabled": false,
+  "last_fired": null
+ },
+ "delete_automation": null,
+ "battery_history": [],
+ "list_shell_commands": [],
+ "add_shell_command": {
+  "id": "",
+  "name": "",
+  "command": "",
+  "enabled": false
+ },
+ "update_shell_command": {
+  "id": "",
+  "name": "",
+  "command": "",
+  "enabled": false
+ },
+ "delete_shell_command": null,
+ "test_shell_command": {
+  "code": null,
+  "output": "",
+  "timed_out": false
+ },
+ "webhook_settings": {
+  "enabled": false,
+  "port": 0,
+  "token": "",
+  "running": false,
+  "error": null
+ },
+ "set_webhooks_enabled": {
+  "enabled": false,
+  "port": 0,
+  "token": "",
+  "running": false,
+  "error": null
+ },
+ "set_webhook_port": {
+  "enabled": false,
+  "port": 0,
+  "token": "",
+  "running": false,
+  "error": null
+ },
+ "new_webhook_token": {
+  "enabled": false,
+  "port": 0,
+  "token": "",
+  "running": false,
+  "error": null
+ },
+ "get_device_labels": {},
+ "device_kinds": {},
+ "own_device_kind": null,
+ "health_check": {
+  "checks": [],
+  "worst": "ok",
+  "bad": 0,
+  "warn": 0
+ },
+ "open_permission_page": false,
+ "request_permission": "",
+ "open_downloads": null,
+ "onboarding_state": {
+  "step": "name",
+  "finished": false,
+  "skipped_all": false,
+  "skipped": [],
+  "features": null
+ },
+ "onboarding_act": {
+  "step": "name",
+  "finished": false,
+  "skipped_all": false,
+  "skipped": [],
+  "features": null
+ },
+ "set_onboarding_features": {
+  "step": "name",
+  "finished": false,
+  "skipped_all": false,
+  "skipped": [],
+  "features": null
+ },
+ "set_device_name": "",
+ "set_device_label": {},
+ "labels_share": false,
+ "set_labels_share": null,
+ "get_page_layout": {
+  "order": [],
+  "hidden": [],
+  "scope": "kind"
+ },
+ "set_page_layout": {
+  "order": [],
+  "hidden": [],
+  "scope": "kind"
+ },
+ "notes_list": [],
+ "note_save": {
+  "id": "",
+  "title": "",
+  "body": "",
+  "pinned": false,
+  "checklist": false,
+  "color": null,
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": "",
+  "conflict_of": null,
+  "remind_at": null,
+  "remind_done": false
+ },
+ "note_delete": null,
+ "read_later_list": [],
+ "read_later_save": {
+  "id": "",
+  "url": "",
+  "title": "",
+  "host": "",
+  "read": false,
+  "saved_at": null,
+  "saved_on": "",
+  "updated_at": null
+ },
+ "read_later_save_clipboard": {
+  "id": "",
+  "url": "",
+  "title": "",
+  "host": "",
+  "read": false,
+  "saved_at": null,
+  "saved_on": "",
+  "updated_at": null
+ },
+ "read_later_mark": {
+  "id": "",
+  "url": "",
+  "title": "",
+  "host": "",
+  "read": false,
+  "saved_at": null,
+  "saved_on": "",
+  "updated_at": null
+ },
+ "read_later_delete": null,
+ "read_later_open": {
+  "id": "",
+  "url": "",
+  "title": "",
+  "host": "",
+  "read": false,
+  "saved_at": null,
+  "saved_on": "",
+  "updated_at": null
+ },
+ "remote_download_request": {
+  "id": "",
+  "node_id": "",
+  "here": false,
+  "url": "",
+  "host": "",
+  "name": "",
+  "size": null,
+  "done": null,
+  "state": "",
+  "error": null,
+  "path": null,
+  "started_at": null
+ },
+ "remote_download_copied_link": "",
+ "remote_download_targets": [],
+ "remote_download_answer": null,
+ "remote_downloads": [],
+ "remote_download_settings": {
+  "policy": "",
+  "allow_lan": false,
+  "max_mb": 0,
+  "allowed": []
+ },
+ "set_remote_download_settings": null,
+ "note_remind_done": {
+  "id": "",
+  "title": "",
+  "body": "",
+  "pinned": false,
+  "checklist": false,
+  "color": null,
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": "",
+  "conflict_of": null,
+  "remind_at": null,
+  "remind_done": false
+ },
+ "note_remind_at": {
+  "id": "",
+  "title": "",
+  "body": "",
+  "pinned": false,
+  "checklist": false,
+  "color": null,
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": "",
+  "conflict_of": null,
+  "remind_at": null,
+  "remind_done": false
+ },
+ "timers_list": [],
+ "timer_start": {
+  "id": "",
+  "label": "",
+  "duration_ms": null,
+  "state": "",
+  "ends_at": null,
+  "remaining_ms": null,
+  "ring_on": [],
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": ""
+ },
+ "timer_action": {
+  "id": "",
+  "label": "",
+  "duration_ms": null,
+  "state": "",
+  "ends_at": null,
+  "remaining_ms": null,
+  "ring_on": [],
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": ""
+ },
+ "timer_add": {
+  "id": "",
+  "label": "",
+  "duration_ms": null,
+  "state": "",
+  "ends_at": null,
+  "remaining_ms": null,
+  "ring_on": [],
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": ""
+ },
+ "timer_set_ring": {
+  "id": "",
+  "label": "",
+  "duration_ms": null,
+  "state": "",
+  "ends_at": null,
+  "remaining_ms": null,
+  "ring_on": [],
+  "created_at": null,
+  "updated_at": null,
+  "by": "",
+  "by_name": ""
+ },
+ "timer_devices": [],
+ "dnd_devices": [],
+ "phone_quiet": [],
+ "peer_permissions": {
+  "node_id": "",
+  "control": false,
+  "screen": false,
+  "kvm": false
+ },
+ "all_permissions": [],
+ "set_peer_permission": {
+  "node_id": "",
+  "control": false,
+  "screen": false,
+  "kvm": false
+ },
+ "permission_answer": null,
+ "permission_notice": null,
+ "dismiss_permission_notice": null,
+ "kvm_settings": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_place": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_set_enabled": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_set_allowed": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_set_clip": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_set_swap": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_set_hotkey": {
+  "supported": false,
+  "blocked": null,
+  "enabled": false,
+  "clip_follows": false,
+  "swap_mods": false,
+  "hotkey": "",
+  "layout": [],
+  "computers": [],
+  "state": {
+   "role": "",
+   "node_id": null,
+   "name": null,
+   "edge": null,
+   "pos": null,
+   "reason": null
+  },
+  "os": ""
+ },
+ "kvm_stop": null,
+ "screen_watch": null,
+ "phone_touch": null,
+ "phone_camera_watch": null,
+ "phone_camera_control": null,
+ "media_command": null,
+ "media_watch": false,
+ "media_supported": false,
+ "verification_codes": [],
+ "copy_verification_code": null,
+ "dismiss_verification_code": false,
+ "otp_auto_copy": false,
+ "set_otp_auto_copy": null,
+ "insert_request": "",
+ "insert_cancel": null,
+ "insert_supported": false,
+ "insert_settings": {
+  "paste": false,
+  "blocked": null
+ },
+ "set_insert_paste": null,
+ "phone_audio_status": {
+  "node": null,
+  "state": "",
+  "buffered_ms": 0,
+  "underruns": 0,
+  "late": 0,
+  "trimmed": 0,
+  "target_ms": 0,
+  "concealed_ms": 0,
+  "recovered": 0,
+  "drift_ppm": 0,
+  "low_latency": false,
+  "via_bluetooth": false,
+  "plc": 0,
+  "latency_ms": null,
+  "before_ms": null,
+  "rate": 0,
+  "output": null,
+  "volume": 0,
+  "error": null
+ },
+ "phone_audio_outputs": {
+  "outputs": [],
+  "default_output": null
+ },
+ "phone_audio_start": null,
+ "phone_audio_stop": null,
+ "phone_audio_set_volume": null,
+ "phone_audio_set_output": null,
+ "computer_audio_status": {
+  "supported": false,
+  "playing_to": [],
+  "asked": [],
+  "via_bluetooth": [],
+  "error": null
+ },
+ "computer_audio_offer": null,
+ "computer_audio_stop": null,
+ "mute_here": {
+  "supported": false,
+  "on": false,
+  "active": false,
+  "why": null
+ },
+ "set_mute_here": null,
+ "audio_route": "",
+ "set_audio_route": null,
+ "audio_via": "",
+ "computer_notifs_state": {
+  "os": "",
+  "supported": false,
+  "on": false,
+  "apps": [],
+  "error": null,
+  "phones": []
+ },
+ "computer_notifs_set_enabled": {
+  "os": "",
+  "supported": false,
+  "on": false,
+  "apps": [],
+  "error": null,
+  "phones": []
+ },
+ "computer_notifs_set_muted": {
+  "os": "",
+  "supported": false,
+  "on": false,
+  "apps": [],
+  "error": null,
+  "phones": []
+ },
+ "send_input": null,
+ "send_clipboard_image": "",
+ "send_clipboard": "",
+ "calls_status": {
+  "available": false,
+  "enabled": false,
+  "device": null,
+  "device_name": null,
+  "connected": false,
+  "phase": "idle",
+  "number": null,
+  "name": null,
+  "since_ms": null,
+  "held": false,
+  "muted": false,
+  "signal": null,
+  "battery": null,
+  "audio": "phone",
+  "output": null,
+  "input": null,
+  "target": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "answer": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "mac_audio": false,
+  "problem": null,
+  "os": ""
+ },
+ "calls_devices": [],
+ "calls_set_enabled": {
+  "available": false,
+  "enabled": false,
+  "device": null,
+  "device_name": null,
+  "connected": false,
+  "phase": "idle",
+  "number": null,
+  "name": null,
+  "since_ms": null,
+  "held": false,
+  "muted": false,
+  "signal": null,
+  "battery": null,
+  "audio": "phone",
+  "output": null,
+  "input": null,
+  "target": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "answer": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "mac_audio": false,
+  "problem": null,
+  "os": ""
+ },
+ "calls_set_device": {
+  "available": false,
+  "enabled": false,
+  "device": null,
+  "device_name": null,
+  "connected": false,
+  "phase": "idle",
+  "number": null,
+  "name": null,
+  "since_ms": null,
+  "held": false,
+  "muted": false,
+  "signal": null,
+  "battery": null,
+  "audio": "phone",
+  "output": null,
+  "input": null,
+  "target": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "answer": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "mac_audio": false,
+  "problem": null,
+  "os": ""
+ },
+ "calls_set_answer_audio": {
+  "available": false,
+  "enabled": false,
+  "device": null,
+  "device_name": null,
+  "connected": false,
+  "phase": "idle",
+  "number": null,
+  "name": null,
+  "since_ms": null,
+  "held": false,
+  "muted": false,
+  "signal": null,
+  "battery": null,
+  "audio": "phone",
+  "output": null,
+  "input": null,
+  "target": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "answer": {
+   "phone": false,
+   "output": null,
+   "input": null
+  },
+  "mac_audio": false,
+  "problem": null,
+  "os": ""
+ },
+ "calls_audio_devices": {
+  "outputs": [],
+  "inputs": [],
+  "default_output": null,
+  "default_input": null
+ },
+ "calls_connect": null,
+ "calls_disconnect": null,
+ "call_answer": null,
+ "call_decline": null,
+ "call_hang_up": null,
+ "call_dial": null,
+ "call_redial": null,
+ "call_dtmf": null,
+ "call_mute": null,
+ "call_set_audio": null,
+ "call_audio_to_phone": null,
+ "call_audio_to_mac": null,
+ "take_send_request": null,
+ "send_paths": {
+  "files": 0,
+  "failed": []
+ },
+ "file_manager_menu": {
+  "os": "",
+  "switchable": false,
+  "on": false
+ },
+ "set_file_manager_menu": {
+  "os": "",
+  "switchable": false,
+  "on": false
+ },
+ "sync_pairs": [],
+ "sync_create": "",
+ "sync_accept": null,
+ "sync_remove": null,
+ "sync_pause": null,
+ "sync_now": null,
+ "sync_max_size_mb": null,
+ "sync_set_max_size_mb": null,
+ "sync_open_folder": null,
+ "search": {
+  "groups": []
+ },
+ "activity_feed": {
+  "items": [],
+  "more": false,
+  "hidden": [],
+  "cleared_at": null
+ },
+ "set_activity_hidden": [],
+ "clear_activity": null,
+ "restore_activity": null,
+ "quick_panel_enabled": false,
+ "set_quick_panel_enabled": null,
+ "quick_panel_hide": null,
+ "quick_panel_open_main": null,
+ "quick_panel_action": null,
+ "quick_panel_clips": [],
+ "diagnose": {
+  "node_id": "",
+  "name": "",
+  "verdict": "",
+  "reason": null,
+  "last_try_ago_s": null,
+  "link": null,
+  "ping_supported": false,
+  "rtt": null,
+  "this_device": {
+   "ip": "",
+   "ipv6": null,
+   "quic_port": 0,
+   "mapped_quic": null,
+   "public": null,
+   "nat": "unknown"
+  },
+  "peer": {
+   "ip": "",
+   "ipv6": null,
+   "quic_port": 0,
+   "mapped_quic": null,
+   "public": null,
+   "nat": "unknown"
+  },
+  "source": "registry",
+  "both_symmetric": false,
+  "relay": {
+   "signed_in": false,
+   "connected": false,
+   "reachable": null,
+   "error": null
+  },
+  "attempts": [],
+  "reconnect": {
+   "last_ms": null,
+   "avg_ms": null,
+   "samples": 0,
+   "last_trigger": null,
+   "network_avg_ms": null,
+   "push_avg_ms": null,
+   "wake_avg_ms": null,
+   "lifetime_last_s": null,
+   "lifetime_avg_s": null,
+   "up_for_s": null,
+   "last_drop": null,
+   "last_drop_ago_s": null,
+   "drops": [],
+   "reach": null,
+   "quiet_for_s": null
+  },
+  "envelope": {
+   "version": 0,
+   "v2_only": false,
+   "accepted": 0,
+   "replays": 0,
+   "stale": 0,
+   "downgrades": 0,
+   "wrong_recipient": 0,
+   "spoofed": 0,
+   "signed": false,
+   "sig_required": false,
+   "unsigned": 0,
+   "bad_signature": 0,
+   "revoked": 0,
+   "skew_ms": null
+  }
+ },
+ "speed_test": "",
+ "cancel_speed_test": false,
+ "links_map": {
+  "width": null,
+  "height": null,
+  "me": {
+   "node_id": "",
+   "x": null,
+   "y": null,
+   "connected": false
+  },
+  "spots": [],
+  "edges": [],
+  "map": {
+   "node_id": "",
+   "name": "",
+   "devices": [],
+   "others": []
+  }
+ },
+ "nearby_media": false,
+ "set_nearby_media": null,
+ "nearby_status": {
+  "node_id": "",
+  "media": false,
+  "near": null,
+  "low_latency": false,
+  "path": "",
+  "latency_ms": null,
+  "before_ms": null,
+  "rtt_ms": null
+ },
+ "key_changes": [],
+ "trust_new_key": null,
+ "dismiss_key_change": false,
+ "own_fingerprint": "",
+ "key_verification": null,
+ "set_device_verified": null,
+ "remove_device": null,
+ "allow_device_again": null,
+ "removed_devices": [],
+ "start_key_rotation": {
+  "state": "",
+  "by_me": false,
+  "by_name": "",
+  "devices": [],
+  "expires_in_s": 0,
+  "needs_passphrase": false,
+  "mismatch_name": ""
+ },
+ "key_rotation": {
+  "state": "",
+  "by_me": false,
+  "by_name": "",
+  "devices": [],
+  "expires_in_s": 0,
+  "needs_passphrase": false,
+  "mismatch_name": ""
+ },
+ "finish_key_rotation": {
+  "state": "",
+  "by_me": false,
+  "by_name": "",
+  "devices": [],
+  "expires_in_s": 0,
+  "needs_passphrase": false,
+  "mismatch_name": ""
+ },
+ "cancel_key_rotation": {
+  "state": "",
+  "by_me": false,
+  "by_name": "",
+  "devices": [],
+  "expires_in_s": 0,
+  "needs_passphrase": false,
+  "mismatch_name": ""
+ },
+ "dismiss_key_rotation": null,
+ "passphrase_strength": 0,
+ "change_account_password": null,
+ "sign_out_all_devices": false,
+ "account_sessions": [],
+ "sign_out_session": null,
+ "signed_out_elsewhere": false,
+ "sign_in_again": null,
+ "account_password_problem": null,
+ "settings_backup_save": null,
+ "settings_restore_open": null,
+ "settings_restore_apply": {
+  "applied": [],
+  "failed": [],
+  "restart": false
+ },
+ "restart_app": null,
+ "update_status": {
+  "current": "",
+  "disabled": null,
+  "auto_install": false,
+  "channel": "",
+  "phase": "",
+  "last_check": null,
+  "error": null,
+  "available": null,
+  "later": false,
+  "downloaded": null,
+  "total": null
+ },
+ "update_check": {
+  "current": "",
+  "disabled": null,
+  "auto_install": false,
+  "channel": "",
+  "phase": "",
+  "last_check": null,
+  "error": null,
+  "available": null,
+  "later": false,
+  "downloaded": null,
+  "total": null
+ },
+ "update_install": null,
+ "update_later": null,
+ "set_update_auto": {
+  "current": "",
+  "disabled": null,
+  "auto_install": false,
+  "channel": "",
+  "phase": "",
+  "last_check": null,
+  "error": null,
+  "available": null,
+  "later": false,
+  "downloaded": null,
+  "total": null
+ },
+ "browser_extension_status": {
+  "browsers": [],
+  "chrome_ids": [],
+  "dev_chrome_id": "",
+  "firefox_id": "",
+  "listening": false,
+  "error": null
+ },
+ "browser_extension_install": {
+  "browsers": [],
+  "chrome_ids": [],
+  "dev_chrome_id": "",
+  "firefox_id": "",
+  "listening": false,
+  "error": null
+ },
+ "browser_extension_remove": {
+  "browsers": [],
+  "chrome_ids": [],
+  "dev_chrome_id": "",
+  "firefox_id": "",
+  "listening": false,
+  "error": null
+ }
+}

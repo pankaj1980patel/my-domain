@@ -263,6 +263,9 @@ object Core {
     /** Ask the UI to open Timers (a timer's notification). */
     var showTimers by mutableStateOf(false)
 
+    /** Debug builds: a screen asked for from adb (`md_screen`, [DebugScreens]). */
+    var showScreen by mutableStateOf<ScreenRequest?>(null)
+
     /** A scanned `mydomain://join?…` link (the camera or Lens opened it),
      *  waiting for the sign-in screen to join with it. */
     var pendingJoin by mutableStateOf<String?>(null)
@@ -291,7 +294,83 @@ object Core {
      *  [clipHistory]; the clipboard listener skips recording it once. */
     @Volatile private var recopied: String? = null
 
-    fun engine(): MdEngine? = runningEngine()
+    /** The running engine; none while [sample] mode is on, so no screen
+     *  reads (or changes) the user's own data then. */
+    fun engine(): MdEngine? = if (sample) null else runningEngine()
+
+    /** Debug builds' sample mode (screenshots, `--ez md_sample true`):
+     *  [SampleData]'s made-up devices on every screen, the engine and its
+     *  events ignored. In memory only: nothing is saved. */
+    @Volatile var sample = false
+        private set
+
+    /** Show [SampleData] instead of the user's devices (debug builds; see
+     *  MainActivity). [signedIn] false: the sign-in screen. Main thread. */
+    fun startSample(signedIn: Boolean = true) {
+        sample = true
+        val now = System.currentTimeMillis()
+        me = DeviceIdentity(SampleData.ME, SampleData.MY_NAME, SampleData.MY_IP, 47103.toUShort())
+        session = Session(SampleData.USER, SampleData.SERVER, true)
+        peers = SampleData.devices.map {
+            PeerInfo(it.node, it.name, it.ip, 47103.toUShort(), it.source, it.link != null, it.link)
+        }
+        ready = signedIn
+        links.clear()
+        progress.clear()
+        quality.clear()
+        SampleData.devices.forEach { d ->
+            d.link?.let { links[d.node] = it }
+            d.quality?.let { quality[d.node] = it }
+            d.stage?.let { progress[d.node] = it }
+        }
+        DeviceKinds.kinds.clear()
+        SampleData.devices.forEach { DeviceKinds.kinds[it.node] = it.kind }
+        deviceStatus.clear()
+        deviceStatus.putAll(SampleData.statuses(now))
+        nowPlaying.clear()
+        nowPlaying.putAll(SampleData.playing(now))
+        messages.clear()
+        messages.addAll(SampleData.messages(now))
+        transfers.clear()
+        transfers.addAll(SampleData.transfers())
+        clipHistory.clear()
+        clipHistory.addAll(SampleData.clips(now))
+        activity.clear()
+        activity.addAll(SampleData.activity(now))
+        apps.clear()
+        screens.clear()
+        listings.clear()
+        syncPairs.clear()
+        // Read from the engine (none now): whatever was shown before goes.
+        Notes.byId.clear()
+        Timers.byId.clear()
+        ReadLater.byId.clear()
+    }
+
+    /** Back to the user's own devices after sample mode (main thread). */
+    fun endSample() {
+        if (!sample) return
+        sample = false
+        links.clear()
+        progress.clear()
+        quality.clear()
+        deviceStatus.clear()
+        nowPlaying.clear()
+        apps.clear()
+        screens.clear()
+        listings.clear()
+        messages.clear()
+        transfers.clear()
+        clipHistory.clear()
+        activity.clear()
+        syncPairs.clear()
+        DeviceKinds.kinds.clear()
+        // Read everything again (Notes, Timers and Read later too).
+        Thread {
+            engine()?.let { DeviceKinds.load(it) }
+            reload()
+        }.start()
+    }
 
     /** Events that change what the home-screen widget shows. */
     private val WIDGET_KINDS = setOf("peers_updated", "peer_connected", "peer_disconnected", "device_status")
@@ -492,6 +571,9 @@ object Core {
 
     /** Every core event, from NetService's listener (core threads). */
     fun onEvent(name: String, payloadJson: String) {
+        // Sample mode (debug screenshots): the screens show made-up devices;
+        // the real ones' events would mix in.
+        if (sample) return
         // A screen snapshot: decoded here, off the main thread, and kept out
         // of the logs (it's a big picture, twice a second).
         if (name == "screen-frame") {
