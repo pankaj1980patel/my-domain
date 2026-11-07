@@ -8,6 +8,7 @@
 import type { Component } from "solid-js";
 import type { LucideProps } from "lucide-solid";
 import ActivityIcon from "lucide-solid/icons/activity";
+import ListIcon from "lucide-solid/icons/list";
 import ChevronDownIcon from "lucide-solid/icons/chevron-down";
 import ChevronRightIcon from "lucide-solid/icons/chevron-right";
 import CircleCheckIcon from "lucide-solid/icons/circle-check";
@@ -200,6 +201,7 @@ const ICONS = {
   "bell-dot": BellDotIcon,
   "find": MapPinIcon,
   "home": LayoutDashboardIcon,
+  list: ListIcon,
 } satisfies Record<string, Component<LucideProps>>;
 
 export type IconName = keyof typeof ICONS;

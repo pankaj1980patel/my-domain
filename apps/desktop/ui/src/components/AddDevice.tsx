@@ -3,7 +3,7 @@
 // Watches for the new device; when it joins, says so and closes. Closing it
 // withdraws the invite.
 
-import { createSignal, onCleanup, Show } from "solid-js";
+import { createSignal, onMount, onCleanup, Show } from "solid-js";
 import { commands, type JoinInvite } from "../bindings";
 import { refreshDevices, unwrap } from "../lib/core";
 import { friendlyError, niceName } from "../lib/words";
@@ -20,7 +20,10 @@ function mmss(secs: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function AddDevice() {
+/** "Add a device": the button, then the invite (QR code and code) in its
+ *  place. `startOpen`: open at once (Home's Add device), and `onClose` when
+ *  it's closed. */
+export function AddDevice(props: { startOpen?: boolean; onClose?: () => void } = {}) {
   const [open, setOpen] = createSignal(false);
   const [invite, setInvite] = createSignal<JoinInvite>();
   const [left, setLeft] = createSignal(0);
@@ -88,7 +91,11 @@ export function AddDevice() {
     setOpen(false);
     setInvite(undefined);
     focusSoon(() => openButton);
+    props.onClose?.();
   };
+  onMount(() => {
+    if (props.startOpen) void start();
+  });
 
   onCleanup(() => {
     if (open()) close();

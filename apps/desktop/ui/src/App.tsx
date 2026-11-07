@@ -58,7 +58,7 @@ import { PermissionAsk, PermissionNotice } from "./components/PeerPermissions";
 type Ask = { id: string; tile?: string; at: number };
 
 type View =
-  | { name: "home" }
+  | { name: "home"; only?: boolean }
   | { name: "device"; node: string; tab?: Ask }
   | { name: "notes"; request?: NoteRequest }
   | { name: "timers" }
@@ -326,7 +326,17 @@ export default function App() {
             {/* Groups, as the places go together: devices; what moves
                 between them; doing things; keeping safe. */}
             <ul class="nav-list">
-              <NavItem place="home" icon="devices" tone="cyan" label="nav.devices" active={is("home")} count={connected()} countWords="a11y.devicesConnected" />
+              <NavItem place="home" icon="home" tone="cyan" label="nav.overview" active={view().name === "home" && !(view() as { only?: boolean }).only} />
+              <NavItem
+                place="home"
+                icon="devices"
+                tone="cyan"
+                label="nav.allDevices"
+                active={(view().name === "home" && !!(view() as { only?: boolean }).only) || view().name === "device"}
+                count={connected()}
+                countWords="a11y.devicesConnected"
+                onClick={() => go({ name: "home", only: true })}
+              />
               <NavItem place="linksMap" icon="map" tone="cyan" label="nav.connections" active={is("linksMap")} />
             </ul>
             <hr class="nav-divider" />
@@ -446,12 +456,17 @@ export default function App() {
               </div>
             </Show>
             <Switch>
-              <Match when={view().name === "home"}>
-                <Home
-                  onOpen={openDevice}
-                  onMap={() => go({ name: "linksMap" })}
-                  onSetup={() => go({ name: "setup" })}
-                />
+              <Match when={view().name === "home" && view()}>
+                {(v) => (
+                  <Home
+                    onlyDevices={!!(v() as { only?: boolean }).only}
+                    onOpen={openDevice}
+                    onMap={() => go({ name: "linksMap" })}
+                    onSetup={() => go({ name: "setup" })}
+                    onHealth={() => go({ name: "health" })}
+                    onActivity={() => go({ name: "activity" })}
+                  />
+                )}
               </Match>
               <Match when={view().name === "health"}>
                 <Health {...healthNav} />
@@ -557,6 +572,7 @@ export default function App() {
 function mockView(): View {
   const p = new URLSearchParams(location.search);
   if (p.get("mock") !== "1") return { name: "home" };
+  if ((p.get("view") ?? "home") === "home") return { name: "home", only: p.get("only") === "1" };
   const name = p.get("view") ?? "home";
   switch (name) {
     case "device":

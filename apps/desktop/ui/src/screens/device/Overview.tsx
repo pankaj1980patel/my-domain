@@ -3,29 +3,17 @@
 // one-click actions (each only when the device offers it); on the right,
 // the health check's word on it, what it may do here, and what it is.
 
-import { createEffect, createSignal, For, on, onCleanup, onMount, Show, type JSX } from "solid-js";
-import { listen } from "@tauri-apps/api/event";
-import { commands, type ActivityItem_Serialize as ActivityItem, type PeerPermissions } from "../../bindings";
-import { peerModel, peerName, runAction, state, type Space } from "../../lib/core";
-import { activityIcon, activityText } from "../../lib/activity";
-import { deviceProblems, runHealth, running } from "../../lib/health";
-import { humanSize, linkLabel, timeAgo, friendlyError } from "../../lib/words";
-import { linkStateOf, toast } from "../../components/ui";
+import { createEffect, createSignal, For, on, Show, type JSX } from "solid-js";
+import { commands, type PeerPermissions } from "../../bindings";
+import { peerModel, peerName, state, type Space } from "../../lib/core";
+import { checkTitle, deviceProblems, runHealth, running } from "../../lib/health";
+import { humanSize, linkLabel } from "../../lib/words";
+import { linkStateOf } from "../../components/ui";
 import { Icon, IconChip, type IconName, type Tone } from "../../components/Icon";
-import { quickRing, quickSendClipboard, quickSendFile } from "../../lib/quickActions";
 import { osName } from "../../lib/deviceInfo";
-import { t, type Key } from "../../i18n";
-
-/** Activity kinds by colour: files blue, messages violet, calls green... */
-const KIND_TONE: Record<string, Tone> = {
-  files: "blue",
-  clipboard: "cyan",
-  messages: "violet",
-  notifications: "violet",
-  calls: "green",
-  connections: "cyan",
-  other: "amber",
-};
+import { t, tn, type Key } from "../../i18n";
+import { RecentActivity } from "../../components/RecentActivity";
+import { QuickGrid } from "../../components/QuickGrid";
 
 export default function Overview(props: {
   node: string;
@@ -38,18 +26,6 @@ export default function Overview(props: {
   const s = () => linkStateOf(props.node);
   const live = () => s() === "direct" || s() === "relay";
 
-  // --- recent activity (the timeline, this device only) ---------------------
-  const [recent, setRecent] = createSignal<ActivityItem[] | null>(null);
-  const loadRecent = () =>
-    commands
-      .activityFeed({ node: props.node, kinds: null, text: null, before_ts: null, before_id: null, limit: 4 })
-      .then((p) => setRecent(p.items.slice(0, 4)), () => setRecent([]));
-  createEffect(on(() => props.node, loadRecent));
-  onMount(() => {
-    const off = listen("activity-changed", loadRecent);
-    onCleanup(() => off.then((f) => f()).catch(() => {}));
-  });
-
   // --- permissions (what it may do on this computer) ------------------------
   const [perms, setPerms] = createSignal<PeerPermissions>();
   createEffect(on(() => props.node, (n) => commands.peerPermissions(n).then(setPerms, () => {})));
@@ -61,37 +37,6 @@ export default function Overview(props: {
     if (!live()) return 0;
     const q = state.quality[props.node];
     return q === "excellent" ? 100 : q === "good" ? 70 : q === "weak" ? 35 : 100;
-  };
-
-  // --- quick actions -------------------------------------------------------------
-  const has = (a: string) => !!st()?.actions.includes(a);
-  const locate = () =>
-    runAction(props.node, "locate", {})
-      .then(() => toast(t("locate.asking")))
-      .catch((e) => toast(friendlyError(e), "error"));
-  const actions = (): { icon: IconName; tone: Tone; label: string; run: () => unknown; off?: string }[] => {
-    const out: { icon: IconName; tone: Tone; label: string; run: () => unknown; off?: string }[] = [
-      { icon: "send-file", tone: "blue", label: t("quick.sendFile"), run: () => quickSendFile(props.node) },
-      { icon: "send-clip", tone: "cyan", label: t("quick.sendClipboard"), run: () => quickSendClipboard(props.node) },
-    ];
-    if (has("screen"))
-      out.push({
-        icon: "screen",
-        tone: "blue",
-        label: st()?.platform === "android" ? t("phoneScreen.title") : t("screen.title"),
-        run: () => props.onGo("remote", "screen"),
-      });
-    if (has("dial")) out.push({ icon: "call", tone: "green", label: t("control.dial"), run: () => props.onGo("remote", "control") });
-    out.push({ icon: "ring", tone: "amber", label: t("control.ring"), run: () => quickRing(props.node) });
-    if (has("locate"))
-      out.push({
-        icon: "find",
-        tone: "red",
-        label: t("locate.locate"),
-        run: locate,
-        off: st()?.locationSharing ? undefined : t("locate.offOn", { name: name() }),
-      });
-    return out;
   };
 
   // --- health ------------------------------------------------------------------------
@@ -144,48 +89,14 @@ export default function Overview(props: {
         </div>
 
         <div class="dash-pair">
-          <section class="tile dash-card" aria-labelledby="dash-recent">
-            <div class="dash-head">
-              <Icon name="activity" tone="violet" />
-              <h2 id="dash-recent">{t("dash.recent")}</h2>
-              <button class="link small dash-more" onClick={props.onActivity}>
-                {t("dash.viewAll")}
-                <Icon name="arrow-right" size={14} />
-              </button>
-            </div>
-            <Show when={recent()?.length} fallback={<p class="muted small">{recent() ? t("dash.noActivity", { name: name() }) : "…"}</p>}>
-              <ul class="dash-feed">
-                <For each={recent()}>
-                  {(a) => (
-                    <li>
-                      <IconChip name={activityIcon(a)} tone={KIND_TONE[a.kind] ?? "cyan"} />
-                      <span class="dash-feed-text">{activityText(a, name())}</span>
-                      <span class="muted small dash-feed-time">{timeAgo(a.ts ?? 0)}</span>
-                    </li>
-                  )}
-                </For>
-              </ul>
-            </Show>
-          </section>
+          <RecentActivity node={props.node} onViewAll={props.onActivity} />
 
           <section class="tile dash-card" aria-labelledby="dash-quick">
             <div class="dash-head">
               <Icon name="quick" tone="amber" />
               <h2 id="dash-quick">{t("dash.quick")}</h2>
             </div>
-            <div class="quick-grid">
-              <For each={actions()}>
-                {(a) => (
-                  <button class="quick-tile" disabled={!!a.off} title={a.off ?? a.label} onClick={() => a.run()}>
-                    <Icon name={a.icon} tone={a.tone} size={24} />
-                    <span>{a.label}</span>
-                    <Show when={a.off}>
-                      <span class="sr-only">{t("a11y.unavailable", { reason: a.off ?? "" })}</span>
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
+            <QuickGrid node={props.node} onGo={props.onGo} />
           </section>
         </div>
       </div>
@@ -207,7 +118,9 @@ export default function Overview(props: {
             </div>
           </div>
           <p class="muted small">
-            {problems().length ? t("dash.healthBadHint", { n: problems().length }) : t("dash.healthGoodHint", { name: name() })}
+            <Show when={problems().length} fallback={t("dash.healthGoodHint", { name: name() })}>
+              {tn("dash.problems", problems().length)}: {checkTitle(problems()[0])}
+            </Show>
           </p>
           <button class="btn btn-soft btn-sm" disabled={running()} onClick={() => runHealth(true)}>
             <Icon name="health" />
