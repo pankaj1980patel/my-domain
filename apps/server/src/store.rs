@@ -49,6 +49,8 @@ pub struct LimitRec {
     pub expires_ms: i64,
 }
 
+// async_trait's expansion trips clippy::double_must_use on newer Rust.
+#[allow(clippy::double_must_use)]
 #[axum::async_trait]
 pub trait Store: Send + Sync {
     /// The account's session state; `None` if there is no such account.
