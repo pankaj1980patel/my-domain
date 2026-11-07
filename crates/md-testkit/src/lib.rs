@@ -380,7 +380,17 @@ impl TestNode {
     /// Start a node whose signals go through `hub`, with the given config
     /// (e.g. only some ladder rungs enabled).
     pub fn start_on_hub(id: &str, hub: &Arc<SignalHub>, config: CoreConfig) -> Self {
-        let node = Self::start_full(MockPlatform::new(id), config);
+        Self::start_on_hub_with(MockPlatform::new(id), hub, config)
+    }
+
+    /// As [`TestNode::start_on_hub`], on a platform set up beforehand (e.g.
+    /// with keys already in its store).
+    pub fn start_on_hub_with(
+        platform: MockPlatform,
+        hub: &Arc<SignalHub>,
+        config: CoreConfig,
+    ) -> Self {
+        let node = Self::start_full(platform, config);
         hub.register(&node.engine);
         node
     }

@@ -147,7 +147,8 @@ pub struct Plaintext {
 ///
 /// A version 2 envelope may also carry the sender's device-key signature
 /// (`sig`, Ed25519, base64) over its header and ciphertext, and, when the
-/// sender has never met the recipient directly, its public key (`pk`): see
+/// sender has never met the recipient directly (or the recipient asked for
+/// it), its public key (`pk`): see
 /// `transport::envelope` (signatures go only to devices that said `env: 3`).
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Envelope {

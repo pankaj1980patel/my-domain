@@ -431,19 +431,41 @@ fn open_envelope<P: Platform>(
             match check_signature(ctx, from, env) {
                 Ok(signed) => signed,
                 Err(why) => {
+                    if why == envelope::Reject::Unsigned && !env.sig.is_empty() {
+                        // Signed, but its key is missing here: ask for it.
+                        ask_for_key(ctx, from);
+                    }
                     refused(ctx, from, protocol, why);
                     return None;
                 }
             }
         } else {
-            false
+            Signed::No
         };
         // Copies can only be recorded where the link isn't encrypted end
         // to end: those ids go to disk too.
         let recordable = matches!(protocol, "RELAY" | "BLE");
-        let verdict = ctx.env.check(&*ctx.platform, &me, from, &hdr, recordable);
-        if signed && verdict.is_ok() {
-            ctx.env.signed_by(&*ctx.platform, from);
+        let mut verdict = ctx.env.check(&*ctx.platform, &me, from, &hdr, recordable);
+        if verdict.is_ok() {
+            match signed {
+                Signed::Yes => ctx.env.signed_by(&*ctx.platform, from),
+                // Pinned only now: from an envelope that passed every check.
+                Signed::FirstUse => {
+                    match crate::device_key::check(
+                        &ctx.peer_keys,
+                        &*ctx.platform,
+                        from,
+                        Some(&env.pk),
+                    ) {
+                        crate::device_key::Verdict::Accept => {
+                            ctx.env.signed_by(&*ctx.platform, from);
+                        }
+                        _ => verdict = Err(envelope::Reject::BadSignature),
+                    }
+                }
+                Signed::NoKey => ask_for_key(ctx, from),
+                Signed::No => {}
+            }
         }
         (pt, verdict, which)
     };
@@ -472,31 +494,45 @@ fn refused<P: Platform>(ctx: &NetCtx<P>, from: &str, protocol: &str, why: envelo
     }
 }
 
+/// What [`check_signature`] made of an envelope's signature.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Signed {
+    /// Signed by the key pinned for its sender.
+    Yes,
+    /// Signed by the key it carries (`pk`), and none is pinned for its
+    /// sender: pin it once the envelope passed every other check.
+    FirstUse,
+    /// Signed, but there's no key to check it against (none pinned, none
+    /// sent along): taken on the account key alone, and the key is asked for.
+    NoKey,
+    /// Unsigned, from a device not seen signing (or signatures are off).
+    No,
+}
+
 /// Check a version 2 envelope's signature (`transport::envelope`, `env: 3`)
-/// against the device key pinned for its sender `from`. `Ok(true)`: signed
-/// and it checks out; `Ok(false)`: unsigned, or signed with no key to check
-/// it against, from a device not seen signing (taken on the account key
-/// alone, as before signatures).
+/// against the device key pinned for its sender `from` (or, with none
+/// pinned, the one it carries). Refused: unsigned (or uncheckable) from a
+/// device seen signing, or a signature that doesn't check out.
 fn check_signature<P: Platform>(
     ctx: &NetCtx<P>,
     from: &str,
     env: &Envelope,
-) -> Result<bool, envelope::Reject> {
+) -> Result<Signed, envelope::Reject> {
     use envelope::Reject;
     if !ctx.config.envelope_sig {
-        return Ok(false);
+        return Ok(Signed::No);
     }
     let required = ctx.env.requires_sig(from);
     if env.sig.is_empty() {
         return if required {
             Err(Reject::Unsigned)
         } else {
-            Ok(false)
+            Ok(Signed::No)
         };
     }
     if let Some(pin) = crate::device_key::pinned(&ctx.peer_keys, &*ctx.platform, from) {
         return if envelope::signature_ok(env, &pin) {
-            Ok(true)
+            Ok(Signed::Yes)
         } else {
             Err(Reject::BadSignature)
         };
@@ -510,16 +546,52 @@ fn check_signature<P: Platform>(
         if ctx.revoked.key_revoked(&env.pk) {
             return Err(Reject::Revoked);
         }
-        return match crate::device_key::check(&ctx.peer_keys, &*ctx.platform, from, Some(&env.pk)) {
-            crate::device_key::Verdict::Accept => Ok(true),
-            _ => Err(Reject::BadSignature),
-        };
+        return Ok(Signed::FirstUse);
     }
     if required {
         Err(Reject::Unsigned)
     } else {
-        Ok(false)
+        Ok(Signed::NoKey)
     }
+}
+
+/// `from` signs what it sends here, but no key is pinned for it and it sent
+/// none along (it has this device's key, so it saw no need): ask for it,
+/// when it answers such a request (`env: 4`) and wasn't just asked.
+fn ask_for_key<P: Platform>(ctx: &NetCtx<P>, from: &str) {
+    if !ctx.env.ask_for_key(from) {
+        return;
+    }
+    let text = serde_json::json!({ "type": envelope::KEY_REQUEST, "want": true }).to_string();
+    let pt = Plaintext {
+        from: ctx.identity.lock().name.clone(),
+        text,
+        ..Default::default()
+    };
+    let _ = send_plaintext(ctx, from, &pt);
+}
+
+/// A key request (`envelope::KEY_REQUEST`) from `node`, or the reply to
+/// ours: handled here, never shown. To a request: add this device's key to
+/// everything that goes to `node`, and reply at once (signed, with it).
+/// The reply needs nothing more: opening it pinned the key.
+fn key_request<P: Platform>(ctx: &NetCtx<P>, node: &str, text: &str) -> bool {
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(text) else {
+        return false;
+    };
+    if value["type"] != envelope::KEY_REQUEST {
+        return false;
+    }
+    if value["want"] == true && ctx.config.envelope_sig {
+        ctx.env.key_wanted_by(node);
+        let pt = Plaintext {
+            from: ctx.identity.lock().name.clone(),
+            text: serde_json::json!({ "type": envelope::KEY_REQUEST }).to_string(),
+            ..Default::default()
+        };
+        let _ = send_plaintext(ctx, node, &pt);
+    }
+    true
 }
 
 /// Decrypt and dispatch an incoming envelope. Clipboard control messages are
@@ -564,6 +636,13 @@ pub fn handle_incoming<P: Platform>(
         };
         let _ = send_plaintext(ctx, node, &ack);
         if !outbox::first_arrival(&ctx.seen, node, id) {
+            return;
+        }
+    }
+
+    // A request for this device's key (or the reply to ours).
+    if let Some(node) = from_node {
+        if key_request(ctx, node, &msg.text) {
             return;
         }
     }
@@ -616,9 +695,10 @@ pub(crate) fn seal<P: Platform>(
         let mut env = envelope::seal(&k, &me, node_id, &plaintext);
         if ctx.config.envelope_sig && ctx.env.sends_sig(node_id) {
             if let Some(env) = env.as_mut() {
-                // Never met directly: it may not have our key pinned.
-                let with_key =
-                    crate::device_key::pinned(&ctx.peer_keys, &*ctx.platform, node_id).is_none();
+                // Never met directly: it may not have our key pinned. Or it
+                // asked for it (it has none, though we have its key).
+                let with_key = ctx.env.sends_pk(node_id)
+                    || crate::device_key::pinned(&ctx.peer_keys, &*ctx.platform, node_id).is_none();
                 envelope::sign(env, &ctx.device_key, with_key);
             }
         }

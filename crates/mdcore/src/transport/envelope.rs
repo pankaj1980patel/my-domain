@@ -56,10 +56,26 @@
 //! that has never met the recipient directly (it pinned no key for it)
 //! adds its public key (`pk`); a receiver with no key pinned for `src`
 //! takes it on first use, as QUIC does (a key that differs from a pinned
-//! one is never taken from `pk`). Once a device was seen sending a signed
-//! envelope that checked out, its unsigned ones are refused (a downgrade,
-//! remembered across restarts), and so is one whose signature doesn't
-//! check out. Trusting a device's new key (`Engine::trust_new_key`) forgets
+//! one is never taken from `pk`). It's taken only from an envelope that
+//! passed every other check: sealed under the account key, from the link's
+//! sender, for this device, in the window and not seen before.
+//!
+//! Pins needn't be symmetric: the sender may have the recipient's key (it
+//! met it over QUIC, or took its `pk`) while the recipient has none for the
+//! sender (it lost it, or never got a `pk`). Then the sender's signed
+//! envelopes come without `pk` and can't be checked, so they're taken on
+//! the account key alone and signatures never become required. A device
+//! that says `env: 4` ([`KEYS`]) answers a key request: the recipient,
+//! holding a signed envelope it can't check, asks for the key
+//! ([`KEY_REQUEST`], at most every [`ASK_EVERY_MS`]); the sender then adds
+//! `pk` to everything it sends that device (until it restarts) and replies
+//! at once, so the recipient pins the key and requires signatures from then
+//! on. The request is an ordinary envelope (account key, checked like any
+//! other) and only asks for a public key, so a forged one gains nothing.
+//!
+//! Once a device was seen sending a signed envelope that checked out, its
+//! unsigned ones are refused (a downgrade, remembered across restarts), and
+//! so is one whose signature doesn't check out. Trusting a device's new key (`Engine::trust_new_key`) forgets
 //! both downgrade marks for it ([`Guard::reset`]): the new install starts
 //! over. `CoreConfig::envelope_sig` off plays an app from before (`env: 2`).
 //! Binary media records (`transport::media`) aren't envelopes and aren't
@@ -92,6 +108,13 @@ use crate::platform::Platform;
 pub const VERSION: u8 = 2;
 /// What a device says (`env: 3`) when it also takes signed envelopes.
 pub const SIGNED: u8 = 3;
+/// What a device says (`env: 4`) when it also answers a key request.
+pub const KEYS: u8 = 4;
+/// The control message asking for the sender's device key (`want: true`),
+/// and the reply (which carries it as `pk`).
+pub const KEY_REQUEST: &str = "env_key";
+/// How often a device that can't check a sender's signatures asks it again.
+pub const ASK_EVERY_MS: u64 = 2_000;
 /// The status and `addr_update` flag saying which version a device reads.
 pub const FLAG: &str = "env";
 /// How far a message's send time may be from this device's clock, either way.
@@ -104,6 +127,8 @@ const MAX_PEERS: usize = 256;
 const PEERS_KEY: &str = "env_peers";
 /// kv key: node id -> 1 (it said `env: 3`) or 2 (it sent a signed one).
 const SIG_KEY: &str = "env_sig_peers";
+/// kv key: node id -> 1 (it said `env: 4`: it answers a key request).
+const KEYS_KEY: &str = "env_key_peers";
 /// Where the ids are written as they arrive (or, without a data file, kv).
 const SEEN_FILE: &str = "env_seen.log";
 const SEEN_KEY: &str = "env_seen";
@@ -399,6 +424,12 @@ pub struct Guard {
     peers: Mutex<HashMap<String, u8>>,
     /// node id -> 1 (said `env: 3`) or 2 (sent a signed one that checked out).
     sig: Mutex<HashMap<String, u8>>,
+    /// node id -> 1 (said `env: 4`: answers a key request).
+    keys: Mutex<HashMap<String, u8>>,
+    /// Devices that asked for this device's key: `pk` goes to them too.
+    send_pk: Mutex<std::collections::HashSet<String>>,
+    /// node id -> when its key was last asked for (ms).
+    asked: Mutex<HashMap<String, u64>>,
     seen: Mutex<HashMap<String, PeerSeen>>,
     stats: Mutex<HashMap<String, EnvelopeInfo>>,
     store: Mutex<Store>,
@@ -418,9 +449,11 @@ impl Guard {
                 *g.peers.lock() = map;
             }
         }
-        if let Some(text) = platform.kv_get(SIG_KEY) {
-            if let Ok(map) = serde_json::from_str::<HashMap<String, u8>>(&text) {
-                *g.sig.lock() = map;
+        for (map, kv) in [(&g.sig, SIG_KEY), (&g.keys, KEYS_KEY)] {
+            if let Some(text) = platform.kv_get(kv) {
+                if let Ok(m) = serde_json::from_str::<HashMap<String, u8>>(&text) {
+                    *map.lock() = m;
+                }
             }
         }
         let file = platform.data_file(SEEN_FILE);
@@ -533,6 +566,9 @@ impl Guard {
         if flag.as_u64().is_some_and(|v| v >= u64::from(SIGNED)) {
             self.raise_sig(platform, node, 1);
         }
+        if flag.as_u64().is_some_and(|v| v >= u64::from(KEYS)) {
+            Self::raise_in(&self.keys, KEYS_KEY, platform, node, 1);
+        }
     }
 
     /// Note what `node` reads (never lowers it), and keep it if it changed.
@@ -576,6 +612,46 @@ impl Guard {
     /// `node` was seen signing: refuse its unsigned envelopes.
     pub fn requires_sig(&self, node: &str) -> bool {
         self.sig.lock().get(node).copied().unwrap_or(0) >= 2
+    }
+
+    /// `node` answers a key request (it said `env: 4`).
+    pub fn answers_key_request(&self, node: &str) -> bool {
+        self.keys.lock().get(node).copied().unwrap_or(0) >= 1
+    }
+
+    /// `node` asked for this device's key: add it (`pk`) to what goes there.
+    pub fn key_wanted_by(&self, node: &str) {
+        let mut set = self.send_pk.lock();
+        if set.len() < MAX_PEERS || set.contains(node) {
+            set.insert(node.to_string());
+        }
+    }
+
+    /// Add this device's key to what goes to `node` (it asked for it).
+    pub fn sends_pk(&self, node: &str) -> bool {
+        self.send_pk.lock().contains(node)
+    }
+
+    /// Ask `node` for its key now? (It answers requests, and wasn't asked
+    /// in the last [`ASK_EVERY_MS`].)
+    pub fn ask_for_key(&self, node: &str) -> bool {
+        self.ask_for_key_at(node, now_ms())
+    }
+
+    fn ask_for_key_at(&self, node: &str, now: u64) -> bool {
+        if !self.answers_key_request(node) {
+            return false;
+        }
+        let mut asked = self.asked.lock();
+        if asked
+            .get(node)
+            .is_some_and(|t| now.saturating_sub(*t) < ASK_EVERY_MS)
+            || (asked.len() >= MAX_PEERS && !asked.contains_key(node))
+        {
+            return false;
+        }
+        asked.insert(node.to_string(), now);
+        true
     }
 
     /// A signed envelope from `node` checked out (and was taken).
@@ -720,11 +796,12 @@ impl Guard {
 }
 
 /// Say in this device's status (and `addr_update`) that it reads version 2
-/// (`env: 2`), and takes signed envelopes (`env: 3`).
+/// (`env: 2`), takes signed envelopes (`env: 3`) and answers a key request
+/// (`env: 4`).
 pub fn extend_status<P: Platform>(ctx: &crate::engine::NetCtx<P>, status: &mut Value) {
     if ctx.config.envelope_v2 {
         status[FLAG] = if ctx.config.envelope_sig {
-            SIGNED
+            KEYS
         } else {
             VERSION
         }
@@ -915,6 +992,27 @@ mod tests {
         // With its key, for a device that never met it.
         sign(&mut env, &a, true);
         assert_eq!(env.pk, a.public());
+    }
+
+    #[test]
+    fn a_key_is_asked_for_only_from_a_device_that_answers_and_not_too_often() {
+        let p = kv();
+        let g = Guard::load(&p);
+        g.advertised(&p, "old", &Value::from(SIGNED));
+        assert!(
+            !g.ask_for_key_at("old", 1_000),
+            "an env: 3 app wouldn't know the request"
+        );
+        g.advertised(&p, "new", &Value::from(KEYS));
+        assert!(g.sends_sig("new") && g.answers_key_request("new"));
+        assert!(g.ask_for_key_at("new", 1_000));
+        assert!(!g.ask_for_key_at("new", 1_000 + ASK_EVERY_MS - 1));
+        assert!(g.ask_for_key_at("new", 1_000 + ASK_EVERY_MS));
+        // Kept across restarts, as the other flags are.
+        assert!(Guard::load(&p).answers_key_request("new"));
+        assert!(!g.sends_pk("new"));
+        g.key_wanted_by("new");
+        assert!(g.sends_pk("new") && !g.sends_pk("old"));
     }
 
     #[test]

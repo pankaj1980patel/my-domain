@@ -356,6 +356,15 @@ fn a_restart_does_not_reopen_the_window() {
 // --- relay ---------------------------------------------------------------------
 
 fn relay_node(id: &str, reg: &FakeRegistry, hub: &Arc<SignalHub>, relay: &FakeRelay) -> TestNode {
+    relay_node_with(MockPlatform::new(id), reg, hub, relay)
+}
+
+fn relay_node_with(
+    platform: MockPlatform,
+    reg: &FakeRegistry,
+    hub: &Arc<SignalHub>,
+    relay: &FakeRelay,
+) -> TestNode {
     let config = CoreConfig {
         relay_url: Some(relay.url()),
         rungs: ConnectRungs {
@@ -365,7 +374,7 @@ fn relay_node(id: &str, reg: &FakeRegistry, hub: &Arc<SignalHub>, relay: &FakeRe
         auto_quic: false,
         ..test_config()
     };
-    let n = TestNode::start_on_hub(id, hub, config);
+    let n = TestNode::start_on_hub_with(platform, hub, config);
     n.engine
         .auth_login(&reg.url(), "alice", "alice-pw")
         .unwrap();
@@ -605,4 +614,106 @@ fn trusting_a_new_key_resets_the_downgrade_marks() {
     let i = info(&b, &a);
     assert!(!i.v2_only && !i.sig_required, "marks reset: {i:?}");
     assert_eq!(i.version, 2, "what it said it reads stays");
+}
+
+// --- asymmetric pins: the sender has the receiver's key, not the reverse -----
+
+/// `a`'s platform, with `b`'s device key already pinned (as if they had met
+/// over QUIC once and `b` then lost its pins, or met `a` only through a
+/// relay that `a` reached first). `b` has no key for `a`.
+fn pinned_to(
+    id: &str,
+    b: &TestNode,
+    b_kv: &Arc<Mutex<std::collections::HashMap<String, String>>>,
+) -> MockPlatform {
+    let b_key = b_kv
+        .lock()
+        .unwrap()
+        .get("identity_key_public")
+        .cloned()
+        .expect("b's public key");
+    let p = MockPlatform::new(id);
+    let pins = serde_json::json!({ b.node_id(): b_key }).to_string();
+    p.kv.lock().unwrap().insert("peer_keys".into(), pins);
+    p
+}
+
+#[test]
+fn a_receiver_without_the_senders_key_learns_it_over_bluetooth() {
+    let b_platform = MockPlatform::new("sig-as-ble-b");
+    let b_kv = Arc::clone(&b_platform.kv);
+    let b = TestNode::start_full(b_platform, offline());
+    let a = TestNode::start_full(pinned_to("sig-as-ble-a", &b, &b_kv), offline());
+    TestNode::pair(&a, &b);
+    let r = radio(&a, &b);
+    negotiated(&a, &b);
+    wait_for("env: 3 both ways", || {
+        info(&a, &b).signed && info(&b, &a).signed
+    });
+    a.engine.send(&b.node_id(), "asymmetric warm up").unwrap();
+    b.sink.wait_for_message("asymmetric warm up");
+    wait_for("b requires a's signatures", || info(&b, &a).sig_required);
+
+    // From here on b refuses an unsigned "a", and one signed with another key.
+    let mallory = DeviceKey::ephemeral();
+    let (ida, idb) = (a.node_id(), b.node_id());
+    b.engine.ble_frame(
+        r.id_b,
+        forged(&ida, &idb, "asym forged", Some(&mallory), true).as_bytes(),
+    );
+    b.engine.ble_frame(
+        r.id_b,
+        forged(&ida, &idb, "asym unsigned", None, false).as_bytes(),
+    );
+    wait_for("the forgeries refused", || {
+        let i = info(&b, &a);
+        i.bad_signature >= 1 && i.unsigned >= 1
+    });
+    assert_eq!(received(&b, "asym forged"), 0);
+    assert_eq!(received(&b, "asym unsigned"), 0);
+    a.engine.send(&idb, "still from a").unwrap();
+    b.sink.wait_for_message("still from a");
+}
+
+#[test]
+fn a_receiver_without_the_senders_key_learns_it_over_the_relay() {
+    let (reg, relay, hub) = (FakeRegistry::start(), FakeRelay::start(), SignalHub::new());
+    reg.add_user("alice", "alice-pw");
+    let b_platform = MockPlatform::new("sig-as-rl-b");
+    let b_kv = Arc::clone(&b_platform.kv);
+    let b = relay_node_with(b_platform, &reg, &hub, &relay);
+    let a = relay_node_with(pinned_to("sig-as-rl-a", &b, &b_kv), &reg, &hub, &relay);
+    TestNode::pair(&a, &b);
+    a.engine.connect(&b.node_id()).unwrap();
+    assert_eq!(a.wait_connected(&b, LONG).as_deref(), Some("relay"));
+    negotiated(&a, &b);
+    wait_for("env: 3 both ways", || {
+        info(&a, &b).signed && info(&b, &a).signed
+    });
+    a.engine.send(&b.node_id(), "asymmetric warm up").unwrap();
+    b.sink.wait_for_message("asymmetric warm up");
+    wait_for("b requires a's signatures", || info(&b, &a).sig_required);
+
+    let mallory = DeviceKey::ephemeral();
+    let (ida, idb) = (a.node_id(), b.node_id());
+    let family = mdcore::crypto::derive_key("family key", "alice").unwrap();
+    let bad = forged_with(
+        &family,
+        &ida,
+        &idb,
+        "asym relay forged",
+        Some(&mallory),
+        true,
+    );
+    assert!(relay.inject(&idb, &ida, &bad));
+    let bare = forged_with(&family, &ida, &idb, "asym relay unsigned", None, false);
+    assert!(relay.inject(&idb, &ida, &bare));
+    wait_for("the forgeries refused", || {
+        let i = info(&b, &a);
+        i.bad_signature >= 1 && i.unsigned >= 1
+    });
+    assert_eq!(received(&b, "asym relay forged"), 0);
+    assert_eq!(received(&b, "asym relay unsigned"), 0);
+    a.engine.send(&idb, "relayed, still from a").unwrap();
+    b.sink.wait_for_message("relayed, still from a");
 }
