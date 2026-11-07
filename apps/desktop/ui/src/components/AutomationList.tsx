@@ -12,6 +12,7 @@ import { createCanWake } from "../lib/canWake";
 import { friendlyError } from "../lib/words";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
+import { Icon } from "./Icon";
 
 /** What can start one, as `Trigger.kind`, with how the form says it. */
 const KINDS: [string, Key][] = [
@@ -81,8 +82,21 @@ export function AutomationList(props: {
       (e) => toast(friendlyError(e), "error"),
     );
 
+  // Deleted at once, with Undo in the toast (it's added back as it was).
   const remove = (a: Automation) =>
-    commands.deleteAutomation(a.id).then(() => setList((l) => l.filter((x) => x.id !== a.id)));
+    commands.deleteAutomation(a.id).then(() => {
+      setList((l) => l.filter((x) => x.id !== a.id));
+      toast(t("automation.deleted"), "info", {
+        label: t("readLater.undo"),
+        run: () =>
+          unwrap(
+            commands.addAutomation({ trigger: a.trigger, node: a.node, action: a.action, args: a.args, label: a.label, enabled: a.enabled }),
+          ).then(
+            (n) => setList((l) => [...l, n]),
+            (e) => toast(friendlyError(e), "error"),
+          ),
+      });
+    });
 
   const add = async (e: Event) => {
     e.preventDefault();
@@ -147,8 +161,13 @@ export function AutomationList(props: {
                   <span class="muted small grow">
                     {a.last_fired ? t("automation.lastFired", { when: a.last_fired }) : t("automation.neverFired")}
                   </span>
-                  <button class="btn btn-ghost btn-sm" onClick={() => remove(a)}>
-                    {t("schedule.delete")}
+                  <button
+                    class="btn btn-ghost btn-sm btn-icon btn-danger-ghost"
+                    aria-label={t("automation.deleteLabel", { what: when(a) })}
+                    title={t("schedule.delete")}
+                    onClick={() => remove(a)}
+                  >
+                    <Icon name="remove" size={16} />
                   </button>
                 </div>
               </li>

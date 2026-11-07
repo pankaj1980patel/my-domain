@@ -6,7 +6,8 @@
 // overall progress; its files open underneath. Each row under way can be
 // paused, resumed or cancelled; a failed one sent from here can be retried.
 
-import { Icon } from "../components/Icon";
+import { askConfirm } from "../components/Confirm";
+import { Icon, IconChip } from "../components/Icon";
 import { Tabs, panelProps } from "../components/Tabs";
 import { MenuButton, type MenuItem } from "../components/Menu";
 import { quickSendFile, quickSendFolder } from "../lib/quickActions";
@@ -144,11 +145,6 @@ export default function Transfers() {
           <MenuButton label={t("files.chooseFolder")} labelled triggerClass="btn btn-soft btn-sm" items={folderMenu()}>
             {t("files.chooseFolder")}
           </MenuButton>
-          <Show when={finished().length > 0}>
-            <button class="btn btn-ghost btn-sm" onClick={clear}>
-              {t("transfers.clear")}
-            </button>
-          </Show>
         </div>
       </div>
       <Show
@@ -166,7 +162,20 @@ export default function Transfers() {
           </ul>
         </Show>
         <Show when={finished().length > 0}>
-          <h2 class="xfer-section">{t("transfers.recent")}</h2>
+          {/* Clearing the list is apart from the rows' actions, asked first. */}
+          <div class="xfer-section-head">
+            <h2 class="xfer-section">{t("transfers.recent")}</h2>
+            <button
+              class="btn btn-ghost btn-sm btn-icon btn-danger-ghost"
+              aria-label={t("transfers.clear")}
+              title={t("transfers.clear")}
+              onClick={async () => {
+                if (await askConfirm({ title: t("transfers.clearTitle"), body: t("transfers.clearBody"), action: t("transfers.clear") })) clear();
+              }}
+            >
+              <Icon name="remove" size={16} />
+            </button>
+          </div>
           <ul class="xfer-list">
             <For each={finished()}>{(e) => <FinishedRow e={e} clock={clock()} files={filesOf(e.id)} onChange={refresh} />}</For>
           </ul>
@@ -214,12 +223,11 @@ function Head(props: { e: Entry }) {
       : props.e.name;
   return (
     <div class="xfer-head">
-      <span
-        class={`xfer-dir ${props.e.incoming ? "in" : "out"}`}
-        role="img"
-        aria-label={props.e.incoming ? t("transfers.received") : t("transfers.sent")}
-      >
-        {props.e.kind === "folder" ? "▤" : props.e.incoming ? "↓" : "↑"}
+      <span class="xfer-dir" role="img" aria-label={props.e.incoming ? t("transfers.received") : t("transfers.sent")}>
+        <IconChip
+          name={props.e.kind === "folder" ? (props.e.incoming ? "files" : "send-folder") : props.e.incoming ? "download" : "send-file"}
+          tone="blue"
+        />
       </span>
       <div class="xfer-what">
         <strong class="xfer-name" title={name()}>
@@ -341,8 +349,14 @@ function ActiveRow(props: { e: Entry; clock: number; files: Entry[] }) {
               {paused() ? t("transfers.resume") : t("transfers.pause")}
             </button>
           </Show>
-          <button class="btn btn-ghost btn-sm" onClick={cancel} aria-label={t("transfers.cancelLabel", { name: props.e.name })}>
-            {t("transfers.cancel")}
+          {/* Cancel: an x apart from Pause, in the danger tone on hover. */}
+          <button
+            class="btn btn-ghost btn-sm btn-icon btn-danger-ghost xfer-cancel"
+            onClick={cancel}
+            aria-label={t("transfers.cancelLabel", { name: props.e.name })}
+            title={t("transfers.cancelLabel", { name: props.e.name })}
+          >
+            <Icon name="close" size={16} />
           </button>
         </div>
       </div>
@@ -430,6 +444,7 @@ function FinishedRow(props: { e: Entry; clock: number; files: Entry[]; onChange:
           </Show>
           <Show when={props.e.path && props.e.exists}>
             <button class="btn btn-ghost btn-sm" onClick={reveal}>
+              <Icon name="folder-open" size={16} />
               {isMac ? t("transfers.showMac") : t("transfers.show")}
             </button>
           </Show>

@@ -16,7 +16,7 @@ import {
   type HistoryPage,
 } from "../../lib/core";
 import { foundId, foundTarget, isFound } from "../../lib/search";
-import { friendlyError } from "../../lib/words";
+import { friendlyError, clockTime } from "../../lib/words";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
 
@@ -42,7 +42,7 @@ function dayLabel(ts: number, now = new Date()): string {
   });
 }
 
-const timeOf = (ts: number) => new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+const timeOf = (ts: number) => clockTime(ts);
 
 export default function NotificationHistory(props: { node: string }) {
   const name = () => peerName(props.node);

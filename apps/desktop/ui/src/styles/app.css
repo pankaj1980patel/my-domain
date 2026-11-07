@@ -109,6 +109,51 @@ input:not([type="checkbox"]):focus {
 input::placeholder {
   color: var(--text-3);
 }
+/* Selects: the same field as an input, with a Lucide chevron-down (a
+   data-URI can't use currentColor, so each theme family has its own:
+   --select-chevron in tokens.css for the light theme). */
+select {
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--surface-2) var(--select-chevron, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c6d5ea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")) no-repeat right 10px center / 16px;
+  border: 1px solid var(--control-border);
+  border-radius: var(--r-md);
+  padding: 8px 34px 8px 12px;
+  min-height: 36px;
+  max-width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+select:hover:not(:disabled) {
+  border-color: var(--focus);
+}
+select:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 1px var(--focus), 0 0 0 4px var(--accent-bg);
+}
+select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* Every search field: a Lucide search icon at the left, and the field's own
+   clear button drawn as an x once something is typed (G-15). */
+input[type="search"] {
+  padding-left: 38px;
+  background: var(--surface-2) var(--search-icon, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E")) no-repeat 12px center / 16px;
+}
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin-left: var(--s-2);
+  background: var(--search-clear, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c6d5ea' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M18 6 6 18'/%3E%3Cpath d='m6 6 12 12'/%3E%3C/svg%3E")) no-repeat center / 16px;
+  cursor: pointer;
+}
 
 .field {
   display: grid;
@@ -1204,13 +1249,9 @@ input[type="checkbox"][role="switch"]:checked::after {
   width: 100%;
 }
 .screen-set select {
-  font: inherit;
-  font-size: var(--text-sm);
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--control-border);
-  border-radius: var(--r-md);
-  padding: 4px 8px;
+  min-height: 32px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .screen-set label.row {
   gap: var(--s-1);
@@ -1378,12 +1419,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   color-scheme: dark light;
 }
 .schedule-select {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--control-border);
-  border-radius: var(--r-md);
-  padding: 6px 8px;
+  width: auto;
 }
 .schedule-days {
   gap: var(--s-1);
@@ -2348,12 +2384,6 @@ input[type="checkbox"][role="switch"]:checked::after {
 .xfer-dir {
   flex: none;
   display: inline-grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-full);
-  background: var(--surface-2);
-  font-weight: 600;
 }
 .xfer-what {
   display: flex;
@@ -4490,10 +4520,16 @@ html.kvm-window body {
   min-width: 0;
   flex: 1 1 auto;
 }
-/* A device's icon inline in a line of text (activity rows). */
+/* A device's icon in front of a line of text (activity rows). */
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+}
 .activity-meta .device-icon {
-  vertical-align: -2px;
-  margin-right: 4px;
+  flex: none;
+  margin: 0;
 }
 .device-model {
   margin: 0;
@@ -5785,7 +5821,7 @@ html.kvm-window body {
 /* --- device dashboard ------------------------------------------------------------- */
 .dash {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: var(--s-4);
   align-items: start;
 }
@@ -5795,38 +5831,44 @@ html.kvm-window body {
   gap: var(--s-4);
   min-width: 0;
 }
+/* Gauges two by two at 1280: each wide enough for "61 GB free" on one line. */
 .stat-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: var(--s-3);
 }
 .stat-card {
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  padding: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  min-width: 0;
 }
+/* A gauge: the ring drawn behind, its icon in the middle. */
 .ring {
   position: relative;
   flex: none;
-  width: 64px;
-  height: 64px;
+  width: 52px;
+  height: 52px;
   display: grid;
   place-items: center;
 }
-.ring svg {
+.ring-gauge {
   position: absolute;
   inset: 0;
+}
+.ring-icon {
+  position: relative;
 }
 .ring-track {
   fill: none;
   stroke: var(--surface-2);
-  stroke-width: 6;
+  stroke-width: 5;
 }
 .ring-fill {
   fill: none;
   stroke: currentColor;
-  stroke-width: 6;
+  stroke-width: 5;
   stroke-linecap: round;
 }
 .stat-text {
@@ -5834,7 +5876,7 @@ html.kvm-window body {
   min-width: 0;
 }
 .stat-value {
-  font-size: var(--text-xl);
+  font-size: var(--text-lg);
   font-weight: 800;
   line-height: 1.15;
   overflow: hidden;
@@ -6126,23 +6168,6 @@ html.kvm-window body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.ring {
-  width: 52px;
-  height: 52px;
-}
-.ring-track,
-.ring-fill {
-  stroke-width: 5;
-}
-.stat-card {
-  padding: var(--s-3) var(--s-4);
-}
-.stat-value {
-  font-size: var(--text-lg);
-}
-.dash {
-  grid-template-columns: minmax(0, 1fr) 260px;
-}
 .device-page {
   gap: var(--s-4);
 }
@@ -6211,12 +6236,6 @@ html.kvm-window body {
   .shell {
     grid-template-columns: 280px minmax(0, 1fr);
   }
-}
-/* Gauge notes take a second line rather than being cut. */
-.stat-sub {
-  white-space: normal;
-  overflow: visible;
-  line-height: 1.3;
 }
 /* Find & control: cards packed in columns, so short ones fill the gaps. */
 .control-groups {
@@ -6392,12 +6411,6 @@ html.kvm-window body {
   align-items: stretch;
   padding: var(--s-4);
 }
-.home-art {
-  width: 96px;
-  height: 120px;
-  flex: none;
-  border-radius: var(--r-lg);
-}
 .home-card-main,
 .home-row-main {
   flex: 1;
@@ -6483,9 +6496,9 @@ html.kvm-window body {
 .home-row {
   position: relative;
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto auto;
+  grid-template-columns: 80px minmax(220px, 1fr) auto auto;
   align-items: center;
-  gap: var(--s-4);
+  gap: var(--s-3);
   padding: var(--s-3) var(--s-4);
 }
 .home-row.chosen::before {
@@ -6497,11 +6510,6 @@ html.kvm-window body {
   width: 3px;
   border-radius: var(--r-full);
   background: var(--accent);
-}
-.home-art-sm {
-  width: 52px;
-  height: 64px;
-  border-radius: var(--r-md);
 }
 .home-row .chip-sm {
   font-weight: 600;
@@ -6659,7 +6667,7 @@ html.kvm-window body {
     grid-template-columns: minmax(0, 1fr);
   }
   .home-row {
-    grid-template-columns: 52px minmax(0, 1fr) auto;
+    grid-template-columns: 80px minmax(0, 1fr) auto;
   }
   .home-stats-chips {
     display: none;
@@ -6679,7 +6687,7 @@ html.kvm-window body {
     grid-template-columns: minmax(0, 1fr);
   }
   .home-row {
-    grid-template-columns: 52px minmax(0, 1fr);
+    grid-template-columns: 80px minmax(0, 1fr);
   }
   .home-round {
     grid-column: 1 / -1;
@@ -6691,10 +6699,6 @@ html.kvm-window body {
 }
 .home-body.with-rail {
   grid-template-columns: minmax(0, 1fr) 250px;
-}
-.home-row {
-  grid-template-columns: 52px minmax(170px, 1fr) auto auto;
-  gap: var(--s-3);
 }
 .home-status {
   white-space: nowrap;
@@ -6742,9 +6746,6 @@ html.kvm-window body {
     padding-right: 10px;
   }
 }
-.home-art {
-  width: 84px;
-}
 .home-card {
   gap: var(--s-3);
 }
@@ -6760,7 +6761,8 @@ html.kvm-window body {
 .device-art,
 .device-art-sm,
 .home-art,
-.home-art-sm {
+.home-art-sm,
+.msg-art {
   width: auto;
   height: auto;
   display: grid;
@@ -6770,15 +6772,23 @@ html.kvm-window body {
   overflow: visible;
   flex: none;
 }
+/* Each slot is a fixed box, whatever the frame (a phone is narrow, a laptop
+   wide), so the text beside it starts at the same x on every card and row. */
 .home-art {
-  min-width: 96px;
+  width: 112px;
+  height: 120px;
 }
 .home-art-sm {
-  min-width: 52px;
+  width: 80px;
+  height: 56px;
 }
 .device-hero .device-art {
-  min-width: 128px;
-  min-height: 160px;
+  width: 176px;
+  height: 160px;
+}
+.msg-art {
+  width: 64px;
+  height: 44px;
 }
 .this-device-icon {
   background: none;
@@ -6786,15 +6796,6 @@ html.kvm-window body {
   width: 60px;
   height: 44px;
   overflow: hidden;
-}
-.home-row {
-  grid-template-columns: 84px minmax(170px, 1fr) auto auto;
-}
-.home-art {
-  min-width: 120px;
-}
-.home-art {
-  min-width: 0;
 }
 .home-actions {
   flex-wrap: nowrap;
@@ -6812,9 +6813,6 @@ html.kvm-window body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.home-row {
-  grid-template-columns: 76px minmax(140px, 1fr) auto auto;
-}
 .home-stat {
   padding: 0 8px;
   gap: 4px;
@@ -6827,9 +6825,6 @@ html.kvm-window body {
 }
 .home-actions .btn {
   padding: 0 7px;
-}
-.device-hero .device-art {
-  min-width: 0;
 }
 .hero-side {
   max-width: 380px;
@@ -7383,4 +7378,421 @@ html.kvm-window body {
   .timers-body {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* =============================================================================
+   Design review (2026-11): one status vocabulary, fixed art boxes, quieter
+   tab levels, destructive actions apart. Rules here replace earlier ones
+   where noted rather than stacking on them.
+   ============================================================================= */
+
+/* --- presence and route (G-4) ------------------------------------------------ */
+/* The route a live link takes: a small chip, amber only for the relay. */
+.route-chip {
+  gap: var(--s-1);
+  font-weight: 600;
+}
+.route-chip .icon {
+  color: currentColor;
+}
+.hero-status {
+  flex-wrap: wrap;
+  row-gap: var(--s-1);
+}
+.hero-presence,
+.home-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.hero-presence.tone-muted,
+.home-presence.tone-muted {
+  color: var(--text-2);
+}
+/* A "?"-like hint: the explanation is its tooltip and accessible name. */
+.hint-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-full);
+  color: var(--text-3);
+  cursor: help;
+}
+.hint-icon:hover,
+.hint-icon:focus-visible {
+  color: var(--accent-fg);
+  background: var(--surface-2);
+}
+
+/* --- device hero (G-6, G-11, DEV-3, DEV-5, DEV-15) --------------------------- */
+/* The back link: an arrow icon and "All devices", underlined on hover only. */
+.link.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  text-decoration: none;
+  color: var(--accent-fg);
+}
+.link.back:hover {
+  text-decoration: underline;
+}
+.hero-side {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.hero-side .hero-actions {
+  min-width: 0;
+}
+.hero-side .hero-actions .btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-more {
+  white-space: nowrap;
+}
+/* Not connected: one line instead of empty gauges. */
+.dash-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  margin: 0;
+  color: var(--text-2);
+}
+.dash-notice .icon {
+  color: var(--text-3);
+}
+.dash-health-count {
+  font-weight: 650;
+}
+/* Recent activity rows: one line each, cut with an ellipsis. */
+.dash-feed-text {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- device tabs at 1024 (G-6): scroll, with a fade at the right edge, and
+   icon-only below 1100px (the name stays for screen readers and tooltip). */
+.tabs {
+  scroll-snap-type: x proximity;
+}
+.tab {
+  scroll-snap-align: start;
+}
+@media (max-width: 1100px) {
+  .device-page > .tabs {
+    mask-image: linear-gradient(90deg, #000 92%, transparent);
+  }
+  .device-page > .tabs .tab-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .device-page > .tabs .tab {
+    padding: 0 var(--s-3);
+  }
+}
+
+/* --- All devices (HOME-1..4, OV-2) ------------------------------------------- */
+.home-stats .stat-card {
+  min-height: 80px;
+  align-items: center;
+}
+.home-stats .icon-chip {
+  width: 40px;
+  height: 40px;
+}
+.stat-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A card's lead action when it isn't connected (Wake, or Connect): a soft
+   accent fill, not the page's one gradient primary. */
+.btn-lead {
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  border-color: color-mix(in srgb, var(--accent-fg) 35%, transparent);
+}
+.btn-lead:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent-fg) 22%, transparent);
+}
+.home-statline {
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 26px;
+}
+.home-statline .home-stat,
+.home-stats-chips .home-stat {
+  height: 26px;
+  min-width: 0;
+  padding: 0 var(--s-2);
+  gap: var(--s-1);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.home-statline .home-stat {
+  background: none;
+  padding: 0;
+}
+.home-stats-chips {
+  align-items: center;
+  gap: var(--s-1);
+}
+.home-row .device-card-name {
+  margin: 0;
+}
+.home-status {
+  flex-wrap: nowrap;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.home-status-rest {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Light theme: the card actions keep a visible fill (G-22). */
+.home-actions .btn-soft {
+  background: var(--btn-secondary-bg);
+  border-color: var(--btn-secondary-border);
+}
+[data-theme="light"] .home-actions .btn-soft {
+  background: #e7f0ff;
+}
+
+/* --- Overview (OV-4, OV-5, OV-7) ------------------------------------------- */
+/* What's next is as tall as what it lists: no empty card beside Your
+   devices and Recent activity. */
+.ov-cols {
+  align-items: start;
+}
+.ov-next {
+  max-height: 100%;
+}
+.ov-strip {
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+}
+.ov-device-text strong {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
+}
+/* Quick-action tiles: a visible fill in every theme. */
+.quick-tile {
+  background: var(--surface-2);
+}
+.quick-tile:hover:not(:disabled) {
+  background: var(--accent-bg);
+}
+.quick-tile > span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* --- Messages (MSG-1, MSG-2, DEV-8) ------------------------------------------ */
+.msg-art {
+  position: relative;
+}
+/* Presence on the picture's corner. */
+.presence-dot {
+  position: absolute;
+  right: 2px;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--r-full);
+  background: currentColor;
+  box-shadow: 0 0 0 2px var(--surface-solid, var(--surface));
+}
+.presence-dot.tone-muted {
+  background: var(--surface);
+  box-shadow: 0 0 0 2px var(--surface-solid, var(--surface)), inset 0 0 0 1.5px var(--text-3);
+}
+.msg-unread {
+  flex: none;
+}
+.msg-item-top .muted {
+  flex: none;
+}
+/* The chat card when a tab or sub-tab already names it: no second
+   "Messages" title (kept for screen readers), only its "⋯". */
+.tiles-split .chat-tile > .tile-head > h2,
+.msg-pane .chat-tile > .tile-head > h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.tiles-split .icon-slot:has(> .chat-tile) > .slot-icon {
+  display: none;
+}
+.tiles-split .chat-tile > .tile-head,
+.msg-pane .chat-tile > .tile-head {
+  justify-content: flex-end;
+  margin-bottom: calc(-1 * var(--s-2));
+}
+
+/* --- device gauges (DEV-1): one row of upright tiles, ring on top, so
+   values never wrap and the page keeps its height. */
+.dash .stat-row {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+.dash .stat-row .stat-card {
+  flex-direction: column;
+  justify-content: center;
+  text-align: center;
+  gap: var(--s-2);
+  padding: var(--s-3);
+}
+.dash .stat-row .stat-text {
+  justify-items: center;
+  max-width: 100%;
+}
+.dash .stat-row .ring,
+.dash .stat-row .icon-chip {
+  width: 48px;
+  height: 48px;
+}
+.dash .stat-row .ring-gauge {
+  width: 48px;
+  height: 48px;
+}
+.dash .stat-row .stat-text > * {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The rail's security card: --card-bg is a gradient in the dark themes, so
+   it can't be colour-mixed (that left it with no background, HOME-5). */
+.home-protect {
+  background: var(--card-bg);
+}
+/* A route as an icon alone (list rows); its name is the tooltip. */
+.route-chip-icon {
+  width: 26px;
+  padding: 0;
+  justify-content: center;
+}
+.msg-list > li {
+  min-width: 0;
+}
+
+/* --- Activity filters (ACT-2): search and device on one row, the kinds
+   under it; even gaps. A select with an icon in front of it. */
+.activity-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+.activity-toolbar > .search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.activity-chips {
+  margin-bottom: var(--s-1);
+}
+.activity-page {
+  gap: var(--s-3);
+}
+.activity-actions {
+  align-items: center;
+}
+.select-with-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+.select-with-icon > .icon {
+  position: absolute;
+  left: 12px;
+  color: var(--text-3);
+  pointer-events: none;
+}
+.select-with-icon > select {
+  padding-left: 36px;
+}
+
+/* --- destructive actions kept apart (G-7) ------------------------------------ */
+/* A ghost icon button that turns to the danger colour on hover or focus. */
+.btn-danger-ghost:hover:not(:disabled),
+.btn-danger-ghost:focus-visible {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+.btn-icon.btn-sm {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+/* Cancel sits at the row's far end, a gap away from Pause. */
+.xfer-cancel {
+  margin-left: var(--s-3);
+}
+.xfer-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin: var(--s-5) 0 var(--s-2);
+}
+.xfer-section-head .xfer-section {
+  margin: 0;
+}
+.confirm-dialog {
+  max-width: 440px;
+}
+/* A field with a small button inside its right end (Read later's paste). */
+.field-with-btn {
+  position: relative;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.field-with-btn > input {
+  padding-right: 44px;
+}
+.field-with-btn > .btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+.field-with-btn > .btn:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.98);
+}
+.rl-delete {
+  margin-left: var(--s-3);
+}
+.device-chip .device-icon,
+.device-chip .icon {
+  flex: none;
+}
+.timer-ring-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.timer-actions .timer-cancel,
+.big-timer-actions .timer-cancel {
+  margin-left: auto;
 }

@@ -7,15 +7,16 @@ import { createMemo, createSignal, For, onMount, Show } from "solid-js";
 import { commands } from "../bindings";
 import { peerIcon, peerName, state } from "../lib/core";
 import { t, tn } from "../i18n";
-import { badCount } from "../lib/health";
+import { problemCount } from "../lib/health";
 import { isVerified } from "../lib/verify";
 import { linkStateOf } from "../components/ui";
+import { presenceLabel, presenceTone } from "../lib/words";
 import { Icon, IconChip, type IconName, type Tone } from "../components/Icon";
 import { MenuButton, type MenuItem } from "../components/Menu";
 import { RecentActivity } from "../components/RecentActivity";
 import { QuickGrid } from "../components/QuickGrid";
 import DeviceArt from "../components/DeviceArt";
-import { AddDialog, DeviceStats } from "./Home";
+import { AddDeviceButton, AddDialog, DeviceStats } from "./Home";
 import { SetupCard } from "./Setup";
 
 const STRIP = 4;
@@ -26,6 +27,7 @@ const cap = (s: string) => s.charAt(0).toLocaleUpperCase() + s.slice(1);
 export default function Dashboard(props: {
   onOpen: (node: string, tab?: string, tile?: string) => void;
   onAllDevices: () => void;
+  onMap: () => void;
   onHealth: () => void;
   onActivity: () => void;
   onSettings: (section: string) => void;
@@ -56,10 +58,10 @@ export default function Dashboard(props: {
   type Tip = { icon: IconName; tone: Tone; title: string; body: string; run: () => void };
   const tips = (): Tip[] => {
     const out: Tip[] = [];
-    if (badCount() > 0)
-      out.push({ icon: "alert", tone: "amber", title: tn("next.fix", badCount()), body: t("next.fixBody"), run: props.onHealth });
+    if (problemCount() > 0)
+      out.push({ icon: "alert", tone: "amber", title: tn("next.fix", problemCount()), body: t("next.fixBody"), run: props.onHealth });
     if (state.peers.length < 2)
-      out.push({ icon: "connect", tone: "cyan", title: t("next.add"), body: t("next.addBody"), run: () => setAdding(true) });
+      out.push({ icon: "plus", tone: "cyan", title: t("next.add"), body: t("next.addBody"), run: () => setAdding(true) });
     const unverified = state.peers.filter((p) => !isVerified(p.node_id)).length;
     if (unverified > 0)
       out.push({ icon: "verify", tone: "green", title: tn("next.verify", unverified), body: t("next.verifyBody"), run: props.onAllDevices });
@@ -80,10 +82,7 @@ export default function Dashboard(props: {
           <h1>{greeting()}</h1>
           <p class="muted">{t("dash.sub")}</p>
         </div>
-        <button class="btn btn-primary" onClick={() => setAdding(true)}>
-          <Icon name="connect" />
-          {t("home.addDevice")}
-        </button>
+        <AddDeviceButton onAdd={() => setAdding(true)} onMap={props.onMap} />
       </header>
 
       <SetupCard onOpen={props.onSetup} />
@@ -125,15 +124,14 @@ export default function Dashboard(props: {
               <For each={devices().slice(0, STRIP)}>
                 {(p) => {
                   const s = () => linkStateOf(p.node_id);
-                  const live = () => s() === "direct" || s() === "relay";
                   return (
                     <button class="ov-device" onClick={() => props.onOpen(p.node_id)}>
                       <DeviceArt node={p.node_id} icon={peerIcon(p.node_id)} size={52} />
                       <span class="ov-device-text">
                         <strong>{peerName(p.node_id)}</strong>
-                        <span class={`small ov-device-state tone-${s() === "direct" ? "green" : s() === "relay" ? "amber" : "muted"}`}>
+                        <span class={`small ov-device-state tone-${presenceTone(s())}`}>
                           <span class="hero-dot" aria-hidden="true" />
-                          {live() ? t("dash.online") : t("dash.offline")}
+                          {presenceLabel(s())}
                           <Show when={state.status[p.node_id]?.battery != null}>
                             <span class="muted"> · {state.status[p.node_id]!.battery}%</span>
                           </Show>

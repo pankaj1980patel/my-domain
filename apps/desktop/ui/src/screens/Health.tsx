@@ -12,10 +12,12 @@ import {
   checkTitle,
   fixLabel,
   levelLabel,
+  problemCount,
   ranAt,
   report,
   runHealth,
   running,
+  warnCount,
   type HealthCheck,
 } from "../lib/health";
 import { friendlyError, timeAgo } from "../lib/words";
@@ -156,8 +158,8 @@ export default function Health(props: HealthNav) {
     if (!r) return "";
     if (r.bad === 0 && r.warn === 0) return t("health.allGood");
     const parts: string[] = [];
-    if (r.bad) parts.push(t("health.summaryBad", { n: r.bad }));
-    if (r.warn) parts.push(t("health.summaryWarn", { n: r.warn }));
+    if (r.bad) parts.push(tn("health.summaryBad", r.bad));
+    if (r.warn) parts.push(tn("health.summaryWarn", r.warn));
     return parts.join(" · ");
   };
   return (
@@ -176,14 +178,16 @@ export default function Health(props: HealthNav) {
       <div class="sec-body">
       <div class="sec-left">
         {/* The verdict, then what it rests on. */}
-        <section class="tile sec-status" classList={{ "sec-bad": (report()?.bad ?? 0) > 0 }}>
-          <IconChip name={(report()?.bad ?? 0) > 0 ? "alert" : "verify"} tone={(report()?.bad ?? 0) > 0 ? "amber" : "green"} size={30} />
+        <section class="tile sec-status" classList={{ "sec-bad": problemCount() > 0 }}>
+          <IconChip name={problemCount() > 0 ? "alert" : "verify"} tone={problemCount() > 0 ? "amber" : "green"} size={30} />
           <div class="grow">
             <span class="small muted">{t("sec.overall")}</span>
             <strong class="sec-word">
-              {(report()?.bad ?? 0) + (report()?.warn ?? 0) > 0
-                ? tn("dash.problems", (report()?.bad ?? 0) + (report()?.warn ?? 0))
-                : t("sec.allGood")}
+              {problemCount() > 0
+                ? tn("dash.problems", problemCount())
+                : warnCount() > 0
+                  ? tn("health.summaryWarn", warnCount())
+                  : t("sec.allGood")}
             </strong>
             <span class="small muted">{summary()}</span>
           </div>

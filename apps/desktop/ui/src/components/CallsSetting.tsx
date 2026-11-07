@@ -15,6 +15,7 @@ import { Keypad } from "./CallOverlay";
 import { toast } from "./ui";
 import { t } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
+import { Icon } from "./Icon";
 
 export function CallsSetting() {
   const [phones, setPhones] = createSignal<CallDevice[]>([]);
@@ -107,25 +108,26 @@ export function CallsSetting() {
               </select>
             </label>
           </Show>
+          {/* Refresh and Connect; Disconnect at the far end, in the danger tone. */}
           <div class="row">
             <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={loadPhones}>
+              <Icon name="refresh" size={16} />
               {t("calls.refresh")}
             </button>
-            <Show
-              when={s()?.connected}
-              fallback={
-                <button class="btn btn-primary btn-sm" disabled={busy() || !s()?.device} onClick={() => run(() => unwrap(commands.callsConnect()))}>
-                  {t("calls.connect")}
-                </button>
-              }
-            >
-              <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={() => run(() => unwrap(commands.callsDisconnect()))}>
+            <Show when={!s()?.connected}>
+              <button class="btn btn-primary btn-sm" disabled={busy() || !s()?.device} onClick={() => run(() => unwrap(commands.callsConnect()))}>
+                {t("calls.connect")}
+              </button>
+            </Show>
+            <span class="muted small grow" role="status">
+              {s()?.connected ? t("calls.connected", { name: deviceLabel() }) : t("calls.notConnected")}
+            </span>
+            <Show when={s()?.connected}>
+              <button class="btn btn-ghost btn-sm btn-danger-ghost" disabled={busy()} onClick={() => run(() => unwrap(commands.callsDisconnect()))}>
+                <Icon name="disconnect" size={16} />
                 {t("calls.disconnect")}
               </button>
             </Show>
-            <span class="muted small" role="status">
-              {s()?.connected ? t("calls.connected", { name: deviceLabel() }) : t("calls.notConnected")}
-            </span>
           </div>
           <Show when={s()?.connected && (s()?.signal != null || s()?.battery != null)}>
             <p class="muted small">

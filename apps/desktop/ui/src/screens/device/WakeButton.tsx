@@ -1,4 +1,4 @@
-// "Wake it" on another computer's page while it's offline and said it may
+// "Wake" (the hero's lead button) on another computer's page while it's offline and said it may
 // be woken (Wake-on-LAN, mdcore features::wake): sends the magic packet from
 // here and from your other devices on its network, then shows "Waking…"
 // (trying to connect every 10 s) until it connects or a minute passes.
@@ -9,6 +9,7 @@ import { connect, peerName, state, unwrap } from "../../lib/core";
 import { friendlyError } from "../../lib/words";
 import { linkStateOf, toast } from "../../components/ui";
 import { t } from "../../i18n";
+import { Icon } from "../../components/Icon";
 
 /** How long "Waking…" waits for it to connect. */
 const WAIT_MS = 60_000;
@@ -78,15 +79,12 @@ export default function WakeButton(props: { node: string }) {
 
   return (
     <Show when={can() && (asleep() || waking())}>
-      <div class="wake-row">
-        <button class="btn btn-ghost btn-sm" disabled={waking()} aria-busy={waking()} onClick={wake}>
-          <Show when={waking()}>
-            <span class="wake-spin" aria-hidden="true" />
-          </Show>
-          {waking() ? t("wake.waking") : t("wake.button")}
-        </button>
-        <p class="muted small">{t("wake.hint")}</p>
-      </div>
+      <button class="btn btn-primary wake-btn" disabled={waking()} aria-busy={waking()} title={t("wake.hint")} onClick={wake}>
+        <Show when={waking()} fallback={<Icon name="power" />}>
+          <span class="wake-spin" aria-hidden="true" />
+        </Show>
+        {waking() ? t("wake.waking") : t("wake.button")}
+      </button>
     </Show>
   );
 }

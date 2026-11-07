@@ -23,9 +23,12 @@ import {
   type ActivityTarget,
 } from "../lib/activity";
 import { Empty, toast } from "../components/ui";
+import { askConfirm } from "../components/Confirm";
+import { MenuButton } from "../components/Menu";
 import { Icon, IconChip } from "../components/Icon";
 import { KIND_TONE } from "../components/RecentActivity";
 import { t } from "../i18n";
+import { dateAndTime } from "../lib/words";
 
 const PAGE = 50;
 const SEARCH_DELAY = 200;
@@ -44,7 +47,6 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
   const [clearedAt, setClearedAt] = createSignal<number | null>(null);
   const [loading, setLoading] = createSignal(false);
   const [choosing, setChoosing] = createSignal(false);
-  const [confirmClear, setConfirmClear] = createSignal(false);
   let generation = 0;
 
   const query = (extra: { before?: ActivityItem; limit?: number }) => ({
@@ -114,7 +116,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
   };
 
   const clear = async () => {
-    setConfirmClear(false);
+    
     await commands.clearActivity();
     toast(t("activity.clearedToast"), "ok");
     void reload();
@@ -147,32 +149,29 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
           <h1>{t("activity.title")}</h1>
           <p class="muted">{t("activity.subtitle")}</p>
         </div>
+        {/* Choose what shows; Clear (destructive) apart, in the "⋯", asked first. */}
         <div class="activity-actions">
-          <button class="btn btn-ghost btn-sm" aria-expanded={choosing()} onClick={() => setChoosing(!choosing())}>
+          <button class="btn btn-soft btn-sm" aria-expanded={choosing()} onClick={() => setChoosing(!choosing())}>
+            <Icon name="control" size={16} />
             {t("activity.choose")}
           </button>
-          <button class="btn btn-ghost btn-sm" onClick={() => setConfirmClear(true)}>
-            {t("activity.clear")}
-          </button>
+          <MenuButton
+            label={t("activity.more")}
+            items={[
+              {
+                icon: "remove",
+                label: t("activity.clear"),
+                danger: true,
+                onSelect: async () => {
+                  if (await askConfirm({ title: t("activity.clearTitle"), body: t("activity.clearBody"), action: t("activity.clear") })) clear();
+                },
+              },
+            ]}
+          >
+            <Icon name="more" />
+          </MenuButton>
         </div>
       </header>
-
-      <Show when={confirmClear()}>
-        <div class="tile activity-confirm" role="alertdialog" aria-labelledby="activity-clear-title" aria-describedby="activity-clear-body">
-          <h2 id="activity-clear-title">{t("activity.clearTitle")}</h2>
-          <p id="activity-clear-body" class="small">
-            {t("activity.clearBody")}
-          </p>
-          <div class="row">
-            <button class="btn btn-ghost btn-sm" onClick={() => setConfirmClear(false)} autofocus>
-              {t("label.cancel")}
-            </button>
-            <button class="btn btn-primary btn-sm" onClick={clear}>
-              {t("activity.clear")}
-            </button>
-          </div>
-        </div>
-      </Show>
 
       <Show when={choosing()}>
         <fieldset class="tile activity-kinds">
@@ -188,7 +187,8 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
         </fieldset>
       </Show>
 
-      <div class="search-box">
+      {/* Row 1: search and the device; row 2: what kind. */}
+      <div class="activity-toolbar" role="group" aria-label={t("activity.filters")}>
         <input
           type="search"
           class="search-input"
@@ -199,24 +199,9 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
           value={text()}
           onInput={(e) => setText(e.currentTarget.value)}
         />
-      </div>
-      <div class="search-filters" role="group" aria-label={t("activity.filters")}>
-        {/* What kind: one chip each (the kinds hidden from the timeline aren't offered). */}
-        <div class="home-filters" role="group" aria-label={t("activity.filterKind")}>
-          <button class="filter-chip" aria-pressed={kind() === ""} onClick={() => setKind("")}>
-            {t("activity.anyKind")}
-          </button>
-          <For each={ACTIVITY_KINDS.filter((k) => !hidden().includes(k))}>
-            {(k) => (
-              <button class="filter-chip" aria-pressed={kind() === k} onClick={() => setKind(k)}>
-                {t(ACTIVITY_KIND_LABEL[k])}
-              </button>
-            )}
-          </For>
-        </div>
-        <label class="search-filter">
-          <span class="small muted">{t("activity.filterDevice")}</span>
-          <select value={node()} onChange={(e) => setNode(e.currentTarget.value)}>
+        <label class="select-with-icon">
+          <Icon name="devices" size={16} />
+          <select aria-label={t("activity.filterDevice")} value={node()} onChange={(e) => setNode(e.currentTarget.value)}>
             <option value="">{t("activity.anyDevice")}</option>
             <For each={state.peers}>{(p) => <option value={p.node_id}>{peerName(p.node_id)}</option>}</For>
           </select>
@@ -234,11 +219,26 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
           </button>
         </Show>
       </div>
+      <div class="activity-chips">
+        {/* What kind: one chip each (the kinds hidden from the timeline aren't offered). */}
+        <div class="home-filters" role="group" aria-label={t("activity.filterKind")}>
+          <button class="filter-chip" aria-pressed={kind() === ""} onClick={() => setKind("")}>
+            {t("activity.anyKind")}
+          </button>
+          <For each={ACTIVITY_KINDS.filter((k) => !hidden().includes(k))}>
+            {(k) => (
+              <button class="filter-chip" aria-pressed={kind() === k} onClick={() => setKind(k)}>
+                {t(ACTIVITY_KIND_LABEL[k])}
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
 
       <Show when={clearedAt()}>
         {(at) => (
           <p class="small muted activity-cleared">
-            {t("activity.clearedSince", { time: new Date(at()).toLocaleString() })}{" "}
+            {t("activity.clearedSince", { time: dateAndTime(at()) })}{" "}
             <button class="btn btn-ghost btn-sm" onClick={restore}>
               {t("activity.showEarlier")}
             </button>

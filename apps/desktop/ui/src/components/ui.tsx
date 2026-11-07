@@ -3,7 +3,7 @@
 import { createSignal, For, Show, type JSX } from "solid-js";
 import { peerIcon, peerName, state, type Peer } from "../lib/core";
 import { DeviceIcon } from "./DeviceIcon";
-import { linkLabel, linkState, qualityLabel, type LinkState } from "../lib/words";
+import { linkLabel, linkState, qualityLabel, type LinkState, type Route } from "../lib/words";
 import type { Quality } from "../bindings";
 import { t, tn } from "../i18n";
 import { Icon, type IconName } from "./Icon";
@@ -96,6 +96,25 @@ export function StatusPill(props: { node: string }) {
         <SignalBars quality={q()!} />
       </Show>
     </span>
+  );
+}
+
+/** How a live link goes: Local network (wifi), Direct (globe) or Relay
+ *  (server, the only one tinted amber). Nothing when not live. */
+export function RouteChip(props: { route: Route | null; compact?: boolean }) {
+  return (
+    <Show when={props.route}>
+      {(r) => (
+        <span
+          class="chip chip-sm route-chip"
+          classList={{ "chip-amber": r().relay, "route-chip-icon": !!props.compact }}
+          title={t("route.title", { route: r().label })}
+        >
+          <Icon name={r().icon} size={14} />
+          <span classList={{ "sr-only": !!props.compact }}>{r().label}</span>
+        </span>
+      )}
+    </Show>
   );
 }
 

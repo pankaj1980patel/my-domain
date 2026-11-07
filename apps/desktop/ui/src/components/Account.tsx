@@ -11,7 +11,7 @@ import { createSignal, For, onMount, Show, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 import { commands, type AccountSession } from "../bindings";
 import { unwrap } from "../lib/core";
-import { friendlyError, niceName, timeAgo } from "../lib/words";
+import { friendlyError, niceName, shortDate, timeAgo } from "../lib/words";
 import { rememberFocus, trapTab } from "../lib/a11y";
 import { toast } from "./ui";
 import { SettingRow } from "./SettingRow";
@@ -312,7 +312,7 @@ export function Sessions() {
                       </div>
                       <div class="small muted">
                         {t("account.sessionTimes", {
-                          created: s.created == null ? "—" : new Date(s.created * 1000).toLocaleDateString(),
+                          created: s.created == null ? "—" : shortDate(s.created * 1000),
                           seen: s.last_seen == null ? "—" : timeAgo(s.last_seen * 1000),
                         })}
                       </div>

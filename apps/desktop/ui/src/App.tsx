@@ -11,6 +11,7 @@ import { SignedOutPrompt } from "./components/Account";
 import { unlockAudio } from "./lib/ring";
 import { niceName } from "./lib/words";
 import { toast, Toasts } from "./components/ui";
+import { ConfirmHost } from "./components/Confirm";
 import CommandPalette, { type Place } from "./components/CommandPalette";
 import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
@@ -43,7 +44,7 @@ import ReadLater from "./screens/ReadLater";
 import LinksMap from "./screens/LinksMap";
 import Health, { type HealthNav } from "./screens/Health";
 import Setup from "./screens/Setup";
-import { badCount, loadSetup, watchHealth } from "./lib/health";
+import { loadSetup, problemCount, watchHealth } from "./lib/health";
 import { readLater, unreadCount } from "./lib/readLater";
 import { setHelpOpener } from "./help/HelpLink";
 import { t, tn, type Key, type PluralKey } from "./i18n";
@@ -376,7 +377,7 @@ export default function App() {
             </ul>
             <hr class="nav-divider" />
             <ul class="nav-list">
-              <NavItem place="health" icon="security" tone="green" label="nav.securityHealth" active={is("health")} count={badCount()} alert />
+              <NavItem place="health" icon="security" tone="green" label="nav.securityHealth" active={is("health")} count={problemCount()} alert />
               <NavItem place="settings" icon="settings" label="nav.settings" active={is("settings") || is("developer") || is("setup")} />
               <NavItem place="help" icon="help" label="nav.help" active={is("help")} />
             </ul>
@@ -482,6 +483,7 @@ export default function App() {
                 <Dashboard
                   onOpen={openDevice}
                   onAllDevices={() => go({ name: "home" })}
+                  onMap={() => go({ name: "linksMap" })}
                   onHealth={() => go({ name: "health" })}
                   onActivity={() => go({ name: "activity" })}
                   onSettings={(section) => goPlace("settings", section)}
@@ -589,6 +591,7 @@ export default function App() {
         )}
       </Show>
       <Show when={state.ringing}>{(r) => <RingBanner from={r().from} />}</Show>
+      <ConfirmHost />
       <Toasts />
     </>
   );

@@ -11,10 +11,10 @@ import { createEffect, createMemo, createSignal, For, on, onMount, Show } from "
 import { Portal } from "solid-js/web";
 import { commands } from "../bindings";
 import { connect, peerIcon, peerName, refreshDevices, state, type Peer } from "../lib/core";
-import { friendlyError, humanSize, timeAgo } from "../lib/words";
-import { Empty, linkStateOf, toast } from "../components/ui";
+import { friendlyError, humanSize, presenceLabel, presenceTone, routeOf, timeAgo } from "../lib/words";
+import { Empty, linkStateOf, RouteChip, toast } from "../components/ui";
 import { t, tn } from "../i18n";
-import { badCount, howLabel, ranAt, report } from "../lib/health";
+import { problemCount, ranAt, report } from "../lib/health";
 import { isVerified } from "../lib/verify";
 import { loadMap, mapView, myEdge } from "../lib/linksMap";
 import { osName } from "../lib/deviceInfo";
@@ -106,19 +106,6 @@ export default function Home(props: {
     state.peers.map((p) => ({ icon: "devices" as const, label: peerName(p.node_id), onSelect: () => setChosen(p.node_id) }));
 
   const [adding, setAdding] = createSignal(false);
-  const addMenu = (): MenuItem[] => [
-    { icon: "connect", label: t("join.addDevice"), onSelect: () => setAdding(true) },
-    { icon: "map", label: t("map.openMap"), divider: true, onSelect: props.onMap },
-    {
-      icon: "refresh",
-      label: t("home.refresh"),
-      onSelect: () =>
-        refreshDevices().then(
-          () => toast(t("home.refreshed"), "ok"),
-          (e) => toast(friendlyError(e), "error"),
-        ),
-    },
-  ];
   const kindMenu = (): MenuItem[] => [
     { label: t("home.typeAll"), onSelect: () => setKind("all") },
     { icon: "phone", label: t("home.typePhones"), onSelect: () => setKind("phone") },
@@ -158,11 +145,7 @@ export default function Home(props: {
           <h1>{t("home.allTitle")}</h1>
           <p class="muted">{t("home.allSub")}</p>
         </div>
-        <MenuButton label={t("home.addDevice")} labelled triggerClass="btn btn-primary" items={addMenu()}>
-          <Icon name="connect" />
-          {t("home.addDevice")}
-          <Icon name="chevron-down" size={16} />
-        </MenuButton>
+        <AddDeviceButton onAdd={() => setAdding(true)} onMap={props.onMap} />
       </header>
 
       {/* Setup not finished: carry on where it stopped. */}
@@ -281,9 +264,9 @@ export default function Home(props: {
               )}
             </Show>
             <button class="tile dash-card home-protect" onClick={props.onHealth}>
-              <IconChip name={badCount() > 0 ? "alert" : "verify"} tone={badCount() > 0 ? "amber" : "green"} size={22} />
+              <IconChip name={problemCount() > 0 ? "alert" : "verify"} tone={problemCount() > 0 ? "amber" : "green"} size={22} />
               <span class="grow">
-                <strong>{badCount() > 0 ? tn("dash.problems", badCount()) : t("home.protected")}</strong>
+                <strong>{problemCount() > 0 ? tn("dash.problems", problemCount()) : t("home.protected")}</strong>
                 <Show when={report() && ranAt()}>
                   <span class="muted small">{t("home.lastCheck", { ago: timeAgo(ranAt()) })}</span>
                 </Show>
@@ -298,28 +281,6 @@ export default function Home(props: {
         <AddDialog onClose={() => setAdding(false)} />
       </Show>
     </section>
-  );
-}
-
-/** A ring filled to `pct` (the share of devices online). */
-function Ring(props: { pct: number }) {
-  const r = 21;
-  const c = 2 * Math.PI * r;
-  return (
-    <div class="ring tone-green" aria-hidden="true">
-      <svg width="52" height="52" viewBox="0 0 52 52">
-        <circle class="ring-track" cx="26" cy="26" r={r} />
-        <circle
-          class="ring-fill"
-          cx="26"
-          cy="26"
-          r={r}
-          stroke-dasharray={`${(c * Math.max(0, Math.min(100, props.pct))) / 100} ${c}`}
-          transform="rotate(-90 26 26)"
-        />
-      </svg>
-      <Icon name="devices" size={18} class="ring-icon" />
-    </div>
   );
 }
 
@@ -341,11 +302,13 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
       (e) => toast(friendlyError(e), "error"),
     );
   const doConnect = () => connect(node()).catch((e) => toast(friendlyError(e), "error"));
-  /** "Online" / "Asleep" / "Offline". */
-  const word = () => (live() ? t("dash.online") : s() === "asleep" ? t("home.asleep") : t("dash.offline"));
-  const tone = () => (s() === "direct" ? "green" : s() === "relay" ? "amber" : s() === "failed" ? "red" : "muted");
+  /** "Online" / "Asleep" / "Offline": the same word on every screen. */
+  const word = () => presenceLabel(s());
+  const tone = () => presenceTone(s());
+  /** Local network / Direct / Relay (only Relay is tinted). */
+  const route = () => routeOf(s(), mapDeviceHow(node()));
   const when = () => (live() ? t("home.activeNow") : props.seen != null ? timeAgo(Date.now() - props.seen * 1000) : "");
-  type Act = { icon: IconName; label: string; run: () => unknown; off?: string };
+  type Act = { icon: IconName; label: string; run: () => unknown; off?: string; lead?: boolean };
   const screen = (): Act => ({
     icon: "screen",
     label: t("quick.screen"),
@@ -362,12 +325,15 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
   /** The three that fit: a phone, a computer, or one that isn't connected. */
   const actions = (): Act[] => {
     const files: Act = { icon: "files", label: t("files.title"), run: () => props.onOpen(node(), "files", "files") };
+    // Not reachable: Wake leads when it can be woken, then Connect (the
+    // card itself opens the details).
     if (!live())
-      return [
-        { icon: "connect", label: t("device.connect"), run: doConnect },
-        { icon: "power", label: t("wake.button"), run: wake, off: canWake() ? undefined : t("home.noWake", { name: name() }) },
-        { icon: "info", label: t("quick.details"), run: () => props.onOpen(node(), "settings", "connection") },
-      ];
+      return canWake()
+        ? [
+            { icon: "power", label: t("wake.button"), run: wake, lead: true },
+            { icon: "connect", label: t("device.connect"), run: doConnect },
+          ]
+        : [{ icon: "connect", label: t("device.connect"), run: doConnect, lead: true }];
     if (phone()) return [screen(), chat(), files];
     return [screen(), { icon: "send-clip", label: t("quick.clipboard"), run: () => quickSendClipboard(node()) }, files];
   };
@@ -377,13 +343,7 @@ function useDevice(props: { peer: Peer; seen: number | null; onOpen: Open }) {
     { icon: "ring", label: t("control.ring"), onSelect: () => quickRing(node()) },
     { icon: "devices", label: t("palette.open", { name: name() }), divider: true, onSelect: () => props.onOpen(node()) },
   ];
-  const used = (x?: { free: number; total: number }) => (x && x.total > 0 ? Math.round(((x.total - x.free) / x.total) * 100) : null);
-  const network = () => {
-    if (st()?.wifiSsid) return st()!.wifiSsid!;
-    const how = mapDeviceHow(node());
-    return live() && how && how !== "none" ? howLabel(how) : "";
-  };
-  return { node, name, s, live, st, word, tone, when, actions, more, screen, chat, call, used, network };
+  return { node, name, s, live, st, word, tone, route, when, actions, more, screen, chat, call };
 }
 /** How this computer reaches it now ("lan", "relay"...), from the map's line. */
 const mapDeviceHow = (node: string) => {
@@ -431,24 +391,26 @@ function HomeCard(props: { peer: Peer; chosen: boolean; seen: number | null; onO
         <p class="muted small home-facts">
           {[osName(d.node()), d.live() ? d.when() : d.when() && t("home.lastSeen", { ago: d.when() })].filter(Boolean).join(" · ")}
         </p>
-        <p class="home-statline small">
-          <span>
-            <Icon name="battery" size={14} />
-            {d.st()?.battery != null ? `${d.st()!.battery}%` : "—"}
-          </span>
-          <span>
-            <Icon name="storage" size={14} />
-            {d.st()?.storage ? humanSize(d.st()!.storage!.total) : "—"}
-          </span>
-          <span>
-            <Icon name="wifi" size={14} />
-            {d.network() || "—"}
-          </span>
-        </p>
+        {/* Live: battery, free storage and the route. Not live: nothing
+            to show but how to get it. */}
+        <Show
+          when={d.live()}
+          fallback={<p class="muted small home-statline">{d.actions()[0]?.icon === "power" ? t("home.wakeToSee") : t("home.connectToSee")}</p>}
+        >
+          <p class="home-statline small">
+            <DeviceFactBits d={d} />
+          </p>
+        </Show>
         <div class="home-actions">
           <For each={d.actions()}>
             {(a) => (
-              <button class="btn btn-soft btn-sm" disabled={!!a.off} title={a.off ?? a.label} onClick={() => a.run()}>
+              <button
+                class="btn btn-sm"
+                classList={{ "btn-soft": !a.lead, "btn-lead": !!a.lead }}
+                disabled={!!a.off}
+                title={a.off ?? a.label}
+                onClick={() => a.run()}
+              >
                 <Icon name={a.icon} size={16} />
                 <span class="btn-label">{a.label}</span>
                 <Show when={a.off}>
@@ -479,35 +441,26 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
       </button>
     );
   };
-  const stat = (name: IconName, v: number | null | undefined, label: string) => (
-    <span class="home-stat" title={label}>
-      <Icon name={name} size={15} />
-      {v != null ? `${v}%` : "—"}
-      <span class="sr-only">{label}</span>
-    </span>
-  );
   return (
     <li class="tile home-row" classList={{ chosen: props.chosen }} data-drop-node={d.node()} onClick={opener(() => props.onOpen(d.node()))}>
       <div class="device-art home-art-sm">
         <DeviceArt node={d.node()} icon={peerIcon(d.node())} size={48} />
       </div>
       <div class="home-row-main">
-        <div class="home-card-top">
-          <h2 class="device-card-name">
-            <button type="button" class="device-open" onClick={() => props.onOpen(d.node())}>
-              {d.name()}
-            </button>
-          </h2>
-          <Show when={osName(d.node())}>
-            <span class="chip chip-sm">{osName(d.node())}</span>
-          </Show>
-        </div>
-        <p class={`home-status small tone-${d.tone()}`}>
-          <span class="hero-dot" aria-hidden="true" />
-          {d.live() ? t("home.connected") : d.word()}
-          <Show when={d.when()}>
-            <span class="muted"> · {d.when()}</span>
-          </Show>
+        <h2 class="device-card-name">
+          <button type="button" class="device-open" onClick={() => props.onOpen(d.node())}>
+            {d.name()}
+          </button>
+        </h2>
+        {/* Presence, when, and the OS under the name. */}
+        <p class="home-status small">
+          <span class={`home-presence tone-${d.tone()}`}>
+            <span class="hero-dot" aria-hidden="true" />
+            {d.word()}
+          </span>
+          <span class="muted home-status-rest">
+            {[d.when() && (d.live() ? d.when() : t("home.lastSeen", { ago: d.when() })), osName(d.node())].filter(Boolean).join(" · ")}
+          </span>
         </p>
         <Show when={loc()}>
           {(l) => (
@@ -519,9 +472,9 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
         </Show>
       </div>
       <div class="home-stats-chips">
-        {stat("battery", d.st()?.battery, t("info.battery"))}
-        {stat("storage", d.used(d.st()?.storage), t("info.storage"))}
-        {stat("memory", d.used(d.st()?.ram), t("info.memory"))}
+        <Show when={d.live()}>
+          <DeviceFactBits d={d} compact />
+        </Show>
       </div>
       <div class="home-round">
         {icon(d.screen())}
@@ -532,6 +485,59 @@ function HomeRow(props: { peer: Peer; chosen: boolean; seen: number | null; onOp
         </MenuButton>
       </div>
     </li>
+  );
+}
+
+/** The three facts a card and a row both show: battery, free storage, and
+ *  the route (Local network / Direct / Relay). Only what's known. */
+function DeviceFactBits(props: { d: ReturnType<typeof useDevice>; compact?: boolean }) {
+  const st = () => props.d.st();
+  return (
+    <>
+      <Show when={st()?.battery != null}>
+        <span class="home-stat" title={t("info.battery")}>
+          <Icon name="battery" size={14} />
+          {st()!.battery}%<span class="sr-only"> {t("info.battery")}</span>
+        </span>
+      </Show>
+      <Show when={st()?.storage}>
+        {(x) => (
+          <span class="home-stat" title={`${t("info.storage")}: ${t("dash.free", { free: humanSize(x().free) })}`}>
+            <Icon name="storage" size={14} />
+            {props.compact ? humanSize(x().free) : t("dash.free", { free: humanSize(x().free) })}
+            <Show when={props.compact}>
+              <span class="sr-only"> {t("dash.free", { free: "" }).trim()}</span>
+            </Show>
+          </span>
+        )}
+      </Show>
+      <RouteChip route={props.d.route()} compact={props.compact} />
+    </>
+  );
+}
+
+/** The page's one primary: Add device (plus), with the map and Refresh in
+ *  its menu. The same button on Overview and All devices. */
+export function AddDeviceButton(props: { onAdd: () => void; onMap: () => void }) {
+  const items = (): MenuItem[] => [
+    { icon: "plus", label: t("join.addDevice"), onSelect: props.onAdd },
+    { icon: "map", label: t("map.openMap"), divider: true, onSelect: props.onMap },
+    {
+      icon: "refresh",
+      label: t("home.refresh"),
+      onSelect: () =>
+        refreshDevices().then(
+          () => toast(t("home.refreshed"), "ok"),
+          (e) => toast(friendlyError(e), "error"),
+        ),
+    },
+  ];
+  return (
+    <MenuButton label={t("home.addDevice")} labelled triggerClass="btn btn-primary" items={items()}>
+      <Icon name="plus" />
+      {t("home.addDevice")}
+      <Icon name="chevron-down" size={16} />
+    </MenuButton>
   );
 }
 
@@ -566,43 +572,44 @@ export function AddDialog(props: { onClose: () => void }) {
   );
 }
 
-/** The four counts: devices (ring: the share online), online, issues from
- *  the health check (opens it), direct links. */
+/** The four counts, each an icon chip, a value and a one-line label:
+ *  devices, online, problems from the health check (opens it), direct links
+ *  (and how many go through the relay). */
 export function DeviceStats(props: { onHealth: () => void }) {
   const online = () => state.peers.filter((p) => !!state.links[p.node_id]).length;
   const relayed = () => state.peers.filter((p) => state.links[p.node_id] === "relay").length;
   const direct = () => online() - relayed();
+  const problems = () => problemCount();
   return (
     <div class="home-stats">
       <div class="tile stat-card">
-        <Ring pct={state.peers.length ? (online() / state.peers.length) * 100 : 0} />
+        <IconChip name="devices" tone="cyan" size={20} />
         <div class="stat-text">
           <strong class="stat-value">{state.peers.length}</strong>
-          <span class="small muted">{t("home.total")}</span>
+          <span class="small muted stat-label">{t("home.total")}</span>
         </div>
       </div>
       <div class="tile stat-card">
-        <span class="stat-dot" aria-hidden="true" />
+        <IconChip name="circle-dot" tone="green" size={20} />
         <div class="stat-text">
           <strong class="stat-value">{online()}</strong>
-          <span class="small muted">{t("home.online")}</span>
+          <span class="small muted stat-label">{t("home.online")}</span>
         </div>
       </div>
       <button class="tile stat-card stat-link" onClick={props.onHealth}>
-        <IconChip name="alert" tone={badCount() > 0 ? "amber" : "green"} size={20} />
+        <IconChip name={problems() > 0 ? "alert" : "check"} tone={problems() > 0 ? "amber" : "green"} size={20} />
         <span class="stat-text">
-          <strong class="stat-value">{badCount()}</strong>
-          <span class="small muted">{badCount() > 0 ? t("home.issues") : t("home.noIssues")}</span>
+          <strong class="stat-value">{problems()}</strong>
+          <span class="small muted stat-label">{problems() > 0 ? tn("home.issues", problems()) : t("home.noIssues")}</span>
         </span>
       </button>
       <div class="tile stat-card">
         <IconChip name="link-direct" tone="violet" size={20} />
         <div class="stat-text">
           <strong class="stat-value">{direct()}</strong>
-          <span class="small muted">{t("home.direct")}</span>
-          <Show when={relayed() > 0}>
-            <span class="small stat-sub">{t("home.relayed", { n: relayed() })}</span>
-          </Show>
+          <span class="small muted stat-label">
+            {relayed() > 0 ? `${t("home.direct")} · ${t("home.relayed", { n: relayed() })}` : t("home.direct")}
+          </span>
         </div>
       </div>
     </div>

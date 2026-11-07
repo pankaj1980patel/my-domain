@@ -100,6 +100,22 @@ import WifiIcon from "lucide-solid/icons/wifi";
 import WorkflowIcon from "lucide-solid/icons/workflow";
 import XIcon from "lucide-solid/icons/x";
 import ZapIcon from "lucide-solid/icons/zap";
+import ServerIcon from "lucide-solid/icons/server";
+import ArrowLeftIcon from "lucide-solid/icons/arrow-left";
+import PlusIcon from "lucide-solid/icons/plus";
+import Volume1Icon from "lucide-solid/icons/volume-1";
+import ImageUpIcon from "lucide-solid/icons/image-up";
+import SquareCheckIcon from "lucide-solid/icons/square-check";
+import SquareIcon from "lucide-solid/icons/square";
+import EyeIcon from "lucide-solid/icons/eye";
+import EyeOffIcon from "lucide-solid/icons/eye-off";
+import PhoneOffIcon from "lucide-solid/icons/phone-off";
+import CircleDotIcon from "lucide-solid/icons/circle-dot";
+import SkipBackIcon from "lucide-solid/icons/skip-back";
+import SkipForwardIcon from "lucide-solid/icons/skip-forward";
+import PlayIcon from "lucide-solid/icons/play";
+import PauseIcon from "lucide-solid/icons/pause";
+import FileIcon from "lucide-solid/icons/file";
 
 const ICONS = {
   devices: MonitorSmartphoneIcon,
@@ -202,6 +218,23 @@ const ICONS = {
   "find": MapPinIcon,
   "home": LayoutDashboardIcon,
   list: ListIcon,
+  server: ServerIcon,
+  globe: GlobeIcon,
+  "arrow-left": ArrowLeftIcon,
+  plus: PlusIcon,
+  "volume-low": Volume1Icon,
+  "image-up": ImageUpIcon,
+  "square-check": SquareCheckIcon,
+  square: SquareIcon,
+  eye: EyeIcon,
+  "eye-off": EyeOffIcon,
+  "phone-off": PhoneOffIcon,
+  "circle-dot": CircleDotIcon,
+  "skip-back": SkipBackIcon,
+  "skip-forward": SkipForwardIcon,
+  play: PlayIcon,
+  pause: PauseIcon,
+  file: FileIcon,
 } satisfies Record<string, Component<LucideProps>>;
 
 export type IconName = keyof typeof ICONS;

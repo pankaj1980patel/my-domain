@@ -24,7 +24,7 @@ import {
   type Timer,
   type TimerAction,
 } from "../lib/timers";
-import { friendlyError, niceName } from "../lib/words";
+import { friendlyError, niceName, clockTime } from "../lib/words";
 import { toast } from "../components/ui";
 import { HelpLink } from "../help/HelpLink";
 import { t, tn } from "../i18n";
@@ -155,7 +155,7 @@ function TimerCard(props: { timer: Timer; now: number; devices: string[] }) {
   const status = () => {
     if (ended()) return t("timers.ended");
     if (x().state === "paused") return t("timers.paused");
-    const at = new Date(x().ends_at ?? 0).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    const at = clockTime(x().ends_at ?? 0);
     return t("timers.endsAt", { time: at });
   };
   const ringNames = () =>
@@ -175,12 +175,14 @@ function TimerCard(props: { timer: Timer; now: number; devices: string[] }) {
       <div class="timer-bar" aria-hidden="true">
         <span style={{ width: `${Math.round(progress(x(), props.now) * 1000) / 10}%` }} />
       </div>
-      <p class="small muted">
-        {t("timers.ringsOn", { names: ringNames() })}{" "}
+      {/* Where it rings, and Change on its own row at the right. */}
+      <div class="timer-ring-row">
+        <p class="small muted">{t("timers.ringsOn", { names: ringNames() })}</p>
         <button class="btn btn-ghost btn-sm" aria-expanded={editRing()} onClick={() => setEditRing(!editRing())}>
+          <Icon name="edit" size={14} />
           {t("timers.change")}
         </button>
-      </p>
+      </div>
       <Show when={editRing()}>
         <RingPicker
           devices={choices()}
@@ -220,9 +222,15 @@ function TimerCard(props: { timer: Timer; now: number; devices: string[] }) {
         <button class="btn btn-soft btn-sm" onClick={more}>
           {t("timers.plusMinute")}
         </button>
+        {/* Cancel: an x at the far end, apart from Pause. */}
         <Show when={!ended()}>
-          <button class="btn btn-ghost btn-sm" onClick={act("cancel")}>
-            {t("timers.cancel")}
+          <button
+            class="btn btn-ghost btn-sm btn-icon btn-danger-ghost timer-cancel"
+            aria-label={t("timers.cancelLabel", { name: x().label || t("timers.untitled") })}
+            title={t("timers.cancelLabel", { name: x().label || t("timers.untitled") })}
+            onClick={act("cancel")}
+          >
+            <Icon name="close" size={16} />
           </button>
         </Show>
       </div>
@@ -337,8 +345,13 @@ function BigTimer(props: { timer: Timer | undefined; now: number }) {
             <button class="btn btn-soft btn-sm" onClick={() => addTime(x().id, MINUTE).catch((e) => toast(friendlyError(e), "error"))}>
               {t("timers.plusMinute")}
             </button>
-            <button class="btn btn-ghost btn-sm" onClick={act("cancel")}>
-              {t("timers.cancel")}
+            <button
+              class="btn btn-ghost btn-sm btn-icon btn-danger-ghost timer-cancel"
+              aria-label={t("timers.cancelLabel", { name: x().label || t("timers.untitled") })}
+              title={t("timers.cancelLabel", { name: x().label || t("timers.untitled") })}
+              onClick={act("cancel")}
+            >
+              <Icon name="close" size={16} />
             </button>
           </div>
         )}

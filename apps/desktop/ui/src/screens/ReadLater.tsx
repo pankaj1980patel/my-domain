@@ -19,7 +19,9 @@ import {
   sortedReadLater,
   type ReadLaterItem,
 } from "../lib/readLater";
-import { friendlyError, timeAgo } from "../lib/words";
+import { friendlyError, niceName, timeAgo } from "../lib/words";
+import { peerIcon, peerName, state } from "../lib/core";
+import { DeviceIcon } from "../components/DeviceIcon";
 import { Empty, toast } from "../components/ui";
 import { foundId, foundTarget, isFound } from "../lib/search";
 import { HelpLink } from "../help/HelpLink";
@@ -96,20 +98,30 @@ export default function ReadLater() {
           </h1>
           <p class="muted">{t("readLater.subtitle")}</p>
         </div>
-        <button class="btn btn-soft btn-sm" onClick={addCopied}>
-          {t("readLater.saveCopied")}
-        </button>
       </header>
 
       <form class="card rl-add" onSubmit={add}>
-        <input
-          type="url"
-          inputMode="url"
-          placeholder={t("readLater.linkPlaceholder")}
-          aria-label={t("readLater.linkLabel")}
-          value={text()}
-          onInput={(e) => setText(e.currentTarget.value)}
-        />
+        {/* One way in: type or paste a link, or save the copied one from
+            the button inside the field. */}
+        <div class="field-with-btn">
+          <input
+            type="url"
+            inputMode="url"
+            placeholder={t("readLater.linkPlaceholder")}
+            aria-label={t("readLater.linkLabel")}
+            value={text()}
+            onInput={(e) => setText(e.currentTarget.value)}
+          />
+          <button
+            type="button"
+            class="btn btn-ghost btn-sm btn-icon"
+            aria-label={t("readLater.saveCopied")}
+            title={t("readLater.saveCopied")}
+            onClick={addCopied}
+          >
+            <Icon name="get-clip" size={16} />
+          </button>
+        </div>
         <input
           type="text"
           placeholder={t("readLater.titlePlaceholder")}
@@ -143,8 +155,14 @@ export default function ReadLater() {
             <span class="filter-sep" aria-hidden="true" />
             <For each={sources()}>
               {(src) => (
-                <button class="filter-chip" aria-pressed={from() === src} onClick={() => setFrom(from() === src ? "" : src)}>
-                  {t("readLater.savedOn", { name: src })}
+                <button
+                  class="filter-chip device-chip"
+                  aria-pressed={from() === src}
+                  aria-label={t("readLater.savedOn", { name: src })}
+                  onClick={() => setFrom(from() === src ? "" : src)}
+                >
+                  <SourceIcon name={src} />
+                  {src}
                 </button>
               )}
             </For>
@@ -187,20 +205,24 @@ export default function ReadLater() {
                       .join(" · ")}
                   </span>
                 </button>
+                {/* Icon buttons with tooltips; Delete apart, in the danger
+                    tone, with Undo in its toast. */}
                 <div class="row rl-actions">
                   <button
-                    class="btn btn-ghost btn-sm"
+                    class="btn btn-ghost btn-sm btn-icon"
                     onClick={() => markRead(i.id, !i.read).catch(fail)}
                     aria-label={t(i.read ? "readLater.markUnreadLabel" : "readLater.markReadLabel", { title: i.title })}
+                    title={i.read ? t("readLater.markUnread") : t("readLater.markRead")}
                   >
-                    {i.read ? t("readLater.markUnread") : t("readLater.markRead")}
+                    <Icon name={i.read ? "circle-dot" : "check"} size={16} />
                   </button>
                   <button
-                    class="btn btn-ghost btn-sm"
+                    class="btn btn-ghost btn-sm btn-icon btn-danger-ghost rl-delete"
                     onClick={() => remove(i)}
                     aria-label={t("readLater.deleteLabel", { title: i.title })}
+                    title={t("readLater.delete")}
                   >
-                    {t("readLater.delete")}
+                    <Icon name="remove" size={16} />
                   </button>
                 </div>
               </li>
@@ -209,5 +231,15 @@ export default function ReadLater() {
         </ul>
       </Show>
     </section>
+  );
+}
+
+/** The device a link was saved on, as its icon (when it's one of yours). */
+function SourceIcon(props: { name: string }) {
+  const node = () => state.peers.find((p) => niceName(peerName(p.node_id)) === niceName(props.name))?.node_id;
+  return (
+    <Show when={node()} fallback={<Icon name="devices" size={14} />}>
+      {(n) => <DeviceIcon icon={peerIcon(n())} size={14} />}
+    </Show>
   );
 }

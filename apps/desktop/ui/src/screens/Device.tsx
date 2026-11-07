@@ -52,8 +52,8 @@ import {
   type Transfer,
   unwrap,
 } from "../lib/core";
-import { fileFailReason, friendlyError, humanSize, linkLabel, progressLabel, timeAgo } from "../lib/words";
-import { Gate, linkStateOf, toast } from "../components/ui";
+import { fileFailReason, friendlyError, humanSize, presenceLabel, presenceTone, progressLabel, routeOf, timeAgo } from "../lib/words";
+import { Gate, linkStateOf, RouteChip, toast } from "../components/ui";
 import { DeviceLabelForm } from "../components/DeviceLabel";
 import KeyChangeBanner from "../components/KeyChangeBanner";
 import { deviceProblems } from "../lib/health";
@@ -91,6 +91,7 @@ import type { PageLayoutView } from "../bindings";
 import { useVerify } from "../components/VerifyDevice";
 import { isVerified } from "../lib/verify";
 import { RemoveDeviceConfirm } from "../components/RemovedDevices";
+import { askConfirm } from "../components/Confirm";
 import { PermissionsTile } from "../components/PeerPermissions";
 
 /** The page's tabs, in order. A tile lives in one (its `tab`); Overview is
@@ -328,8 +329,12 @@ export default function Device(props: {
   const verify = useVerify(() => props.node);
   const [removing, setRemoving] = createSignal(false);
   const menu = (): MenuItem[] => [
+    // Overview has its own Quick actions card: the header's "Actions" button
+    // isn't shown there, its items are here.
+    ...(current() === "overview" ? quickMenu().map((m) => ({ ...m, divider: false })) : []),
     {
       icon: "layout",
+      divider: current() === "overview",
       label: arranging() ? t("layout.done") : t("layout.edit"),
       hint: t("layout.editHint"),
       onSelect: () => setArranging((v) => !v),
@@ -397,7 +402,17 @@ export default function Device(props: {
     const how = seen()?.how;
     return live() && how && how !== "none" ? howLabel(how) : "";
   };
-  const statusTone = () => (s() === "direct" ? "green" : s() === "relay" ? "amber" : s() === "failed" ? "red" : "muted");
+  // One word for its presence (the pill and the line say the same), and
+  // the route beside it when live.
+  const statusTone = () => presenceTone(s());
+  const route = () => routeOf(s(), seen()?.how);
+  const lastSeen = () => (!live() && seen()?.ago != null ? t("map.lastSeen", { ago: timeAgo(Date.now() - seen()!.ago! * 1000) }) : "");
+  // Asleep / not reached: what it means, behind a "?" (not a paragraph).
+  const why = () => (s() === "asleep" ? t("progress.asleep") : s() === "failed" ? progressLabel("failed") : null);
+  // Can it be woken (Wake-on-LAN)? Then Wake leads while it's not live.
+  const [canWake, setCanWake] = createSignal(false);
+  createEffect(on(() => [props.node, state.status[props.node]] as const, ([n]) => commands.canWake(n).then(setCanWake, () => setCanWake(false))));
+  const wakeLeads = () => canWake() && !live();
   const mockMenu = import.meta.env.MODE === "mock" && new URLSearchParams(location.search).get("menu") === "1";
 
   // Ask for its battery whenever this page opens (answer: device-status-event).
@@ -427,6 +442,7 @@ export default function Device(props: {
       {(p) => (
         <section class="page device-page">
           <button class="link back" onClick={props.onBack}>
+            <Icon name="arrow-left" size={16} />
             {t("device.back")}
           </button>
           {/* The hero: the device's picture, its name, how it's linked, a
@@ -437,7 +453,7 @@ export default function Device(props: {
               <DeviceArt
                 node={props.node}
                 icon={peerIcon(props.node)}
-                size={["laptop", "monitor"].includes(frameOf(peerIcon(props.node))) ? 112 : "large"}
+                size={["laptop", "monitor"].includes(frameOf(peerIcon(props.node))) ? 104 : "large"}
                 title={peerName(props.node)}
               />
             </div>
@@ -454,21 +470,31 @@ export default function Device(props: {
                   <Icon name="edit" />
                 </button>
               </div>
-              <p class={`hero-status tone-${statusTone()}`}>
-                <span class="hero-dot" aria-hidden="true" />
-                {linkLabel(s())}
-                <Show when={s() === "connecting" || s() === "waking" || s() === "asleep" || s() === "failed"}>
-                  <span class="muted small"> · {progressLabel(state.progress[props.node])}</span>
+              {/* Presence (the same word as the pill), then the route when
+                  live, or when it was last seen. */}
+              <p class="hero-status">
+                <span class={`hero-presence tone-${statusTone()}`}>
+                  <span class="hero-dot" aria-hidden="true" />
+                  {presenceLabel(s())}
+                </span>
+                <RouteChip route={route()} />
+                <Show when={s() === "connecting" || s() === "waking"}>
+                  <span class="muted small">{progressLabel(state.progress[props.node])}</span>
+                </Show>
+                <Show when={lastSeen()}>
+                  <span class="muted small">· {lastSeen()}</span>
+                </Show>
+                <Show when={why()}>
+                  {(w) => (
+                    <span class="hint-icon" tabIndex={0} role="img" aria-label={w()} title={w()}>
+                      <Icon name="info" size={15} />
+                    </span>
+                  )}
                 </Show>
               </p>
-              <p class="muted small hero-facts">
-                {[
-                  osName(props.node) || peerModel(props.node),
-                  !live() && seen()?.ago != null ? t("map.lastSeen", { ago: timeAgo(Date.now() - seen()!.ago! * 1000) }) : "",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </p>
+              <Show when={osName(props.node) || peerModel(props.node)}>
+                <p class="muted small hero-facts">{osName(props.node) || peerModel(props.node)}</p>
+              </Show>
               <div class="hero-chips">
                 <Show when={isVerified(props.node)}>
                   <span class="chip chip-green" title={t("verify.badgeHint")}>
@@ -489,25 +515,34 @@ export default function Device(props: {
                   </span>
                 </Show>
               </div>
-              {/* Asleep? Wake it, if it said it may be woken. */}
-              <WakeButton node={props.node} />
             </div>
             <div class="hero-side">
+              {/* Asleep? Wake leads, if it said it may be woken. */}
+              <WakeButton node={props.node} />
               <MenuButton
-                label={live() ? t("dash.online") : t("dash.offline")}
+                label={presenceLabel(s())}
                 labelled
                 triggerClass={`btn btn-soft hero-link tone-${statusTone()}`}
                 items={linkMenu()}
               >
                 <span class="hero-dot" aria-hidden="true" />
-                {live() ? t("dash.online") : t("dash.offline")}
+                {presenceLabel(s())}
                 <Icon name="chevron-down" size={16} />
               </MenuButton>
-              <MenuButton label={t("dash.quick")} labelled triggerClass="btn btn-primary" items={quickMenu()}>
-                <Icon name="quick" />
-                {t("dash.quick")}
-                <Icon name="chevron-down" size={16} />
-              </MenuButton>
+              {/* One primary: Actions on every tab but Overview (which has
+                  its Quick actions card), unless Wake leads. */}
+              <Show when={current() !== "overview"}>
+                <MenuButton
+                  label={t("device.actions")}
+                  labelled
+                  triggerClass={`btn hero-actions ${wakeLeads() ? "btn-soft" : "btn-primary"}`}
+                  items={quickMenu()}
+                >
+                  <Icon name="quick" />
+                  <span class="btn-label">{t("device.actions")}</span>
+                  <Icon name="chevron-down" size={16} />
+                </MenuButton>
+              </Show>
               <MenuButton label={t("device.more", { name: peerName(props.node) })} items={menu()} startOpen={mockMenu}>
                 <Icon name="more" />
               </MenuButton>
@@ -551,10 +586,10 @@ export default function Device(props: {
                 />
                 <Show when={current() === "overview"}>
                   <div class="tab-panel" {...panelProps("device", "overview")}>
-                    <Overview node={props.node} onGo={goTo} onActivity={() => props.onActivity?.()} />
+                    <Overview node={props.node} how={seen()?.how} onGo={goTo} onActivity={() => props.onActivity?.()} />
                   </div>
                 </Show>
-                <div class="tiles tab-panel" hidden={current() === "overview"} {...panelProps("device", current())}>
+                <div class="tiles tab-panel" classList={{ "tiles-split": split() }} hidden={current() === "overview"} {...panelProps("device", current())}>
                   <Show when={split()}>
                     <ul class="sub-nav tile-wide" aria-label={t("device.tilesOf", { tab: t(TAB_LABEL[current()]) })}>
                       <For each={offeredTiles()}>
@@ -951,13 +986,29 @@ export function ChatTile(props: { node: string }) {
   };
 
   return (
-    <article class="tile tile-wide">
+    <article class="tile tile-wide chat-tile">
       <div class="tile-head">
+        {/* Named by the tab or sub-tab around it: kept for screen readers. */}
         <h2>{t("chat.title")}</h2>
+        {/* Clear is destructive: in the card's "⋯", asked first. */}
         <Show when={thread().length > 0}>
-          <button class="btn btn-ghost btn-sm" title={t("chat.clearHint")} onClick={() => clearChat(props.node).catch(() => {})}>
-            {t("chat.clear")}
-          </button>
+          <MenuButton
+            label={t("chat.more", { name: peerName(props.node) })}
+            items={[
+              {
+                icon: "remove",
+                label: t("chat.clear"),
+                hint: t("chat.clearHint"),
+                danger: true,
+                onSelect: async () => {
+                  if (await askConfirm({ title: t("chat.clearTitle"), body: t("chat.clearHint"), action: t("chat.clear") }))
+                    clearChat(props.node).catch(() => {});
+                },
+              },
+            ]}
+          >
+            <Icon name="more" />
+          </MenuButton>
         </Show>
       </div>
       <div class="thread" ref={list} onScroll={onScroll} role="log" aria-label={t("a11y.chatLog", { name: peerName(props.node) })} tabIndex={0}>
@@ -1204,8 +1255,10 @@ function ClipboardTile(props: { node: string }) {
     <article class="tile">
       <h2>{t("clipboard.title")}</h2>
       <p class="muted small">{t("clipboard.hint")}</p>
+      {/* Two inline actions, each with its icon. */}
+      <div class="row">
       <button
-        class="btn btn-soft btn-block"
+        class="btn btn-soft btn-sm"
         disabled={busy()}
         onClick={async () => {
           setBusy(true);
@@ -1219,18 +1272,21 @@ function ClipboardTile(props: { node: string }) {
           }
         }}
       >
+        <Icon name="get-clip" size={16} />
         {busy() ? t("clipboard.getting") : t("clipboard.get")}
       </button>
       <button
-        class="btn btn-soft btn-block"
+        class="btn btn-soft btn-sm"
         onClick={async () => {
           const r = await commands.sendClipboardImage(props.node);
           if (r.status === "error") toast(friendlyError(r.error), "error");
           else toast(t("clipboard.pictureSent", { name: peerName(props.node) }), "ok");
         }}
       >
+        <Icon name="image-up" size={16} />
         {t("clipboard.sendPicture")}
       </button>
+      </div>
       <label class="switch-row">
         <span>{t("clipboard.sync")}</span>
         <input
@@ -1243,8 +1299,15 @@ function ClipboardTile(props: { node: string }) {
       <Show when={state.clipHistory.length}>
         <div class="row">
           <span class="small grow">{t("clipboard.recent")}</span>
-          <button class="btn btn-ghost btn-sm" onClick={() => clearClipHistory()}>
-            {t("clipboard.clear")}
+          <button
+            class="btn btn-ghost btn-sm btn-icon btn-danger-ghost"
+            aria-label={t("clipboard.clearLabel")}
+            title={t("clipboard.clearLabel")}
+            onClick={async () => {
+              if (await askConfirm({ title: t("clipboard.clearTitle"), action: t("clipboard.clear") })) clearClipHistory();
+            }}
+          >
+            <Icon name="remove" size={16} />
           </button>
         </div>
         <ul class="clip-history">

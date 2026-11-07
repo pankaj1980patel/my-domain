@@ -3,10 +3,10 @@
 // its notifications and their history, or which of its apps send them here.
 // Built from the device page's own tiles.
 
-import { createMemo, createSignal, For, Show } from "solid-js";
-import { peerIcon, peerName, state } from "../lib/core";
-import { timeAgo } from "../lib/words";
-import { t } from "../i18n";
+import { createEffect, createMemo, createSignal, For, on, Show } from "solid-js";
+import { chatKeep, chatPage, chatTick, peerIcon, peerName, state, type ChatMessage } from "../lib/core";
+import { presenceLabel, presenceTone, timeAgo } from "../lib/words";
+import { t, tn } from "../i18n";
 import { linkStateOf } from "../components/ui";
 import { Icon } from "../components/Icon";
 import { Tabs, panelProps } from "../components/Tabs";
@@ -19,9 +19,29 @@ type Tab = "messages" | "notifications" | "apps";
 
 export default function Messages(props: { onOpen: (node: string) => void }) {
   const [tab, setTab] = createSignal<Tab>("messages");
-  const last = (node: string) => {
+  // The newest saved message of each conversation (chat history), so each
+  // row shows its last line even before anything came in this session.
+  const [saved, setSaved] = createSignal<Record<string, ChatMessage>>({});
+  createEffect(
+    on([() => state.peers.map((p) => p.node_id).join(","), chatTick, chatKeep], ([, , keep]) => {
+      setSaved({});
+      if (!keep) return;
+      for (const p of state.peers) {
+        const node = p.node_id;
+        chatPage(node, null, 1)
+          .then((r) => {
+            const m = r.messages[r.messages.length - 1];
+            if (m) setSaved((x) => ({ ...x, [node]: m }));
+          })
+          .catch(() => {});
+      }
+    }),
+  );
+  const last = (node: string): ChatMessage | undefined => {
     const list = state.messages.filter((m) => m.node === node);
-    return list[list.length - 1];
+    const live = list[list.length - 1];
+    const old = saved()[node];
+    return !live ? old : !old || live.ts >= old.ts ? live : old;
   };
   const unread = (node: string) => state.messages.filter((m) => m.node === node && m.dir === "in").length;
   // Newest conversation first, then connected, then by name.
@@ -71,10 +91,15 @@ export default function Messages(props: { onOpen: (node: string) => void }) {
               return (
                 <li>
                   <button class="msg-item" aria-current={node() === p.node_id ? "true" : undefined} onClick={() => setChosen(p.node_id)}>
-                    <DeviceArt node={p.node_id} icon={peerIcon(p.node_id)} size={40} />
+                    {/* Presence: a dot on the picture's corner. */}
+                    <span class="msg-art">
+                      <DeviceArt node={p.node_id} icon={peerIcon(p.node_id)} size={40} />
+                      <span class={`presence-dot tone-${presenceTone(s())}`} title={presenceLabel(s())} aria-hidden="true" />
+                    </span>
                     <span class="msg-item-text">
                       <span class="msg-item-top">
                         <strong>{peerName(p.node_id)}</strong>
+                        <span class="sr-only">, {presenceLabel(s())}</span>
                         <Show when={last(p.node_id)}>
                           {(m) => <span class="muted small">{timeAgo(m().ts)}</span>}
                         </Show>
@@ -82,19 +107,16 @@ export default function Messages(props: { onOpen: (node: string) => void }) {
                       <span class="muted small msg-preview">
                         <Show
                           when={tab() === "messages" && last(p.node_id)}
-                          fallback={
-                            <>
-                              <span class={`hero-dot tone-${s() === "direct" ? "green" : s() === "relay" ? "amber" : "muted"}`} aria-hidden="true" />{" "}
-                              {s() === "direct" || s() === "relay" ? t("dash.online") : t("dash.offline")}
-                            </>
-                          }
+                          fallback={presenceLabel(s())}
                         >
-                          {(m) => m().text}
+                          {(m) => (m().dir === "out" ? t("msg.you", { text: m().text }) : m().text)}
                         </Show>
                       </span>
                     </span>
                     <Show when={tab() === "messages" && unread(p.node_id) > 0}>
-                      <span class="badge">{unread(p.node_id)}</span>
+                      <span class="badge msg-unread" aria-label={tn("msg.unread", unread(p.node_id))}>
+                        {unread(p.node_id)}
+                      </span>
                     </Show>
                   </button>
                 </li>

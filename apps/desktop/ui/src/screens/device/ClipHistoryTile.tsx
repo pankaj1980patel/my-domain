@@ -23,10 +23,13 @@ import {
   type ClipRecord,
 } from "../../lib/core";
 import { foundId, foundTarget, isFound } from "../../lib/search";
-import { friendlyError, humanSize } from "../../lib/words";
+import { friendlyError, humanSize, clockTime, shortDate } from "../../lib/words";
 import { rememberFocus, trapTab } from "../../lib/a11y";
 import { toast } from "../../components/ui";
 import { t } from "../../i18n";
+import { askConfirm } from "../../components/Confirm";
+import { MenuButton } from "../../components/Menu";
+import { Icon } from "../../components/Icon";
 
 /** Rows shown at first, and added by "Show more". */
 const PAGE = 50;
@@ -36,9 +39,9 @@ const ALL = 200;
 /** The time, with the date when it wasn't today. */
 function whenOf(ts: number, now = new Date()): string {
   const d = new Date(ts);
-  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const time = clockTime(d.getTime());
   if (d.toDateString() === now.toDateString()) return time;
-  return `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })} ${time}`;
+  return `${shortDate(d.getTime())} ${time}`;
 }
 
 /** A picture's dimensions and size: "800 × 600 · 1.2 MB". */
@@ -117,10 +120,25 @@ export default function ClipHistoryTile(props: { node: string }) {
     <article class="tile tile-wide">
       <div class="tile-head">
         <h2>{t("clipHistory.title")}</h2>
+        {/* Clear is destructive: in the card's "⋯", asked first. */}
         <Show when={page().kept > 0}>
-          <button class="btn btn-ghost btn-sm" title={t("clipHistory.clearHint", { name: name() })} onClick={clear}>
-            {t("clipHistory.clear")}
-          </button>
+          <MenuButton
+            label={t("clipHistory.options", { name: name() })}
+            items={[
+              {
+                icon: "remove",
+                label: t("clipHistory.clear"),
+                hint: t("clipHistory.clearHint", { name: name() }),
+                danger: true,
+                onSelect: async () => {
+                  if (await askConfirm({ title: t("clipHistory.clearTitle"), body: t("clipHistory.clearHint", { name: name() }), action: t("clipHistory.clear") }))
+                    clear();
+                },
+              },
+            ]}
+          >
+            <Icon name="more" />
+          </MenuButton>
         </Show>
       </div>
       <Show when={page().kept > 0} fallback={<p class="muted small">{t("clipHistory.empty", { name: name() })}</p>}>

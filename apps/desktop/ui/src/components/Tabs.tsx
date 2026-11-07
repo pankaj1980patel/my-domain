@@ -45,10 +45,11 @@ export function Tabs(props: {
               aria-selected={on()}
               aria-controls={`${props.idBase}-panel`}
               tabIndex={on() ? 0 : -1}
+              title={tab.label}
               onClick={() => props.onSelect(tab.id)}
             >
               <Show when={tab.icon}>{(i) => <Icon name={i()} />}</Show>
-              {tab.label}
+              <span class="tab-label">{tab.label}</span>
               {tab.count ? (
                 <span class="tab-count">
                   {tab.count}

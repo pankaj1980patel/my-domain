@@ -298,6 +298,8 @@ type State = {
   progress: Record<string, string>;
   /** node_id -> measured link quality (live links only) */
   quality: Record<string, Quality>;
+  /** node_id -> measured round trip in ms (live links only) */
+  rtt: Record<string, number>;
   messages: ChatMessage[];
   activity: ActivityItem[];
   apps: Record<string, { apps: AppEntry[]; subscribed: string[] }>;
@@ -350,6 +352,7 @@ export const [state, setState] = createStore<State>({
   links: {},
   progress: {},
   quality: {},
+  rtt: {},
   messages: [],
   activity: [],
   apps: {},
@@ -491,6 +494,7 @@ let secondary = false;
 async function pollQuality() {
   const stats = await commands.linkStats().catch(() => []);
   setState("quality", Object.fromEntries(stats.map((s) => [s.node_id, s.quality])));
+  setState("rtt", reconcile(Object.fromEntries(stats.filter((s) => s.rtt_ms != null).map((s) => [s.node_id, s.rtt_ms as number]))));
 }
 
 /** Subscribe to the core's events once; the store updates itself after.

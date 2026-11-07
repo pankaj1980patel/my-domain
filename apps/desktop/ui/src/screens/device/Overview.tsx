@@ -6,8 +6,8 @@
 import { createEffect, createSignal, For, on, Show, type JSX } from "solid-js";
 import { commands, type PeerPermissions } from "../../bindings";
 import { peerModel, peerName, state, type Space } from "../../lib/core";
-import { checkTitle, deviceProblems, howLabel, runHealth, running } from "../../lib/health";
-import { humanSize } from "../../lib/words";
+import { checkTitleHere, deviceProblems, runHealth, running } from "../../lib/health";
+import { humanSize, presenceLabel, routeOf } from "../../lib/words";
 import { linkStateOf } from "../../components/ui";
 import { Icon, IconChip, type IconName, type Tone } from "../../components/Icon";
 import { osName } from "../../lib/deviceInfo";
@@ -17,6 +17,8 @@ import { QuickGrid } from "../../components/QuickGrid";
 
 export default function Overview(props: {
   node: string;
+  /** How the link goes, from the connections map ("lan"...), when known. */
+  how?: string;
   /** Open a tab of the page (at one of its tiles). */
   onGo: (tab: string, tile?: string) => void;
   onActivity: () => void;
@@ -33,20 +35,38 @@ export default function Overview(props: {
   // --- gauges ------------------------------------------------------------------
   const used = (x: Space | undefined) => (x && x.total > 0 ? Math.round(((x.total - x.free) / x.total) * 100) : undefined);
   const batteryTone = (b: number): Tone => (b <= 15 ? "red" : b <= 35 ? "amber" : "green");
-  const linkPct = () => {
-    if (!live()) return 0;
-    const q = state.quality[props.node];
-    return q === "excellent" ? 100 : q === "good" ? 70 : q === "weak" ? 35 : 100;
+  // The link isn't a measurement to fill a ring with: its route and, when
+  // measured, the round trip ("Relay · 48 ms").
+  const route = () => routeOf(s(), props.how);
+  const linkSub = () => {
+    const r = route();
+    if (!r) return undefined;
+    const rtt = state.rtt[props.node];
+    return rtt != null ? `${r.label} · ${Math.round(rtt)} ms` : r.label;
   };
 
   // --- health ------------------------------------------------------------------------
+  // Counted as everywhere else: red lines are problems, amber ones are
+  // worth a look.
   const problems = () => deviceProblems(props.node);
-  const bad = () => problems().some((c) => c.level === "bad");
+  const badN = () => problems().filter((c) => c.level === "bad").length;
+  const bad = () => badN() > 0;
+  const worst = () => problems().find((c) => c.level === "bad") ?? problems()[0];
 
   return (
     <div class="dash">
       <div class="dash-main">
-        {/* What it last said about itself, and the link. */}
+        {/* What it last said about itself, and the link; nothing to show
+            while it isn't connected but a line saying so. */}
+        <Show
+          when={live()}
+          fallback={
+            <p class="tile dash-notice small">
+              <Icon name={s() === "asleep" ? "link-asleep" : "link-offline"} />
+              <span>{t(s() === "asleep" ? "dash.asleepNotice" : "dash.offlineNotice", { name: name() })}</span>
+            </p>
+          }
+        >
         <div class="stat-row">
           <Show when={st()?.battery !== undefined}>
             <Stat
@@ -78,15 +98,18 @@ export default function Overview(props: {
               sub={`${humanSize(st()!.ram!.total - st()!.ram!.free)} / ${humanSize(st()!.ram!.total)}`}
             />
           </Show>
-          <Stat
-            pct={linkPct()}
-            tone={s() === "relay" ? "amber" : live() ? "green" : "red"}
-            icon={live() ? "wifi" : "link-offline"}
-            value={live() ? t("dash.online") : t("dash.offline")}
-            label={t("dash.connection")}
-            sub={s() === "relay" ? howLabel("relay") : undefined}
-          />
+          <div class="tile stat-card">
+            <IconChip name={route()?.icon ?? "link-offline"} tone={route()?.relay ? "amber" : "green"} size={22} />
+            <div class="stat-text">
+              <strong class="stat-value">{presenceLabel(s())}</strong>
+              <span class="small muted">{t("dash.connection")}</span>
+              <Show when={linkSub()}>
+                <span class="small stat-sub">{linkSub()}</span>
+              </Show>
+            </div>
+          </div>
         </div>
+        </Show>
 
         <div class="dash-pair">
           <RecentActivity node={props.node} onViewAll={props.onActivity} />
@@ -117,11 +140,12 @@ export default function Overview(props: {
               </p>
             </div>
           </div>
-          <p class="muted small">
-            <Show when={problems().length} fallback={t("dash.healthGoodHint", { name: name() })}>
-              {tn("dash.problems", problems().length)}: {checkTitle(problems()[0])}
-            </Show>
-          </p>
+          <Show when={problems().length} fallback={<p class="muted small">{t("dash.healthGoodHint", { name: name() })}</p>}>
+            <p class="small dash-health-count">
+              {bad() ? tn("dash.problems", badN()) : tn("health.summaryWarn", problems().length)}
+            </p>
+            <p class="muted small">{checkTitleHere(worst())}</p>
+          </Show>
           <button class="btn btn-soft btn-sm" disabled={running()} onClick={() => runHealth(true)}>
             <Icon name="health" />
             {running() ? t("health.running") : t("dash.runCheck")}
@@ -164,7 +188,7 @@ function Stat(props: { pct: number; tone: Tone; icon: IconName; value: string; l
   return (
     <div class="tile stat-card">
       <div class={`ring tone-${props.tone}`} role="img" aria-label={[props.label, props.value, props.sub].filter(Boolean).join(", ")}>
-        <svg width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
+        <svg class="ring-gauge" width="52" height="52" viewBox="0 0 52 52" aria-hidden="true">
           <circle class="ring-track" cx="26" cy="26" r={r} />
           <circle
             class="ring-fill"

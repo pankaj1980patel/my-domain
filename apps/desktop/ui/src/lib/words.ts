@@ -3,7 +3,7 @@
 // Developer screen.
 
 import type { Quality, TransportKind } from "../bindings";
-import { t } from "../i18n";
+import { t, language } from "../i18n";
 
 /** `waking`: a push went to wake it; `asleep`: it didn't answer one, or
  *  closed its link to save battery (it wakes when something needs it). */
@@ -36,6 +36,35 @@ export function linkLabel(s: LinkState): string {
     default:
       return t("link.offline");
   }
+}
+
+/** Is it reachable now (directly or through the relay)? */
+export function isLive(s: LinkState): boolean {
+  return s === "direct" || s === "relay";
+}
+
+/** Presence, one word for every screen: Online (green), Asleep, Offline
+ *  (grey; red only when the last try failed). How it's linked is the route
+ *  (routeOf), shown beside it. */
+export function presenceLabel(s: LinkState): string {
+  if (isLive(s)) return t("dash.online");
+  if (s === "asleep") return t("link.asleep");
+  if (s === "connecting") return t("link.connecting");
+  if (s === "waking") return t("link.waking");
+  return t("dash.offline");
+}
+export function presenceTone(s: LinkState): "green" | "red" | "muted" {
+  return isLive(s) ? "green" : s === "failed" ? "red" : "muted";
+}
+
+export type Route = { icon: "wifi" | "globe" | "server"; label: string; relay: boolean };
+/** The route a live link takes: Local network (wifi), Direct (globe) or
+ *  Relay (server; the only one tinted amber). `how` is the map's word for
+ *  the link ("lan", "punched"...), when known. Null when not live. */
+export function routeOf(s: LinkState, how?: string): Route | null {
+  if (s === "relay") return { icon: "server", label: t("route.relay"), relay: true };
+  if (s !== "direct") return null;
+  return how === "lan" ? { icon: "wifi", label: t("route.lan"), relay: false } : { icon: "globe", label: t("route.direct"), relay: false };
 }
 
 /** Link quality in plain words (the core's rating; no milliseconds here). */
@@ -109,6 +138,8 @@ export function niceName(name: string): string {
   return name.replace(/\.local$/i, "").replace(/[-_]+/g, " ").trim() || name;
 }
 
+/** When, one way everywhere: under a day "2 h ago", then "4 Nov" this
+ *  year, else "4 Nov 2025" (in the app's language). */
 export function timeAgo(ts: number): string {
   const s = Math.max(0, Math.round((Date.now() - ts) / 1000));
   if (s < 10) return t("time.justNow");
@@ -117,7 +148,24 @@ export function timeAgo(ts: number): string {
   if (m < 60) return t("time.minutesAgo", { count: m });
   const h = Math.round(m / 60);
   if (h < 24) return t("time.hoursAgo", { count: h });
-  return new Date(ts).toLocaleDateString();
+  return shortDate(ts);
+}
+
+/** "4 Nov" this year, "4 Nov 2025" otherwise. */
+export function shortDate(ts: number): string {
+  const d = new Date(ts);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return new Intl.DateTimeFormat(language(), { day: "numeric", month: "short", year: sameYear ? undefined : "numeric" }).format(d);
+}
+
+/** A clock time: "3:08 PM" (no leading zero), or "15:08" where that's the way. */
+export function clockTime(ts: number): string {
+  return new Intl.DateTimeFormat(language(), { hour: "numeric", minute: "2-digit" }).format(new Date(ts));
+}
+
+/** A date and a time: "4 Nov, 3:08 PM". */
+export function dateAndTime(ts: number): string {
+  return `${shortDate(ts)}, ${clockTime(ts)}`;
 }
 
 /** 1536 -> "1.5 KB": whole bytes, one decimal below 100 of a larger unit. */

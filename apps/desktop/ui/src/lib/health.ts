@@ -57,6 +57,12 @@ export async function runHealth(server = true): Promise<HealthReport | null> {
 
 /** Red lines now (the sidebar and Home badge). */
 export const badCount = () => report()?.bad ?? 0;
+/** The one problem count every screen shows (sidebar badge, Overview and
+ *  All devices tiles, "Fix N problems", the Security page's verdict): the
+ *  lines that need fixing. Amber lines are counted apart (warnCount). */
+export const problemCount = badCount;
+/** Amber lines now: worth a look, not counted as problems. */
+export const warnCount = () => report()?.warn ?? 0;
 
 /** The amber and red lines about one device (its page's banner). */
 export function deviceProblems(node: string): HealthCheck[] {
@@ -165,6 +171,17 @@ export function checkTitle(c: HealthCheck): string {
     default:
       return c.id;
   }
+}
+
+/** The line's title on its device's own page: without the "{name}: "
+ *  in front (the page already names it), first letter capitalised. */
+export function checkTitleHere(c: HealthCheck): string {
+  const title = checkTitle(c);
+  const name = c.node_id ? peerName(c.node_id) : "";
+  const prefix = `${name}: `;
+  if (!name || !title.startsWith(prefix)) return title;
+  const rest = title.slice(prefix.length);
+  return rest.charAt(0).toLocaleUpperCase() + rest.slice(1);
 }
 
 /** What to know, under the title (empty: nothing more). */
