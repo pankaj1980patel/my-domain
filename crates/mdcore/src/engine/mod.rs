@@ -40,6 +40,7 @@ mod health;
 mod join;
 mod nearby;
 pub use join::{JoinInvite, JoinStatus};
+mod key_rotation;
 mod kvm;
 mod labels;
 mod ladder;
@@ -211,6 +212,8 @@ pub struct NetCtx<P: Platform> {
     pub env: Arc<transport::envelope::Guard>,
     /// The devices the user removed (see `features::revoke`).
     pub revoked: Arc<crate::features::revoke::Revocations>,
+    /// A change of the account passphrase under way (see `features::rekey`).
+    pub rekey: Arc<crate::features::rekey::Rekey>,
 }
 
 impl<P: Platform> Clone for NetCtx<P> {
@@ -252,6 +255,7 @@ impl<P: Platform> Clone for NetCtx<P> {
             ble_links: self.ble_links.clone(),
             env: self.env.clone(),
             revoked: self.revoked.clone(),
+            rekey: self.rekey.clone(),
             seen: self.seen.clone(),
             quic: self.quic.clone(),
             relay: self.relay.clone(),
@@ -425,6 +429,7 @@ impl<P: Platform> Engine<P> {
             ble_links: Arc::default(),
             env: Arc::new(transport::envelope::Guard::load(&*platform)),
             revoked,
+            rekey: Arc::new(crate::features::rekey::Rekey::load(&*platform)),
             subs: subs.clone(),
             removal_subs: Arc::default(),
             quic_failed: Arc::default(),
@@ -459,6 +464,7 @@ impl<P: Platform> Engine<P> {
         // Who follows which of this device's apps, from last time.
         crate::features::notif_rich::load_subs(&ctx);
         background::spawn_all(&ctx);
+        crate::features::rekey::spawn(&ctx);
 
         let engine = Engine {
             server_url: ctx.server_url.clone(),

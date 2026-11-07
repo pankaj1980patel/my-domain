@@ -37,6 +37,10 @@ mdns-sd = "0.21"
 crab_nat = "0.8"
 uuid = { version = "1", features = ["v4"] }
 argon2 = "0.5"
+# Changing the passphrase on all devices (`features::rekey`): the new key
+# goes to each device sealed to its own device key, as X25519 from its
+# Ed25519 key. Already in the tree (WebRTC's DTLS uses it via x25519-dalek).
+curve25519-dalek = { version = "4.1", default-features = false }
 chacha20poly1305 = "0.10"
 sha2 = "0.10"
 # Synced folders compare names in NFC (a Mac's disk takes "é" as one

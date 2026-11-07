@@ -100,6 +100,8 @@ fun HomeScreen(
             item { HealthHomeCard(onHealth) }
             // While heavy background work waits to save battery (SaveBatteryTile).
             item { SavingBatteryBanner(onBattery) }
+            // A passphrase change made on another device missed here.
+            item { KeyRotationPrompt() }
             if (devices.isEmpty()) {
                 item {
                     EmptyState(

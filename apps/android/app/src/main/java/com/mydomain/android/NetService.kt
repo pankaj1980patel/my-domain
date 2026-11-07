@@ -18,6 +18,7 @@ import com.mydomain.android.core.NetworkingUtils.wifiIpv4
 import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.RemovedDevices
+import com.mydomain.android.core.KeyRotation
 import com.mydomain.android.core.KeyChanges
 import com.mydomain.android.core.KeystoreSecrets
 import com.mydomain.android.core.NetWatch
@@ -461,6 +462,8 @@ class NetService : Service() {
                         "key_changed" -> KeyChanges.onChanged(this@NetService, o.optString("node_id"), o.optString("name"))
                         // A device was removed (here or on another of yours), or allowed again.
                         "revocations_changed" -> runCatching { RemovedDevices.load() }
+                        // The passphrase change moved on (or this phone missed one).
+                        "key_rotation_changed" -> runCatching { KeyRotation.load() }
                         "battery_alert" -> DeviceActions.batteryAlert(this@NetService, Core.peerName(o.optString("from")), o.optString("alert"), o.optInt("level"))
                     }
                 } catch (e: Exception) {

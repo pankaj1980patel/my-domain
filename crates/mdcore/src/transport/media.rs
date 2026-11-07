@@ -260,7 +260,7 @@ pub(crate) fn send<P: Platform>(ctx: &NetCtx<P>, node: &str, h: &Header, payload
     if !quic && !super::relay::reads_media(ctx, node, route) {
         return Sent::NotBinary;
     }
-    let Some(key) = *ctx.key.lock() else {
+    let Some(key) = crate::features::rekey::send_key(ctx, node) else {
         return Sent::NotBinary;
     };
     let Some(record) = encode(&key, h, payload) else {
@@ -291,10 +291,10 @@ pub(crate) fn on_record_via<P: Platform>(ctx: &NetCtx<P>, from: &str, record: &[
     if ctx.revoked.is_revoked(from) {
         return;
     }
-    let Some(key) = *ctx.key.lock() else {
-        return;
-    };
-    let Some((h, payload)) = decode(&key, record) else {
+    // The account key (and, while the passphrase changes, the next or
+    // previous one: `features::rekey`).
+    let keys = crate::features::rekey::open_keys(ctx, Some(from));
+    let Some((h, payload)) = keys.iter().find_map(|(k, _)| decode(k, record)) else {
         ctx.decrypt_fail_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         return;

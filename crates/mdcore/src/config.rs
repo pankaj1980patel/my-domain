@@ -338,6 +338,10 @@ pub struct CoreConfig {
     /// disk does that, a Linux or Windows one doesn't). Off: each
     /// folder's disk is asked once.
     pub sync_fold_norm: bool,
+    /// How long a passphrase change (`features::rekey`) waits for devices
+    /// that are offline before it ends without them (they then need the
+    /// new passphrase typed in). Tests make it short.
+    pub key_rotation_ttl: std::time::Duration,
 }
 
 impl Default for CoreConfig {
@@ -390,6 +394,7 @@ impl Default for CoreConfig {
             sync_every: std::time::Duration::from_secs(30),
             sync_fold_case: false,
             sync_fold_norm: false,
+            key_rotation_ttl: crate::features::rekey::TTL,
         }
     }
 }

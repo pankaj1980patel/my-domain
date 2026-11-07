@@ -26,6 +26,7 @@ use crate::crypto::{decrypt, encrypt};
 use crate::engine::NetCtx;
 use crate::error::CoreError;
 use crate::events::CoreEvent;
+use crate::features::rekey;
 use crate::model::{Envelope, IncomingMessage, Plaintext, WsFrame};
 use crate::platform::Platform;
 
@@ -171,6 +172,7 @@ pub fn peer_came_up<P: Platform>(ctx: &NetCtx<P>, node_id: &str) {
         crate::features::dnd::link_up(&ctx, &peer);
         crate::features::labels::link_up(&ctx, &peer);
         crate::features::revoke::link_up(&ctx, &peer);
+        crate::features::rekey::link_up(&ctx, &peer);
         crate::features::notes::link_up(&ctx, &peer);
         crate::features::timers::link_up(&ctx, &peer);
         crate::features::read_later::link_up(&ctx, &peer);
@@ -379,32 +381,46 @@ fn open_envelope<P: Platform>(
     ip: &str,
     protocol: &str,
 ) -> Option<Vec<u8>> {
-    let Some(key) = *ctx.key.lock() else {
+    // The account key, and while the passphrase is being changed the next
+    // or previous one too (`features::rekey`).
+    let keys = rekey::open_keys(ctx, from_node);
+    if keys.is_empty() {
         note_undecryptable(ctx, from_node, ip.to_string(), protocol);
         return None;
-    };
+    }
     // A device you removed: nothing it sends is used (`features::revoke`).
     if let Some(node) = from_node.filter(|n| ctx.revoked.is_revoked(n)) {
         refused(ctx, node, protocol, envelope::Reject::Revoked);
         return None;
     }
+    let v1 = |env: &Envelope| {
+        keys.iter()
+            .find_map(|(k, which)| decrypt(k, env).map(|pt| (pt, *which)))
+    };
     // An older app: version 1 only, nothing checked.
     if !ctx.config.envelope_v2 {
-        let pt = decrypt(&key, env);
-        if pt.is_none() {
-            note_undecryptable(ctx, from_node, ip.to_string(), protocol);
-        }
-        return pt;
-    }
-    let from = from_node.unwrap_or_default();
-    let (pt, verdict) = if env.v == 0 {
-        let Some(pt) = decrypt(&key, env) else {
+        let Some((pt, which)) = v1(env) else {
             note_undecryptable(ctx, from_node, ip.to_string(), protocol);
             return None;
         };
-        (pt, ctx.env.check_v1(from))
+        rekey::opened(ctx, from_node, which);
+        return Some(pt);
+    }
+    let from = from_node.unwrap_or_default();
+    let (pt, verdict, which) = if env.v == 0 {
+        let Some((pt, which)) = v1(env) else {
+            note_undecryptable(ctx, from_node, ip.to_string(), protocol);
+            return None;
+        };
+        (pt, ctx.env.check_v1(from), which)
     } else {
-        let Some((hdr, pt)) = envelope::open(&key, env) else {
+        let opened = keys
+            .iter()
+            .find_map(|(k, which)| envelope::open(k, env).map(|o| (o, *which)));
+        let Some(((hdr, pt), which)) = opened else {
+            // Signed by one of your devices, yet sealed under a key this
+            // one doesn't have: the passphrase changed on one side.
+            rekey::undecryptable(ctx, env, from);
             note_undecryptable(ctx, from_node, ip.to_string(), protocol);
             return None;
         };
@@ -429,10 +445,13 @@ fn open_envelope<P: Platform>(
         if signed && verdict.is_ok() {
             ctx.env.signed_by(&*ctx.platform, from);
         }
-        (pt, verdict)
+        (pt, verdict, which)
     };
     match verdict {
-        Ok(()) => Some(pt),
+        Ok(()) => {
+            rekey::opened(ctx, from_node, which);
+            Some(pt)
+        }
         Err(why) => {
             refused(ctx, from, protocol, why);
             None
@@ -590,7 +609,7 @@ pub(crate) fn seal<P: Platform>(
     node_id: &str,
     pt: &Plaintext,
 ) -> crate::Result<String> {
-    let k = ctx.key.lock().ok_or(CoreError::NoKey)?;
+    let k = rekey::send_key(ctx, node_id).ok_or(CoreError::NoKey)?;
     let plaintext = serde_json::to_vec(pt).map_err(|e| e.to_string())?;
     let env = if ctx.config.envelope_v2 && ctx.env.sends_v2(node_id) {
         let me = ctx.identity.lock().node_id.clone();

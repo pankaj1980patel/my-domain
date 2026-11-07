@@ -12,6 +12,7 @@ import CallOverlay from "./components/CallOverlay";
 import SendToPicker from "./components/SendToPicker";
 import DropAnywhere from "./components/DropAnywhere";
 import UpdateBanner from "./components/UpdateBanner";
+import { KeyRotationBanner } from "./components/KeyRotation";
 import { DownloadAsk, DownloadOnPicker } from "./components/DownloadOn";
 import { initRemoteDownloads } from "./lib/remoteDownload";
 import { logoSrc, Tagline, Wordmark } from "./components/Brand";
@@ -374,6 +375,7 @@ export default function App() {
           </nav>
           <main class="content" id="main" tabIndex={-1} ref={main}>
             <UpdateBanner />
+            <KeyRotationBanner />
             <Switch>
               <Match when={view().name === "home"}>
                 <Home

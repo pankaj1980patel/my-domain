@@ -117,3 +117,55 @@ mod tests {
         assert!(!title.contains('\''), "typographic apostrophes only");
     }
 }
+
+// --- Change the passphrase on all devices (`mdcore::features::rekey`) ---
+
+/// Start changing the passphrase on all your devices (Settings → Security).
+#[tauri::command]
+#[specta::specta]
+pub fn start_key_rotation(
+    new_passphrase: String,
+    engine: State<Eng>,
+) -> Result<mdcore::features::rekey::KeyRotation, CoreError> {
+    engine.start_key_rotation(&new_passphrase)
+}
+
+/// The passphrase change under way (or the last one).
+#[tauri::command]
+#[specta::specta]
+pub fn key_rotation(engine: State<Eng>) -> mdcore::features::rekey::KeyRotation {
+    engine.key_rotation()
+}
+
+/// Finish: every device switches (pressed again: stop waiting for the
+/// devices that are offline).
+#[tauri::command]
+#[specta::specta]
+pub fn finish_key_rotation(
+    engine: State<Eng>,
+) -> Result<mdcore::features::rekey::KeyRotation, CoreError> {
+    engine.finish_key_rotation()
+}
+
+/// Cancel before finishing.
+#[tauri::command]
+#[specta::specta]
+pub fn cancel_key_rotation(
+    engine: State<Eng>,
+) -> Result<mdcore::features::rekey::KeyRotation, CoreError> {
+    engine.cancel_key_rotation()
+}
+
+/// Clear a finished change, or a "type the new passphrase" notice.
+#[tauri::command]
+#[specta::specta]
+pub fn dismiss_key_rotation(engine: State<Eng>) {
+    engine.dismiss_key_rotation();
+}
+
+/// How strong a passphrase being typed is: 0 (too short) to 4.
+#[tauri::command]
+#[specta::specta]
+pub fn passphrase_strength(passphrase: String, engine: State<Eng>) -> u8 {
+    engine.passphrase_strength(&passphrase)
+}

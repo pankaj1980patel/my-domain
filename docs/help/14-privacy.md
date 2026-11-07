@@ -1,6 +1,6 @@
 ---
 title: Privacy and encryption
-keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature
+keywords: privacy, permissions, per device, allow once, allow control, see this screen, remote control, verification code, otp, one-time code, password, password manager, concealed, backup, back up, restore, settings backup, new computer, reinstall, private, encryption, encrypted, end-to-end, server, security, safe, consent, permission, key, device key, data, what is sent, qr, qr code, join code, add a device, security key, key changed, fingerprint, trust, verify, verified, safety number, remove device, removed devices, revoke, lost device, stolen, allow again, signed, signature, change passphrase, new passphrase, passphrase changed, rotate, rotation, key rotation
 platforms: desktop, android
 ---
 ## End-to-end encrypted
@@ -51,7 +51,16 @@ Your devices also sign every message with their own security key, so a message s
 If you lose a device, sell it or stop trusting it, open its page and choose **Remove device**. It's removed from all your devices: they forget it, close any connection to it, and refuse it from then on, on your Wi-Fi, through the server and over Bluetooth, even though it still has your device key. This is **permanent for that install** of the app: the removal is signed by the device you made it on and kept on every device of yours, so it isn't found and added back.
 
 - **Settings → Removed devices** lists them, with who removed each. **Allow again** takes a removal back on all your devices (only do this for a device you have back and trust).
-- A removed device that still has your device key could join again as a **new** device (with a QR code or a code, or after a reinstall). It then shows up in your list as a new device, and you can remove that too. To keep it out for good, also choose **Change device key** in Settings on your other devices.
+- A removed device that still has your device key could join again as a **new** device (with a QR code or a code, or after a reinstall). It then shows up in your list as a new device, and you can remove that too. To keep it out for good, change the passphrase on all your devices (below).
+
+## Changing the passphrase on all devices
+
+The passphrase your devices share (your device key) can be changed on all of them at once, so a device you removed, or anyone who learned the old passphrase, is left out for good. On any of your devices, open **Settings → Change passphrase on all devices**, type the new passphrase twice (a hint shows how strong it is) and choose **Send to my devices**.
+
+- The new key goes only to your **trusted** devices: not removed, and already connected to this one before (so it knows their security key). Each copy is locked to that one device's own security key and signed by the device you started on: no other device, and not the server, can read it or fake it. The server never sees the passphrase or the key, and your **account password doesn't change**.
+- Nothing switches yet. The list shows each device: **Waiting** (offline), **Has the new key**, then **Updated**. When they have it, choose **Finish: switch all devices**. Until you finish, **Cancel change** drops it everywhere and the old passphrase keeps working.
+- A device that's offline gets the new key when it comes back, for up to **7 days**. Meanwhile your devices still understand it with the old key. When every device has switched, the old key is dropped. **Stop waiting** ends it sooner.
+- A device that missed it (offline for longer, or never connected to the one you started on) still has the old passphrase, so it can't talk to the others. It says **Your passphrase was changed**: type the new passphrase on it, and it's back.
 
 ## Consent: the device being reached decides
 

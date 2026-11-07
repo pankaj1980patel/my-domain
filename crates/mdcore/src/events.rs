@@ -459,6 +459,11 @@ pub enum CoreEvent {
     /// the apps refresh their "Removed devices" list
     /// (`Engine::removed_devices`).
     RevocationsChanged { node_ids: Vec<String> },
+    /// The passphrase change (`features::rekey`) moved on, here or on the
+    /// device that started it, or a device of yours was seen using another
+    /// passphrase. `state` as in `KeyRotation`; the apps refresh
+    /// `Engine::key_rotation`.
+    KeyRotationChanged { state: String },
     /// How a speed test started with `Engine::speed_test` is going
     /// (`features::diag`). `phase`: "ping", "upload", "download" (with
     /// `done` of `total` bytes), then "done" (with `result`), "failed"
@@ -663,6 +668,7 @@ impl CoreEvent {
             CoreEvent::WifiDirect { .. } => "wifi-direct-changed",
             CoreEvent::KeyChanged { .. } => "key-changed",
             CoreEvent::RevocationsChanged { .. } => "revocations-changed",
+            CoreEvent::KeyRotationChanged { .. } => "key-rotation-changed",
 
             CoreEvent::SpeedTest { .. } => "speed-test",
             CoreEvent::ScreenWatch { .. } => "screen-watch",

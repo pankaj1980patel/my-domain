@@ -153,6 +153,9 @@ impl<P: Platform> Engine<P> {
         let key = derive_key(passphrase, &username).ok_or("failed to derive key")?;
         self.save_key(&key);
         *self.ctx.key.lock() = Some(key);
+        // Typed by hand (e.g. after missing a change made on another
+        // device): any change under way here is moot.
+        crate::features::rekey::reset(&self.ctx);
         self.announce_with_key();
         Ok(())
     }
@@ -169,6 +172,7 @@ impl<P: Platform> Engine<P> {
         let key = derive_key(new_passphrase, &username).ok_or("failed to derive key")?;
         self.save_key(&key);
         *self.ctx.key.lock() = Some(key);
+        crate::features::rekey::reset(&self.ctx);
         self.announce_with_key();
         Ok(())
     }
@@ -189,6 +193,7 @@ impl<P: Platform> Engine<P> {
         *self.ctx.key.lock() = None;
         self.ctx.platform.secret_set(SECRET_TOKEN, None);
         self.ctx.platform.secret_set(SECRET_KEY, None);
+        crate::features::rekey::reset(&self.ctx);
     }
 }
 

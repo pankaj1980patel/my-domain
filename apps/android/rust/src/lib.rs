@@ -1047,6 +1047,44 @@ impl MdEngine {
             .map_err(|e| MdError::Failed(e.to_string()))
     }
 
+    /// Start changing the passphrase on all your devices
+    /// (`mdcore::features::rekey`): the new key goes to each trusted
+    /// device, sealed to it. Returns the change as JSON (the core's
+    /// `KeyRotation`); progress comes as `key_rotation_changed` events.
+    pub fn start_key_rotation(&self, new_passphrase: String) -> MdResult<String> {
+        let r = self.inner.start_key_rotation(&new_passphrase)?;
+        serde_json::to_string(&r).map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// The passphrase change under way (or the last one) as JSON, and
+    /// whether this phone needs the new passphrase typed in.
+    pub fn key_rotation(&self) -> MdResult<String> {
+        serde_json::to_string(&self.inner.key_rotation())
+            .map_err(|e| MdError::Failed(e.to_string()))
+    }
+
+    /// Finish: every device switches (again: stop waiting for the rest).
+    pub fn finish_key_rotation(&self) -> MdResult<()> {
+        self.inner.finish_key_rotation()?;
+        Ok(())
+    }
+
+    /// Cancel before finishing: every device drops the new key.
+    pub fn cancel_key_rotation(&self) -> MdResult<()> {
+        self.inner.cancel_key_rotation()?;
+        Ok(())
+    }
+
+    /// Clear a finished change, or the "type the new passphrase" notice.
+    pub fn dismiss_key_rotation(&self) {
+        self.inner.dismiss_key_rotation();
+    }
+
+    /// How strong a passphrase being typed is: 0 (too short) to 4.
+    pub fn passphrase_strength(&self, passphrase: String) -> u8 {
+        self.inner.passphrase_strength(&passphrase)
+    }
+
     /// This phone's own security key as a short fingerprint (Settings, Add
     /// a device): what your other devices show for it.
     pub fn own_fingerprint(&self) -> String {

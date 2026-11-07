@@ -155,6 +155,22 @@ impl DeviceKey {
         self.pair.sign(msg).unwrap_or_default()
     }
 
+    /// This key as an X25519 secret (the Ed25519 seed hashed with SHA-512,
+    /// first half; clamped where it's used), so another device can seal
+    /// something to us knowing only our public key ([`x25519_public`]).
+    /// `None` if the stored key can't be read as Ed25519.
+    pub fn x25519_secret(&self) -> Option<[u8; 32]> {
+        // PKCS#8 for Ed25519 (v1 or v2): ... OID 1.3.101.112, then the seed
+        // as an OCTET STRING inside an OCTET STRING (04 22 04 20 <32>).
+        const MARK: [u8; 7] = [0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20];
+        let at = self.pkcs8.windows(MARK.len()).position(|w| w == MARK)? + MARK.len();
+        let seed = self.pkcs8.get(at..at + 32)?;
+        let h = Sha512::digest(seed);
+        let mut out = [0u8; 32];
+        out.copy_from_slice(&h[..32]);
+        Some(out)
+    }
+
     /// The public key, base64: what other devices remember us by.
     pub fn public(&self) -> String {
         B64.encode(&self.public)
@@ -169,6 +185,26 @@ impl DeviceKey {
         let key = PrivatePkcs8KeyDer::from(self.pkcs8.clone());
         Ok((cert.der().clone(), key.into()))
     }
+}
+
+/// A device's public key (base64 Ed25519, as pinned) as an X25519 public
+/// key (the birational map to Montgomery form); `None` if it isn't one.
+pub fn x25519_public(key: &str) -> Option<[u8; 32]> {
+    let raw: [u8; 32] = B64.decode(key).ok()?.try_into().ok()?;
+    let point = curve25519_dalek::edwards::CompressedEdwardsY(raw).decompress()?;
+    Some(point.to_montgomery().to_bytes())
+}
+
+/// X25519: `secret` (clamped) times `public`.
+pub fn x25519(secret: [u8; 32], public: [u8; 32]) -> [u8; 32] {
+    curve25519_dalek::montgomery::MontgomeryPoint(public)
+        .mul_clamped(secret)
+        .to_bytes()
+}
+
+/// X25519: `secret` (clamped) times the base point (its public key).
+pub fn x25519_base(secret: [u8; 32]) -> [u8; 32] {
+    curve25519_dalek::montgomery::MontgomeryPoint::mul_base_clamped(secret).to_bytes()
 }
 
 /// Whether `sig` is `key`'s (base64, as pinned) Ed25519 signature of `msg`.
@@ -722,6 +758,20 @@ impl<P: Platform> Store for P {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_device_key_works_as_x25519_both_ways() {
+        let a = DeviceKey::ephemeral();
+        let b = DeviceKey::ephemeral();
+        let (sa, sb) = (a.x25519_secret().unwrap(), b.x25519_secret().unwrap());
+        // Our X25519 public key is the one others derive from our Ed25519 key.
+        let pa = x25519_public(&a.public()).unwrap();
+        let pb = x25519_public(&b.public()).unwrap();
+        assert_eq!(x25519_base(sa), pa);
+        assert_eq!(x25519(sa, pb), x25519(sb, pa));
+        assert_ne!(x25519(sa, pb), [0u8; 32]);
+        assert!(x25519_public("not a key").is_none());
+    }
 
     /// kv only (like mdctl).
     #[derive(Default)]

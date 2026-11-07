@@ -40,6 +40,7 @@ import { AddDevice } from "../components/AddDevice";
 import { OwnFingerprint } from "../components/VerifyDevice";
 import { RemovedDevicesSetting } from "../components/RemovedDevices";
 import { PermissionsSummary } from "../components/PeerPermissions";
+import { KeyRotationSetting } from "../components/KeyRotation";
 import { t, tRich, type Key, LANGUAGES, languagePref, setLanguagePref, systemLanguage, type LangPref } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
 import { focusSoon } from "../lib/a11y";
@@ -159,6 +160,8 @@ export default function Settings(props: { onDeveloper: () => void; onHealth: () 
       </article>
 
       <RemovedDevicesSetting />
+
+      <KeyRotationSetting />
 
       <article class="tile" id="settings-health">
         <h2>{t("health.settingsTile")}</h2>

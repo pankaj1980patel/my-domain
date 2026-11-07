@@ -872,6 +872,21 @@ export const commands = {
 	allowDeviceAgain: (nodeId: string) => typedError<null, string>(__TAURI_INVOKE("allow_device_again", { nodeId })),
 	/**  The removed devices (Settings), the most recently removed first. */
 	removedDevices: () => __TAURI_INVOKE<RemovedDevice[]>("removed_devices"),
+	/**  Start changing the passphrase on all your devices (Settings → Security). */
+	startKeyRotation: (newPassphrase: string) => typedError<KeyRotation, string>(__TAURI_INVOKE("start_key_rotation", { newPassphrase })),
+	/**  The passphrase change under way (or the last one). */
+	keyRotation: () => __TAURI_INVOKE<KeyRotation>("key_rotation"),
+	/**
+	 *  Finish: every device switches (pressed again: stop waiting for the
+	 *  devices that are offline).
+	 */
+	finishKeyRotation: () => typedError<KeyRotation, string>(__TAURI_INVOKE("finish_key_rotation")),
+	/**  Cancel before finishing. */
+	cancelKeyRotation: () => typedError<KeyRotation, string>(__TAURI_INVOKE("cancel_key_rotation")),
+	/**  Clear a finished change, or a "type the new passphrase" notice. */
+	dismissKeyRotation: () => __TAURI_INVOKE<void>("dismiss_key_rotation"),
+	/**  How strong a passphrase being typed is: 0 (too short) to 4. */
+	passphraseStrength: (passphrase: string) => __TAURI_INVOKE<number>("passphrase_strength", { passphrase }),
 	/**
 	 *  Save a backup of this app's settings where the user picks. `appearance`
 	 *  is the UI's theme and language. The path, or `None` when the dialog was
@@ -2497,6 +2512,31 @@ export type KeyChange = {
 	was_verified: boolean,
 };
 
+/**  The passphrase change, for Settings → Security. */
+export type KeyRotation = {
+	/**
+	 *  "none"; "preparing" (the new key is going out, nothing switched:
+	 *  can be cancelled); "switching" (switched, waiting for the rest);
+	 *  then "done", "expired" or "cancelled".
+	 */
+	state: string,
+	/**  Started on this device (the list and Finish / Cancel are here). */
+	by_me: boolean,
+	/**  The device that started it. */
+	by_name: string,
+	/**  The devices it goes to (on the device that started it). */
+	devices: RotationDevice[],
+	/**  Seconds until offers to offline devices expire (under way only). */
+	expires_in_s: number,
+	/**
+	 *  A device of yours uses another passphrase: this one needs the new
+	 *  one typed in.
+	 */
+	needs_passphrase: boolean,
+	/**  Which device (its name). */
+	mismatch_name: string,
+};
+
 /**  Comparing keys with one of your devices (`Engine::key_verification`). */
 export type KeyVerification = {
 	node_id: string,
@@ -3876,6 +3916,14 @@ export type RestoreResult = {
 	failed: string[],
 	/**  Some of it takes effect only after the app restarts. */
 	restart: boolean,
+};
+
+/**  One device in a change (the initiator's list). */
+export type RotationDevice = {
+	node_id: string,
+	name: string,
+	/**  "waiting", "ready", "updated", "expired" or "no_key". */
+	status: string,
 };
 
 /**  Round trips measured with pings, in milliseconds. */

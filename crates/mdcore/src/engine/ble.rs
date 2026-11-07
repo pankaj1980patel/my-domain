@@ -217,7 +217,7 @@ pub(crate) fn ble_send_media<P: Platform>(
     payload: &[u8],
 ) -> crate::transport::media::Sent {
     use crate::transport::media::{encode, Sent};
-    let Some(key) = *ctx.key.lock() else {
+    let Some(key) = crate::features::rekey::send_key(ctx, node) else {
         return Sent::NotBinary;
     };
     let links = ctx.ble_links.lock();
