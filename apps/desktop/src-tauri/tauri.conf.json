@@ -26,7 +26,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "REPLACE_WITH_UPDATER_PUBLIC_KEY",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDkxQ0VDRkQ3RTA5OUMzQzQKUldURXc1bmcxOC9Pa1QrdkJRV2piUW5hRnNxazNkQ01zYlF5cUV6QnpEVUpBVnkzUStzZTQ4OVoK",
       "endpoints": [
         "https://github.com/pankaj1980patel/my-domain/releases/latest/download/latest.json"
       ],
