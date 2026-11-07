@@ -23,9 +23,14 @@ cargo run                # listens on http://0.0.0.0:8080 (PORT to override)
 
 | Method | Path | Auth | Body / Query |
 |--------|------|------|--------------|
-| POST | `/auth/register` | — | `{username,password}` → `{token,username}` |
+| POST | `/auth/register` | — | `{username,password,invite?}` → `{token,username}` (`invite` when `REGISTRATION=invite`; 403 when closed) |
 | POST | `/auth/login` | — | `{username,password}` → `{token,username}` |
 | POST | `/auth/verify` | — | `{username,password}` → 200/401 (confirm password for a settings change) |
+| POST | `/auth/logout` | JWT | → 204; this session's token stops working (its relay socket is closed) |
+| POST | `/auth/logout_all` | JWT | → 204; every session of the account stops working |
+| POST | `/auth/password` | JWT | `{password,new_password}` → `{token,username}`; signs out every session, the caller gets a new token |
+| GET  | `/admin/limits` | `ADMIN_TOKEN` | limiter counts only (no addresses, names or ids); 404 when `ADMIN_TOKEN` is unset |
+| POST | `/admin/invites` | `ADMIN_TOKEN` | `{uses?:1, days?:7}` → `{code}` (shown once; only a hash is stored) |
 | POST | `/devices/register` | JWT | `{node_id,name,ip?,tcp_port,udp_port}` — upsert (also the network-change update) |
 | GET  | `/devices` | JWT | `?exclude=<node_id>` → this user's devices |
 | POST | `/devices/unregister` | JWT | `{node_id}` |
@@ -46,18 +51,39 @@ curl localhost:8080/devices -H "authorization: Bearer $TOKEN"
 |-----|---------|
 | `MONGO_URI` | MongoDB connection string (Atlas SRV URI) |
 | `MONGO_DB`  | Database name (default `device_registry`) |
-| `JWT_SECRET`| HS256 signing secret (`openssl rand -base64 48`) |
+| `JWT_SECRET`| HS256 signing secret (`openssl rand -base64 48`); under 32 bytes is warned about |
+| `STRICT_SECRETS` | `1` refuses to start with a `JWT_SECRET` under 32 bytes (default off: warn only) |
+| `REGISTRATION` | `open` (default), `invite` (sign-up needs a code from `/admin/invites`) or `closed`; an unknown value is `closed` |
+| `ADMIN_TOKEN` | Turns on `/admin/*` (at least 32 bytes, `openssl rand -hex 32`); unset or shorter: off |
 | `PORT`      | HTTP port (default 8080) |
+
+## Sessions
+
+Tokens last 7 days and carry a session id and the account's token version. `/auth/logout` revokes
+that session id; `/auth/logout_all` and a password change raise the version, which signs out every
+session. Every authenticated request (HTTP, relay, pairing) checks both against the account record,
+cached for 30 s (changes made through this server apply at once). Tokens issued before this change
+have no session id and count as version 0: they keep working until the account's first
+`logout_all`/password change, and `/auth/logout` with one signs out every session. An account keeps
+at most 64 revoked session ids (each until its token expires); a logout past that signs out every
+session instead.
 
 ## Limits
 
-Abuse limits live in memory (a restart resets them; every map drops idle entries and holds at most
-100k keys). Over a rate limit the answer is `429` with `Retry-After` (seconds); an oversized body is
-`413`, an oversized field `400` naming it. Defaults suit a handful of devices per account; raise them in
-`.env` (positive numbers only, anything else keeps the default) and restart.
+Over a rate limit the answer is `429` with `Retry-After` (seconds); an oversized body is `413`, an
+oversized field `400` naming it. Short (per-minute) limits live in memory; every map drops idle entries
+and holds at most 100k keys. What must outlive a restart is also written to MongoDB (`md_limits`,
+expiring through a TTL index on `expires`) and read back at startup: pairing lockouts with their strike
+count, the daily push count per account and the daily sign-up count per address. Those records hold the
+address (or IPv6 /64) or account id they count, and nothing else, until they expire (a day at most; an
+hour after a lockout). Defaults suit a handful of devices per account; raise them in `.env` (positive
+numbers only, anything else keeps the default) and restart.
 
 | Var | Default | What |
 |-----|---------|------|
+| `REGISTER_PER_MIN_PER_CLIENT` | 3 | Sign-up tries per address (IPv6 /64) a minute |
+| `REGISTER_PER_MIN` | 30 | Sign-up tries a minute server-wide (bursts of half) |
+| `REGISTER_PER_DAY_PER_CLIENT` | 5 | Accounts made per address a day (kept across restarts) |
 | `MAX_DEVICES_PER_ACCOUNT` | 32 | Devices one account may register (a new one past it gets `409`) |
 | `SIGNALS_PER_MIN` | 600 | `/signal` + `/signal/selfping` requests per account a minute (bursts of a fifth) |
 | `PUSH_PER_MIN` | 60 | FCM pushes per account a minute (bursts of half) |
@@ -72,8 +98,8 @@ Abuse limits live in memory (a restart resets them; every map drops idle entries
 
 Fixed caps: request bodies 4 KiB on `/auth/*`, 8 KiB on `/pair/*`, 16 KiB on `/devices/*`, 32 KiB on
 `/signal` (its `data` at most 16 KiB); device fields as in `devices.rs` (`MAX_*`). `JWT_SECRET` should be
-at least 32 bytes (a shorter one is warned about at startup). See `docs/SECURITY-REVIEW-2026-11.md`
-(M18, M20, M21, L24).
+at least 32 bytes (a shorter one is warned about at startup, refused with `STRICT_SECRETS=1`). See
+`docs/SECURITY-REVIEW-2026-11.md` (M18, M20, M21, M22, L23, L24).
 
 ## Notes
 

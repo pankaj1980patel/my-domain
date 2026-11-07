@@ -104,6 +104,18 @@ pub fn verify_password_call(url: &str, username: &str, password: &str) -> Result
     }
 }
 
+/// Sign this session's token out on the server (`/auth/logout`; an older
+/// server answers 404, which changes nothing).
+pub fn auth_logout(url: &str, token: &str) -> Result<(), String> {
+    crate::tls::http()
+        .post(&format!("{}/auth/logout", base(url)))
+        .timeout(Duration::from_secs(5))
+        .set("Authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({}))
+        .map_err(http_err)?;
+    Ok(())
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn registry_register(
     url: &str,

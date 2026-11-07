@@ -4,6 +4,7 @@
 // their OTHER devices' endpoints (IP + TCP/UDP ports) — so clients can connect
 // directly without LAN discovery. Backed by MongoDB Atlas. Config in `.env`.
 
+mod admin;
 mod auth;
 mod devices;
 mod error;
@@ -12,8 +13,11 @@ mod limits;
 mod models;
 mod pair;
 mod relay;
+mod session;
 mod signal;
+mod signup;
 mod state;
+mod store;
 
 use axum::{
     extract::{DefaultBodyLimit, State},
@@ -62,6 +66,13 @@ fn api(state: AppState) -> Router {
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/auth/verify", post(auth::verify))
+        .route("/auth/logout", post(auth::logout))
+        .route("/auth/logout_all", post(auth::logout_all))
+        .route("/auth/password", post(auth::change_password))
+        .layer(DefaultBodyLimit::max(MAX_AUTH_BODY));
+    let admin = Router::new()
+        .route("/admin/limits", get(admin::limits))
+        .route("/admin/invites", post(admin::invites))
         .layer(DefaultBodyLimit::max(MAX_AUTH_BODY));
     let devices = Router::new()
         .route("/devices/register", post(devices::register))
@@ -77,9 +88,63 @@ fn api(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health))
         .merge(auth)
+        .merge(admin)
         .merge(devices)
         .merge(signals)
         .with_state(state)
+}
+
+/// Shortest `JWT_SECRET` that isn't warned about (or, strict, refused).
+const MIN_JWT_SECRET: usize = 32;
+
+/// `STRICT_SECRETS=1` (or `true`): refuse to start with weak secrets.
+fn strict_secrets() -> bool {
+    matches!(
+        std::env::var("STRICT_SECRETS")
+            .ok()
+            .as_deref()
+            .map(str::trim),
+        Some("1") | Some("true") | Some("yes")
+    )
+}
+
+/// Security review L23: a short secret can be brute-forced offline from any
+/// one token. Refused only when strict, so a deploy can't brick the server
+/// by default; replace it with `openssl rand -base64 48`.
+fn check_jwt_secret(secret: &str, strict: bool) -> anyhow::Result<()> {
+    if secret.len() >= MIN_JWT_SECRET {
+        return Ok(());
+    }
+    let msg = format!(
+        "JWT_SECRET is only {} bytes; use at least {MIN_JWT_SECRET} (openssl rand -base64 48)",
+        secret.len()
+    );
+    if strict {
+        anyhow::bail!("{msg} (STRICT_SECRETS is on)");
+    }
+    tracing::warn!("{msg}");
+    Ok(())
+}
+
+/// Read back the lockouts and daily counts saved before a restart. A store
+/// that can't be read is logged, not fatal (limits then start empty).
+async fn restore_limits(s: &AppState) {
+    let r = (
+        s.pair.restore().await,
+        s.push.restore().await,
+        s.signup.restore().await,
+    );
+    match r {
+        (Ok(a), Ok(b), Ok(c)) => {
+            tracing::info!("restored limits: {a} lockouts, {b} push and {c} sign-up day counts")
+        }
+        (a, b, c) => tracing::warn!(
+            "restoring limits failed: {:?} {:?} {:?}",
+            a.err(),
+            b.err(),
+            c.err()
+        ),
+    }
 }
 
 #[tokio::main]
@@ -122,33 +187,65 @@ async fn main() -> anyhow::Result<()> {
         )
         .await;
 
-    if jwt_secret.len() < 32 {
-        // Security review L23: a short secret can be brute-forced offline
-        // from any one token. Not refused, so a deploy can't brick the
-        // server; replace it with `openssl rand -base64 48`.
-        tracing::warn!(
-            "JWT_SECRET is only {} bytes; use at least 32 (openssl rand -base64 48)",
-            jwt_secret.len()
-        );
+    // Limiter records and invite codes expire by themselves (TTL index).
+    for coll in [store::LIMITS_COLL, store::INVITES_COLL] {
+        let _ = db
+            .collection::<mongodb::bson::Document>(coll)
+            .create_index(
+                IndexModel::builder()
+                    .keys(doc! { "expires": 1 })
+                    .options(
+                        IndexOptions::builder()
+                            .expire_after(std::time::Duration::ZERO)
+                            .build(),
+                    )
+                    .build(),
+            )
+            .await;
     }
+    let _ = db
+        .collection::<mongodb::bson::Document>(store::LIMITS_COLL)
+        .create_index(IndexModel::builder().keys(doc! { "key": 1 }).build())
+        .await;
+
+    check_jwt_secret(&jwt_secret, strict_secrets())?;
     let fcm = fcm::FcmClient::from_env();
     if fcm.is_none() {
         tracing::warn!("FCM not configured (set FCM_SA_JSON or GOOGLE_APPLICATION_CREDENTIALS); /signal disabled");
     }
-    let relay_state = relay::RelayState::new(jwt_secret.clone());
+    let store = store::MongoStore::shared(db.clone());
+    let sessions = session::Sessions::new(jwt_secret, store.clone());
+    let relay_state = relay::RelayState::new(sessions.clone());
     let relay = relay::router(relay_state.clone());
-    let pairing = pair::router(pair::PairState::new(jwt_secret.clone()));
+    let pair_state = pair::PairState::new(sessions.clone());
+    let pairing = pair::router(pair_state.clone());
     let state = AppState {
         db,
-        jwt_secret,
+        sessions,
         fcm,
         relay: relay_state,
-        push: std::sync::Arc::new(signal::PushLimiter::new(signal::PushConfig::from_env())),
+        push: std::sync::Arc::new(signal::PushLimiter::new(
+            signal::PushConfig::from_env(),
+            store.clone(),
+        )),
         max_devices: limits::env_or("MAX_DEVICES_PER_ACCOUNT", devices::MAX_DEVICES),
+        signup: signup::Signup::new(signup::SignupConfig::from_env(), store),
+        pair: pair_state,
+        admin_token: admin::token_from_env(),
     };
+    restore_limits(&state).await;
+    tracing::info!(
+        "sign-up: {}; /admin: {}",
+        state.signup.mode().as_str(),
+        if state.admin_token.is_some() {
+            "on"
+        } else {
+            "off"
+        }
+    );
 
     let app = api(state)
-        // WebSocket relay (own state: needs only the JWT secret).
+        // WebSocket relay (own state: sessions only).
         .merge(relay)
         // Add a device by QR code / 6-digit code (own state, in memory).
         .merge(pairing)
@@ -177,18 +274,31 @@ mod api_tests {
     const SECRET: &str = "api-test-secret";
 
     async fn start(push: signal::PushConfig) -> String {
+        start_with(push, signup::SignupConfig::default(), None).await
+    }
+
+    async fn start_with(
+        push: signal::PushConfig,
+        signup: signup::SignupConfig,
+        admin_token: Option<&str>,
+    ) -> String {
         let client = mongodb::Client::with_uri_str(
             "mongodb://127.0.0.1:9/?serverSelectionTimeoutMS=100&connectTimeoutMS=100",
         )
         .await
         .unwrap();
+        let store = store::MemStore::new();
+        let sessions = session::Sessions::new(SECRET.into(), store.clone());
         let state = AppState {
             db: client.database("none"),
-            jwt_secret: SECRET.into(),
+            sessions: sessions.clone(),
             fcm: None,
-            relay: relay::RelayState::new(SECRET.into()),
-            push: std::sync::Arc::new(signal::PushLimiter::new(push)),
+            relay: relay::RelayState::new(sessions.clone()),
+            push: std::sync::Arc::new(signal::PushLimiter::new(push, store.clone())),
             max_devices: devices::MAX_DEVICES,
+            signup: signup::Signup::new(signup, store),
+            pair: pair::PairState::new(sessions),
+            admin_token: admin_token.map(Into::into),
         };
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -301,5 +411,249 @@ mod api_tests {
         // Self-pings share the account's signal budget.
         let r = post(&base, "/signal/selfping", &json!({"node_id": "a"})).await;
         assert_eq!(r.status(), 429);
+    }
+
+    async fn send(
+        base: &str,
+        path: &str,
+        token: Option<&str>,
+        ip: &str,
+        body: Option<Value>,
+    ) -> reqwest::Response {
+        let mut r = if body.is_some() {
+            reqwest::Client::new().post(format!("{base}{path}"))
+        } else {
+            reqwest::Client::new().get(format!("{base}{path}"))
+        }
+        // The server is on loopback, so it takes this as the client.
+        .header("x-forwarded-for", ip);
+        if let Some(t) = token {
+            r = r.bearer_auth(t);
+        }
+        if let Some(b) = body {
+            r = r.json(&b);
+        }
+        r.send().await.unwrap()
+    }
+
+    fn signup_body() -> Value {
+        json!({"username": "newbie", "password": "secret-pw"})
+    }
+
+    #[tokio::test]
+    async fn sign_ups_are_limited_per_address_and_closed_or_invite_modes_refuse() {
+        let base = start_with(
+            signal::PushConfig::default(),
+            signup::SignupConfig {
+                per_client_per_min: 2.0,
+                ..Default::default()
+            },
+            None,
+        )
+        .await;
+        // Past the limits it goes on to the (absent) database: 500.
+        for _ in 0..2 {
+            let r = send(
+                &base,
+                "/auth/register",
+                None,
+                "203.0.113.5",
+                Some(signup_body()),
+            )
+            .await;
+            assert_eq!(r.status(), 500);
+        }
+        let r = send(
+            &base,
+            "/auth/register",
+            None,
+            "203.0.113.5",
+            Some(signup_body()),
+        )
+        .await;
+        assert_eq!(r.status(), 429);
+        assert!(r.headers().contains_key("retry-after"));
+        // The same IPv6 /64 is one address; another one isn't limited.
+        for (ip, want) in [
+            ("2001:db8:7:7::1", 500),
+            ("2001:db8:7:7::2", 500),
+            ("2001:db8:7:7::3", 429),
+            ("2001:db8:7:8::1", 500),
+        ] {
+            let r = send(&base, "/auth/register", None, ip, Some(signup_body())).await;
+            assert_eq!(r.status(), want, "{ip}");
+        }
+
+        let closed = start_with(
+            signal::PushConfig::default(),
+            signup::SignupConfig {
+                mode: signup::Mode::Closed,
+                ..Default::default()
+            },
+            None,
+        )
+        .await;
+        let r = send(
+            &closed,
+            "/auth/register",
+            None,
+            "203.0.113.6",
+            Some(signup_body()),
+        )
+        .await;
+        assert_eq!(r.status(), 403);
+
+        let invite = start_with(
+            signal::PushConfig::default(),
+            signup::SignupConfig {
+                mode: signup::Mode::Invite,
+                ..Default::default()
+            },
+            Some(&"a".repeat(40)),
+        )
+        .await;
+        let r = send(
+            &invite,
+            "/auth/register",
+            None,
+            "203.0.113.7",
+            Some(signup_body()),
+        )
+        .await;
+        assert_eq!(r.status(), 403, "no invite");
+        let mut body = signup_body();
+        body["invite"] = json!("wxyz-wxyz-wxyz-wxyz-wxyz");
+        let r = send(&invite, "/auth/register", None, "203.0.113.7", Some(body)).await;
+        assert_eq!(r.status(), 403, "unknown invite");
+        // A real one (from /admin/invites) gets past to the database.
+        let admin = "a".repeat(40);
+        let r = send(
+            &invite,
+            "/admin/invites",
+            Some(&admin),
+            "127.0.0.1",
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(r.status(), 200);
+        let code = r.json::<Value>().await.unwrap()["code"]
+            .as_str()
+            .unwrap()
+            .to_uppercase();
+        let mut body = signup_body();
+        body["invite"] = json!(code);
+        let r = send(
+            &invite,
+            "/auth/register",
+            None,
+            "203.0.113.8",
+            Some(body.clone()),
+        )
+        .await;
+        assert_eq!(r.status(), 500);
+        // The sign-up failed, so the invite was given back and still works.
+        let r = send(&invite, "/auth/register", None, "203.0.113.9", Some(body)).await;
+        assert_eq!(r.status(), 500);
+        let r = send(&invite, "/admin/limits", Some(&admin), "127.0.0.1", None).await;
+        let v: Value = r.json().await.unwrap();
+        assert_eq!(v["signup"]["mode"], "invite");
+        assert_eq!(v["signup"]["refused_invite_since_start"], 2);
+        assert_eq!(v["invites_with_uses_left"], 1);
+    }
+
+    #[tokio::test]
+    async fn logout_signs_out_this_session_and_logout_all_every_session() {
+        let base = start(signal::PushConfig::default()).await;
+        let ip = "203.0.113.20";
+        let (a, b) = (
+            issue_token(SECRET, "id-ann", "ann").unwrap(),
+            issue_token(SECRET, "id-ann", "ann").unwrap(),
+        );
+        // Signed in: the request goes on to the (absent) database.
+        assert_eq!(
+            send(&base, "/devices", Some(&a), ip, None).await.status(),
+            500
+        );
+        let r = send(&base, "/auth/logout", Some(&a), ip, Some(json!({}))).await;
+        assert_eq!(r.status(), 204);
+        assert_eq!(
+            send(&base, "/devices", Some(&a), ip, None).await.status(),
+            401
+        );
+        assert_eq!(
+            send(&base, "/devices", Some(&b), ip, None).await.status(),
+            500
+        );
+
+        let r = send(&base, "/auth/logout_all", Some(&b), ip, Some(json!({}))).await;
+        assert_eq!(r.status(), 204);
+        assert_eq!(
+            send(&base, "/devices", Some(&b), ip, None).await.status(),
+            401
+        );
+        let r = send(&base, "/auth/logout", Some(&b), ip, Some(json!({}))).await;
+        assert_eq!(r.status(), 401, "already signed out");
+        // A password change needs a session too.
+        let r = send(
+            &base,
+            "/auth/password",
+            Some(&b),
+            ip,
+            Some(json!({"password": "x", "new_password": "longer-one"})),
+        )
+        .await;
+        assert_eq!(r.status(), 401);
+    }
+
+    #[tokio::test]
+    async fn admin_routes_are_off_without_a_token_and_show_only_counts() {
+        let off = start(signal::PushConfig::default()).await;
+        let r = send(&off, "/admin/limits", Some("anything"), "127.0.0.1", None).await;
+        assert_eq!(r.status(), 404);
+        let r = send(
+            &off,
+            "/admin/invites",
+            Some("x"),
+            "127.0.0.1",
+            Some(json!({})),
+        )
+        .await;
+        assert_eq!(r.status(), 404);
+
+        let token = "t".repeat(40);
+        let on = start_with(
+            signal::PushConfig::default(),
+            signup::SignupConfig::default(),
+            Some(&token),
+        )
+        .await;
+        let r = send(&on, "/admin/limits", Some("wrong"), "127.0.0.1", None).await;
+        assert_eq!(r.status(), 401);
+        let r = send(&on, "/admin/limits", None, "127.0.0.1", None).await;
+        assert_eq!(r.status(), 401);
+        // A sign-up from an address shows up as a count, never the address.
+        send(
+            &on,
+            "/auth/register",
+            None,
+            "198.51.100.77",
+            Some(signup_body()),
+        )
+        .await;
+        let r = send(&on, "/admin/limits", Some(&token), "127.0.0.1", None).await;
+        assert_eq!(r.status(), 200);
+        let text = r.text().await.unwrap();
+        assert!(!text.contains("198.51.100"), "{text}");
+        let v: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(v["signup"]["mode"], "open");
+        assert_eq!(v["pair"]["addresses_locked_out"], 0);
+        assert_eq!(v["relay"]["connections"], 0);
+    }
+
+    #[test]
+    fn a_short_jwt_secret_is_refused_only_when_strict() {
+        assert!(check_jwt_secret("short", false).is_ok());
+        assert!(check_jwt_secret("short", true).is_err());
+        assert!(check_jwt_secret(&"k".repeat(32), true).is_ok());
     }
 }

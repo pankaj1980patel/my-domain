@@ -3,7 +3,8 @@
 // that's connected, else pushes it as an FCM data message to the target's
 // token. Both `from` and `to` must belong to the caller's user (anti-spoof).
 //
-// Limits (security review M21), all per account and in memory:
+// Limits (security review M21), all per account and in memory (the daily
+// count is also kept in the store, so a restart keeps it):
 // - every `/signal` and `/signal/selfping` request: `SIGNALS_PER_MIN`
 //   (bursts of a fifth of it), checked before the database is asked;
 // - a signal body at most `MAX_SIGNAL_BYTES`, its push payload at most
@@ -26,7 +27,7 @@ use serde::Deserialize;
 use crate::auth::AuthUser;
 use crate::error::AppError;
 use crate::fcm::FcmError;
-use crate::limits::{env_or, Buckets, Recent, Windows};
+use crate::limits::{env_or, Buckets, Recent, StoredWindows};
 use crate::models::Device;
 use crate::state::AppState;
 
@@ -88,7 +89,6 @@ struct PushInner {
     signals: Buckets<String>,
     account: Buckets<String>,
     target: Buckets<(String, String)>,
-    daily: Windows<String>,
     recent: Recent<u64>,
 }
 
@@ -97,10 +97,12 @@ pub struct PushLimiter {
     cfg: PushConfig,
     hasher: RandomState,
     inner: Mutex<PushInner>,
+    /// Pushes per account today (kept in the store).
+    daily: StoredWindows,
 }
 
 impl PushLimiter {
-    pub fn new(cfg: PushConfig) -> Self {
+    pub fn new(cfg: PushConfig, store: std::sync::Arc<dyn crate::store::Store>) -> Self {
         PushLimiter {
             cfg,
             hasher: RandomState::new(),
@@ -116,12 +118,21 @@ impl PushLimiter {
                     cfg.per_target_per_min / 3.0,
                     MAX_TRACKED,
                 ),
-                daily: Windows::new(Duration::from_secs(24 * 3600), MAX_TRACKED),
                 recent: Recent::new(cfg.dedupe, MAX_TRACKED),
             }),
+            daily: StoredWindows::new("push:", Duration::from_secs(24 * 3600), MAX_TRACKED, store),
         }
     }
 
+    /// Read back the daily counts (after a restart).
+    pub async fn restore(&self) -> Result<usize, AppError> {
+        self.daily.restore().await
+    }
+
+    /// Accounts with a daily count (for `/admin/limits`).
+    pub fn accounts_counted_today(&self) -> usize {
+        self.daily.len()
+    }
     /// One signal request from `user` (before anything else is done).
     pub fn signal(&self, user: &str, now: Instant) -> Result<(), AppError> {
         self.inner
@@ -157,8 +168,8 @@ impl PushLimiter {
         let user = user.to_string();
         let target = (user.clone(), to.to_string());
         let mut wait = g.account.wait(&user, now).max(g.target.wait(&target, now));
-        if g.daily.count(&user, now) >= self.cfg.per_day {
-            wait = wait.max(g.daily.resets_in(&user, now));
+        if self.daily.count(&user, now) >= self.cfg.per_day {
+            wait = wait.max(self.daily.resets_in(&user, now));
         }
         if !wait.is_zero() {
             return Err(AppError::RateLimited(
@@ -168,7 +179,7 @@ impl PushLimiter {
         }
         g.account.take(&user, now);
         g.target.take(&target, now);
-        g.daily.add(&user, now);
+        self.daily.add(&user, now);
         Ok(Admit::Send)
     }
 
@@ -377,6 +388,7 @@ pub async fn selfping(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::MemStore;
     use serde_json::json;
 
     fn small() -> PushConfig {
@@ -399,7 +411,7 @@ mod tests {
 
     #[test]
     fn pushes_per_target_then_per_account_are_limited_with_a_retry_time() {
-        let l = PushLimiter::new(small());
+        let l = PushLimiter::new(small(), MemStore::new());
         let t0 = Instant::now();
         // Per target: a burst of 10, then one every 2 s.
         for i in 0..10u64 {
@@ -428,7 +440,7 @@ mod tests {
 
     #[test]
     fn an_account_has_a_daily_ceiling() {
-        let l = PushLimiter::new(small());
+        let l = PushLimiter::new(small(), MemStore::new());
         let mut t = Instant::now();
         for i in 0..50u64 {
             assert!(l.push("ann", &format!("d{}", i % 5), i, t).is_ok(), "{i}");
@@ -439,9 +451,28 @@ mod tests {
         assert!(l.push("ann", "d0", 999, t + w).is_ok());
     }
 
+    #[tokio::test]
+    async fn the_daily_ceiling_survives_a_restart() {
+        let store = MemStore::new();
+        let l = PushLimiter::new(small(), store.clone());
+        let t0 = Instant::now();
+        for i in 0..50u64 {
+            let t = t0 + Duration::from_secs(3 * i);
+            assert!(l.push("ann", &format!("d{}", i % 5), i, t).is_ok(), "{i}");
+        }
+        assert!(l.push("bob", "d0", 1, t0).is_ok());
+        assert_eq!(store.limit_records(), 2, "one record per account and day");
+        // A new server on the same store, after the restart.
+        let after = PushLimiter::new(small(), store);
+        assert_eq!(after.restore().await.unwrap(), 2);
+        let w = retry(after.push("ann", "d0", 999, Instant::now()).unwrap_err());
+        assert!(w > Duration::from_secs(23 * 3600), "{w:?}");
+        assert!(after.push("bob", "d1", 2, Instant::now()).is_ok());
+    }
+
     #[test]
     fn the_same_push_within_the_window_is_sent_once() {
-        let l = PushLimiter::new(small());
+        let l = PushLimiter::new(small(), MemStore::new());
         let t0 = Instant::now();
         let data = json!({"type": "signal", "payload": "x"});
         let d = l.digest("ann", "phone", &data);
@@ -472,7 +503,7 @@ mod tests {
 
     #[test]
     fn oversized_push_payloads_are_refused() {
-        let l = PushLimiter::new(small());
+        let l = PushLimiter::new(small(), MemStore::new());
         assert!(l.sized(json!({"payload": "x".repeat(3000)})).is_ok());
         assert!(matches!(
             l.sized(json!({"payload": "x".repeat(3600)})),
@@ -482,10 +513,13 @@ mod tests {
 
     #[test]
     fn signal_requests_are_limited_per_account() {
-        let l = PushLimiter::new(PushConfig {
-            signals_per_min: 60.0,
-            ..small()
-        });
+        let l = PushLimiter::new(
+            PushConfig {
+                signals_per_min: 60.0,
+                ..small()
+            },
+            MemStore::new(),
+        );
         let t0 = Instant::now();
         for _ in 0..12 {
             assert!(l.signal("ann", t0).is_ok());

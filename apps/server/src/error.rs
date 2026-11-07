@@ -9,6 +9,8 @@ use serde_json::json;
 #[derive(Debug)]
 pub enum AppError {
     Unauthorized,
+    /// Not allowed here at all (sign-up closed, a bad invite code).
+    Forbidden(String),
     BadRequest(String),
     Conflict(String),
     /// Expired, used, or never there (a join code).
@@ -38,6 +40,7 @@ impl IntoResponse for AppError {
             AppError::TooLarge(m) => (StatusCode::PAYLOAD_TOO_LARGE, m),
             AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized".to_string()),
             AppError::BadRequest(m) => (StatusCode::BAD_REQUEST, m),
+            AppError::Forbidden(m) => (StatusCode::FORBIDDEN, m),
             AppError::Conflict(m) => (StatusCode::CONFLICT, m),
             AppError::Gone(m) => (StatusCode::GONE, m),
             AppError::TooMany => (

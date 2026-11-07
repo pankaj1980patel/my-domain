@@ -178,7 +178,14 @@ impl<P: Platform> Engine<P> {
     }
 
     pub fn logout(&self) {
-        *self.token.lock() = None;
+        // The server forgets this session too (best effort, off this
+        // thread: signing out works offline).
+        let token = self.token.lock().take();
+        if let (Some(url), Some(token)) = (self.server_url.lock().clone(), token) {
+            std::thread::spawn(move || {
+                let _ = crate::registry::auth_logout(&url, &token);
+            });
+        }
         *self.ctx.key.lock() = None;
         self.ctx.platform.secret_set(SECRET_TOKEN, None);
         self.ctx.platform.secret_set(SECRET_KEY, None);

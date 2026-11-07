@@ -44,7 +44,7 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 use tokio::sync::mpsc;
 
-use crate::auth::verify_token;
+use crate::session::Sessions;
 
 /// Largest relayed frame (matches the clients' 4 MiB link cap, plus JSON
 /// wrapping overhead).
@@ -62,6 +62,8 @@ pub const MAX_BIN_FRAME: usize = 1024 * 1024;
 enum Out {
     Text(String),
     Bin(Vec<u8>),
+    /// The session was signed out: close the socket.
+    Close,
 }
 
 impl Out {
@@ -69,6 +71,7 @@ impl Out {
         match self {
             Out::Text(t) => t.len(),
             Out::Bin(b) => b.len(),
+            Out::Close => 0,
         }
     }
 }
@@ -118,6 +121,9 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 struct Queue {
     tx: mpsc::UnboundedSender<Out>,
     bytes: Arc<AtomicUsize>,
+    /// The session id of the token it signed in with (empty for an old
+    /// token), so signing out that session closes it.
+    sid: Arc<str>,
 }
 
 impl Queue {
@@ -191,7 +197,7 @@ pub struct Stats {
 
 #[derive(Clone)]
 pub struct RelayState {
-    jwt_secret: String,
+    sessions: Arc<Sessions>,
     conns: Conns,
     next_id: Arc<AtomicU64>,
     /// Bytes per second per account.
@@ -206,18 +212,18 @@ pub struct RelayState {
 }
 
 impl RelayState {
-    pub fn new(jwt_secret: String) -> Self {
+    pub fn new(sessions: Arc<Sessions>) -> Self {
         let rate = std::env::var("RELAY_BYTES_PER_SEC")
             .ok()
             .and_then(|v| v.parse::<f64>().ok())
             .filter(|r| *r > 0.0)
             .unwrap_or(4.0 * 1024.0 * 1024.0);
-        Self::with_rate(jwt_secret, rate)
+        Self::with_rate(sessions, rate)
     }
 
-    pub fn with_rate(jwt_secret: String, rate: f64) -> Self {
+    pub fn with_rate(sessions: Arc<Sessions>, rate: f64) -> Self {
         RelayState {
-            jwt_secret,
+            sessions,
             conns: Arc::default(),
             next_id: Arc::default(),
             rate,
@@ -251,6 +257,21 @@ impl RelayState {
             .filter(|(_, _, heard)| now.saturating_sub(heard.load(Ordering::Relaxed)) <= fresh)
             .map(|(_, q, _)| q.clone());
         target.is_some_and(|q| q.push(Out::Text(frame)))
+    }
+
+    /// Close `user_id`'s sockets that signed in with session `sid` (all of
+    /// them for `None`): the session was signed out.
+    pub fn sign_out(&self, user_id: &str, sid: Option<&str>) {
+        for ((u, _), (_, q, _)) in self.conns.lock().unwrap().iter() {
+            if u == user_id && sid.is_none_or(|s| *q.sid == *s) {
+                let _ = q.tx.send(Out::Close);
+            }
+        }
+    }
+
+    /// Open relay sockets (for `/admin/limits`).
+    pub fn connections(&self) -> usize {
+        self.conns.lock().unwrap().len()
     }
 
     /// Charge `n` bytes to `user`; how long to pause before forwarding.
@@ -300,7 +321,7 @@ async fn stats(State(s): State<RelayState>) -> Json<Value> {
 
 async fn serve(mut socket: WebSocket, s: RelayState) {
     // 1. Authenticate with the first frame.
-    let Some((user_id, node_id)) = authenticate(&mut socket, &s).await else {
+    let Some((user_id, sid, node_id)) = authenticate(&mut socket, &s).await else {
         let _ = socket
             .send(Message::Text(json!({"error": "unauthorized"}).to_string()))
             .await;
@@ -313,6 +334,7 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
     let queue = Queue {
         tx,
         bytes: Arc::clone(&queued),
+        sid: sid.into(),
     };
     let heard = Arc::new(AtomicU64::new(s.now_ms()));
     let admitted = {
@@ -399,6 +421,11 @@ async fn serve(mut socket: WebSocket, s: RelayState) {
                 let msg = match out {
                     Out::Text(t) => Message::Text(t),
                     Out::Bin(b) => Message::Binary(b),
+                    Out::Close => {
+                        let bye = json!({"error": "signed out"}).to_string();
+                        let _ = socket.send(Message::Text(bye)).await;
+                        break;
+                    }
                 };
                 if socket.send(msg).await.is_err() { break; }
             }
@@ -418,7 +445,8 @@ async fn throttle(s: &RelayState, user: &str, n: usize) {
     }
 }
 
-async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String, String)> {
+/// (user id, session id, node id) from the first frame, if its token is good.
+async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String, String, String)> {
     let first = tokio::time::timeout(AUTH_TIMEOUT, socket.recv())
         .await
         .ok()??
@@ -427,9 +455,13 @@ async fn authenticate(socket: &mut WebSocket, s: &RelayState) -> Option<(String,
         return None;
     };
     let v: Value = serde_json::from_str(&text).ok()?;
-    let user = verify_token(&s.jwt_secret, v["auth"].as_str()?)?;
+    let user = s.sessions.verify(v["auth"].as_str()?).await.ok()?;
     let node_id = v["node_id"].as_str()?.trim().to_string();
-    (!node_id.is_empty() && node_id.len() <= MAX_NODE_ID).then_some((user.user_id, node_id))
+    (!node_id.is_empty() && node_id.len() <= MAX_NODE_ID).then_some((
+        user.user_id,
+        user.sid,
+        node_id,
+    ))
 }
 
 /// Remove the registration only if it's still this connection's (a newer one
@@ -456,7 +488,7 @@ mod tests {
     const SECRET: &str = "test-secret";
 
     fn start() -> u16 {
-        start_with(RelayState::new(SECRET.into()))
+        start_with(RelayState::new(Sessions::test(SECRET)))
     }
 
     fn start_with(state: RelayState) -> u16 {
@@ -558,7 +590,7 @@ mod tests {
     #[test]
     fn a_heavy_sender_is_slowed_not_dropped_and_stats_count_it() {
         // 2 KB/s per account, so a 30 KB burst must take several seconds.
-        let port = start_with(RelayState::with_rate(SECRET.into(), 2000.0));
+        let port = start_with(RelayState::with_rate(Sessions::test(SECRET), 2000.0));
         let mut laptop = client(port, &tok("alice"), "laptop");
         next_json(&mut laptop);
         let mut phone = client(port, &tok("alice"), "phone");
@@ -587,7 +619,7 @@ mod tests {
 
     #[test]
     fn signals_go_to_a_connected_device_and_report_when_it_is_not() {
-        let state = RelayState::new(SECRET.into());
+        let state = RelayState::new(Sessions::test(SECRET));
         let port = start_with(state.clone());
         let mut phone = client(port, &tok("alice"), "phone");
         next_json(&mut phone);
@@ -606,8 +638,37 @@ mod tests {
     }
 
     #[test]
+    fn signing_out_a_session_closes_its_socket_and_it_cannot_come_back() {
+        let sessions = Sessions::test(SECRET);
+        let state = RelayState::new(sessions.clone());
+        let port = start_with(state.clone());
+        let (t1, t2) = (tok("alice"), tok("alice"));
+        let mut laptop = client(port, &t1, "laptop");
+        assert_eq!(next_json(&mut laptop)["ok"], true);
+        let mut phone = client(port, &t2, "phone");
+        assert_eq!(next_json(&mut phone)["ok"], true);
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let user = rt.block_on(sessions.verify(&t1)).unwrap();
+        assert!(!rt.block_on(sessions.logout(&user)).unwrap());
+        state.sign_out("alice", Some(&user.sid));
+        assert_eq!(next_json(&mut laptop), json!({"error": "signed out"}));
+        // The other session is still connected.
+        assert!(state.deliver_signal("alice", "phone", "{}".into()));
+        assert_eq!(next_json(&mut phone), json!({}));
+        // The signed-out token can't sign in again.
+        let mut again = client(port, &t1, "laptop");
+        assert_eq!(next_json(&mut again), json!({"error": "unauthorized"}));
+
+        // Signing out everything closes the rest.
+        rt.block_on(sessions.logout_all("alice")).unwrap();
+        state.sign_out("alice", None);
+        assert_eq!(next_json(&mut phone), json!({"error": "signed out"}));
+    }
+
+    #[test]
     fn a_silent_socket_gets_no_signals_until_it_speaks_again() {
-        let mut state = RelayState::new(SECRET.into());
+        let mut state = RelayState::new(Sessions::test(SECRET));
         state.signal_fresh = Duration::from_millis(300);
         let port = start_with(state.clone());
         let mut phone = client(port, &tok("alice"), "phone");
@@ -720,7 +781,7 @@ mod tests {
 
     #[test]
     fn binary_frames_share_the_accounts_budget() {
-        let port = start_with(RelayState::with_rate(SECRET.into(), 2000.0));
+        let port = start_with(RelayState::with_rate(Sessions::test(SECRET), 2000.0));
         let (mut laptop, mut phone) = pair_of(port);
         let started = Instant::now();
         for _ in 0..10 {
@@ -750,6 +811,7 @@ mod tests {
         let q = Queue {
             tx,
             bytes: Arc::default(),
+            sid: "".into(),
         };
         let chunk = vec![0u8; 1024 * 1024];
         let mut taken = 0;
@@ -774,7 +836,7 @@ mod tests {
 
     #[test]
     fn idle_account_buckets_are_dropped() {
-        let s = RelayState::with_rate(SECRET.into(), 1000.0);
+        let s = RelayState::with_rate(Sessions::test(SECRET), 1000.0);
         s.charge("first", 1); // the first sweep
         let t0 = Instant::now();
         {

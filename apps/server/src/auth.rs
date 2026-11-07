@@ -1,25 +1,29 @@
-// Authentication: Argon2id password hashing, JWT issuance/verification, the
-// `AuthUser` extractor that guards device endpoints, and the /auth/* handlers.
+// Authentication: Argon2id password hashing, the `AuthUser` extractor that
+// guards device endpoints, and the /auth/* handlers. Tokens and sessions
+// (issuing, checking, signing out) are in `session.rs`.
+
+use std::net::SocketAddr;
+use std::time::Instant;
 
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use axum::{
     async_trait,
-    extract::{FromRequestParts, State},
-    http::{header::AUTHORIZATION, request::Parts, StatusCode},
+    extract::{ConnectInfo, FromRequestParts, State},
+    http::{header::AUTHORIZATION, request::Parts, HeaderMap, StatusCode},
     Json,
 };
-use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
-use mongodb::bson::doc;
+use mongodb::bson::{doc, oid::ObjectId};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::AppError;
 use crate::models::User;
+use crate::signup::{invite_hash, Mode};
 use crate::state::AppState;
 
-const TOKEN_TTL_SECS: u64 = 7 * 24 * 3600;
+pub use crate::session::AuthUser;
+
 /// Wrong passwords allowed per username in `GUESS_WINDOW` (login and
 /// verify together), so a password can't be guessed online.
 const GUESSES_PER_USER: u32 = 10;
@@ -29,6 +33,8 @@ const MAX_TRACKED: usize = 50_000;
 /// Longest username / password looked at (Argon2 over megabytes is a CPU sink).
 const MAX_USERNAME: usize = 64;
 const MAX_PASSWORD: usize = 256;
+/// Shortest password accepted for a new account or a new password.
+const MIN_PASSWORD: usize = 6;
 
 /// Wrong-password counts per username: (window start, count).
 #[derive(Default)]
@@ -99,19 +105,20 @@ fn too_long(username: &str, pw: &str) -> bool {
     username.len() > MAX_USERNAME || pw.len() > MAX_PASSWORD
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Claims {
-    pub sub: String, // user id (hex)
-    pub username: String,
-    pub exp: usize,
-}
-
 fn hash_password(pw: &str) -> Result<String, AppError> {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()
         .hash_password(pw.as_bytes(), &salt)
         .map(|h| h.to_string())
         .map_err(|e| AppError::Internal(e.to_string()))
+}
+
+/// `hash_password` off the async workers.
+async fn hash_password_blocking(pw: &str) -> Result<String, AppError> {
+    let pw = pw.to_string();
+    tokio::task::spawn_blocking(move || hash_password(&pw))
+        .await
+        .map_err(|e| AppError::Internal(e.to_string()))?
 }
 
 fn verify_password(pw: &str, hash: &str) -> bool {
@@ -124,29 +131,12 @@ fn verify_password(pw: &str, hash: &str) -> bool {
         .unwrap_or(false)
 }
 
-pub(crate) fn make_token(secret: &str, user_id: &str, username: &str) -> Result<String, AppError> {
-    let exp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0) as usize
-        + TOKEN_TTL_SECS as usize;
-    let claims = Claims {
-        sub: user_id.to_string(),
-        username: username.to_string(),
-        exp,
-    };
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| AppError::Internal(e.to_string()))
-}
-
-/// Extractor: requires a valid `Authorization: Bearer <jwt>` header.
-pub struct AuthUser {
-    pub user_id: String,
-    pub username: String,
+/// The bearer token in `headers`, if any.
+pub fn bearer(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|h| h.strip_prefix("Bearer "))
 }
 
 #[async_trait]
@@ -157,42 +147,25 @@ impl FromRequestParts<AppState> for AuthUser {
         parts: &mut Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let token = parts
-            .headers
-            .get(AUTHORIZATION)
-            .and_then(|h| h.to_str().ok())
-            .and_then(|h| h.strip_prefix("Bearer "))
-            .ok_or(AppError::Unauthorized)?;
-        verify_token(&state.jwt_secret, token).ok_or(AppError::Unauthorized)
+        let token = bearer(&parts.headers).ok_or(AppError::Unauthorized)?;
+        state.sessions.verify(token).await
     }
 }
 
-/// Check a session token (signature + expiry) and return who it belongs to.
-/// Shared by the HTTP `Authorization` extractor and the WebSocket relay, where
-/// the token arrives in the first frame instead of a header.
-pub fn verify_token(secret: &str, token: &str) -> Option<AuthUser> {
-    let data = decode::<Claims>(
-        token,
-        &DecodingKey::from_secret(secret.as_bytes()),
-        &Validation::default(),
-    )
-    .ok()?;
-    Some(AuthUser {
-        user_id: data.claims.sub,
-        username: data.claims.username,
-    })
-}
-
-/// Issue a token (for tests that need a valid session without MongoDB).
+/// Issue a token (for tests that need a valid session without MongoDB; the
+/// test stores take any account at version 0).
 #[cfg(test)]
 pub fn issue_token(secret: &str, user_id: &str, username: &str) -> Option<String> {
-    make_token(secret, user_id, username).ok()
+    crate::session::make_token(secret, user_id, username, 0).ok()
 }
 
 #[derive(Deserialize)]
 pub struct AuthReq {
     pub username: String,
     pub password: String,
+    /// Needed when `REGISTRATION=invite`; ignored otherwise.
+    #[serde(default)]
+    pub invite: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -203,41 +176,88 @@ pub struct TokenResp {
 
 pub async fn register(
     State(s): State<AppState>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+    headers: HeaderMap,
     Json(req): Json<AuthReq>,
 ) -> Result<Json<TokenResp>, AppError> {
+    // Per address (the one Caddy saw), before anything costly.
+    let client = crate::limits::client_key(crate::devices::client_ip(peer, &headers));
+    let now = Instant::now();
+    s.signup.admit(&client, now)?;
     let username = req.username.trim().to_lowercase();
-    if username.is_empty() || req.password.len() < 6 || too_long(&username, &req.password) {
+    if username.is_empty()
+        || req.password.len() < MIN_PASSWORD
+        || too_long(&username, &req.password)
+    {
         return Err(AppError::BadRequest(
             "username required (at most 64 characters) and password must be 6-256 characters"
                 .into(),
         ));
     }
+    // An invite is used up first and given back if the sign-up fails.
+    let invite = match s.signup.mode() {
+        Mode::Invite => {
+            let code = req
+                .invite
+                .as_deref()
+                .filter(|c| !c.trim().is_empty() && c.len() <= 64);
+            let Some(code) = code else {
+                s.signup.bad_invite();
+                return Err(AppError::Forbidden(
+                    "an invite code is needed to sign up here".into(),
+                ));
+            };
+            let code = code.to_string();
+            let hash = tokio::task::spawn_blocking(move || invite_hash(&code))
+                .await
+                .map_err(|e| AppError::Internal(e.to_string()))??;
+            if !s.sessions.store().take_invite(&hash).await? {
+                s.signup.bad_invite();
+                return Err(AppError::Forbidden("this invite code is not valid".into()));
+            }
+            Some(hash)
+        }
+        _ => None,
+    };
+    let made = create_user(&s, &username, &req.password).await;
+    let uid = match made {
+        Ok(uid) => uid,
+        Err(e) => {
+            if let Some(h) = invite {
+                let _ = s.sessions.store().return_invite(&h).await;
+            }
+            return Err(e);
+        }
+    };
+    s.signup.created(&client, now);
+    let token = s.sessions.issue_at(&uid, &username, 0)?;
+    Ok(Json(TokenResp { token, username }))
+}
+
+/// Insert a new account; its id.
+async fn create_user(s: &AppState, username: &str, password: &str) -> Result<String, AppError> {
     let users = s.db.collection::<User>(crate::models::USERS_COLL);
     if users
-        .find_one(doc! { "username": &username })
+        .find_one(doc! { "username": username })
         .await?
         .is_some()
     {
         return Err(AppError::Conflict("username already taken".into()));
     }
-    let pw = req.password.clone();
-    let password_hash = tokio::task::spawn_blocking(move || hash_password(&pw))
-        .await
-        .map_err(|e| AppError::Internal(e.to_string()))??;
+    let password_hash = hash_password_blocking(password).await?;
     let res = users
         .insert_one(User {
             id: None,
-            username: username.clone(),
+            username: username.to_string(),
             password_hash,
+            token_ver: 0,
+            revoked: Vec::new(),
         })
         .await?;
-    let uid = res
-        .inserted_id
+    res.inserted_id
         .as_object_id()
         .map(|o| o.to_hex())
-        .ok_or(AppError::Internal("no inserted id".into()))?;
-    let token = make_token(&s.jwt_secret, &uid, &username)?;
-    Ok(Json(TokenResp { token, username }))
+        .ok_or(AppError::Internal("no inserted id".into()))
 }
 
 pub async fn login(
@@ -261,7 +281,7 @@ pub async fn login(
         .id
         .map(|o| o.to_hex())
         .ok_or(AppError::Internal("no id".into()))?;
-    let token = make_token(&s.jwt_secret, &uid, &username)?;
+    let token = s.sessions.issue_at(&uid, &username, user.token_ver)?;
     Ok(Json(TokenResp { token, username }))
 }
 
@@ -278,6 +298,72 @@ pub async fn verify(
     let found = users.find_one(doc! { "username": &username }).await?;
     check_password(&username, &req.password, found.map(|u| u.password_hash)).await?;
     Ok(StatusCode::OK)
+}
+
+/// `POST /auth/logout`: sign out the session this token belongs to (a token
+/// from before session ids signs out every session of the account).
+pub async fn logout(State(s): State<AppState>, user: AuthUser) -> Result<StatusCode, AppError> {
+    let all = s.sessions.logout(&user).await?;
+    s.relay
+        .sign_out(&user.user_id, (!all).then_some(user.sid.as_str()));
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `POST /auth/logout_all`: sign out every session of the account, this
+/// one included.
+pub async fn logout_all(State(s): State<AppState>, user: AuthUser) -> Result<StatusCode, AppError> {
+    s.sessions.logout_all(&user.user_id).await?;
+    s.relay.sign_out(&user.user_id, None);
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub struct PasswordReq {
+    pub password: String,
+    pub new_password: String,
+}
+
+/// `POST /auth/password` (signed in) `{"password", "new_password"}`: change
+/// the password. Every session is signed out; the caller gets a new token.
+pub async fn change_password(
+    State(s): State<AppState>,
+    user: AuthUser,
+    Json(req): Json<PasswordReq>,
+) -> Result<Json<TokenResp>, AppError> {
+    if req.new_password.len() < MIN_PASSWORD || too_long(&user.username, &req.new_password) {
+        return Err(AppError::BadRequest(
+            "new_password must be 6-256 characters".into(),
+        ));
+    }
+    if too_long(&user.username, &req.password) {
+        return Err(AppError::Unauthorized);
+    }
+    let oid = ObjectId::parse_str(&user.user_id).map_err(|_| AppError::Unauthorized)?;
+    let users = s.db.collection::<User>(crate::models::USERS_COLL);
+    let found = users.find_one(doc! { "_id": oid }).await?;
+    check_password(
+        &user.username,
+        &req.password,
+        found.map(|u| u.password_hash),
+    )
+    .await?;
+    let password_hash = hash_password_blocking(&req.new_password).await?;
+    users
+        .update_one(
+            doc! { "_id": oid },
+            doc! {
+                "$set": { "password_hash": password_hash, "revoked": [] },
+                "$inc": { "token_ver": 1_i64 },
+            },
+        )
+        .await?;
+    s.sessions.forget(&user.user_id);
+    s.relay.sign_out(&user.user_id, None);
+    let token = s.sessions.issue(&user.user_id, &user.username).await?;
+    Ok(Json(TokenResp {
+        token,
+        username: user.username,
+    }))
 }
 
 #[cfg(test)]

@@ -14,6 +14,12 @@ pub struct User {
     pub id: Option<ObjectId>,
     pub username: String,
     pub password_hash: String,
+    /// Token version (see `session.rs`); absent on accounts from before it.
+    #[serde(default)]
+    pub token_ver: i64,
+    /// Sessions signed out one by one, until their tokens expire.
+    #[serde(default)]
+    pub revoked: Vec<crate::store::Revoked>,
 }
 
 /// A device owned by a user. `node_id` is the per-session id the client uses;

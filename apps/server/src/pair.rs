@@ -30,7 +30,9 @@
 //! - Per client address (an IPv6 /64 counts as one): `fails_per_client`
 //!   wrong claims in a minute lock that address out, for a minute the first
 //!   time and twice as long each time after (up to an hour; forgotten after
-//!   an hour of quiet). Answers are 429 with `Retry-After`.
+//!   an hour of quiet). Answers are 429 with `Retry-After`. A lockout is
+//!   saved in the store when it starts and read back at startup, so a
+//!   restart neither lifts it nor resets the doubling.
 //! - Per pairing: every wrong code is a guess at each live code, so a
 //!   pairing's code stops working after `code_lock_after` wrong codes were
 //!   tried while it was live (at most a 0.1% chance of a hit by default,
@@ -43,7 +45,7 @@
 //!   its own address, never server-wide or against a pairing.
 
 use std::collections::HashMap;
-use std::net::{IpAddr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -55,9 +57,12 @@ use rand_core::{OsRng, RngCore};
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use crate::auth::{make_token, verify_token, AuthUser};
+use crate::auth::AuthUser;
 use crate::devices::client_ip;
 use crate::error::AppError;
+use crate::limits::{client_key, from_wall, to_wall, wall_ms};
+use crate::session::Sessions;
+use crate::store::LimitRec;
 
 /// How long a pairing can be claimed.
 pub const PAIR_TTL: Duration = Duration::from_secs(5 * 60);
@@ -180,31 +185,91 @@ struct Inner {
 
 #[derive(Clone)]
 pub struct PairState {
-    jwt_secret: String,
+    sessions: Arc<Sessions>,
     ttl: Duration,
     limits: PairLimits,
     inner: Arc<Mutex<Inner>>,
 }
 
 impl PairState {
-    pub fn new(jwt_secret: String) -> Self {
-        Self::with(jwt_secret, PAIR_TTL, PairLimits::from_env())
+    pub fn new(sessions: Arc<Sessions>) -> Self {
+        Self::with(sessions, PAIR_TTL, PairLimits::from_env())
     }
 
     #[cfg(test)]
-    pub fn with_ttl(jwt_secret: String, ttl: Duration) -> Self {
-        Self::with(jwt_secret, ttl, PairLimits::default())
+    pub fn with_ttl(sessions: Arc<Sessions>, ttl: Duration) -> Self {
+        Self::with(sessions, ttl, PairLimits::default())
     }
 
-    pub fn with(jwt_secret: String, ttl: Duration, limits: PairLimits) -> Self {
+    pub fn with(sessions: Arc<Sessions>, ttl: Duration, limits: PairLimits) -> Self {
         PairState {
-            jwt_secret,
+            sessions,
             ttl,
             limits,
             inner: Arc::default(),
         }
     }
+
+    /// Read back the lockouts saved before a restart; how many.
+    pub async fn restore(&self) -> Result<usize, AppError> {
+        let recs = self.sessions.store().load_limits(LOCKOUT_PREFIX).await?;
+        let (now, now_ms) = (Instant::now(), wall_ms());
+        let mut inner = self.inner.lock().unwrap();
+        let mut n = 0;
+        for r in recs {
+            let Some(key) = r.key.strip_prefix(LOCKOUT_PREFIX) else {
+                continue;
+            };
+            let last_ms = r.expires_ms - STRIKE_MEMORY.as_millis() as i64;
+            let (Some(last), until) = (
+                from_wall(last_ms, now, now_ms),
+                from_wall(r.until_ms, now, now_ms),
+            ) else {
+                continue;
+            };
+            let keep_newer = inner
+                .clients
+                .get(key)
+                .is_some_and(|c| c.strikes >= r.strikes);
+            if keep_newer {
+                continue;
+            }
+            inner.clients.insert(
+                key.to_string(),
+                Client {
+                    since: now,
+                    n: 0,
+                    strikes: r.strikes,
+                    locked_until: until.filter(|u| *u > now),
+                    last,
+                },
+            );
+            n += 1;
+        }
+        Ok(n)
+    }
+
+    /// Counts only (for `/admin/limits`).
+    pub fn stats(&self) -> Value {
+        let now = Instant::now();
+        let mut inner = self.inner.lock().unwrap();
+        inner.purge(now);
+        let locked = inner
+            .clients
+            .values()
+            .filter(|c| c.locked_until.is_some_and(|u| u > now))
+            .count();
+        json!({
+            "pairings": inner.pairings.len(),
+            "addresses_tracked": inner.clients.len(),
+            "addresses_locked_out": locked,
+            "wrong_codes_total": inner.code_fails_total,
+        })
+    }
 }
+
+/// Lockout records in the store are keyed `pair:<address>`.
+const LOCKOUT_PREFIX: &str = "pair:";
 
 pub fn router(state: PairState) -> Router {
     Router::new()
@@ -216,28 +281,9 @@ pub fn router(state: PairState) -> Router {
         .with_state(state)
 }
 
-/// The key a client's failures are counted under: its address, or for IPv6
-/// its /64 (one subscriber usually holds a whole /64).
-fn client_key(ip: IpAddr) -> String {
-    match ip {
-        IpAddr::V4(v4) => v4.to_string(),
-        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
-            Some(v4) => v4.to_string(),
-            None => {
-                let s = v6.segments();
-                format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
-            }
-        },
-    }
-}
-
-fn signed_in(s: &PairState, headers: &HeaderMap) -> Result<AuthUser, AppError> {
-    let token = headers
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|h| h.to_str().ok())
-        .and_then(|h| h.strip_prefix("Bearer "))
-        .ok_or(AppError::Unauthorized)?;
-    verify_token(&s.jwt_secret, token).ok_or(AppError::Unauthorized)
+async fn signed_in(s: &PairState, headers: &HeaderMap) -> Result<AuthUser, AppError> {
+    let token = crate::auth::bearer(headers).ok_or(AppError::Unauthorized)?;
+    s.sessions.verify(token).await
 }
 
 fn is_claim(s: &str) -> bool {
@@ -293,8 +339,15 @@ impl Inner {
     }
 
     /// Count a failed claim from `key`; `code` = it was a typed code (a
-    /// guess at every live code) rather than a QR claim.
-    fn failed(&mut self, key: String, code: bool, now: Instant, lim: &PairLimits) {
+    /// guess at every live code) rather than a QR claim. A lockout that
+    /// starts is returned, to be saved.
+    fn failed(
+        &mut self,
+        key: String,
+        code: bool,
+        now: Instant,
+        lim: &PairLimits,
+    ) -> Option<LimitRec> {
         if code {
             *self
                 .code_fails
@@ -304,7 +357,7 @@ impl Inner {
         }
         let allowance = self.allowance(now, lim);
         self.sweep_clients(now);
-        let c = self.clients.entry(key).or_insert(Client {
+        let c = self.clients.entry(key.clone()).or_insert(Client {
             since: now,
             n: 0,
             strikes: 0,
@@ -320,16 +373,26 @@ impl Inner {
         }
         c.last = now;
         c.n += 1;
-        if c.n >= allowance {
-            // Locked out: one window, doubled per lockout before it.
-            let lockout = FAIL_WINDOW
-                .saturating_mul(1u32 << c.strikes.min(10))
-                .min(MAX_LOCKOUT);
-            c.strikes += 1;
-            c.locked_until = Some(now + lockout);
-            c.since = now;
-            c.n = 0;
+        if c.n < allowance {
+            return None;
         }
+        // Locked out: one window, doubled per lockout before it.
+        let lockout = FAIL_WINDOW
+            .saturating_mul(1u32 << c.strikes.min(10))
+            .min(MAX_LOCKOUT);
+        c.strikes += 1;
+        c.locked_until = Some(now + lockout);
+        c.since = now;
+        c.n = 0;
+        // Saved until the strikes would be forgotten.
+        Some(LimitRec {
+            key: format!("{LOCKOUT_PREFIX}{key}"),
+            since_ms: 0,
+            n: 0,
+            strikes: c.strikes,
+            until_ms: to_wall(now + lockout),
+            expires_ms: to_wall(now + STRIKE_MEMORY.max(lockout)),
+        })
     }
 
     fn sweep_clients(&mut self, now: Instant) {
@@ -375,7 +438,7 @@ async fn create(
     headers: HeaderMap,
     Json(req): Json<CreateReq>,
 ) -> Result<Json<Value>, AppError> {
-    let user = signed_in(&s, &headers)?;
+    let user = signed_in(&s, &headers).await?;
     let claim = req.claim.to_ascii_lowercase();
     if !is_claim(&claim) {
         return Err(AppError::BadRequest("claim must be 64 hex digits".into()));
@@ -474,16 +537,6 @@ async fn claim(
     let client = client_key(client_ip(peer, &headers));
     let lim = s.limits;
     let now = Instant::now();
-    let mut inner = s.inner.lock().unwrap();
-    inner.purge(now);
-    let wait = inner.client_wait(&client, now, &lim);
-    if !wait.is_zero() {
-        return Err(AppError::RateLimited(
-            wait,
-            "too many wrong tries from here, wait a while".into(),
-        ));
-    }
-
     let claim = req
         .claim
         .map(|c| c.trim().to_ascii_lowercase())
@@ -491,30 +544,62 @@ async fn claim(
     let code: Option<String> = req
         .code
         .map(|c| c.chars().filter(|c| c.is_ascii_digit()).collect());
-    let found = inner.pairings.iter().find_map(|(uid, p)| {
-        let by_claim = claim.is_some() && p.claim.is_some() && p.claim == claim;
-        let by_code = code.as_ref().is_some_and(|c| c.len() == 6)
-            && p.code == code
-            && !inner.code_locked(p, &lim);
-        (by_claim || by_code).then(|| (uid.clone(), by_code))
-    });
-    let Some((uid, by_code)) = found else {
-        // A wrong QR claim guesses nothing (2^256), so it counts only
-        // against its own address; anything else is a guess at the codes.
-        let guessed_code = code.as_ref().is_some_and(|c| c.len() == 6) || claim.is_none();
-        inner.failed(client, guessed_code, now, &lim);
+    // The pairing it matches, if any (`by_code`: matched by the code).
+    let matches = |inner: &Inner, uid: &str, by_code: bool| -> bool {
+        inner.pairings.get(uid).is_some_and(|p| {
+            if by_code {
+                code.as_ref().is_some_and(|c| c.len() == 6)
+                    && p.code == code
+                    && !inner.code_locked(p, &lim)
+            } else {
+                claim.is_some() && p.claim == claim
+            }
+        })
+    };
+    let (uid, by_code, username) = {
+        let mut inner = s.inner.lock().unwrap();
+        inner.purge(now);
+        let wait = inner.client_wait(&client, now, &lim);
+        if !wait.is_zero() {
+            return Err(AppError::RateLimited(
+                wait,
+                "too many wrong tries from here, wait a while".into(),
+            ));
+        }
+        let found = inner.pairings.iter().find_map(|(uid, p)| {
+            let by_claim = matches(&inner, uid, false);
+            let by_code = matches(&inner, uid, true);
+            (by_claim || by_code).then(|| (uid.clone(), by_code, p.username.clone()))
+        });
+        let Some(found) = found else {
+            // A wrong QR claim guesses nothing (2^256), so it counts only
+            // against its own address; anything else is a guess at the codes.
+            let guessed_code = code.as_ref().is_some_and(|c| c.len() == 6) || claim.is_none();
+            if let Some(rec) = inner.failed(client, guessed_code, now, &lim) {
+                s.sessions.store().put_limit(rec);
+            }
+            return Err(AppError::Gone(
+                "this join code has expired or was already used".into(),
+            ));
+        };
+        found
+    };
+    // Issued at the account's token version (a store read, so outside the
+    // lock), then the pairing is checked again before it's spent.
+    let token = s.sessions.issue(&uid, &username).await?;
+    let mut inner = s.inner.lock().unwrap();
+    if !matches(&inner, &uid, by_code) {
         return Err(AppError::Gone(
             "this join code has expired or was already used".into(),
         ));
-    };
-    let p = inner.pairings.get_mut(&uid).expect("found above");
+    }
+    let p = inner.pairings.get_mut(&uid).expect("checked above");
     let name = req.name.trim().chars().take(64).collect::<String>();
     let name = if name.is_empty() {
         "A new device".to_string()
     } else {
         name
     };
-    let token = make_token(&s.jwt_secret, &uid, &p.username)?;
     // Single use: neither the claim nor the code works again.
     p.claim = None;
     p.code = None;
@@ -528,7 +613,7 @@ async fn claim(
 }
 
 async fn status(State(s): State<PairState>, headers: HeaderMap) -> Result<Json<Value>, AppError> {
-    let user = signed_in(&s, &headers)?;
+    let user = signed_in(&s, &headers).await?;
     let mut inner = s.inner.lock().unwrap();
     inner.purge(Instant::now());
     let locked = inner
@@ -551,7 +636,7 @@ async fn status(State(s): State<PairState>, headers: HeaderMap) -> Result<Json<V
 }
 
 async fn cancel(State(s): State<PairState>, headers: HeaderMap) -> Result<StatusCode, AppError> {
-    let user = signed_in(&s, &headers)?;
+    let user = signed_in(&s, &headers).await?;
     s.inner.lock().unwrap().pairings.remove(&user.user_id);
     Ok(StatusCode::NO_CONTENT)
 }
@@ -611,7 +696,7 @@ mod tests {
 
     #[tokio::test]
     async fn create_needs_a_session_and_a_proper_claim() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (c, _) = post(&base, "/pair/create", None, json!({"claim": claim_hex(1)})).await;
         assert_eq!(c, 401);
         let (c, _) = post(
@@ -647,7 +732,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_qr_claim_signs_in_the_same_account_once() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let ann = tok("ann");
         post(
             &base,
@@ -667,8 +752,8 @@ mod tests {
         assert_eq!(v["username"], "ann");
         // The code box is only for a typed code.
         assert!(v["code_box"].is_null());
-        let session = verify_token(SECRET, v["token"].as_str().unwrap()).unwrap();
-        assert_eq!(session.user_id, "id-ann");
+        let session = crate::session::decode_token(SECRET, v["token"].as_str().unwrap()).unwrap();
+        assert_eq!(session.sub, "id-ann");
         // Single use.
         let (c, _) = post(
             &base,
@@ -687,7 +772,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_typed_code_works_once_and_hands_over_the_box() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (_, v) = post(
             &base,
             "/pair/create",
@@ -721,7 +806,7 @@ mod tests {
 
     #[tokio::test]
     async fn the_device_may_pick_the_code_but_not_one_in_use() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (c, v) = post(
             &base,
             "/pair/create",
@@ -760,7 +845,7 @@ mod tests {
 
     #[tokio::test]
     async fn chosen_codes_cannot_be_walked_to_find_another_accounts_pairing() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (c, _) = post(
             &base,
             "/pair/create",
@@ -798,7 +883,7 @@ mod tests {
     #[tokio::test]
     async fn an_expired_pairing_cannot_be_claimed() {
         let base = start(PairState::with_ttl(
-            SECRET.into(),
+            Sessions::test(SECRET),
             Duration::from_millis(150),
         ))
         .await;
@@ -819,7 +904,7 @@ mod tests {
 
     #[tokio::test]
     async fn another_account_cannot_see_or_cancel_it_and_a_new_one_replaces_it() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (ann, bob) = (tok("ann"), tok("bob"));
         post(
             &base,
@@ -859,7 +944,7 @@ mod tests {
 
     #[tokio::test]
     async fn failed_claims_are_rate_limited() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         let (_, v) = post(
             &base,
             "/pair/create",
@@ -909,7 +994,7 @@ mod tests {
 
     #[tokio::test]
     async fn a_lockout_says_when_to_retry() {
-        let base = start(PairState::new(SECRET.into())).await;
+        let base = start(PairState::new(Sessions::test(SECRET))).await;
         for _ in 0..FAILS_PER_CLIENT {
             let r = claim_from(&base, "198.51.100.1", json!({"code": "000000"})).await;
             assert_eq!(r.status().as_u16(), 410);
@@ -934,7 +1019,7 @@ mod tests {
             fails_global: 20,
             code_lock_after: 1000,
         };
-        let base = start(PairState::with(SECRET.into(), PAIR_TTL, lim)).await;
+        let base = start(PairState::with(Sessions::test(SECRET), PAIR_TTL, lim)).await;
         let (_, v) = post(
             &base,
             "/pair/create",
@@ -986,7 +1071,7 @@ mod tests {
             fails_global: 1000,
             code_lock_after: 30,
         };
-        let base = start(PairState::with(SECRET.into(), PAIR_TTL, lim)).await;
+        let base = start(PairState::with(Sessions::test(SECRET), PAIR_TTL, lim)).await;
         let ann = tok("ann");
         let (_, v) = post(
             &base,
@@ -1062,6 +1147,49 @@ mod tests {
         t += STRIKE_MEMORY + Duration::from_secs(61);
         inner.failed("c".into(), false, t, &lim);
         assert_eq!(inner.clients.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_lockout_and_its_strikes_survive_a_restart() {
+        let lim = PairLimits {
+            fails_per_client: 3,
+            fails_global: 1_000_000,
+            code_lock_after: 1_000_000,
+        };
+        let sessions = Sessions::test(SECRET);
+        let before = PairState::with(sessions.clone(), PAIR_TTL, lim);
+        let base = start(before.clone()).await;
+        for _ in 0..3 {
+            let r = claim_from(&base, "198.51.100.20", json!({"code": "123456"})).await;
+            assert_eq!(r.status().as_u16(), 410);
+        }
+        let r = claim_from(&base, "198.51.100.20", json!({"code": "123456"})).await;
+        assert_eq!(r.status().as_u16(), 429);
+        assert_eq!(before.stats()["addresses_locked_out"], 1);
+
+        // A new server on the same store.
+        let after = PairState::with(sessions, PAIR_TTL, lim);
+        assert_eq!(after.restore().await.unwrap(), 1);
+        let base = start(after.clone()).await;
+        let r = claim_from(&base, "198.51.100.20", json!({"code": "123456"})).await;
+        assert_eq!(r.status().as_u16(), 429, "still locked out");
+        let secs: u64 = r.headers()["retry-after"]
+            .to_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((55..=60).contains(&secs), "{secs}");
+        let r = claim_from(&base, "198.51.100.21", json!({"code": "123456"})).await;
+        assert_eq!(r.status().as_u16(), 410, "another address isn't");
+        // The strike count came back too: the next lockout is two minutes.
+        let key = client_key("198.51.100.20".parse().unwrap());
+        let mut inner = after.inner.lock().unwrap();
+        assert_eq!(inner.clients[&key].strikes, 1);
+        let t = Instant::now() + Duration::from_secs(61);
+        for _ in 0..3 {
+            inner.failed(key.clone(), true, t, &lim);
+        }
+        assert_eq!(inner.client_wait(&key, t, &lim).as_secs(), 120);
     }
 
     #[test]

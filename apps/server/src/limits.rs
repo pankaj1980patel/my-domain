@@ -1,14 +1,66 @@
 //! Small in-memory limiters shared by the handlers: a token bucket per key, a
 //! fixed-window counter per key, and a "seen lately" set. Every map expires
 //! idle entries and is capped, so a flood of new keys (addresses, accounts)
-//! can't grow server memory without end.
+//! can't grow server memory without end. `StoredWindows` (daily counters)
+//! also writes through to the store, so a restart keeps them.
 //!
 //! Tunables come from the environment (see `apps/server/README.md`, "Limits").
 
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::net::IpAddr;
 use std::str::FromStr;
-use std::time::{Duration, Instant};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+
+use crate::store::{LimitRec, Store};
+
+/// The key a client address is limited under: the address, or for IPv6 its
+/// /64 (one subscriber usually holds a whole /64).
+pub fn client_key(ip: IpAddr) -> String {
+    match ip {
+        IpAddr::V4(v4) => v4.to_string(),
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => v4.to_string(),
+            None => {
+                let s = v6.segments();
+                format!("{:x}:{:x}:{:x}:{:x}::/64", s[0], s[1], s[2], s[3])
+            }
+        },
+    }
+}
+
+/// Milliseconds since the Unix epoch.
+pub fn wall_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// `t` as wall-clock ms. Measured from one moment fixed for the process, so
+/// the same `Instant` always gives the same value (a window's start names
+/// its record).
+pub fn to_wall(t: Instant) -> i64 {
+    static ANCHOR: std::sync::OnceLock<(Instant, i64)> = std::sync::OnceLock::new();
+    let (at, at_ms) = *ANCHOR.get_or_init(|| (Instant::now(), wall_ms()));
+    if t >= at {
+        at_ms + (t - at).as_millis() as i64
+    } else {
+        at_ms - (at - t).as_millis() as i64
+    }
+}
+
+/// Wall-clock `ms` as an `Instant` (`None` if this process can't express
+/// it, which only happens for long-gone times).
+pub fn from_wall(ms: i64, now: Instant, now_ms: i64) -> Option<Instant> {
+    let d = Duration::from_millis(ms.abs_diff(now_ms));
+    if ms >= now_ms {
+        now.checked_add(d)
+    } else {
+        now.checked_sub(d)
+    }
+}
 
 /// `name` from the environment parsed as `T`, else `default` (also when it
 /// doesn't parse, or is zero/negative for numbers: limits are never off).
@@ -184,9 +236,107 @@ impl<K: Eq + Hash + Clone> Windows<K> {
         }
     }
 
-    #[cfg(test)]
+    /// The window start and count for `key`, if it has a current window.
+    pub fn get(&self, key: &K, now: Instant) -> Option<(Instant, u32)> {
+        self.map
+            .get(key)
+            .filter(|(since, _)| now.saturating_duration_since(*since) < self.window)
+            .copied()
+    }
+
+    /// Put back a window read from storage (after a restart).
+    pub fn restore(&mut self, key: K, since: Instant, n: u32) {
+        self.map.insert(key, (since, n));
+    }
+
     pub fn len(&self) -> usize {
         self.map.len()
+    }
+}
+
+/// `Windows` that outlive a restart: every count is written through to the
+/// store (one record per key and window, expiring with it) and read back by
+/// `restore` at startup. Used for the daily counters.
+pub struct StoredWindows {
+    prefix: &'static str,
+    window: Duration,
+    map: Mutex<Windows<String>>,
+    store: Arc<dyn Store>,
+}
+
+impl StoredWindows {
+    pub fn new(
+        prefix: &'static str,
+        window: Duration,
+        max_keys: usize,
+        store: Arc<dyn Store>,
+    ) -> Self {
+        StoredWindows {
+            prefix,
+            window,
+            map: Mutex::new(Windows::new(window, max_keys)),
+            store,
+        }
+    }
+
+    pub fn count(&self, key: &str, now: Instant) -> u32 {
+        self.map.lock().unwrap().count(&key.to_string(), now)
+    }
+
+    pub fn resets_in(&self, key: &str, now: Instant) -> Duration {
+        self.map.lock().unwrap().resets_in(&key.to_string(), now)
+    }
+
+    /// Count one event for `key`, here and (in the background) in the store.
+    pub fn add(&self, key: &str, now: Instant) {
+        let key = key.to_string();
+        let (since, n) = {
+            let mut m = self.map.lock().unwrap();
+            m.add(&key, now);
+            m.get(&key, now).unwrap_or((now, 1))
+        };
+        let since_ms = to_wall(since);
+        self.store.put_limit(LimitRec {
+            key: format!("{}{key}", self.prefix),
+            since_ms,
+            n,
+            strikes: 0,
+            until_ms: 0,
+            expires_ms: since_ms + self.window.as_millis() as i64,
+        });
+    }
+
+    /// Read back the windows still running (the latest per key); how many.
+    pub async fn restore(&self) -> Result<usize, crate::error::AppError> {
+        let recs = self.store.load_limits(self.prefix).await?;
+        let (now, now_ms) = (Instant::now(), wall_ms());
+        let mut m = self.map.lock().unwrap();
+        let mut restored = 0;
+        for r in recs {
+            if r.expires_ms <= now_ms {
+                continue;
+            }
+            let Some(since) = from_wall(r.since_ms, now, now_ms) else {
+                continue;
+            };
+            let Some(key) = r.key.strip_prefix(self.prefix).map(str::to_string) else {
+                continue;
+            };
+            let newer = match m.get(&key, now) {
+                Some((s, n)) => since > s || (since == s && r.n > n),
+                None => true,
+            };
+            if newer {
+                m.restore(key, since, r.n);
+                restored += 1;
+            }
+        }
+        Ok(restored)
+    }
+
+    /// Keys with a window (for `/admin/limits`).
+    pub fn len(&self) -> usize {
+        self.map.lock().unwrap().len()
     }
 }
 
