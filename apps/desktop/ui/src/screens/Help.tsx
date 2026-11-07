@@ -182,6 +182,7 @@ export default function Help(props: { topic?: string; onTopic: (id: string) => v
                 <strong>{t(c.title)}</strong>
                 <span class="muted small">{t(c.body)}</span>
               </span>
+              <Icon name="chevron-right" />
             </button>
           )}
         </For>

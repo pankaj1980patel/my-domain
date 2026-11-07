@@ -14,6 +14,7 @@ import DeviceArt from "../components/DeviceArt";
 import { pageKind } from "../lib/pageLayout";
 import NotificationHistory from "./device/NotificationHistory";
 import { AppsTile, ChatTile, NotificationsTile } from "./Device";
+import { PageHelp } from "../help/HelpLink";
 
 type Tab = "messages" | "notifications" | "apps";
 
@@ -71,6 +72,7 @@ export default function Messages(props: { onOpen: (node: string) => void }) {
           <h1>{t("msg.title")}</h1>
           <p class="muted">{t("msg.sub")}</p>
         </div>
+        <PageHelp topic="messages-clipboard" />
       </header>
       <Tabs
         label={t("msg.title")}

@@ -41,7 +41,7 @@ import { Bell, done, snooze, SnoozeButtons } from "../components/NoteReminders";
 import { friendlyError, niceName, timeAgo } from "../lib/words";
 import { Empty, toast } from "../components/ui";
 import { LABEL_COLORS } from "../components/DeviceLabel";
-import { HelpLink } from "../help/HelpLink";
+import { PageHelp } from "../help/HelpLink";
 import { t, type Key } from "../i18n";
 import { ToolTabs, type Tool } from "../components/ToolTabs";
 
@@ -127,7 +127,7 @@ export default function Notes(props: { request?: NoteRequest; onTool?: (tool: To
         </span>
         <div class="grow">
           <h1>
-            {t("notes.title")} <HelpLink topic="notes" />
+            {t("notes.title")}
           </h1>
           <p class="muted">{t("notes.subtitle")}</p>
           {/* Notes are kept on all your devices: a status line, not a button-like chip. */}
@@ -139,6 +139,7 @@ export default function Notes(props: { request?: NoteRequest; onTool?: (tool: To
         <button class="btn btn-primary btn-sm" onClick={() => show(null)}>
           {t("notes.new")}
         </button>
+        <PageHelp topic="notes" />
       </header>
       <ToolTabs selected="notes" onSelect={props.onTool} />
       <div class="notes-layout">

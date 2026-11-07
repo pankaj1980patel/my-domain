@@ -9,6 +9,7 @@ import { joinAccount, signIn } from "../lib/core";
 import { friendlyError } from "../lib/words";
 import { t } from "../i18n";
 import { logoSrc, Tagline, Wordmark } from "../components/Brand";
+import { Icon } from "../components/Icon";
 
 const DEFAULT_SERVER = "https://mydomain.servehttp.com";
 
@@ -21,6 +22,8 @@ export default function SignIn(props: { onDone: () => void }) {
   const [pass, setPass] = createSignal("");
   const [key, setKey] = createSignal("");
   const [advanced, setAdvanced] = createSignal(false);
+  const [showPass, setShowPass] = createSignal(false);
+  const [showKey, setShowKey] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal("");
 
@@ -114,24 +117,30 @@ export default function SignIn(props: { onDone: () => void }) {
           </label>
           <label class="field">
             <span>{t("signIn.password")}</span>
-            <input
-              type="password"
-              value={pass()}
-              onInput={(e) => setPass(e.currentTarget.value)}
-              autocomplete={create() ? "new-password" : "current-password"}
-              aria-invalid={!!error() && !pass()}
-            />
+            <span class="field-with-btn">
+              <input
+                type={showPass() ? "text" : "password"}
+                value={pass()}
+                onInput={(e) => setPass(e.currentTarget.value)}
+                autocomplete={create() ? "new-password" : "current-password"}
+                aria-invalid={!!error() && !pass()}
+              />
+              <RevealButton shown={showPass()} onToggle={() => setShowPass(!showPass())} what={t("signIn.password")} />
+            </span>
           </label>
           <label class="field">
             <span>{t("signIn.deviceKey")}</span>
             <div class="field-row">
-              <input
-                type="password"
-                value={key()}
-                onInput={(e) => setKey(e.currentTarget.value)}
-                aria-describedby="signin-key-hint"
-                aria-invalid={!!error() && !key().trim()}
-              />
+              <span class="field-with-btn">
+                <input
+                  type={showKey() ? "text" : "password"}
+                  value={key()}
+                  onInput={(e) => setKey(e.currentTarget.value)}
+                  aria-describedby="signin-key-hint"
+                  aria-invalid={!!error() && !key().trim()}
+                />
+                <RevealButton shown={showKey()} onToggle={() => setShowKey(!showKey())} what={t("signIn.deviceKey")} />
+              </span>
               <Show when={create()}>
                 <button type="button" class="btn btn-ghost btn-sm" onClick={async () => setKey(await commands.generateKey())}>
                   {t("signIn.generate")}
@@ -141,16 +150,6 @@ export default function SignIn(props: { onDone: () => void }) {
             <small class="muted" id="signin-key-hint">
               {t("signIn.keyHint")}
             </small>
-          </label>
-        </Show>
-
-        <button type="button" class="link" onClick={() => setAdvanced(!advanced())} aria-expanded={advanced()}>
-          {advanced() ? t("signIn.hideAdvanced") : t("signIn.advanced")}
-        </button>
-        <Show when={advanced()}>
-          <label class="field">
-            <span>{t("signIn.server")}</span>
-            <input value={server()} onInput={(e) => setServer(e.currentTarget.value)} />
           </label>
         </Show>
 
@@ -171,7 +170,8 @@ export default function SignIn(props: { onDone: () => void }) {
                 ? t("signIn.createAccount")
                 : t("signIn.signIn")}
         </button>
-        <p class="center">
+        {/* Below the primary: join with a code, and Advanced (the server). */}
+        <p class="center signin-links">
           <button
             type="button"
             class="link"
@@ -182,7 +182,17 @@ export default function SignIn(props: { onDone: () => void }) {
           >
             {join() ? t("signIn.usePassword") : t("signIn.joinWithCode")}
           </button>
+          <span aria-hidden="true">·</span>
+          <button type="button" class="link" onClick={() => setAdvanced(!advanced())} aria-expanded={advanced()}>
+            {advanced() ? t("signIn.hideAdvanced") : t("signIn.advanced")}
+          </button>
         </p>
+        <Show when={advanced()}>
+          <label class="field">
+            <span>{t("signIn.server")}</span>
+            <input value={server()} onInput={(e) => setServer(e.currentTarget.value)} />
+          </label>
+        </Show>
         <p class="muted center" hidden={join()}>
           {create() ? t("signIn.haveAccount") : t("signIn.newHere")}{" "}
           <button type="button" class="link" onClick={() => setCreate(!create())}>
@@ -191,5 +201,15 @@ export default function SignIn(props: { onDone: () => void }) {
         </p>
       </form>
     </main>
+  );
+}
+
+/** The eye inside a secret field: show or hide what's typed. */
+function RevealButton(props: { shown: boolean; onToggle: () => void; what: string }) {
+  const label = () => (props.shown ? t("signIn.hide", { what: props.what }) : t("signIn.show", { what: props.what }));
+  return (
+    <button type="button" class="btn btn-ghost btn-sm btn-icon" aria-pressed={props.shown} aria-label={label()} title={label()} onClick={props.onToggle}>
+      <Icon name={props.shown ? "eye-off" : "eye"} size={16} />
+    </button>
   );
 }

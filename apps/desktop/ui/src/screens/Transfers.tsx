@@ -24,6 +24,7 @@ import { Empty, toast } from "../components/ui";
 import { foundId, isFound } from "../lib/search";
 import { t, tn } from "../i18n";
 import { downloads } from "../lib/remoteDownload";
+import { PageHelp } from "../help/HelpLink";
 
 const isMac = /Mac/i.test(navigator.platform || navigator.userAgent);
 /** Speed older than this (no bytes moved) isn't shown. */
@@ -117,6 +118,7 @@ export default function Transfers() {
           {t("files.sendTo")}
           <Icon name="chevron-down" size={16} />
         </MenuButton>
+        <PageHelp topic="files" />
       </header>
       <Tabs
         label={t("files.pageTitle")}

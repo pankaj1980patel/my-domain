@@ -26,7 +26,7 @@ import {
 } from "../lib/timers";
 import { friendlyError, niceName, clockTime } from "../lib/words";
 import { toast } from "../components/ui";
-import { HelpLink } from "../help/HelpLink";
+import { PageHelp } from "../help/HelpLink";
 import { t, tn } from "../i18n";
 import { ToolTabs, type Tool } from "../components/ToolTabs";
 
@@ -258,13 +258,14 @@ export default function Timers(props: { onTool?: (tool: Tool) => void }) {
         </span>
         <div class="grow">
           <h1>
-            {t("timers.title")} <HelpLink topic="timers" />
+            {t("timers.title")}
           </h1>
           <p class="muted">{t("timers.subtitle")}</p>
         </div>
         <Show when={running() > 0}>
           <span class="badge">{tn("timers.running", running())}</span>
         </Show>
+        <PageHelp topic="timers" />
       </header>
       <ToolTabs selected="timers" onSelect={props.onTool} />
       <div class="timers-body">

@@ -9,6 +9,7 @@ import { commands } from "../bindings";
 import { callDo, callStatus, duration, KEYPAD, watchCalls, type AudioTarget } from "../lib/calls";
 import { CallAudioPicker } from "./CallAudioPicker";
 import { t } from "../i18n";
+import { Icon } from "./Icon";
 import { rememberFocus } from "../lib/a11y";
 
 /** The incoming-call box: Answer takes focus when it appears (it isn't
@@ -44,9 +45,11 @@ function IncomingCall(props: { who: string; number?: string | null; showNumber: 
       </div>
       <div class="row call-actions">
         <button class="btn call-decline" onClick={() => callDo(commands.callDecline())}>
+          <Icon name="phone-off" size={18} />
           {t("calls.decline")}
         </button>
         <button class="btn btn-primary call-answer" ref={answer} onClick={() => callDo(commands.callAnswer())}>
+          <Icon name="phone" size={18} />
           {t("calls.answer")}
         </button>
       </div>

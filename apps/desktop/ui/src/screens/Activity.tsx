@@ -29,6 +29,7 @@ import { Icon, IconChip } from "../components/Icon";
 import { KIND_TONE } from "../components/RecentActivity";
 import { t } from "../i18n";
 import { dateAndTime } from "../lib/words";
+import { PageHelp } from "../help/HelpLink";
 
 const PAGE = 50;
 const SEARCH_DELAY = 200;
@@ -171,6 +172,7 @@ export default function Activity(props: { onOpen: (target: Exclude<ActivityTarge
             <Icon name="more" />
           </MenuButton>
         </div>
+        <PageHelp topic="activity" />
       </header>
 
       <Show when={choosing()}>

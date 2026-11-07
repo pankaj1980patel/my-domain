@@ -504,7 +504,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   font-size: var(--text-sm);
   font-weight: 550;
   color: var(--text-2);
@@ -899,7 +899,7 @@ input[type="checkbox"][role="switch"]:checked::after {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--s-3);
 }
 .transfer {
   display: flex;
@@ -976,7 +976,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .notif {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
   padding-bottom: var(--s-3);
   border-bottom: 1px solid var(--border);
 }
@@ -1661,7 +1661,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .history-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .history-list {
   display: flex;
@@ -1673,7 +1673,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .history-day {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .history-day-label {
   margin: 0;
@@ -1689,7 +1689,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .history-muted {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
   padding-top: var(--s-3);
   border-top: 1px solid var(--border);
 }
@@ -1834,7 +1834,7 @@ input[type="checkbox"][role="switch"]:checked::after {
 .clip-log {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--s-2);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -3207,7 +3207,7 @@ input[type="checkbox"][role="switch"]:not(:checked) {
 }
 .note-colors {
   display: flex;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .note-swatch {
   width: 22px;
@@ -3430,7 +3430,7 @@ html:lang(ta) body {
 .notes-filter {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .note-bell {
   flex: none;
@@ -3869,7 +3869,7 @@ html.qp-window body {
 .wake-row .btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .wake-spin {
   width: 12px;
@@ -3917,7 +3917,7 @@ html.qp-window body {
   margin: 8px 0 12px;
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .backup-section {
   display: flex;
@@ -4650,7 +4650,7 @@ html.kvm-window body {
 }
 
 /* Settings: removed devices (components/RemovedDevices.tsx). */
-.removed-list { display: flex; flex-direction: column; gap: 10px; }
+.removed-list { display: flex; flex-direction: column; gap: var(--s-3); }
 .removed-row { align-items: center; gap: 8px; }
 .removed-row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 
@@ -4733,7 +4733,7 @@ html.kvm-window body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .btn-block {
   display: flex;
@@ -4945,7 +4945,7 @@ html.kvm-window body {
   font-weight: 650;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   flex: none;
   padding: 10px var(--s-3);
   color: var(--text-2);
@@ -4963,9 +4963,6 @@ html.kvm-window body {
 .tab[aria-selected="true"] {
   color: var(--accent-fg);
   border-bottom-color: var(--accent);
-}
-.tab:focus-visible {
-  outline-offset: -2px;
 }
 .tab-count {
   font-size: var(--text-xs);
@@ -5247,7 +5244,7 @@ html.kvm-window body {
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   height: 34px;
   padding: 0 var(--s-3);
   color: var(--text-2);
@@ -5506,7 +5503,7 @@ html.kvm-window body {
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   height: 30px;
   padding: 0 var(--s-3);
   border-radius: var(--r-full);
@@ -5722,9 +5719,6 @@ html.kvm-window body {
 .tab[aria-selected="true"] .tab-count {
   background: color-mix(in srgb, var(--on-primary) 22%, transparent);
   color: var(--on-primary);
-}
-.tab:focus-visible {
-  outline-offset: 2px;
 }
 
 /* --- device hero ------------------------------------------------------------------ */
@@ -6116,7 +6110,9 @@ html.kvm-window body {
 }
 
 /* --- narrow ----------------------------------------------------------------------------- */
-@media (max-width: 1100px) {
+/* With the sidebar a rail at 1100 px, the dashboard keeps its right
+   column down to 900 px. */
+@media (max-width: 900px) {
   .dash {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -6214,7 +6210,7 @@ html.kvm-window body {
   height: 38px;
 }
 .dash-checks {
-  gap: 6px;
+  gap: var(--s-2);
 }
 .hero-side {
   flex-wrap: wrap;
@@ -6349,7 +6345,7 @@ html.kvm-window body {
   font-weight: 650;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   height: 34px;
   padding: 0 var(--s-3);
   color: var(--text-2);
@@ -6418,7 +6414,7 @@ html.kvm-window body {
   flex: 1;
   min-width: 0;
   display: grid;
-  gap: 6px;
+  gap: var(--s-2);
   align-content: start;
 }
 .home-card-top {
@@ -6467,7 +6463,7 @@ html.kvm-window body {
 .home-statline > span {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--s-1);
   min-width: 0;
 }
 .home-statline .icon {
@@ -6476,7 +6472,7 @@ html.kvm-window body {
 .home-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--s-2);
   margin-top: 2px;
 }
 .home-actions .btn {
@@ -6520,7 +6516,7 @@ html.kvm-window body {
   margin: 0;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--s-2);
   font-weight: 600;
 }
 .home-status .hero-dot {
@@ -6535,12 +6531,12 @@ html.kvm-window body {
 }
 .home-stats-chips {
   display: flex;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .home-stat {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: var(--s-1);
   height: 30px;
   min-width: 70px;
   padding: 0 var(--s-2);
@@ -6554,7 +6550,7 @@ html.kvm-window body {
 }
 .home-round {
   display: flex;
-  gap: 6px;
+  gap: var(--s-2);
 }
 .round-btn {
   display: grid;
@@ -6628,7 +6624,7 @@ html.kvm-window body {
 }
 .quick-list {
   grid-template-columns: minmax(0, 1fr);
-  gap: 6px;
+  gap: var(--s-2);
 }
 .quick-list .quick-tile {
   min-height: 0;
@@ -6732,11 +6728,11 @@ html.kvm-window body {
   }
 }
 .nav-item {
-  gap: 10px;
+  gap: var(--s-3);
 }
 .home-actions .btn {
   padding: 0 8px;
-  gap: 5px;
+  gap: var(--s-1);
 }
 @media (min-width: 721px) {
   .sidebar {
@@ -6752,7 +6748,7 @@ html.kvm-window body {
   gap: var(--s-3);
 }
 .home-actions {
-  gap: 5px;
+  gap: var(--s-1);
 }
 .home-actions .btn {
   font-size: var(--text-xs);
@@ -7493,7 +7489,7 @@ html.kvm-window body {
 }
 .hero-side .hero-actions,
 .hero-side .hero-link {
-  max-width: 180px;
+  max-width: 220px;
   min-width: 0;
 }
 .hero-side .hero-link {
@@ -7723,12 +7719,15 @@ html.kvm-window body {
 }
 .dash .stat-row .ring,
 .dash .stat-row .icon-chip {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
 }
 .dash .stat-row .ring-gauge {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
+}
+.dash .stat-row .stat-card {
+  gap: var(--s-1);
 }
 .dash .stat-row .stat-text > * {
   max-width: 100%;
@@ -7953,13 +7952,17 @@ html.kvm-window body {
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: var(--s-3);
   align-items: center;
-  padding-left: 36px;
 }
 .settings-cat .switch-row:not(.set-row) + p.muted.small,
 .device-page .switch-row:not(.set-row) + p.muted.small {
   margin-top: calc(-1 * var(--s-2));
-  padding-left: 36px;
   padding-right: 56px;
+}
+/* In a card whose other rows have icons, an icon-less row's text starts at
+   the same x as theirs. */
+.tile:has(.set-icon) > .switch-row:not(.set-row),
+.tile:has(.set-icon) > .switch-row:not(.set-row) + p.muted.small {
+  padding-left: 36px;
 }
 .device-page .tile > .switch-row:not(.set-row) {
   padding-left: 0;
@@ -8126,4 +8129,283 @@ html.kvm-window body {
 .add-device-open {
   justify-self: start;
   align-self: flex-start;
+}
+
+/* --- device header (DEV-4, DEV-6) --------------------------------------------
+   Overview: the full hero. Other tabs: one slim line, so the tab's content
+   starts near the top. */
+.device-hero-slim {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s-3);
+}
+.device-hero-slim .device-art {
+  width: 56px;
+  height: 56px;
+}
+.device-hero-slim .hero-main {
+  padding-top: 0;
+  gap: 0;
+}
+.device-hero-slim .hero-main .label-title h1 {
+  font-size: var(--text-xl);
+}
+.device-hero-slim .hero-status,
+.device-hero-slim .hero-facts,
+.device-hero-slim .hero-chips {
+  display: none;
+}
+.device-hero-slim .hero-side {
+  padding-top: 0;
+}
+.device-info-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s-1) var(--s-3);
+  margin: 0;
+}
+.device-info-list dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- Remote control (DEV-7): titled cards on one grid, scrolling inside the
+   panel when taller than the window. */
+.control-groups {
+  display: grid;
+  columns: auto;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--s-3);
+  align-items: start;
+  max-height: calc(100vh - 330px);
+  overflow-y: auto;
+  padding: 2px;
+}
+.control-group {
+  margin-bottom: 0;
+}
+.locate-row {
+  display: grid;
+  gap: var(--s-2);
+}
+.control-group .call-subhead {
+  margin: var(--s-2) 0 0;
+  font-size: var(--text-sm);
+}
+
+/* --- narrow window (G-5): at 1100 px and under, the sidebar is a 72 px icon
+   rail (names as tooltips and for screen readers, counts kept as small
+   badges). Its toggle opens it as an overlay with the names. The window's
+   minimum is 960 × 640 (tauri.conf.json). */
+.rail-toggle {
+  display: none;
+}
+.rail-backdrop {
+  display: none;
+}
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+  .sidebar {
+    position: relative;
+    z-index: 30;
+    width: 72px;
+    padding: var(--s-3) var(--s-2);
+    align-items: center;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .rail-toggle {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: var(--r-md);
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+  }
+  .rail-toggle:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+  .sidebar:not(.rail-open) .brand {
+    padding: var(--s-1) 0 var(--s-3);
+  }
+  .sidebar:not(.rail-open) .brand-text,
+  .sidebar:not(.rail-open) .nav-label,
+  .sidebar:not(.rail-open) .this-device-text,
+  .sidebar:not(.rail-open) .this-device > .icon,
+  .sidebar:not(.rail-open) .quiet-badge,
+  .sidebar:not(.rail-open) .sound-badge-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .sidebar:not(.rail-open) .nav-list {
+    width: 100%;
+  }
+  .sidebar:not(.rail-open) .nav-item {
+    position: relative;
+    justify-content: center;
+    padding: 10px 0;
+  }
+  .sidebar:not(.rail-open) .nav-count {
+    position: absolute;
+    top: 2px;
+    right: 4px;
+    margin: 0;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: center;
+  }
+  .sidebar:not(.rail-open) .nav-divider {
+    width: 32px;
+    margin: var(--s-2) auto;
+  }
+  .sidebar:not(.rail-open) .this-device {
+    justify-content: center;
+    padding: var(--s-2) 0;
+  }
+  .sidebar:not(.rail-open) .this-device-icon {
+    width: 44px;
+  }
+  /* Open: the full sidebar over the page, a dim backdrop behind it. */
+  .sidebar.rail-open {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 280px;
+    align-items: stretch;
+    box-shadow: var(--shadow-2, 0 12px 40px rgba(0, 0, 0, 0.45));
+    background: var(--surface-solid, var(--surface));
+  }
+  .sidebar.rail-open .rail-toggle {
+    align-self: flex-end;
+  }
+  .rail-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+/* Security stat tiles: chip, value and label stacked, each on one line. */
+.sec-stats .stat-card {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-2);
+}
+.sec-stats .stat-text {
+  justify-items: center;
+  max-width: 100%;
+}
+.sec-stats .icon-chip {
+  width: 32px;
+  height: 32px;
+}
+
+/* --- page heads (G-19, G-21) -------------------------------------------------
+   [head tile][title + subtitle][actions][help]: at most one 40 px primary,
+   an optional soft button and a "⋯"; help is the same 36 px ghost "?" on
+   every page. */
+.page-head > .btn,
+.page-head > .menu-wrap > .btn,
+.page-head > div > .btn,
+.page-head .activity-actions .btn {
+  height: 40px;
+}
+.page-help {
+  flex: none;
+  width: 36px;
+  height: 36px !important;
+  padding: 0;
+  color: var(--text-2);
+}
+/* A card's title with its icon: centred on one line (G-20). */
+.tile > h2:has(> .icon),
+.tile-head > h2:has(> .icon),
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.tile > h2 > .icon,
+.tile-head > h2 > .icon {
+  vertical-align: initial;
+}
+
+/* Media controls (DEV-10): round icon buttons, play/pause the big one. */
+.np-buttons {
+  align-items: center;
+  gap: var(--s-3);
+}
+.np-buttons .np-skip {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--r-full);
+}
+.np-buttons .np-play {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: var(--r-full);
+}
+.np-volume .btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.signin-links {
+  display: flex;
+  justify-content: center;
+  gap: var(--s-2);
+  color: var(--text-3);
+}
+.field-row > .field-with-btn {
+  flex: 1 1 auto;
+}
+.field > .field-with-btn,
+.field-row > .field-with-btn {
+  display: block;
+}
+/* Help (HELP-1): the card whose topic is open is marked; topic names take
+   up to two lines. */
+.help-card[aria-current="true"] {
+  box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-bg);
+}
+.help-card > .icon {
+  color: var(--text-3);
+}
+.help-topic {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.battery-chart-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  margin: 0;
+}
+.battery-chart-swatch {
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+  background: var(--success-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 50%, transparent);
 }

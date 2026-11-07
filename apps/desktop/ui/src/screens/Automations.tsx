@@ -13,6 +13,7 @@ import { ScheduleList } from "../components/ScheduleList";
 import { WebhookSetting } from "../components/WebhookSetting";
 import { ShellCommandsSetting } from "../components/ShellCommandsSetting";
 import { LOCAL_PRESETS } from "../lib/presets";
+import { PageHelp } from "../help/HelpLink";
 
 type Tab = "rules" | "schedules" | "hooks";
 
@@ -44,6 +45,7 @@ export default function Automations() {
           <Icon name="quick" />
           {t("auto.newRule")}
         </button>
+        <PageHelp topic="automations" />
       </header>
       <Tabs
         label={t("automation.title")}

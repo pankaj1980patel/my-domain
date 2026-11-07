@@ -2562,7 +2562,6 @@ export const es: Partial<Messages> = {
   "route.title": "Conexión: {route}",
   "home.wakeToSee": "Despiértalo para ver la batería y el almacenamiento",
   "home.connectToSee": "Conéctalo para ver la batería y el almacenamiento",
-  "device.actions": "Acciones",
   "dash.asleepNotice": "{name} está dormido. Despiértalo o conéctalo para ver su batería, almacenamiento y memoria.",
   "dash.offlineNotice": "{name} no está conectado. Conéctalo para ver su batería, almacenamiento y memoria.",
   "chat.more": "Opciones del chat con {name}",
@@ -2590,4 +2589,10 @@ export const es: Partial<Messages> = {
   "setup.short.permissions": "Permisos",
   "setup.short.connection": "Conexión",
   "nav.thisComputer": "Este ordenador",
+  "calls.dialMoved": "Para llamar a un número, usa el teclado en la página del teléfono: Control remoto → Buscar y llamar.",
+  "locate.when": "Localizado {ago} · ±{acc} m",
+  "nav.expand": "Mostrar los nombres del menú",
+  "nav.collapse": "Ocultar los nombres del menú",
+  "signIn.show": "Mostrar {what}",
+  "signIn.hide": "Ocultar {what}",
 };

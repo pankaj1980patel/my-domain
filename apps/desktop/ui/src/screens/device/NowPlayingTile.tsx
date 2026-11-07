@@ -10,6 +10,7 @@ import { createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-j
 import { clock, mediaCommand, peerName, positionAt, state, watchMedia } from "../../lib/core";
 import { t } from "../../i18n";
 import { HelpLink } from "../../help/HelpLink";
+import { Icon } from "../../components/Icon";
 
 /** How often to ask to stay posted (the device keeps a watcher 10 min). */
 const WATCH_EVERY_MS = 4 * 60_000;
@@ -107,30 +108,30 @@ export default function NowPlayingTile(props: { node: string }) {
             >
               <div class="row np-buttons" role="group" aria-label={t("media.controls")}>
                 <button
-                  class="btn btn-soft btn-sm"
+                  class="btn btn-soft np-skip"
                   disabled={cur().canPrev === false}
                   aria-label={t("media.previous")}
                   title={t("media.previous")}
                   onClick={() => cmd("previous", undefined, cur().session)}
                 >
-                  ⏮
+                  <Icon name="skip-back" size={18} />
                 </button>
                 <button
-                  class="btn btn-primary btn-sm"
+                  class="btn btn-primary np-play"
                   aria-label={cur().playing ? t("media.pause") : t("media.play")}
                   title={cur().playing ? t("media.pause") : t("media.play")}
                   onClick={() => cmd(cur().playing ? "pause" : "play", undefined, cur().session)}
                 >
-                  {cur().playing ? "⏸" : "▶"}
+                  <Icon name={cur().playing ? "pause" : "play"} size={20} />
                 </button>
                 <button
-                  class="btn btn-soft btn-sm"
+                  class="btn btn-soft np-skip"
                   disabled={cur().canNext === false}
                   aria-label={t("media.next")}
                   title={t("media.next")}
                   onClick={() => cmd("next", undefined, cur().session)}
                 >
-                  ⏭
+                  <Icon name="skip-forward" size={18} />
                 </button>
               </div>
 
@@ -141,7 +142,7 @@ export default function NowPlayingTile(props: { node: string }) {
                   title={t("media.volumeDown")}
                   onClick={() => cmd("volume_down")}
                 >
-                  −
+                  <Icon name="volume-low" size={18} />
                 </button>
                 <Show
                   when={cur().volumeMax}
@@ -163,7 +164,7 @@ export default function NowPlayingTile(props: { node: string }) {
                   title={t("media.volumeUp")}
                   onClick={() => cmd("volume_up")}
                 >
-                  +
+                  <Icon name="speaker" size={18} />
                 </button>
               </div>
 

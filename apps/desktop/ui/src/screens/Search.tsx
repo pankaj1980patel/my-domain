@@ -11,6 +11,7 @@ import { peerName, state } from "../lib/core";
 import { FOUND_KINDS, KIND_LABEL, queryWords, searchAll, type Found, type FoundGroup, type FoundKind } from "../lib/search";
 import { FoundText } from "../components/Found";
 import { t, tn } from "../i18n";
+import { PageHelp } from "../help/HelpLink";
 
 /** Results per group with every kind shown, and with one kind. */
 const PER_GROUP = 20;
@@ -194,6 +195,7 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
           <h1>{t("search.title")}</h1>
           <p class="muted">{t("search.subtitle")}</p>
         </div>
+        <PageHelp topic="getting-started" />
       </header>
       <div class="search-box">
         <input

@@ -12,7 +12,7 @@ import { peerIcon, peerName, state } from "../lib/core";
 import { DeviceIcon } from "../components/DeviceIcon";
 import { mapView, myEdge, watchMap, type MapDevice, type MapEdge, type MapView } from "../lib/linksMap";
 import { niceName, timeAgo } from "../lib/words";
-import { HelpLink } from "../help/HelpLink";
+import { PageHelp } from "../help/HelpLink";
 import KeyChangeBanner from "../components/KeyChangeBanner";
 import { VerifiedBadge } from "../components/VerifyDevice";
 import { t, type Key } from "../i18n";
@@ -129,10 +129,11 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
         </span>
         <div class="grow">
           <h1>
-            {t("nav.connections")} <HelpLink topic="troubleshooting" />
+            {t("nav.connections")}
           </h1>
           <p class="muted" title={t("map.subtitle")}>{t("map.sub2")}</p>
         </div>
+        <PageHelp topic="troubleshooting" />
       </header>
 
       <Show when={mapView()} fallback={<p class="muted">{t("map.loading")}</p>}>

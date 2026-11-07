@@ -24,7 +24,7 @@ import { peerIcon, peerName, state } from "../lib/core";
 import { DeviceIcon } from "../components/DeviceIcon";
 import { Empty, toast } from "../components/ui";
 import { foundId, foundTarget, isFound } from "../lib/search";
-import { HelpLink } from "../help/HelpLink";
+import { PageHelp } from "../help/HelpLink";
 import { t } from "../i18n";
 import { ToolTabs, type Tool } from "../components/ToolTabs";
 
@@ -95,10 +95,11 @@ export default function ReadLater(props: { onTool?: (tool: Tool) => void }) {
         </span>
         <div class="grow">
           <h1>
-            {t("readLater.title")} <HelpLink topic="read-later" />
+            {t("readLater.title")}
           </h1>
           <p class="muted">{t("readLater.subtitle")}</p>
         </div>
+        <PageHelp topic="read-later" />
       </header>
       <ToolTabs selected="readLater" onSelect={props.onTool} />
 

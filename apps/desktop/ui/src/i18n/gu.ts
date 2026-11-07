@@ -2563,7 +2563,6 @@ export const gu: Partial<Messages> = {
   "route.title": "કનેક્શન: {route}",
   "home.wakeToSee": "બૅટરી અને સ્ટોરેજ જોવા માટે તેને જગાડો",
   "home.connectToSee": "બૅટરી અને સ્ટોરેજ જોવા માટે કનેક્ટ કરો",
-  "device.actions": "ક્રિયાઓ",
   "dash.asleepNotice": "{name} સૂતું છે. તેની બૅટરી, સ્ટોરેજ અને મેમરી જોવા માટે તેને જગાડો અથવા કનેક્ટ કરો.",
   "dash.offlineNotice": "{name} કનેક્ટ નથી. તેની બૅટરી, સ્ટોરેજ અને મેમરી જોવા માટે કનેક્ટ કરો.",
   "chat.more": "{name} સાથેની ચૅટના વિકલ્પો",
@@ -2591,4 +2590,10 @@ export const gu: Partial<Messages> = {
   "setup.short.permissions": "પરવાનગીઓ",
   "setup.short.connection": "કનેક્શન",
   "nav.thisComputer": "આ કમ્પ્યુટર",
+  "calls.dialMoved": "કોઈ નંબર પર કૉલ કરવા માટે ફોનના પેજ પરનું ડાયલ પૅડ વાપરો: રિમોટ કંટ્રોલ → શોધો અને કૉલ કરો.",
+  "locate.when": "{ago} સ્થાન મળ્યું · ±{acc} મી",
+  "nav.expand": "મેનૂનાં નામ બતાવો",
+  "nav.collapse": "મેનૂનાં નામ છુપાવો",
+  "signIn.show": "{what} બતાવો",
+  "signIn.hide": "{what} છુપાવો",
 };

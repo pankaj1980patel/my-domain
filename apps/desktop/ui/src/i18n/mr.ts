@@ -2562,7 +2562,6 @@ export const mr: Partial<Messages> = {
   "route.title": "कनेक्शन: {route}",
   "home.wakeToSee": "बॅटरी व स्टोरेज पाहण्यासाठी ते जागे करा",
   "home.connectToSee": "बॅटरी व स्टोरेज पाहण्यासाठी कनेक्ट करा",
-  "device.actions": "क्रिया",
   "dash.asleepNotice": "{name} झोपले आहे. त्याची बॅटरी, स्टोरेज व मेमोरी पाहण्यासाठी ते जागे करा किंवा कनेक्ट करा.",
   "dash.offlineNotice": "{name} कनेक्ट नाही. त्याची बॅटरी, स्टोरेज व मेमोरी पाहण्यासाठी कनेक्ट करा.",
   "chat.more": "{name} सोबतच्या चॅटचे पर्याय",
@@ -2590,4 +2589,10 @@ export const mr: Partial<Messages> = {
   "setup.short.permissions": "परवानग्या",
   "setup.short.connection": "कनेक्शन",
   "nav.thisComputer": "हा संगणक",
+  "calls.dialMoved": "एखाद्या नंबरवर कॉल करण्यासाठी फोनच्या पेजवरील डायल पॅड वापरा: रिमोट कंट्रोल → शोधा व कॉल करा.",
+  "locate.when": "{ago} स्थान मिळाले · ±{acc} मी",
+  "nav.expand": "मेनूची नावे दाखवा",
+  "nav.collapse": "मेनूची नावे लपवा",
+  "signIn.show": "{what} दाखवा",
+  "signIn.hide": "{what} लपवा",
 };

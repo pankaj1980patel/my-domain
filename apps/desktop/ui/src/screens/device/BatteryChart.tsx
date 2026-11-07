@@ -9,6 +9,7 @@ import { createEffect, createMemo, createSignal, For, on, onCleanup, Show } from
 import { commands, type BatterySample } from "../../bindings";
 import { state } from "../../lib/core";
 import { t } from "../../i18n";
+import { clockTime } from "../../lib/words";
 
 const DAY_S = 24 * 60 * 60;
 /** Further apart than this, the line breaks (the device wasn't heard from). */
@@ -146,7 +147,7 @@ export default function BatteryChart(props: { node: string }) {
                 style={{ left: `${Math.min(85, Math.max(15, (x(p().at) / W) * 100))}%` }}
               >
                 {t(p().charging ? "info.batteryTipCharging" : "info.batteryTip", {
-                  time: new Date(p().at * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+                  time: clockTime(p().at * 1000),
                   level: p().level,
                 })}
               </span>
@@ -158,6 +159,13 @@ export default function BatteryChart(props: { node: string }) {
           <span>{t("info.batteryDayAgo")}</span>
           <span>{t("info.batteryNow")}</span>
         </div>
+        {/* What the shaded stretches are. */}
+        <Show when={charging().length > 0}>
+          <p class="small muted battery-chart-legend">
+            <span class="battery-chart-swatch" aria-hidden="true" />
+            {t("dash.charging")}
+          </p>
+        </Show>
         <Show when={guess()}>{(g) => <p class="small muted battery-chart-guess">{g()}</p>}</Show>
       </div>
     </Show>

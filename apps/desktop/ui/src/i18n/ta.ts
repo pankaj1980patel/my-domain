@@ -2562,7 +2562,6 @@ export const ta: Partial<Messages> = {
   "route.title": "இணைப்பு: {route}",
   "home.wakeToSee": "பேட்டரியும் சேமிப்பகமும் பார்க்க அதை எழுப்பு",
   "home.connectToSee": "பேட்டரியும் சேமிப்பகமும் பார்க்க இணை",
-  "device.actions": "செயல்கள்",
   "dash.asleepNotice": "{name} உறக்கத்தில் உள்ளது. அதன் பேட்டரி, சேமிப்பகம், நினைவகத்தைப் பார்க்க அதை எழுப்பு அல்லது இணை.",
   "dash.offlineNotice": "{name} இணைக்கப்படவில்லை. அதன் பேட்டரி, சேமிப்பகம், நினைவகத்தைப் பார்க்க இணை.",
   "chat.more": "{name} உடனான அரட்டை விருப்பங்கள்",
@@ -2590,4 +2589,10 @@ export const ta: Partial<Messages> = {
   "setup.short.permissions": "அனுமதிகள்",
   "setup.short.connection": "இணைப்பு",
   "nav.thisComputer": "இந்தக் கணினி",
+  "calls.dialMoved": "ஒரு எண்ணை அழைக்க, ஃபோனின் பக்கத்தில் உள்ள டயல் பேடைப் பயன்படுத்துங்கள்: ரிமோட் கட்டுப்பாடு → கண்டுபிடி & அழை.",
+  "locate.when": "{ago} இருப்பிடம் கண்டறியப்பட்டது · ±{acc} மீ",
+  "nav.expand": "பட்டியலின் பெயர்களைக் காட்டு",
+  "nav.collapse": "பட்டியலின் பெயர்களை மறை",
+  "signIn.show": "{what} ஐக் காட்டு",
+  "signIn.hide": "{what} ஐ மறை",
 };

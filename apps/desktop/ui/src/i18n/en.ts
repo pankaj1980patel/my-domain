@@ -2574,7 +2574,6 @@ export const en = {
   "route.title": "Connection: {route}",
   "home.wakeToSee": "Wake it to see battery and storage",
   "home.connectToSee": "Connect to see battery and storage",
-  "device.actions": "Actions",
   "dash.asleepNotice": "{name} is asleep. Wake or connect it to see its battery, storage and memory.",
   "dash.offlineNotice": "{name} isn't connected. Connect to see its battery, storage and memory.",
   "chat.more": "Chat options for {name}",
@@ -2602,6 +2601,12 @@ export const en = {
   "setup.short.permissions": "Permissions",
   "setup.short.connection": "Connection",
   "nav.thisComputer": "This computer",
+  "calls.dialMoved": "To call a number, use the dial pad on the phone's page: Remote control → Find & call.",
+  "locate.when": "Located {ago} · ±{acc} m",
+  "nav.expand": "Show the menu's names",
+  "nav.collapse": "Hide the menu's names",
+  "signIn.show": "Show {what}",
+  "signIn.hide": "Hide {what}",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */

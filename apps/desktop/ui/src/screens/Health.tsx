@@ -22,7 +22,7 @@ import {
 } from "../lib/health";
 import { friendlyError, timeAgo } from "../lib/words";
 import { toast } from "../components/ui";
-import { HelpLink } from "../help/HelpLink";
+import { PageHelp } from "../help/HelpLink";
 import { t, tn } from "../i18n";
 import { IconChip } from "../components/Icon";
 import { isVerified } from "../lib/verify";
@@ -173,10 +173,11 @@ export default function Health(props: HealthNav) {
         </span>
         <div class="grow">
           <h1>
-            {t("nav.securityHealth")} <HelpLink topic="troubleshooting" />
+            {t("nav.securityHealth")}
           </h1>
           <p class="muted">{t("sec.sub")}</p>
         </div>
+        <PageHelp topic="troubleshooting" />
       </header>
       <div class="sec-body">
       <div class="sec-left">
