@@ -9,9 +9,11 @@
 //        `ExcludeClipboardContentFromMonitorProcessing`, or
 //        `CanIncludeInClipboardHistory` / `CanUploadToCloudClipboard` set
 //        to 0 (what Windows' own clipboard history honours);
-//      * Linux: not detected. KeePassXC/KDE mark it with the MIME type
-//        `x-kde-passwordManagerHint` = "secret", but arboard can't list a
-//        clipboard's types, so such a copy looks like any other.
+//      * Linux Wayland: KeePassXC/KDE mark it with the MIME type
+//        `x-kde-passwordManagerHint` = "secret", read through the
+//        data-control protocol (`md_portal`; wlroots compositors and KDE).
+//        GNOME has no data-control, and X11 isn't read: there such a copy
+//        looks like any other.
 //  - A copy made while an app the user excluded is in front (macOS: its
 //    bundle id, e.g. `com.agilebits.onepassword7`; Windows: its program,
 //    e.g. `KeePass.exe`; Linux: not available) stays here too.
@@ -197,7 +199,8 @@ pub struct ClipPrivacy {
     pub excluded: Vec<String>,
     /// The app in front at the last copy, if known.
     pub last_app: Option<String>,
-    /// This OS can tell a concealed copy (not Linux).
+    /// This OS can tell a concealed copy (not Linux X11 nor GNOME's
+    /// Wayland).
     pub detects: bool,
     /// This OS can tell which app a copy came from (not Linux).
     pub knows_apps: bool,
@@ -213,7 +216,7 @@ pub fn clip_privacy() -> ClipPrivacy {
         last_app: STATE
             .get()
             .and_then(|s| s.last_app.lock().ok().and_then(|l| l.clone())),
-        detects: cfg!(any(target_os = "macos", windows)),
+        detects: cfg!(any(target_os = "macos", windows)) || os::detects(),
         knows_apps: cfg!(any(target_os = "macos", windows)),
     }
 }
@@ -264,6 +267,11 @@ pub fn set_clip_excluded_apps(apps: Vec<String>) -> Vec<String> {
 
 #[cfg(target_os = "macos")]
 mod os {
+    /// Read from the pasteboard's types (see `concealed`).
+    pub fn detects() -> bool {
+        true
+    }
+
     use objc2::msg_send;
     use objc2::rc::{autoreleasepool, Retained};
     use objc2::runtime::{AnyClass, AnyObject};
@@ -315,6 +323,11 @@ mod os {
 
 #[cfg(windows)]
 mod os {
+    /// Read from the pasteboard's types (see `concealed`).
+    pub fn detects() -> bool {
+        true
+    }
+
     use windows::core::{w, PWSTR};
     use windows::Win32::Foundation::{CloseHandle, HGLOBAL};
     use windows::Win32::System::DataExchange::{
@@ -407,11 +420,28 @@ mod os {
     }
 }
 
-/// Linux: arboard can't list the clipboard's types, nor is there one
-/// frontmost app across X11/Wayland; see the top of this file.
-#[cfg(not(any(target_os = "macos", windows)))]
+/// Linux: the clipboard's types on Wayland through data-control; no
+/// frontmost app across X11/Wayland. See the top of this file.
+#[cfg(target_os = "linux")]
 mod os {
     pub fn concealed() -> bool {
+        md_portal::Session::wayland() && md_portal::service::clip_concealed() == Some(true)
+    }
+    /// The compositor lets the clipboard's types be read.
+    pub fn detects() -> bool {
+        md_portal::Session::wayland() && md_portal::service::clip_concealed().is_some()
+    }
+    pub fn frontmost_app() -> Option<String> {
+        None
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows, target_os = "linux")))]
+mod os {
+    pub fn concealed() -> bool {
+        false
+    }
+    pub fn detects() -> bool {
         false
     }
     pub fn frontmost_app() -> Option<String> {

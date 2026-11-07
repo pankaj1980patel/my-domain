@@ -28,9 +28,13 @@
 //
 // macOS: capturing and playing input both need my-domain allowed under
 // Privacy & Security > Accessibility; until then one notice says so (once
-// per run). Nothing ever asks macOS to grant it. Linux: X11 only (on
-// Wayland there's no way for an app to capture or move the pointer), so
-// the feature says it's unavailable there.
+// per run). Nothing ever asks macOS to grant it. Linux X11: as above.
+// Linux Wayland (`md_portal`, `kvm_os`): being controlled plays the input
+// through the RemoteDesktop portal (asked once, remembered) or /dev/uinput;
+// sending needs the InputCapture portal (GNOME 45+, KDE Plasma 6), whose
+// pointer barriers on the edges with a computer replace looking at the
+// pointer (`wayland_edges`). Without it this computer is "receive only",
+// and Settings says so.
 //
 // The parts that decide (geometry, the capture's states, keys) are plain
 // functions, tested here; the OS hooks (`kvm_os`) stay thin.
@@ -485,12 +489,16 @@ pub fn init(app: &AppHandle) {
         .spawn(move || edges(&a));
 }
 
-/// Why this computer can't share its mouse and keyboard now, if it can't.
+/// Why this computer can't share its mouse and keyboard now, if it can't,
+/// or "receive_only" (Wayland without the input capture portal).
 fn blocked() -> Option<&'static str> {
     if let Some(why) = kvm_os::unsupported() {
         return Some(why);
     }
-    crate::remote_input::ready().err()
+    if let Err(why) = crate::remote_input::ready() {
+        return Some(why);
+    }
+    kvm_os::receive_only().then_some("receive_only")
 }
 
 fn engine(app: &AppHandle) -> Option<State<'_, Eng>> {
@@ -640,8 +648,21 @@ fn edges(app: &AppHandle) {
             layout = engine(app).map(|e| e.kvm_layout()).unwrap_or_default();
             layout_at = Instant::now();
         }
-        if !enabled || layout.is_empty() || kvm_os::unsupported().is_some() {
+        if !enabled
+            || layout.is_empty()
+            || kvm_os::unsupported().is_some()
+            || kvm_os::receive_only()
+        {
+            #[cfg(target_os = "linux")]
+            if md_portal::Session::wayland() {
+                md_portal::service::kvm_stop();
+            }
             std::thread::sleep(IDLE_POLL);
+            continue;
+        }
+        #[cfg(target_os = "linux")]
+        if md_portal::Session::wayland() {
+            wayland_edges(rt, &layout, idle);
             continue;
         }
         std::thread::sleep(POLL_EVERY);
@@ -678,6 +699,66 @@ fn edges(app: &AppHandle) {
             pos,
         });
     }
+}
+
+/// Wayland: the portal's barriers on the edges with a computer stand in
+/// for looking at the pointer. A push through one starts controlling that
+/// computer (the portal is already capturing; `kvm_os::start_capture`
+/// takes it over), unless cooling down.
+#[cfg(target_os = "linux")]
+fn wayland_edges(rt: &Rt, layout: &[KvmNeighbor], idle: bool) {
+    use md_portal::service;
+    // A capture the core never took (starting failed): give it back.
+    service::kvm_release_unclaimed(Duration::from_secs(5));
+    if !idle {
+        std::thread::sleep(POLL_EVERY * 10);
+        return;
+    }
+    let edges: Vec<md_portal::Edge> = layout
+        .iter()
+        .filter_map(|n| Side::parse(&n.side))
+        .map(|s| match s {
+            Side::Left => md_portal::Edge::Left,
+            Side::Right => md_portal::Edge::Right,
+            Side::Top => md_portal::Edge::Top,
+            Side::Bottom => md_portal::Edge::Bottom,
+        })
+        .collect();
+    let Some((edge, (x, y), zones)) = service::kvm_watch(&edges, Duration::from_millis(250)) else {
+        return;
+    };
+    let side = match edge {
+        md_portal::Edge::Left => Side::Left,
+        md_portal::Edge::Right => Side::Right,
+        md_portal::Edge::Top => Side::Top,
+        md_portal::Edge::Bottom => Side::Bottom,
+    };
+    let cooling = rt
+        .cooldown
+        .lock()
+        .map(|c| Instant::now() < *c)
+        .unwrap_or(true);
+    let n = layout.iter().find(|n| n.side == side.as_str());
+    let Some(n) = n.filter(|_| !cooling) else {
+        service::kvm_release();
+        return;
+    };
+    let screens: Vec<Rect> = zones
+        .iter()
+        .map(|z| Rect {
+            x: z.x,
+            y: z.y,
+            w: z.w,
+            h: z.h,
+        })
+        .collect();
+    let pos = bounds(&screens).map_or(POS_SCALE / 2, |b| along(&b, side, x, y));
+    let node = n.node_id.clone();
+    feed(Input::EdgeHit {
+        node: &node,
+        edge: side,
+        pos,
+    });
 }
 
 /// The capture's worker: what the hooks caught goes to the core (fast,
@@ -737,6 +818,15 @@ fn player(app: &AppHandle, rx: Receiver<Play>) {
         match p {
             Play::Enter { edge: e, pos } => {
                 edge = Some(e);
+                // Wayland: open the portal's session (asked once), whose
+                // screens place the pointer.
+                #[cfg(target_os = "linux")]
+                if crate::remote_input::wayland_input() {
+                    if let Err(err) = md_portal::service::with_input(|_| ()) {
+                        eprintln!("[kvm] can't control this computer: {err}");
+                        tell_once(app, "wayland_denied");
+                    }
+                }
                 screens = kvm_os::screens(app);
                 if let Some((x, y)) = entry_point(&screens, e, pos) {
                     kvm_os::warp(x, y);
@@ -744,6 +834,15 @@ fn player(app: &AppHandle, rx: Receiver<Play>) {
             }
             Play::Release => {
                 edge = None;
+                #[cfg(target_os = "linux")]
+                if crate::remote_input::wayland_input() {
+                    if !keys.is_empty() || !buttons.is_empty() {
+                        let _ = md_portal::service::with_input(|inj| {
+                            wayland_let_go(inj, &mut keys, &mut buttons)
+                        });
+                    }
+                    continue;
+                }
                 if let Some(en) = enigo.as_mut() {
                     release_all(en, &mut keys, &mut buttons);
                 }
@@ -752,6 +851,13 @@ fn player(app: &AppHandle, rx: Receiver<Play>) {
                 let Some(e) = edge else {
                     continue;
                 };
+                #[cfg(target_os = "linux")]
+                if crate::remote_input::wayland_input() {
+                    if wayland_play(app, e, events, &mut keys, &mut buttons, &screens) {
+                        edge = None;
+                    }
+                    continue;
+                }
                 if enigo.is_none() {
                     if let Err(why) = crate::remote_input::ready() {
                         tell_once(app, why);
@@ -795,6 +901,83 @@ fn player(app: &AppHandle, rx: Receiver<Play>) {
                 }
             }
         }
+    }
+}
+
+/// Wayland: play `events` through the portal's (or uinput's) session.
+/// True when the pointer was pushed back out and control went back.
+#[cfg(target_os = "linux")]
+fn wayland_play(
+    app: &AppHandle,
+    e: Side,
+    events: Vec<KvmEvent>,
+    keys: &mut Vec<u16>,
+    buttons: &mut Vec<u8>,
+    screens: &[Rect],
+) -> bool {
+    let done = md_portal::service::with_input(|inj| {
+        for ev in events {
+            match ev {
+                KvmEvent::Move { dx, dy } => {
+                    let _ = inj.motion(dx, dy);
+                    // Followed from the moves: uinput can't tell.
+                    let Some((x, y)) = inj.cursor() else {
+                        continue;
+                    };
+                    if let Some(pos) = pushed_out(screens, x, y, dx, dy, e) {
+                        if engine(app).is_some_and(|eng| eng.kvm_leave(e.as_str(), pos)) {
+                            wayland_let_go(inj, keys, buttons);
+                            return true;
+                        }
+                    }
+                }
+                KvmEvent::Button { button, down } => {
+                    if down {
+                        buttons.push(button);
+                    } else {
+                        buttons.retain(|x| *x != button);
+                    }
+                    let _ = inj.button(button, down);
+                }
+                KvmEvent::Wheel { dx, dy } => {
+                    let _ = inj.wheel(dx, dy);
+                }
+                KvmEvent::Key { code, down } => {
+                    if down {
+                        if !keys.contains(&code) {
+                            keys.push(code);
+                        }
+                    } else {
+                        keys.retain(|k| *k != code);
+                    }
+                    if let Some(c) = kvm_keys::to_evdev(code) {
+                        let _ = inj.key(c, down);
+                    }
+                }
+            }
+        }
+        false
+    });
+    match done {
+        Ok(gave_back) => gave_back,
+        Err(err) => {
+            eprintln!("[kvm] can't control this computer: {err}");
+            tell_once(app, "wayland_denied");
+            false
+        }
+    }
+}
+
+/// Wayland: let go of every key and button still held here.
+#[cfg(target_os = "linux")]
+fn wayland_let_go(inj: &mut md_portal::Injector, keys: &mut Vec<u16>, buttons: &mut Vec<u8>) {
+    for k in keys.drain(..).rev() {
+        if let Some(c) = kvm_keys::to_evdev(k) {
+            let _ = inj.key(c, false);
+        }
+    }
+    for b in buttons.drain(..) {
+        let _ = inj.button(b, false);
     }
 }
 
@@ -941,8 +1124,15 @@ fn tell_once(app: &AppHandle, why: &str) {
             "To share your mouse and keyboard with your other computers, allow my-domain in \
              System Settings > Privacy & Security > Accessibility, then try again."
         }
-        "display" | "wayland" => {
-            "Sharing your mouse and keyboard needs an X11 session on this computer (Wayland isn't supported)."
+        "display" => "Sharing your mouse and keyboard needs an X11 session on this computer.",
+        "wayland" | "wayland_input" => {
+            "On Wayland, sharing your mouse and keyboard needs your desktop's remote desktop \
+             portal (xdg-desktop-portal-gnome or -kde) or access to /dev/uinput. See Help \u{203a} \
+             Troubleshooting."
+        }
+        "wayland_denied" => {
+            "my-domain wasn't allowed to control this computer. It asks again in a couple of \
+             minutes."
         }
         _ => "my-domain couldn't use this computer's mouse and keyboard.",
     };

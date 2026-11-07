@@ -14,7 +14,12 @@
 //    change. When the OS won't take some keys (another app holds them) the
 //    binding says so and the others still work;
 //  - a press runs off the OS's event thread, and a notification says how it
-//    went (`notify::post_always`: it answers something you just did).
+//    went (`notify::post_always`: it answers something you just did);
+//  - Linux Wayland: the plugin only sees keys pressed in X11 (XWayland)
+//    windows there, so the GlobalShortcuts portal binds them instead when
+//    the desktop has it (`apply_portal`; the desktop may show them for the
+//    user to confirm or change). Without it the plugin's keys stay, and
+//    each binding says they work only while an X11 window is in front.
 //
 // Keys are written the plugin's way ("CmdOrCtrl+Shift+Y"). Checked before
 // they're kept: Cmd, Ctrl or Alt plus one key; not one the system or every
@@ -785,6 +790,10 @@ fn apply(app: &AppHandle) {
     let Some(s) = app.try_state::<Shortcuts>() else {
         return;
     };
+    #[cfg(target_os = "linux")]
+    if apply_portal(app, &s) {
+        return;
+    }
     if s.unavailable.load(Ordering::Relaxed) {
         return;
     }
@@ -833,12 +842,110 @@ fn apply(app: &AppHandle) {
             }
         }
     }
+    #[cfg(target_os = "linux")]
+    if md_portal::Session::wayland() {
+        for id in registered.values() {
+            problems
+                .entry(id.clone())
+                .or_insert_with(|| WAYLAND_X11_ONLY.to_string());
+        }
+    }
     if let Ok(mut p) = s.problems.lock() {
         *p = problems;
     }
     if let Ok(mut r) = s.registered.lock() {
         *r = registered;
     };
+}
+
+/// Wayland without the shortcuts portal: what a binding says.
+#[cfg(target_os = "linux")]
+const WAYLAND_X11_ONLY: &str = "On Wayland this works only while an X11 app\u{2019}s window is in \
+     front: your desktop has no shortcuts portal. Set the keys in your desktop\u{2019}s keyboard \
+     settings to run my-domain instead, or sign in to an X11 session.";
+
+/// Wayland: bind the keys through the GlobalShortcuts portal (on its own
+/// thread: the desktop may show them to confirm). False: not Wayland, or
+/// no portal here.
+#[cfg(target_os = "linux")]
+fn apply_portal(app: &AppHandle, s: &Shortcuts) -> bool {
+    static BOUND: Mutex<Option<md_portal::Shortcuts>> = Mutex::new(None);
+    if !md_portal::Session::wayland() || md_portal::service::caps().0.global_shortcuts.is_none() {
+        return false;
+    }
+    if !s.unavailable.load(Ordering::Relaxed) {
+        // Not both: the plugin's X11 keys would fire too.
+        let _ = app.global_shortcut().unregister_all();
+    }
+    let os = Os::here();
+    let mut problems = HashMap::new();
+    let mut wanted = Vec::new();
+    if !s.paused.load(Ordering::Relaxed) {
+        for b in s.list().into_iter().filter(|b| b.enabled) {
+            match parse_accel(&b.keys) {
+                Ok(a) => {
+                    let c = a.resolve(os);
+                    wanted.push(md_portal::Wanted {
+                        id: b.id.clone(),
+                        description: describe(app, &b),
+                        trigger: md_portal::keys::trigger(c.ctrl, c.alt, c.shift, c.meta, &c.key),
+                    });
+                }
+                Err(e) => {
+                    problems.insert(b.id, e);
+                }
+            }
+        }
+    }
+    if let Ok(mut p) = s.problems.lock() {
+        *p = problems;
+    }
+    if let Ok(mut r) = s.registered.lock() {
+        r.clear();
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let mut slot = BOUND.lock().unwrap_or_else(|p| p.into_inner());
+        // The old session ends, and its keys with it.
+        *slot = None;
+        if wanted.is_empty() {
+            return;
+        }
+        let a = app.clone();
+        let on_press = move |id: String| {
+            let Some(b) = a.try_state::<Shortcuts>().and_then(|s| s.get(&id)) else {
+                return;
+            };
+            let a = a.clone();
+            std::thread::spawn(move || run(&a, &b));
+        };
+        let (taken, why) = match md_portal::Shortcuts::bind(&wanted, on_press) {
+            Ok(bound) => {
+                let taken = bound.bound.clone();
+                *slot = Some(bound);
+                (
+                    taken,
+                    "Your desktop didn\u{2019}t take this shortcut: check its keyboard settings."
+                        .to_string(),
+                )
+            }
+            Err(e) => {
+                eprintln!("[shortcuts] the desktop's shortcuts portal: {e}");
+                (
+                    Vec::new(),
+                    format!("Your desktop didn\u{2019}t take the shortcuts: {e}"),
+                )
+            }
+        };
+        if let Some(s) = app.try_state::<Shortcuts>() {
+            if let Ok(mut p) = s.problems.lock() {
+                for w in wanted.iter().filter(|w| !taken.contains(&w.id)) {
+                    p.insert(w.id.clone(), why.clone());
+                }
+            }
+        }
+    });
+    true
 }
 
 /// A press (from the OS's event thread): run its binding on another.

@@ -5,8 +5,11 @@
 // One thread owns the `enigo` handle and plays the events in the order they
 // came. On macOS, nothing is delivered until the user allows my-domain under
 // Privacy & Security > Accessibility; until then one notice says so (once per
-// run) instead of failing silently. On Linux, `enigo` talks to the X server,
-// so on Wayland it reaches only X (XWayland) windows.
+// run) instead of failing silently. On Linux X11, `enigo` talks to the X
+// server. On Wayland the events go through the RemoteDesktop portal (asked
+// once, then remembered), else `/dev/uinput` when this user may write it
+// (`md_portal`; never asks for root); with neither, `enigo` reaches only X
+// (XWayland) windows.
 //
 // Three- and four-finger swipes become this computer's own shortcuts (see
 // `shortcut`), the way a laptop's touchpad does it:
@@ -27,17 +30,34 @@ use tauri::AppHandle;
 const PX_PER_STEP: i32 = 20;
 
 /// Why input can't be played back here yet, for the phone to show: macOS
-/// "accessibility"; Linux "display" with no X server to talk to.
+/// "accessibility"; Linux "display" with no X server to talk to, or
+/// "wayland_input" on Wayland with neither the portal nor uinput (nor
+/// XWayland).
 pub fn ready() -> Result<(), &'static str> {
     #[cfg(target_os = "macos")]
     if !crate::device::accessibility_trusted() {
         return Err("accessibility");
     }
     #[cfg(target_os = "linux")]
-    if std::env::var_os("DISPLAY").is_none() {
-        return Err("display");
+    {
+        if wayland_input() {
+            return Ok(());
+        }
+        if std::env::var_os("DISPLAY").is_none() {
+            return Err(if md_portal::Session::wayland() {
+                "wayland_input"
+            } else {
+                "display"
+            });
+        }
     }
     Ok(())
+}
+
+/// Wayland, with the RemoteDesktop portal or uinput to play input through.
+#[cfg(target_os = "linux")]
+pub(crate) fn wayland_input() -> bool {
+    md_portal::Session::wayland() && md_portal::service::input_way().is_ok()
 }
 
 /// Play `events` back, in order, on the input thread.
@@ -76,6 +96,11 @@ impl Player {
             tell_once(app, why);
             return;
         }
+        #[cfg(target_os = "linux")]
+        if wayland_input() {
+            self.play_wayland(app, events);
+            return;
+        }
         if self.enigo.is_none() {
             let settings = Settings {
                 // We say so ourselves (once), rather than macOS's prompt
@@ -96,6 +121,34 @@ impl Player {
             if let Err(err) = self.one(e) {
                 // The kind only: a text event may be a password.
                 eprintln!("[input] {}: {err}", input_kind(e));
+            }
+        }
+    }
+
+    /// Wayland: through the portal (or uinput).
+    #[cfg(target_os = "linux")]
+    fn play_wayland(&mut self, app: &AppHandle, events: &[InputEvent]) {
+        let mut rest = (self.rest_x, self.rest_y);
+        let done = md_portal::service::with_input(|inj| {
+            for e in events {
+                // The kind only: a text event may be a password.
+                wayland::one(inj, e, &mut rest)
+                    .map_err(|err| format!("{}: {err}", input_kind(e)))?;
+            }
+            Ok::<(), String>(())
+        });
+        (self.rest_x, self.rest_y) = rest;
+        match done {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                // The session ended (stopped from the desktop's indicator):
+                // a new one next time.
+                eprintln!("[input] {e}");
+                md_portal::service::input_reset();
+            }
+            Err(e) => {
+                eprintln!("[input] can't control this computer: {e}");
+                tell_once(app, "wayland_denied");
             }
         }
     }
@@ -165,6 +218,17 @@ pub fn paste() -> Result<(), &'static str> {
         }
         _ => "There\u{2019}s no screen here to paste into.",
     })?;
+    #[cfg(target_os = "linux")]
+    if wayland_input() {
+        use md_portal::keys::code;
+        return match md_portal::service::with_input(|inj| {
+            inj.combo(&[code::LEFTCTRL], wayland::KEY_V)
+        }) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(_)) => Err("Couldn\u{2019}t press the keys."),
+            Err(_) => Err("my-domain wasn\u{2019}t allowed to type here."),
+        };
+    }
     let mut enigo =
         Enigo::new(&Settings::default()).map_err(|_| "Couldn\u{2019}t reach the keyboard.")?;
     let held: &[Key] = if cfg!(target_os = "macos") {
@@ -255,9 +319,97 @@ fn tell_once(app: &AppHandle, why: &str) {
              Privacy & Security > Accessibility, then try again."
         }
         "display" => "Your phone's touchpad needs an X11 session (or XWayland) on this computer.",
+        "wayland_input" => {
+            "On Wayland, your phone's touchpad needs your desktop's remote desktop portal \
+             (xdg-desktop-portal-gnome or -kde) or access to /dev/uinput. See Help \u{203a} \
+             Troubleshooting."
+        }
+        "wayland_denied" => {
+            "my-domain wasn't allowed to control this computer. Use your phone's touchpad again \
+             in a couple of minutes to be asked again."
+        }
         _ => "Your phone's touchpad couldn't control this computer.",
     };
     crate::notify::post_always(app, "my-domain can't use your phone as a touchpad", body);
+}
+
+/// Wayland: one event through the portal's (or uinput's) session.
+#[cfg(target_os = "linux")]
+mod wayland {
+    use md_portal::keys::code;
+    use md_portal::Injector;
+    use mdcore::model::{InputEvent, InputKey, MouseButton, SwipeDir};
+
+    /// evdev KEY_D and KEY_V.
+    const KEY_D: u16 = 32;
+    pub const KEY_V: u16 = 47;
+
+    pub fn one(inj: &mut Injector, e: &InputEvent, rest: &mut (i32, i32)) -> Result<(), String> {
+        match e {
+            InputEvent::Move { dx, dy } => inj.motion(*dx, *dy),
+            InputEvent::Click { button } => {
+                let b = match button {
+                    MouseButton::Left => 1,
+                    MouseButton::Right => 2,
+                    MouseButton::Middle => 3,
+                };
+                inj.button(b, true)?;
+                inj.button(b, false)
+            }
+            InputEvent::Scroll { dx, dy } => {
+                let (sx, rx) = super::steps(rest.0 + dx);
+                let (sy, ry) = super::steps(rest.1 + dy);
+                *rest = (rx, ry);
+                if sx != 0 || sy != 0 {
+                    inj.wheel(sx, sy)?;
+                }
+                Ok(())
+            }
+            InputEvent::Text { text } => inj.text(text),
+            InputEvent::Key { key } => {
+                let k = match key {
+                    InputKey::Enter => code::ENTER,
+                    InputKey::Backspace => code::BACKSPACE,
+                    InputKey::Left => code::LEFT,
+                    InputKey::Right => code::RIGHT,
+                    InputKey::Up => code::UP,
+                    InputKey::Down => code::DOWN,
+                    InputKey::Esc => code::ESC,
+                };
+                inj.combo(&[], k)
+            }
+            InputEvent::Point { x, y } => {
+                // The first screen the portal shared (none: uinput, which
+                // can't place the pointer).
+                let Some(s) = inj.screens().first().copied() else {
+                    return Ok(());
+                };
+                let scale = f64::from(mdcore::features::input::POINT_SCALE);
+                let px = s.x + f64::from(*x) * (s.w - 1.0) / scale;
+                let py = s.y + f64::from(*y) * (s.h - 1.0) / scale;
+                inj.warp(px, py);
+                Ok(())
+            }
+            InputEvent::Gesture { fingers, dir } => {
+                let (mods, key) = shortcut(*fingers, *dir);
+                inj.combo(mods, key)
+            }
+            InputEvent::Tap { .. } | InputEvent::Swipe { .. } => Ok(()),
+        }
+    }
+
+    /// The same shortcuts as `super::shortcut` on Linux, as evdev keys.
+    fn shortcut(fingers: u8, dir: SwipeDir) -> (&'static [u16], u16) {
+        use SwipeDir::*;
+        match (fingers, dir) {
+            (3, Right) => (&[code::LEFTALT], code::TAB),
+            (3, Left) => (&[code::LEFTALT, code::LEFTSHIFT], code::TAB),
+            (_, Left) => (&[code::LEFTCTRL, code::LEFTALT], code::RIGHT),
+            (_, Right) => (&[code::LEFTCTRL, code::LEFTALT], code::LEFT),
+            (_, Up) => (&[], code::LEFTMETA),
+            (_, Down) => (&[code::LEFTMETA], KEY_D),
+        }
+    }
 }
 
 /// What kind of event `e` is, for the log (never what it carries).

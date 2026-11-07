@@ -1,0 +1,33 @@
+[package]
+name = "md-portal"
+description = "my-domain: Wayland on Linux through the XDG desktop portals (screen cast, screenshot, remote desktop, input capture, global shortcuts), a PipeWire stream through GStreamer, and /dev/uinput as a fallback."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+# No dependencies off Linux: the portals are Linux's. The versions are the
+# ones Tauri, md-geo and md-notify already pull in: no new crates.
+[target.'cfg(target_os = "linux")'.dependencies]
+# Blocking API (default features), as md-geo and md-notify use it.
+zbus = "5.16"
+# The portals' option and result dictionaries (a{sv}); zbus re-exports this
+# exact version, named directly so the pure parsing can use it in tests.
+zvariant = "5"
+# /dev/uinput (its ioctls and input_event) and handing the PipeWire fd to
+# the GStreamer child process.
+libc = "0.2"
+# A Screenshot portal still (PNG) as a small JPEG for the phone: the image
+# version arboard already pulls in, with its PNG and JPEG codecs (their
+# crates are in Cargo.lock already).
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
+# The clipboard's types on Wayland (a password manager's concealed mark)
+# through the data-control protocol: the version arboard already uses.
+wl-clipboard-rs = "0.9"
+
+[dev-dependencies]
+# The parsing tests build real portal results, on every OS.
+zvariant = "5"
+
+[lints]
+workspace = true

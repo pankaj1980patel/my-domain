@@ -1671,7 +1671,10 @@ export type ClipPrivacy_Deserialize = {
 	excluded: string[],
 	/**  The app in front at the last copy, if known. */
 	last_app?: string | null,
-	/**  This OS can tell a concealed copy (not Linux). */
+	/**
+	 *  This OS can tell a concealed copy (not Linux X11 nor GNOME's
+	 *  Wayland).
+	 */
 	detects: boolean,
 	/**  This OS can tell which app a copy came from (not Linux). */
 	knows_apps: boolean,
@@ -1683,7 +1686,10 @@ export type ClipPrivacy_Serialize = {
 	excluded: string[],
 	/**  The app in front at the last copy, if known. */
 	last_app: string | null,
-	/**  This OS can tell a concealed copy (not Linux). */
+	/**
+	 *  This OS can tell a concealed copy (not Linux X11 nor GNOME's
+	 *  Wayland).
+	 */
 	detects: boolean,
 	/**  This OS can tell which app a copy came from (not Linux). */
 	knows_apps: boolean,

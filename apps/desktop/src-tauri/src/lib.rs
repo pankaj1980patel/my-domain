@@ -118,11 +118,22 @@ impl DesktopClipboard {
     }
 }
 
+/// Wayland with no clipboard arboard can reach (no data-control protocol
+/// and no XWayland): `wl-paste` / `wl-copy` instead, when installed.
+#[cfg(target_os = "linux")]
+fn wl_clipboard_fallback() -> bool {
+    md_portal::Session::wayland() && md_portal::service::caps().1.wl_clipboard
+}
+
 impl Clipboard for DesktopClipboard {
     fn get(&self) -> Option<String> {
         let mut g = self.inner.lock().unwrap();
         if g.is_none() {
             *g = arboard::Clipboard::new().ok();
+        }
+        #[cfg(target_os = "linux")]
+        if g.is_none() && wl_clipboard_fallback() {
+            return md_portal::service::wl_paste();
         }
         g.as_mut().and_then(|c| c.get_text().ok())
     }
@@ -130,6 +141,11 @@ impl Clipboard for DesktopClipboard {
         let mut g = self.inner.lock().unwrap();
         if g.is_none() {
             *g = arboard::Clipboard::new().ok();
+        }
+        #[cfg(target_os = "linux")]
+        if g.is_none() && wl_clipboard_fallback() {
+            md_portal::service::wl_copy(text);
+            return;
         }
         if let Some(c) = g.as_mut() {
             let _ = c.set_text(text.to_owned());
@@ -2086,6 +2102,15 @@ pub fn run() {
             app.manage(clip_history::ClipHistory::load(&handle));
             // Before the Engine: its clipboard watcher asks.
             clip_privacy::load(&handle);
+            // Wayland: where the portals' restore tokens are kept, and a
+            // first look at the portals and tools, off the UI's thread.
+            #[cfg(target_os = "linux")]
+            if let Ok(dir) = handle.path().app_config_dir() {
+                md_portal::service::configure(dir);
+                if md_portal::Session::wayland() {
+                    std::thread::spawn(md_portal::service::caps);
+                }
+            }
             otp_codes::load(&handle);
             app.manage(chat_history::ChatHistory::load(&handle));
             app.manage(insert_capture::InsertPrefs::load(&handle));

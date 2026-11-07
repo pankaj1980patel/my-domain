@@ -41,7 +41,11 @@ Between a Mac and a Windows or Linux computer, **Swap Cmd and Ctrl** (on by defa
 ## If it doesn't work
 
 - **On a Mac,** my-domain needs **System Settings → Privacy & Security → Accessibility** to capture and move the mouse and keyboard. Allow it there yourself (my-domain never turns it on), then try again.
-- **On Linux,** it needs an X11 session. It isn't available on Wayland, which doesn't let apps capture or move the pointer: choose an X11 (Xorg) session at sign-in to use it.
+- **On Linux with X11,** it works as on the other computers.
+- **On Linux with Wayland,** apps can't watch or move the pointer themselves, so my-domain asks your desktop's portals (each asks you once).
+- **Wayland, being controlled** goes through the remote-desktop portal (GNOME, KDE Plasma), remembered after the first time. Without it, `/dev/uinput` is used if you've allowed it (see [Troubleshooting](help:troubleshooting)); then the pointer can't be pushed back out at the edge: use **Take back** or the hotkey.
+- **Wayland, controlling another computer** needs the input-capture portal (GNOME 45 or later, KDE Plasma 6 or later). It puts invisible barriers on the edges where you placed a computer; pushing through one starts controlling it. Without that portal the computer is **receive only**: Settings says so, and the other computers can still control it. Place it on the other computer's screen to use it from there.
+- The health check shows which portals your Wayland desktop has.
 - **Nothing happens at the edge:** check the computer is placed on that side, that it's connected (Settings lists "not connected" otherwise), and that the other computer allows being controlled.
 - **Several screens:** only an outer edge works, one with no screen of the same computer beyond it. On the computer being controlled, the pointer comes in on its outermost screen at that side.
 - **Windows:** a window running as administrator may not take the other computer's input unless my-domain also runs as administrator (Windows' own rule).

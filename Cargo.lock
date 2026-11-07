@@ -3485,6 +3485,8 @@ dependencies = [
  "num-traits",
  "png 0.18.1",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
 ]
 
 [[package]]
@@ -4093,6 +4095,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "md-portal"
+version = "0.1.0"
+dependencies = [
+ "image",
+ "libc",
+ "wl-clipboard-rs",
+ "zbus 5.16.0",
+ "zvariant 5.12.0",
+]
+
+[[package]]
 name = "md-testkit"
 version = "0.1.0"
 dependencies = [
@@ -4387,6 +4400,7 @@ dependencies = [
  "md-geo",
  "md-hfp",
  "md-notify",
+ "md-portal",
  "mdcore",
  "native-tls",
  "objc2 0.6.4",

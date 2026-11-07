@@ -110,6 +110,25 @@ Hover over it (or read the line under it): it says why, for example a permission
 
 The health check lists the permissions the features you use need, each with a button to its page. On the phone, see also [Set up this phone](help:setup-phone). On a Mac, check System Settings → Privacy & Security (Accessibility, Screen Recording, Location) for my-domain.
 
+## Linux with Wayland
+
+Wayland (the default on GNOME, KDE Plasma and most new Linux desktops) doesn't let apps read the screen, move the pointer, type, or catch keys pressed in other apps. my-domain asks your desktop's **portals** instead; each one asks you once and is remembered. The health check lists each portal and helper as present or missing. To install what's missing:
+
+- **Portals** (everything below): `xdg-desktop-portal` and your desktop's: `xdg-desktop-portal-gnome` (GNOME), `xdg-desktop-portal-kde` (KDE Plasma) or `xdg-desktop-portal-wlr` (Sway). The same names on Debian/Ubuntu, Fedora and Arch.
+- **PipeWire** (the screen on the phone): `pipewire` and `wireplumber`, on every distribution.
+- **GStreamer's PipeWire plugin** (the screen, about two pictures a second): Debian/Ubuntu `gstreamer1.0-pipewire gstreamer1.0-plugins-good gstreamer1.0-tools`; Fedora `pipewire-gstreamer gstreamer1-plugins-good gstreamer1`; Arch `gst-plugin-pipewire gst-plugins-good gstreamer`.
+- **wl-clipboard** (the clipboard when no X11 compatibility, XWayland, is running): `wl-clipboard` everywhere.
+- **Tray icon** (GNOME only shows one with an extension): `gnome-shell-extension-appindicator`, then turn it on in Extensions.
+
+- **Screen:** without the GStreamer plugin, Sway and Hyprland use `grim`, others the screenshot portal (one picture every two seconds).
+- **Phone touchpad and being controlled:** the remote-desktop portal (GNOME, KDE). On desktops without it (Sway and other wlroots ones), you can let my-domain use the kernel's virtual input device instead. my-domain never asks for root: you do this once, yourself. Create `/etc/udev/rules.d/60-my-domain-uinput.rules` containing `KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"`, run `sudo udevadm control --reload && sudo udevadm trigger`, add yourself to the group with `sudo usermod -aG input $USER`, then sign out and in. Anything you run can then type and move the pointer, so only do it on a computer that's yours.
+- **Controlling other computers** (share mouse and keyboard) needs the input-capture portal: GNOME 45+ or KDE Plasma 6+. Without it this computer is receive only.
+- **Keyboard shortcuts** go through the global-shortcuts portal (KDE Plasma 5.27+, GNOME 48+); your desktop may show them to confirm or let you change the keys. Without it they work only while an X11 window is in front: set a shortcut in your desktop's keyboard settings that runs my-domain instead.
+- **Clipboard:** copy and paste work through XWayland, or the data-control protocol (KDE, Sway, Hyprland). A password marked concealed by KeePassXC or KDE's password managers is recognised only through data-control; GNOME doesn't offer it, so there such a copy syncs like any other unless you exclude it yourself.
+- **Notifications** work on every desktop.
+- **To be asked again** (you said no, or chose the wrong screen): stop and start what you were doing after a couple of minutes. To forget what my-domain remembered, delete the `portal-*.token` files in its settings folder (`~/.config/com.landiscover.app/`).
+- Or sign in to an **X11 (Xorg) session** at the login screen, where everything works without portals.
+
 ## Sign-in problems
 
 Check the username and password. On a company network that inspects secure connections, my-domain uses your computer's trusted certificates, so it should work if your browser does.

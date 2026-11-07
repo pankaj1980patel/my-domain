@@ -42,6 +42,12 @@ export async function fixCheck(c: HealthCheck, nav: HealthNav) {
         setTimeout(() => runHealth(false), 8000);
         return;
       case "open_permission":
+        // Linux tools and portals have no settings page: how to install
+        // them is in Help.
+        if (/^(linux_|tool_)/.test(c.detail ?? "")) {
+          nav.onHelp("troubleshooting");
+          return;
+        }
         await openPermissionPage(c);
         return;
       case "allow_permission": {

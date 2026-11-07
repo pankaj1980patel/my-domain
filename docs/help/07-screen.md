@@ -40,7 +40,12 @@ The phone's full-screen touchpad shows the computer's screen behind it, so you c
 
 - The computer must allow it: **Let my phone see this screen** in its Settings (and **Let my phone control this computer** to be controlled).
 - **macOS** needs Screen Recording permission for my-domain, and Accessibility to be controlled.
-- **Linux** needs a screenshot tool (grim on Wayland, ImageMagick on X11); control works on X11 or XWayland.
+- **Linux on X11** needs ImageMagick (its `import` tool) to show the screen; control works out of the box.
+- **Linux on Wayland** (GNOME, KDE Plasma, Sway...) goes through your desktop's portals, which ask you once.
+- **Wayland, seeing the screen:** the screen-cast portal plus GStreamer's PipeWire plugin give about two pictures a second. The first time, your desktop asks which screen to share; my-domain remembers the answer (the portal's restore token), so it doesn't ask again until you revoke it. Without the plugin, `grim` (Sway, Hyprland) or the screenshot portal is used: one picture every two seconds.
+- **Wayland, control (touchpad, keyboard, Point & click):** the remote-desktop portal (GNOME, KDE), asked once and remembered. Where there's none (Sway and other wlroots desktops), my-domain uses `/dev/uinput` if you've allowed it (see [Troubleshooting](help:troubleshooting)); there typing is limited to what a US keyboard types and Point & click isn't available.
+- **Wayland:** stopping the sharing from your desktop's own indicator stops it here too; watching again asks again after a short pause.
+- The health check lists what's present and what to install on Wayland.
 - The computer shows a notice when a device starts watching.
 
 ## Touchpad and remote

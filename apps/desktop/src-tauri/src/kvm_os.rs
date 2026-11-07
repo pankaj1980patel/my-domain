@@ -10,10 +10,16 @@
 //  - Windows: low-level hooks (WH_MOUSE_LL, WH_KEYBOARD_LL) on their own
 //    thread with a message loop; every event is swallowed, motion is how
 //    far the pointer would have moved from where it's parked;
-//  - Linux: X11 grabs of the pointer (with an invisible cursor) and the
+//  - Linux X11: grabs of the pointer (with an invisible cursor) and the
 //    keyboard on the root window; motion is read from where the pointer
-//    went and it's warped back. Wayland has no way for an app to do this:
-//    unsupported there.
+//    went and it's warped back;
+//  - Linux Wayland (`md_portal`): an app can't read or move the pointer
+//    there. Being controlled goes through the RemoteDesktop portal (its
+//    screens place the pointer; where it is is followed from the moves
+//    made), else /dev/uinput. Sending needs the InputCapture portal
+//    (GNOME 45+, KDE Plasma 6): `kvm.rs` watches its edge barriers, and a
+//    capture here hands over what the portal's EIS socket delivers;
+//    without it this computer is "receive only".
 //
 // Dropping the `Capture` always lets go (and shows the pointer again).
 
@@ -78,7 +84,7 @@ fn tauri_screens(app: &AppHandle) -> Vec<Rect> {
         .unwrap_or_default()
 }
 
-pub use os::{cursor, screens, start_capture, unsupported, warp, Capture};
+pub use os::{cursor, receive_only, screens, start_capture, unsupported, warp, Capture};
 
 #[cfg(target_os = "macos")]
 mod os {
@@ -108,6 +114,10 @@ mod os {
 
     pub fn unsupported() -> Option<&'static str> {
         None
+    }
+
+    pub fn receive_only() -> bool {
+        false
     }
 
     pub fn screens(_app: &AppHandle) -> Vec<Rect> {
@@ -370,6 +380,10 @@ mod os {
         None
     }
 
+    pub fn receive_only() -> bool {
+        false
+    }
+
     pub fn screens(app: &AppHandle) -> Vec<Rect> {
         tauri_screens(app)
     }
@@ -580,16 +594,26 @@ mod os {
     use x11rb::protocol::Event;
     use x11rb::rust_connection::RustConnection;
 
+    fn wayland() -> bool {
+        md_portal::Session::wayland()
+    }
+
     pub fn unsupported() -> Option<&'static str> {
-        let wayland =
-            std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t.eq_ignore_ascii_case("wayland"));
-        if wayland {
-            return Some("wayland");
+        if wayland() {
+            // Being controlled needs the remote desktop portal or uinput;
+            // sending, the input capture portal (`receive_only`).
+            return md_portal::service::input_way().err().map(|_| "wayland");
         }
         if std::env::var_os("DISPLAY").is_none() {
             return Some("display");
         }
         None
+    }
+
+    /// Wayland without the InputCapture portal: other computers can
+    /// control this one, but it can't send its own mouse and keyboard.
+    pub fn receive_only() -> bool {
+        wayland() && !md_portal::service::can_send()
     }
 
     /// A connection for looking at and moving the pointer.
@@ -604,10 +628,29 @@ mod os {
     }
 
     pub fn screens(app: &AppHandle) -> Vec<Rect> {
+        if wayland() {
+            // The portal's screens, in the units its moves use.
+            let s = md_portal::service::input_screens();
+            if !s.is_empty() {
+                return s
+                    .into_iter()
+                    .map(|r| Rect {
+                        x: r.x,
+                        y: r.y,
+                        w: r.w,
+                        h: r.h,
+                    })
+                    .collect();
+            }
+        }
         tauri_screens(app)
     }
 
     pub fn cursor() -> Option<(f64, f64)> {
+        if wayland() {
+            // Where the moves made here put it (no app may read it there).
+            return md_portal::service::input_cursor();
+        }
         let g = shared()?.lock().ok()?;
         let (c, root) = &*g;
         let r = c.query_pointer(*root).ok()?.reply().ok()?;
@@ -615,6 +658,11 @@ mod os {
     }
 
     pub fn warp(x: f64, y: f64) {
+        if wayland() {
+            // Only through an input session already open: never asks.
+            md_portal::service::input_warp(x, y);
+            return;
+        }
         let Some(m) = shared() else {
             return;
         };
@@ -637,14 +685,58 @@ mod os {
     pub struct Capture {
         stop: Arc<AtomicBool>,
         thread: Option<std::thread::JoinHandle<()>>,
+        /// An InputCapture portal capture (Wayland).
+        portal: bool,
     }
 
     impl Drop for Capture {
         fn drop(&mut self) {
             self.stop.store(true, Ordering::Release);
+            if self.portal {
+                // Gives the pointer back, and ends the forwarding thread.
+                md_portal::service::kvm_release();
+            }
             if let Some(t) = self.thread.take() {
                 let _ = t.join();
             }
+        }
+    }
+
+    /// Wayland: what the portal captured since the pointer went through a
+    /// barrier (`kvm.rs` saw it) goes to `tx`.
+    fn portal_capture(tx: Sender<Captured>) -> Result<Capture, &'static str> {
+        use md_portal::Captured as P;
+        let (ptx, prx) = mpsc::channel::<P>();
+        let thread = std::thread::Builder::new()
+            .name("kvm-portal".into())
+            .spawn(move || {
+                for c in prx {
+                    let got = match c {
+                        P::Motion { dx, dy } => Some(Captured::Motion { dx, dy }),
+                        P::Button { button, down } => Some(Captured::Button { button, down }),
+                        P::Wheel { dx, dy } => Some(Captured::Wheel { dx, dy }),
+                        P::Key { code, down } => {
+                            kvm_keys::from_evdev(code).map(|hid| Captured::Key { hid, down })
+                        }
+                    };
+                    if let Some(got) = got {
+                        if tx.send(got).is_err() {
+                            break;
+                        }
+                    }
+                }
+            })
+            .map_err(|_| "thread")?;
+        let capture = Capture {
+            stop: Arc::new(AtomicBool::new(false)),
+            thread: Some(thread),
+            portal: true,
+        };
+        if md_portal::service::kvm_attach(ptx) {
+            Ok(capture)
+        } else {
+            // Nothing captured (the pointer didn't go through a barrier).
+            Err("wayland")
         }
     }
 
@@ -727,6 +819,9 @@ mod os {
     }
 
     pub fn start_capture(tx: Sender<Captured>) -> Result<Capture, &'static str> {
+        if wayland() {
+            return portal_capture(tx);
+        }
         let stop = Arc::new(AtomicBool::new(false));
         let stopping = stop.clone();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), &'static str>>();
@@ -796,6 +891,7 @@ mod os {
             Ok(Ok(())) => Ok(Capture {
                 stop,
                 thread: Some(thread),
+                portal: false,
             }),
             other => {
                 let _ = thread.join();
@@ -816,6 +912,9 @@ mod os {
 
     pub fn unsupported() -> Option<&'static str> {
         Some("unsupported")
+    }
+    pub fn receive_only() -> bool {
+        false
     }
     pub fn screens(_app: &AppHandle) -> Vec<Rect> {
         Vec::new()

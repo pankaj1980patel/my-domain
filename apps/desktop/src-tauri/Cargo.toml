@@ -30,6 +30,10 @@ md-geo = { workspace = true }
 # This computer's own notifications on a phone (Linux, session D-Bus); see
 # `computer_notifs.rs`.
 md-notify = { workspace = true }
+# Wayland on Linux through the desktop portals (screen cast, remote input,
+# input capture for sharing the mouse and keyboard, global shortcuts) and
+# the clipboard's concealed mark; see `wayland.rs`. Empty off Linux.
+md-portal = { workspace = true }
 # Typed commands: generates TypeScript bindings for the UI from the Rust
 # commands (ADR-0003). The three crates move in lockstep (release candidates).
 specta = { version = "=2.0.0-rc.26", features = ["derive"] }

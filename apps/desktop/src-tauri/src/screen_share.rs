@@ -3,9 +3,12 @@
 //
 // Snapshots come from the OS's own tools, shrunk to `WIDTH` pixels wide:
 // macOS `screencapture` + `sips` (needs Screen Recording permission, else
-// macOS hands over only the wallpaper); Linux `grim` (Wayland) or
-// ImageMagick's `import` (X11). A notice says when a device starts
-// watching, so it's never silent.
+// macOS hands over only the wallpaper); Linux X11: ImageMagick's
+// `import`. Linux Wayland (`md_portal`): the ScreenCast portal's PipeWire
+// stream read by `gst-launch-1.0 pipewiresrc` (asked once, then
+// remembered with the portal's restore token), else `grim` (wlroots),
+// else the Screenshot portal's stills (one every `STILLS_EVERY`). A notice
+// says when a device starts watching, so it's never silent.
 
 #[cfg_attr(windows, allow(unused_imports))]
 use std::process::{Command, Stdio};
@@ -21,10 +24,16 @@ use crate::Eng;
 const WIDTH: u32 = 1280;
 /// At most one snapshot per this long.
 const EVERY: Duration = Duration::from_millis(500);
+/// Wayland without a screen cast: one Screenshot portal still per this
+/// long (each one is a file the portal writes).
+#[cfg(target_os = "linux")]
+const STILLS_EVERY: Duration = Duration::from_secs(2);
 
 /// Why snapshots can't be taken here, for the phone to show: macOS
-/// "screen_recording" (permission); Linux "grim" or "imagemagick" (a tool to
-/// install); "unsupported" elsewhere.
+/// "screen_recording" (permission); Linux X11 "imagemagick" (a tool to
+/// install); Linux Wayland "gst_pipewire" (GStreamer's PipeWire plugin to
+/// install) or "portal" (no desktop portal for the screen); "unsupported"
+/// elsewhere.
 pub fn ready() -> Result<(), &'static str> {
     #[cfg(target_os = "macos")]
     {
@@ -37,11 +46,7 @@ pub fn ready() -> Result<(), &'static str> {
     #[cfg(target_os = "linux")]
     {
         if wayland() {
-            if has("grim", &["-h"]) {
-                Ok(())
-            } else {
-                Err("grim")
-            }
+            md_portal::service::screen_way().map(|_| ())
         } else if has("import", &["-version"]) {
             Ok(())
         } else {
@@ -92,6 +97,9 @@ fn send_while_watched(app: &AppHandle) {
             return;
         };
         if engine.screen_watchers().is_empty() {
+            // Ends a Wayland screen cast.
+            #[cfg(target_os = "linux")]
+            md_portal::service::screen_stop();
             return;
         }
         let started = Instant::now();
@@ -103,8 +111,17 @@ fn send_while_watched(app: &AppHandle) {
             }
             None => eprintln!("[screen] no snapshot"),
         }
-        std::thread::sleep(EVERY.saturating_sub(started.elapsed()));
+        std::thread::sleep(every().saturating_sub(started.elapsed()));
     }
+}
+
+/// How often a snapshot is taken.
+fn every() -> Duration {
+    #[cfg(target_os = "linux")]
+    if wayland() && md_portal::service::screen_way() == Ok(md_portal::ScreenWay::Stills) {
+        return STILLS_EVERY;
+    }
+    EVERY
 }
 
 /// What to tell the user when snapshots can't be taken.
@@ -113,7 +130,15 @@ fn needs(why: &str) -> &'static str {
         "screen_recording" => {
             "Allow my-domain in System Settings > Privacy & Security > Screen Recording, then try again."
         }
-        "grim" => "Install grim to share this screen from Wayland.",
+        "gst_pipewire" => {
+            "Install GStreamer's PipeWire plugin (gstreamer1.0-pipewire on Debian/Ubuntu, \
+             pipewire-gstreamer on Fedora, gst-plugin-pipewire on Arch) to share this screen \
+             from Wayland."
+        }
+        "portal" => {
+            "Sharing this screen from Wayland needs xdg-desktop-portal and your desktop's \
+             portal (xdg-desktop-portal-gnome, -kde or -wlr)."
+        }
         "imagemagick" => "Install ImageMagick (its import tool) to share this screen.",
         _ => "Sharing this screen isn't supported here yet.",
     }
@@ -150,9 +175,13 @@ fn snapshot() -> Option<Vec<u8>> {
     #[cfg(target_os = "linux")]
     {
         let out = if wayland() {
-            Command::new("grim")
-                .args(["-t", "jpeg", "-q", "50", "-s", "0.5", "-"])
-                .output()
+            match md_portal::service::screen_way() {
+                Ok(md_portal::ScreenWay::Grim) => Command::new("grim")
+                    .args(["-t", "jpeg", "-q", "50", "-s", "0.5", "-"])
+                    .output(),
+                Ok(way) => return md_portal::service::screen_jpeg(way, WIDTH, 50),
+                Err(_) => return None,
+            }
         } else {
             Command::new("import")
                 .args(["-silent", "-window", "root", "-resize"])
@@ -171,7 +200,7 @@ fn snapshot() -> Option<Vec<u8>> {
 
 #[cfg(target_os = "linux")]
 fn wayland() -> bool {
-    std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "wayland")
+    md_portal::Session::wayland()
 }
 
 #[cfg(target_os = "linux")]

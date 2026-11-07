@@ -1,7 +1,8 @@
 //! First-run setup and the health check on the computer (the core's
 //! `features::onboarding` and `features::health`): what only this app can
-//! read (macOS permissions, a screenshot tool on Linux, free space where
-//! received files go) goes to the core, which adds the server, pushes,
+//! read (macOS permissions, a screenshot tool on Linux X11, the desktop
+//! portals and helper programs on Linux Wayland, free space where received
+//! files go) goes to the core, which adds the server, pushes,
 //! links, keys and versions and rates each line. Each permission's fix
 //! opens the OS's own page for it: nothing is ever granted from here.
 
@@ -55,6 +56,9 @@ pub struct Readings {
     /// probed. Always "Ask now"-able once probed: no API says whether
     /// its prompt was answered.
     pub local_network: Option<&'static str>,
+    /// Linux Wayland: the desktop portals and helper programs found; none
+    /// elsewhere.
+    pub wayland: Option<(md_portal::Portals, md_portal::Tools)>,
 }
 
 fn fact(id: &str, features: &[&str], state: &str, critical: bool) -> PermissionFact {
@@ -211,6 +215,13 @@ pub fn permission_facts(os: Os, r: &Readings) -> Vec<PermissionFact> {
                     out.push(fact(&format!("tool_{tool}"), &["media"], "denied", false));
                 }
             }
+            // Wayland: each portal and helper, with how to install it
+            // (the UI's words for `linux_*`).
+            if let Some((portals, tools)) = &r.wayland {
+                for l in md_portal::caps::health_lines(portals, tools) {
+                    out.push(fact(l.id, l.features, l.state, false));
+                }
+            }
         }
     }
     out
@@ -325,6 +336,7 @@ fn readings(app: &AppHandle) -> Readings {
             bluetooth: mac::bluetooth_auth().map(bluetooth_state),
             notifications: mac::notification_status().map(notification_state),
             local_network: Some(read_local_network(app)),
+            wayland: None,
         }
     }
     #[cfg(not(target_os = "macos"))]
@@ -332,9 +344,21 @@ fn readings(app: &AppHandle) -> Readings {
         let _ = app;
         Readings {
             screen: Some(crate::screen_share::ready().map_err(String::from)),
+            wayland: wayland_readings(),
             ..Default::default()
         }
     }
+}
+
+/// Linux Wayland: the portals and helper programs (cached a minute).
+#[cfg(target_os = "linux")]
+fn wayland_readings() -> Option<(md_portal::Portals, md_portal::Tools)> {
+    md_portal::Session::wayland().then(md_portal::service::caps)
+}
+
+#[cfg(all(not(target_os = "linux"), not(target_os = "macos")))]
+fn wayland_readings() -> Option<(md_portal::Portals, md_portal::Tools)> {
+    None
 }
 
 fn facts(app: &AppHandle) -> PlatformFacts {
@@ -636,6 +660,7 @@ mod tests {
             bluetooth: Some("granted"),
             notifications: Some("granted"),
             local_network: Some("granted"),
+            wayland: None,
         };
         let f = permission_facts(Os::Mac, &ok);
         assert!(f.iter().all(|p| p.state == "granted" && !p.can_ask));
@@ -651,6 +676,7 @@ mod tests {
             bluetooth: Some("not_determined"),
             notifications: Some("not_determined"),
             local_network: Some("unknown"),
+            wayland: None,
         };
         let f = permission_facts(Os::Mac, &fresh);
         let ask: Vec<(&str, &str, bool)> = f
@@ -788,6 +814,35 @@ mod tests {
             vec![("tool_grim", "denied")]
         );
         assert_eq!(settings_url(Os::Linux, "tool_grim"), None);
+    }
+
+    #[test]
+    fn linux_wayland_lists_its_portals_and_tools() {
+        let portals = md_portal::Portals {
+            screencast: Some(5),
+            remote_desktop: Some(2),
+            ..Default::default()
+        };
+        let tools = md_portal::Tools {
+            pipewire: true,
+            wl_clipboard: true,
+            ..Default::default()
+        };
+        let r = Readings {
+            screen: Some(Err("gst_pipewire".into())),
+            wayland: Some((portals, tools)),
+            ..Default::default()
+        };
+        let f = permission_facts(Os::Linux, &r);
+        let got = states(&f);
+        assert!(got.contains(&("linux_screencast", "granted")));
+        assert!(got.contains(&("linux_gst_pipewire", "denied")));
+        assert!(got.contains(&("linux_input_capture", "denied")));
+        assert!(got.contains(&("linux_wl_clipboard", "granted")));
+        // No screenshot-tool line for a Wayland reason, and none is red.
+        assert!(!got.iter().any(|(id, _)| id.starts_with("tool_")));
+        assert!(f.iter().all(|x| !x.critical));
+        assert_eq!(settings_url(Os::Linux, "linux_screencast"), None);
     }
 
     #[test]
