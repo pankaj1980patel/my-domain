@@ -237,16 +237,18 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
             <Icon name="chevron-down" size={14} />
           </MenuButton>
         </div>
-        <label class="search-filter">
-          <span class="small muted">{t("search.filterDevice")}</span>
-          <select value={node()} onChange={(e) => setNode(e.currentTarget.value)}>
+        {/* Device and when: one group at the right, each with its icon. */}
+        <div class="search-selects">
+        <label class="select-with-icon">
+          <Icon name="devices" size={16} />
+          <select aria-label={t("search.filterDevice")} value={node()} onChange={(e) => setNode(e.currentTarget.value)}>
             <option value="">{t("search.anyDevice")}</option>
             <For each={state.peers}>{(p) => <option value={p.node_id}>{peerName(p.node_id)}</option>}</For>
           </select>
         </label>
-        <label class="search-filter">
-          <span class="small muted">{t("search.filterWhen")}</span>
-          <select value={when()} onChange={(e) => setWhen(e.currentTarget.value as When)}>
+        <label class="select-with-icon">
+          <Icon name="calendar" size={16} />
+          <select aria-label={t("search.filterWhen")} value={when()} onChange={(e) => setWhen(e.currentTarget.value as When)}>
             <option value="any">{t("search.anyTime")}</option>
             <option value="today">{t("search.today")}</option>
             <option value="week">{t("search.week")}</option>
@@ -254,6 +256,7 @@ export default function Search(props: { query?: string; onOpen: (f: Found) => vo
             <option value="custom">{t("search.custom")}</option>
           </select>
         </label>
+        </div>
         <Show when={when() === "custom"}>
           <label class="search-filter">
             <span class="small muted">{t("search.dateFrom")}</span>

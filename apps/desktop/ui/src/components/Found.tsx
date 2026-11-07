@@ -33,8 +33,11 @@ export function foundMeta(f: Found): string {
       if (name) parts.push(name);
       break;
     case "transfers":
-      if (f.tag && TRANSFER_STATE[f.tag]) parts.push(t(TRANSFER_STATE[f.tag]));
+      // One line: "Pixel 8 · 380 KB · 2 h ago" (the detail's "From Pixel 8"
+      // isn't said again).
       if (name) parts.push(name);
+      for (const bit of (f.detail || "").split(" · ")) if (bit && !(name && bit.includes(name))) parts.push(bit);
+      if (f.tag && f.tag !== "done" && TRANSFER_STATE[f.tag]) parts.push(t(TRANSFER_STATE[f.tag]));
       break;
     case "schedules":
     case "shortcuts":
@@ -67,7 +70,7 @@ export function foundMeta(f: Found): string {
 
 /** Kinds whose text says more than the title (a notification's or a
  *  note's text, a file's folder). */
-const WITH_DETAIL = new Set<Found["kind"]>(["notes", "read_later", "notifications", "transfers", "folders"]);
+const WITH_DETAIL = new Set<Found["kind"]>(["notes", "read_later", "notifications", "folders"]);
 
 /** The result's two lines. `title` empty: the text's snippet is the line. */
 export function FoundText(props: { f: Found; words: string[]; class?: string }) {

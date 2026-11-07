@@ -111,7 +111,9 @@ async function openPermissionPage(c: HealthCheck) {
   }
 }
 
-/** One line: a dot for the level, what it is, why, and its fix. A
+const LEVEL_ICON: Record<string, "ok" | "alert" | "no" | "info"> = { ok: "ok", warn: "alert", bad: "no", info: "info" };
+
+/** One line: an icon for the level, what it is, why, and its fix. A
  *  permission the OS can still ask for gets "Allow" (its prompt) and its
  *  settings page beside it. */
 export function HealthRow(props: { check: HealthCheck; nav: HealthNav }) {
@@ -127,7 +129,8 @@ export function HealthRow(props: { check: HealthCheck; nav: HealthNav }) {
   };
   return (
     <li class={`health-row health-${c().level}`}>
-      <span class="health-dot" aria-hidden="true" />
+      {/* The level as an icon, not colour alone. */}
+      <Icon name={LEVEL_ICON[c().level] ?? "info"} size={16} class="health-icon" />
       <div class="health-text">
         <strong>{checkTitle(c())}</strong>
         <span class="sr-only">, {levelLabel(c())}</span>
@@ -242,7 +245,7 @@ export default function Health(props: HealthNav) {
           </li>
           <li>
             <button class="sec-row" onClick={() => (props.onDevices ? props.onDevices() : props.onMap())}>
-              <IconChip name="verify" tone="green" />
+              <IconChip name="verify" tone={verified() < state.peers.length ? "amber" : "green"} />
               <span class="grow">
                 <strong>{t("sec.verification")}</strong>
                 <span class="muted small">{t("sec.verificationBody", { n: verified(), total: state.peers.length })}</span>

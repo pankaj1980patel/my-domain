@@ -3593,6 +3593,7 @@ html.qp-window body {
   overflow-y: auto;
   padding: 0 var(--s-3) var(--s-3);
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: var(--s-3);
 }
@@ -3600,11 +3601,10 @@ html.qp-window body {
   display: grid;
   gap: var(--s-1);
 }
+/* Section titles: sentence case, quiet (no uppercase eyebrows, G-16). */
 .qp-h {
-  font-size: var(--text-xs);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-3);
 }
 .qp-sub {
@@ -3623,7 +3623,7 @@ html.qp-window body {
 }
 .qp-device {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--s-2);
   row-gap: var(--s-1);
@@ -3656,21 +3656,23 @@ html.qp-window body {
 .qp-device-state .pill {
   font-size: var(--text-xs);
 }
+/* Its actions: 32 px icon buttons at the row's end, each with a tooltip
+   and a label (QP-1: nothing runs past the 360 px panel). */
 .qp-actions {
-  grid-column: 1 / -1;
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s-1);
+  gap: 2px;
 }
 .qp-act {
   font: inherit;
-  font-size: var(--text-xs);
-  font-weight: 650;
-  padding: 4px 10px;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   border-radius: var(--r-full);
-  border: 1px solid var(--border-strong);
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--text);
+  color: var(--text-2);
   cursor: pointer;
 }
 .qp-act:hover:not(:disabled) {
@@ -5087,7 +5089,7 @@ html.kvm-window body {
   font-weight: 600;
 }
 .settings-cat .switch-row:not(.set-row) + p.muted.small {
-  margin-top: calc(-1 * var(--s-4));
+  margin-top: calc(-1 * var(--s-2));
   padding-right: 56px;
 }
 .settings-cat label.row.small {
@@ -7102,14 +7104,26 @@ html.kvm-window body {
   min-height: 0;
   overflow-y: auto;
 }
+/* The verdict across the left column: its title on one line, the actions
+   on a row under it. (--card-bg is a gradient in dark themes: the tint is
+   layered over it, not colour-mixed into it.) */
 .sec-status {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-4);
-  background: color-mix(in srgb, var(--c-green) 9%, var(--card-bg));
+  gap: var(--s-3) var(--s-4);
+  background: linear-gradient(color-mix(in srgb, var(--c-green) 9%, transparent), color-mix(in srgb, var(--c-green) 9%, transparent)), var(--card-bg);
 }
 .sec-status.sec-bad {
-  background: color-mix(in srgb, var(--c-amber) 9%, var(--card-bg));
+  background: linear-gradient(color-mix(in srgb, var(--c-amber) 9%, transparent), color-mix(in srgb, var(--c-amber) 9%, transparent)), var(--card-bg);
+}
+.sec-status .grow {
+  min-width: 0;
+}
+.sec-status .sec-actions {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
 }
 .sec-status .icon-chip {
   width: 56px;
@@ -7122,6 +7136,9 @@ html.kvm-window body {
 .sec-word {
   font-size: var(--text-xl);
   font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sec-actions {
   display: grid;
@@ -7135,8 +7152,19 @@ html.kvm-window body {
 .sec-stats .stat-card {
   padding: var(--s-3);
 }
+.sec-stats .stat-value,
 .sec-when {
-  font-size: var(--text-md);
+  font-size: var(--text-lg);
+  font-weight: 800;
+}
+.sec-stats .stat-card {
+  min-width: 0;
+}
+.sec-stats .stat-text .muted {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .sec-rows {
   list-style: none;
@@ -7172,6 +7200,22 @@ html.kvm-window body {
 .health-page > .sec-body > .sec-checks {
   min-height: 0;
   overflow-y: auto;
+  /* A fade at the bottom: the list goes on below. */
+  mask-image: linear-gradient(180deg, #000 calc(100% - 28px), transparent);
+  padding-bottom: var(--s-6);
+}
+.health-icon {
+  flex: none;
+  color: var(--text-3);
+}
+.health-ok .health-icon {
+  color: var(--success);
+}
+.health-warn .health-icon {
+  color: var(--warning);
+}
+.health-bad .health-icon {
+  color: var(--danger);
 }
 
 /* Connections: health in the header. */
@@ -7437,12 +7481,24 @@ html.kvm-window body {
 .link.back:hover {
   text-decoration: underline;
 }
+/* The buttons stay on one line (long labels, e.g. Tamil, are cut with an
+   ellipsis); the facts list takes the next line. */
 .hero-side {
-  flex-wrap: nowrap;
+  max-width: 460px;
   min-width: 0;
 }
-.hero-side .hero-actions {
+.hero-side > .btn,
+.hero-side > .menu-wrap {
+  flex: none;
+}
+.hero-side .hero-actions,
+.hero-side .hero-link {
+  max-width: 180px;
   min-width: 0;
+}
+.hero-side .hero-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .hero-side .hero-actions .btn-label {
   overflow: hidden;
@@ -7795,4 +7851,279 @@ html.kvm-window body {
 .timer-actions .timer-cancel,
 .big-timer-actions .timer-cancel {
   margin-left: auto;
+}
+
+/* Quick panel: every child keeps inside the panel's width. */
+.qp,
+.qp * {
+  box-sizing: border-box;
+}
+.qp-section,
+.qp-list,
+.qp-list > li,
+.qp-foot > * {
+  min-width: 0;
+}
+.qp-title .wordmark {
+  font-size: var(--text-md);
+}
+.qp-close {
+  display: inline-grid;
+  place-items: center;
+}
+/* The relay is a route, not a warning: a relayed device is online (G-4). */
+.pill-relay {
+  color: var(--success);
+}
+.pill-relay .dot {
+  background: var(--success);
+}
+
+/* --- tab levels (G-8) ---------------------------------------------------------
+   Level 1 (.tab) keeps the filled accent. Level 2 (.sub-nav-item) is a soft
+   fill. Anything under that (Remote control's parts) is an underline only,
+   never the filled primary. */
+.sub-nav {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px;
+}
+.sub-nav-item {
+  flex: none;
+}
+.sub-nav-item.active {
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+}
+.control-groups-wrap > .home-filters {
+  gap: var(--s-1);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+}
+.control-groups-wrap > .home-filters .filter-chip {
+  height: 36px;
+  background: transparent;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.control-groups-wrap > .home-filters .filter-chip:hover {
+  background: transparent;
+  color: var(--text);
+}
+.control-groups-wrap > .home-filters .filter-chip[aria-pressed="true"] {
+  background: transparent;
+  color: var(--accent-fg);
+  border-bottom-color: var(--accent-fg);
+}
+/* Notes, Timers and Read later: their tabs under the header, like every
+   other page (the old bar above the header is gone). */
+.tool-tabs {
+  display: none;
+}
+
+/* --- one setting-row style (G-14) --------------------------------------------
+   Icon (24 px column), name with its description under it (4 px apart),
+   control on the right, centred on the text. Rows without an icon keep the
+   same text column, so every name starts at the same x. */
+.set-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  column-gap: var(--s-3);
+  row-gap: var(--s-1);
+  align-items: center;
+}
+.set-row > .set-icon {
+  grid-column: 1;
+  align-self: start;
+  margin-top: 1px;
+}
+.set-row > .set-text {
+  grid-column: 2;
+  gap: var(--s-1);
+}
+.set-row > .set-control,
+.set-row > input[role="switch"] {
+  grid-column: 3;
+  align-self: center;
+}
+.settings-cat .switch-row:not(.set-row),
+.device-page .switch-row:not(.set-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--s-3);
+  align-items: center;
+  padding-left: 36px;
+}
+.settings-cat .switch-row:not(.set-row) + p.muted.small,
+.device-page .switch-row:not(.set-row) + p.muted.small {
+  margin-top: calc(-1 * var(--s-2));
+  padding-left: 36px;
+  padding-right: 56px;
+}
+.device-page .tile > .switch-row:not(.set-row) {
+  padding-left: 0;
+}
+.device-page .tile > .switch-row:not(.set-row) + p.muted.small {
+  padding-left: 0;
+  margin-top: calc(-1 * var(--s-3));
+}
+@media (max-width: 720px) {
+  .set-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .set-row > .set-control {
+    grid-column: 2;
+  }
+}
+
+/* --- Settings (SET-1, SET-3, SET-5, SET-7) ----------------------------------- */
+/* The landing shows the categories once, as cards; the list beside it only
+   keeps the search box. Card summaries get three lines. */
+.settings-landing .settings-cats {
+  display: none;
+}
+.cat-card-text .muted {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+.session-row {
+  align-items: center;
+  gap: var(--s-3);
+}
+.session-row .device-icon {
+  flex: none;
+  color: var(--text-2);
+}
+/* A section opened by a link lands below the top bar, title in view. */
+[id^="settings-"] {
+  scroll-margin-top: 80px;
+}
+/* Themes: five across on a wide window, else three and two (SET-5). */
+.theme-picker {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (min-width: 1100px) {
+  .theme-picker {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+/* KVM: computers are names with their icon, not field-like pills; a placed
+   chip is cut with an ellipsis (SET-6). */
+.kvm-list .kvm-name {
+  border: none;
+  background: none;
+  padding: 0;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.kvm-slot .kvm-chip {
+  max-width: 100%;
+  min-width: 0;
+}
+.kvm-chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A device's Settings tab: one column of equal cards (DEV-12). */
+.tiles[data-tab="settings"] {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+}
+.tiles[data-tab="settings"] > .icon-slot {
+  grid-column: 1 / -1;
+}
+
+/* --- Connections (CON-1..3, G-23) -------------------------------------------- */
+.map-name-bg {
+  fill: var(--surface-solid, var(--surface));
+  stroke: none;
+  opacity: 0.92;
+}
+.map-node .map-name-bg {
+  stroke: none;
+  stroke-width: 0;
+}
+.map-name-sub {
+  fill: var(--text-3);
+  font-size: 11px;
+}
+/* The health summary is a strip under the tabs, not squeezed into the head. */
+.conn-health-strip {
+  align-self: stretch;
+  flex-wrap: wrap;
+}
+/* Verified: a filled success badge with a white check, in every theme. */
+.map-verified circle {
+  fill: var(--success);
+  stroke: var(--surface-solid, var(--bg));
+}
+.map-verified path {
+  stroke: var(--on-primary);
+}
+
+/* --- Search (SRCH-1, SRCH-2) ------------------------------------------------- */
+.search-filters {
+  align-items: center;
+}
+.search-filters > .search-chips {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.search-selects {
+  display: flex;
+  gap: var(--s-2);
+  margin-left: auto;
+}
+.topbar-search-off {
+  visibility: hidden;
+}
+/* Notes (NTR-2): the shared line under the subtitle; the editor panel as
+   tall as the list beside it. */
+.notes-synced {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  margin-top: 2px;
+}
+.notes-page .notes-main {
+  align-self: stretch;
+  min-height: 100%;
+  display: grid;
+}
+.notes-page .notes-main > * {
+  min-height: 0;
+}
+
+/* --- Setup (SETUP-1..4) ------------------------------------------------------- */
+.shell.shell-setup {
+  grid-template-columns: minmax(0, 1fr);
+}
+.shell-setup > .sidebar[hidden] {
+  display: none;
+}
+.setup-dots .setup-dot {
+  width: auto;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: 0 var(--s-3);
+  font-size: var(--text-sm);
+  font-weight: 600;
+}
+.setup-dot.done {
+  color: var(--success);
+}
+.setup-dots {
+  flex-wrap: wrap;
+}
+.setup-foot {
+  align-items: center;
+}
+.add-device-open {
+  justify-self: start;
+  align-self: flex-start;
 }

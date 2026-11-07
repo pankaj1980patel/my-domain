@@ -40,7 +40,6 @@ import { UpdatesSetting } from "../components/UpdatesSetting";
 import { updateStatus } from "../lib/updates";
 import { ClipPrivacySetting } from "../components/ClipPrivacySetting";
 import { OtpSetting } from "../components/OtpSetting";
-import { AddDevice } from "../components/AddDevice";
 import { OwnFingerprint } from "../components/VerifyDevice";
 import { RemovedDevicesSetting } from "../components/RemovedDevices";
 import { PermissionsSummary } from "../components/PeerPermissions";
@@ -243,7 +242,8 @@ export default function Settings(props: {
   const subOf = (c: CategoryId) => sub()[c] ?? SECTIONS[c][0].id;
   const pickSub = (c: CategoryId, id: string) => setSub({ ...sub(), [c]: id });
 
-  type Sec = { id: string; icon: IconName; title: Key; body: () => JSX.Element };
+  /** `short`: the sub-tab's name when the title is long (the tile keeps it). */
+  type Sec = { id: string; icon: IconName; title: Key; short?: Key; body: () => JSX.Element };
   const SECTIONS: Record<CategoryId, Sec[]> = {
     general: [
       {
@@ -304,9 +304,14 @@ export default function Settings(props: {
           <>
             <article class="tile" id="settings-account">
               <h2>{t("settings.account")}</h2>
-              <SettingRow icon="user" label={state.account.username || "…"} hint={state.account.server || t("settings.account")}>
-                <AddDevice />
-              </SettingRow>
+              {/* Who's signed in; adding a device lives in All devices. */}
+              <div class="set-row">
+                <Icon name="user" size={20} class="set-icon" />
+                <span class="set-text">
+                  <span class="set-label">{state.account.username || "…"}</span>
+                  <span class="set-hint">{state.account.server || t("settings.account")}</span>
+                </span>
+              </div>
               <ChangePassword />
               <Sessions />
             </article>
@@ -440,6 +445,7 @@ export default function Settings(props: {
         id: "sharing",
         icon: "devices",
         title: "settings.cat.devicesTile",
+        short: "settings.short.devices",
         body: () => (
           <article class="tile">
             <h2>{t("settings.cat.devicesTile")}</h2>
@@ -472,15 +478,16 @@ export default function Settings(props: {
         id: "permissions",
         icon: "verify",
         title: "perm.summaryTitle",
+        short: "settings.short.permissions",
         body: () => (
           <article class="tile">
             <PermissionsSummary />
           </article>
         ),
       },
-      { id: "wake", icon: "power", title: "wake.title", body: () => <WakeSetting /> },
-      { id: "kvm", icon: "mouse", title: "kvm.title", body: () => <KvmSetting /> },
-      { id: "removed", icon: "remove", title: "removedDevices.title", body: () => <RemovedDevicesSetting /> },
+      { id: "wake", icon: "power", title: "wake.title", short: "settings.short.wake", body: () => <WakeSetting /> },
+      { id: "kvm", icon: "mouse", title: "kvm.title", short: "settings.short.kvm", body: () => <KvmSetting /> },
+      { id: "removed", icon: "archive", title: "removedDevices.title", short: "settings.short.removed", body: () => <RemovedDevicesSetting /> },
     ],
     clipboard: [
       {
@@ -657,7 +664,9 @@ export default function Settings(props: {
         hidden={!shows(p.id)}
         aria-labelledby={`settings-cat-${p.id}`}
       >
-        <h2 class="settings-cat-title" id={`settings-cat-${p.id}`}>
+        {/* Named by the selected category in the list: no eyebrow (kept
+            for screen readers). */}
+        <h2 class="settings-cat-title sr-only" id={`settings-cat-${p.id}`}>
           <Icon name={c.icon} />
           {label()}
         </h2>
@@ -674,7 +683,7 @@ export default function Settings(props: {
                     onClick={() => pickSub(p.id, x.id)}
                   >
                     <Icon name={x.icon} />
-                    {t(x.title)}
+                    {t(x.short ?? x.title)}
                   </button>
                 </li>
               )}
@@ -707,7 +716,7 @@ export default function Settings(props: {
         </div>
       </header>
 
-      <div class="settings-layout">
+      <div class="settings-layout" classList={{ "settings-landing": cat() === null && !searching() }}>
         <nav class="settings-nav" aria-label={t("settings.categories")}>
           <input
             type="search"
@@ -768,7 +777,9 @@ export default function Settings(props: {
                     <IconChip name={c.icon} tone={c.tone} size={22} />
                     <span class="cat-card-text">
                       <strong>{t(c.label)}</strong>
-                      <span class="muted small">{SECTIONS[c.id].map((x) => t(x.title)).join(" · ")}</span>
+                      <span class="muted small">
+                        {[...SECTIONS[c.id].map((x) => t(x.short ?? x.title)), ...(c.id === "appearance" ? [t("settings.language")] : [])].join(" · ")}
+                      </span>
                     </span>
                     <Icon name="chevron-right" />
                   </button>

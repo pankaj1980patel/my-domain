@@ -11,6 +11,7 @@ import { toast } from "./ui";
 import { t } from "../i18n";
 import { focusSoon } from "../lib/a11y";
 import { OwnFingerprint } from "./VerifyDevice";
+import { Icon } from "./Icon";
 
 const POLL_MS = 2000;
 
@@ -108,7 +109,8 @@ export function AddDevice(props: { startOpen?: boolean; onClose?: () => void } =
     <Show
       when={open()}
       fallback={
-        <button class="btn btn-ghost" ref={openButton} onClick={start}>
+        <button class="btn btn-lead add-device-open" ref={openButton} onClick={start}>
+          <Icon name="plus" />
           {t("join.addDevice")}
         </button>
       }

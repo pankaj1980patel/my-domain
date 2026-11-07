@@ -589,7 +589,7 @@ export default function Device(props: {
                     <Overview node={props.node} how={seen()?.how} onGo={goTo} onActivity={() => props.onActivity?.()} />
                   </div>
                 </Show>
-                <div class="tiles tab-panel" classList={{ "tiles-split": split() }} hidden={current() === "overview"} {...panelProps("device", current())}>
+                <div class="tiles tab-panel" data-tab={current()} classList={{ "tiles-split": split() }} hidden={current() === "overview"} {...panelProps("device", current())}>
                   <Show when={split()}>
                     <ul class="sub-nav tile-wide" aria-label={t("device.tilesOf", { tab: t(TAB_LABEL[current()]) })}>
                       <For each={offeredTiles()}>

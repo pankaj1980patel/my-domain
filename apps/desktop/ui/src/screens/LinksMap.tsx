@@ -57,6 +57,15 @@ const PATH: Record<string, Key> = {
   ble: "map.path.ble",
 };
 
+/** Where a line's label sits: half way along this computer's own links
+ *  (clear of the device's name under it), else where the map put it. */
+function labelAt(v: MapView, e: MapEdge): { x: number; y: number } {
+  const other = e.mine ? v.spots.find((s) => s.node_id === e.b || s.node_id === e.a) : undefined;
+  const { x: mx, y: my } = v.me;
+  if (!other || mx == null || my == null || other.x == null || other.y == null) return { x: e.label_x ?? 0, y: e.label_y ?? 0 };
+  return { x: mx + (other.x - mx) * 0.5, y: my + (other.y - my) * 0.5 };
+}
+
 /** The label's words: how, and the round trip where known. */
 function label(e: MapEdge): string {
   const how = e.nearby ? `${t(e.label_key as Key)} · ${t("nearby.badge")}` : t(e.label_key as Key);
@@ -124,11 +133,29 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
           </h1>
           <p class="muted" title={t("map.subtitle")}>{t("map.sub2")}</p>
         </div>
+      </header>
+
+      <Show when={mapView()} fallback={<p class="muted">{t("map.loading")}</p>}>
+        {(v) => (
+          <>
+            <Show when={v().map.devices.length === 0}>
+              <p class="muted">{t("map.empty")}</p>
+            </Show>
+            <Tabs
+              label={t("map.title")}
+              idBase="map"
+              tabs={[
+                { id: "map", label: t("map.topology"), icon: "map" },
+                { id: "list", label: t("map.listTab"), icon: "list" },
+              ]}
+              selected={view()}
+              onSelect={(id) => setView(id as "map" | "list")}
+            />
         {/* Connection health: only what's measured (QUIC round trips and
             loss); no bandwidth. */}
         <Show when={health()}>
           {(h) => (
-            <div class="conn-health" role="group" aria-label={t("map.health")}>
+            <div class="conn-health conn-health-strip" role="group" aria-label={t("map.health")}>
               <IconChip name={h().ok ? "verify" : "alert"} tone={h().ok ? "green" : "amber"} />
               <span class="conn-health-text">
                 <strong>{t("map.health")}</strong>
@@ -149,24 +176,7 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
             </div>
           )}
         </Show>
-      </header>
 
-      <Show when={mapView()} fallback={<p class="muted">{t("map.loading")}</p>}>
-        {(v) => (
-          <>
-            <Show when={v().map.devices.length === 0}>
-              <p class="muted">{t("map.empty")}</p>
-            </Show>
-            <Tabs
-              label={t("map.title")}
-              idBase="map"
-              tabs={[
-                { id: "map", label: t("map.topology"), icon: "map" },
-                { id: "list", label: t("map.listTab"), icon: "list" },
-              ]}
-              selected={view()}
-              onSelect={(id) => setView(id as "map" | "list")}
-            />
             <div hidden={view() !== "map"} {...panelProps("map", "map")}>
             <div class="map-wrap">
               <div class="tile map-canvas">
@@ -192,7 +202,7 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                     {(e) => (
                       <g
                         class={`map-label tone-${e.tone}`}
-                        transform={`translate(${e.label_x} ${e.label_y})`}
+                        transform={`translate(${labelAt(v(), e).x} ${labelAt(v(), e).y})`}
                         onClick={() => setPick({ kind: "edge", id: e.id })}
                       >
                         <rect x={-label(e).length * 3.3 - 8} y={-11} width={label(e).length * 6.6 + 16} height={22} rx={11} />
@@ -214,7 +224,15 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                         <g class="map-icon" transform="translate(-13 -13)">
                           <DeviceIcon icon={peerIcon(s.node_id)} size={26} />
                         </g>
-                        <text class="map-name" y={40} text-anchor="middle">
+                        <rect
+                          class="map-name-bg"
+                          x={-peerName(s.node_id).length * 3.4 - 8}
+                          y={34}
+                          width={peerName(s.node_id).length * 6.8 + 16}
+                          height={20}
+                          rx={10}
+                        />
+                        <text class="map-name" y={44} text-anchor="middle" dominant-baseline="central">
                           {peerName(s.node_id)}
                         </text>
                         <Show when={device(v(), s.node_id)?.verified}>
@@ -234,6 +252,9 @@ export default function LinksMap(props: { onDevice: (node: string) => void }) {
                     </g>
                     <text class="map-name" y={50} text-anchor="middle">
                       {t("map.you")}
+                      <tspan class="map-name-sub" x={0} dy={15}>
+                        {niceName(state.me?.name ?? "")}
+                      </tspan>
                     </text>
                   </g>
                 </svg>

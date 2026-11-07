@@ -28,6 +28,7 @@ import { friendlyError, niceName, clockTime } from "../lib/words";
 import { toast } from "../components/ui";
 import { HelpLink } from "../help/HelpLink";
 import { t, tn } from "../i18n";
+import { ToolTabs, type Tool } from "../components/ToolTabs";
 
 const MINUTE = 60_000;
 
@@ -238,7 +239,7 @@ function TimerCard(props: { timer: Timer; now: number; devices: string[] }) {
   );
 }
 
-export default function Timers() {
+export default function Timers(props: { onTool?: (tool: Tool) => void }) {
   const now = useNow();
   const devices = useDevices();
   const list = createMemo(() => sortedTimers());
@@ -265,6 +266,7 @@ export default function Timers() {
           <span class="badge">{tn("timers.running", running())}</span>
         </Show>
       </header>
+      <ToolTabs selected="timers" onSelect={props.onTool} />
       <div class="timers-body">
         {/* The one that ends soonest, large. */}
         <BigTimer timer={lead()} now={now()} />

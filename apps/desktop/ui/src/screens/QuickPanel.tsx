@@ -17,7 +17,8 @@ import { clipTick, copyText, copyVerificationCode, loadPanel, peerName, startEve
 import { linkLabel } from "../lib/words";
 import { linkStateOf } from "../components/ui";
 import { DeviceAvatar } from "../components/DeviceLabel";
-import { logoSrc } from "../components/Brand";
+import { logoSrc, Wordmark } from "../components/Brand";
+import { Icon } from "../components/Icon";
 import { trapTab } from "../lib/a11y";
 import { t } from "../i18n";
 
@@ -177,11 +178,11 @@ export default function QuickPanel() {
       <header class="qp-head">
         <img src={logoSrc()} alt="" class="qp-logo" />
         <h1 id="qp-title" class="qp-title">
-          {t("app.name")}
+          <Wordmark />
           <span class="sr-only"> · {t("panel.title")}</span>
         </h1>
         <button type="button" class="qp-close" aria-label={t("panel.close")} title={t("panel.close")} onClick={hide}>
-          <span aria-hidden="true">×</span>
+          <Icon name="close" size={16} />
         </button>
       </header>
 
@@ -369,13 +370,13 @@ function DeviceRow(props: { node: string; act: (node: string, action: string) =>
       </div>
       <div class="qp-actions" role="group" aria-label={t("panel.deviceActions", { name: name() })}>
         <button type="button" class="qp-act" aria-label={t("panel.ringLabel", { name: name() })} title={t("panel.ringLabel", { name: name() })} onClick={() => props.act(props.node, "ring")}>
-          {t("panel.ring")}
+          <Icon name="ring" size={16} />
         </button>
         <button type="button" class="qp-act" aria-label={t("panel.clipLabel", { name: name() })} title={t("panel.clipLabel", { name: name() })} onClick={() => props.act(props.node, "clipboard")}>
-          {t("panel.clip")}
+          <Icon name="send-clip" size={16} />
         </button>
         <button type="button" class="qp-act" aria-label={t("panel.fileLabel", { name: name() })} title={t("panel.fileLabel", { name: name() })} onClick={() => props.act(props.node, "send_file")}>
-          {t("panel.file")}
+          <Icon name="send-file" size={16} />
         </button>
         <Show when={phone()}>
           <button
@@ -386,7 +387,7 @@ function DeviceRow(props: { node: string; act: (node: string, action: string) =>
             title={locateOff() ? t("panel.locateOff", { name: name() }) : t("panel.locateLabel", { name: name() })}
             onClick={() => props.act(props.node, "locate")}
           >
-            {t("panel.locate")}
+            <Icon name="locate" size={16} />
           </button>
         </Show>
         <Show when={computer()}>
@@ -398,7 +399,7 @@ function DeviceRow(props: { node: string; act: (node: string, action: string) =>
             title={lockOff() ? t("panel.lockOff", { name: name() }) : t("panel.lockLabel", { name: name() })}
             onClick={() => props.act(props.node, "lock")}
           >
-            {t("panel.lock")}
+            <Icon name="lock" size={16} />
           </button>
         </Show>
       </div>

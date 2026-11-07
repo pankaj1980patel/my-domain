@@ -26,6 +26,7 @@ import { Empty, toast } from "../components/ui";
 import { foundId, foundTarget, isFound } from "../lib/search";
 import { HelpLink } from "../help/HelpLink";
 import { t } from "../i18n";
+import { ToolTabs, type Tool } from "../components/ToolTabs";
 
 /** One of six tile colours, the same for a site every time. */
 function hueOf(host: string): number {
@@ -34,7 +35,7 @@ function hueOf(host: string): number {
   return h % 6;
 }
 
-export default function ReadLater() {
+export default function ReadLater(props: { onTool?: (tool: Tool) => void }) {
   const [text, setText] = createSignal("");
   const [title, setTitle] = createSignal("");
   const [query, setQuery] = createSignal("");
@@ -99,6 +100,7 @@ export default function ReadLater() {
           <p class="muted">{t("readLater.subtitle")}</p>
         </div>
       </header>
+      <ToolTabs selected="readLater" onSelect={props.onTool} />
 
       <form class="card rl-add" onSubmit={add}>
         {/* One way in: type or paste a link, or save the copied one from

@@ -15,6 +15,8 @@ import { friendlyError, niceName } from "../lib/words";
 import { toast } from "./ui";
 import { t, type Key } from "../i18n";
 import { HelpLink } from "../help/HelpLink";
+import { DeviceIcon } from "./DeviceIcon";
+import { peerIcon, state } from "../lib/core";
 
 const SIDES = ["top", "left", "right", "bottom"] as const;
 type SideName = (typeof SIDES)[number];
@@ -108,7 +110,7 @@ export function KvmSetting() {
                             draggable={true}
                             onDragStart={(e) => e.dataTransfer?.setData(DRAG_TYPE, n().node_id)}
                           >
-                            {nameOf(n().node_id)}
+                            <span class="kvm-chip-name">{nameOf(n().node_id)}</span>
                             <button
                               class="kvm-x"
                               aria-label={t("kvm.remove", { name: nameOf(n().node_id) })}
@@ -133,10 +135,11 @@ export function KvmSetting() {
                     {(c) => (
                       <li class="row small">
                         <span
-                          class="kvm-chip grow"
+                          class="kvm-chip kvm-name grow"
                           draggable={true}
                           onDragStart={(e) => e.dataTransfer?.setData(DRAG_TYPE, c.node_id)}
                         >
+                          <DeviceIcon icon={state.peers.some((p) => p.node_id === c.node_id) ? peerIcon(c.node_id) : "monitor"} size={18} />
                           {niceName(c.name)}
                           <Show when={!c.linked}>
                             <span class="muted"> · {t("kvm.notLinked")}</span>

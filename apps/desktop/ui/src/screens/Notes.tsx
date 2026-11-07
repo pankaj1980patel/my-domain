@@ -43,6 +43,7 @@ import { Empty, toast } from "../components/ui";
 import { LABEL_COLORS } from "../components/DeviceLabel";
 import { HelpLink } from "../help/HelpLink";
 import { t, type Key } from "../i18n";
+import { ToolTabs, type Tool } from "../components/ToolTabs";
 
 /** How long after the last keystroke a note saves itself. */
 const SAVE_AFTER_MS = 600;
@@ -59,7 +60,7 @@ function useNow() {
   return now;
 }
 
-export default function Notes(props: { request?: NoteRequest }) {
+export default function Notes(props: { request?: NoteRequest; onTool?: (tool: Tool) => void }) {
   const [query, setQuery] = createSignal("");
   const [upcoming, setUpcoming] = createSignal(false);
   const now = useNow();
@@ -129,16 +130,17 @@ export default function Notes(props: { request?: NoteRequest }) {
             {t("notes.title")} <HelpLink topic="notes" />
           </h1>
           <p class="muted">{t("notes.subtitle")}</p>
+          {/* Notes are kept on all your devices: a status line, not a button-like chip. */}
+          <p class="small notes-synced tone-green" title={t("notes.syncedHint")}>
+            <Icon name="folder-sync" size={14} />
+            {t("notes.syncedHint")}
+          </p>
         </div>
-        {/* Notes are kept on all your devices. */}
-        <span class="chip chip-green" title={t("notes.syncedHint")}>
-          <Icon name="folder-sync" size={15} />
-          {t("notes.synced")}
-        </span>
         <button class="btn btn-primary btn-sm" onClick={() => show(null)}>
           {t("notes.new")}
         </button>
       </header>
+      <ToolTabs selected="notes" onSelect={props.onTool} />
       <div class="notes-layout">
         <div class="notes-side">
           <input
@@ -248,12 +250,13 @@ export default function Notes(props: { request?: NoteRequest }) {
 
 /** A line under the title: checklist progress, or the start of the text. */
 function snippet(n: Note): string {
-  if (n.checklist) {
-    const [done, all] = checklistCount(n.body);
-    if (all) return t("notes.progress", { done, all });
-  }
+  // A checklist (or a note with Markdown tasks in it): its progress, not
+  // the raw "- [x]" lines.
+  const [done, all] = checklistCount(n.body);
+  if (all && (n.checklist || /^\s*[-*+]\s+\[[ xX]\]/m.test(n.body))) return t("notes.progress", { done, all });
   const line = n.body.split("\n").find((l) => l.trim()) ?? "";
-  return line.slice(0, 120);
+  // Markdown marks at the start of a line aren't shown.
+  return line.replace(/^\s*(#{1,6}\s+|[-*+]\s+(\[[ xX]\]\s*)?|\d+[.)]\s+|>\s*)/, "").slice(0, 120);
 }
 
 function Editor(props: {

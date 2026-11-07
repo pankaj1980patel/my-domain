@@ -25,6 +25,7 @@ import { AddDevice } from "../components/AddDevice";
 import { HealthRow, type HealthNav } from "./Health";
 import { t, type Key } from "../i18n";
 import { focusSoon } from "../lib/a11y";
+import { Icon, type IconName } from "../components/Icon";
 
 /** The settings for the groups picked: clipboard sync follows the pick;
  *  the others are only turned off when left out (nothing that shares more
@@ -39,6 +40,14 @@ async function applyFeatures(picked: Set<string>) {
     await commands.setShareLocation(false).catch(() => {});
   }
 }
+
+const STEP_ICON: Record<string, IconName> = {
+  name: "edit",
+  devices: "devices",
+  features: "apps",
+  permissions: "lock",
+  connection: "wifi",
+};
 
 export default function Setup(props: { onClose: () => void; nav: HealthNav }) {
   const [name, setName] = createSignal("");
@@ -116,12 +125,13 @@ export default function Setup(props: { onClose: () => void; nav: HealthNav }) {
             {t(`setup.step.${step()}` as Key)}
           </h1>
         </div>
+        {/* One way out at the top: Skip setup; "Later" is the close x. */}
         <div class="row">
-          <button class="btn btn-ghost" onClick={props.onClose}>
-            {t("setup.later")}
-          </button>
           <button class="btn btn-ghost" onClick={() => act("skip_all")}>
             {t("setup.skipAll")}
+          </button>
+          <button class="btn btn-ghost btn-icon" aria-label={t("setup.later")} title={t("setup.later")} onClick={props.onClose}>
+            <Icon name="close" />
           </button>
         </div>
       </header>
@@ -130,14 +140,17 @@ export default function Setup(props: { onClose: () => void; nav: HealthNav }) {
         <For each={STEPS}>
           {(s, i) => (
             <li>
+              {/* Each step: its icon and short name; a check once passed. */}
               <button
                 class={`setup-dot ${s === step() ? "on" : ""} ${setup()?.skipped.includes(s) ? "skipped" : ""}`}
+                classList={{ done: i() < STEPS.indexOf(step()) && !setup()?.skipped.includes(s) }}
                 aria-current={s === step() ? "step" : undefined}
                 aria-label={`${i() + 1}. ${t(`setup.step.${s}` as Key)}`}
                 title={t(`setup.step.${s}` as Key)}
                 onClick={() => act("goto", s)}
               >
-                {i() + 1}
+                <Icon name={i() < STEPS.indexOf(step()) && !setup()?.skipped.includes(s) ? "check" : STEP_ICON[s]} size={16} />
+                <span>{t(`setup.short.${s}` as Key)}</span>
               </button>
             </li>
           )}
@@ -208,13 +221,16 @@ export default function Setup(props: { onClose: () => void; nav: HealthNav }) {
         </Switch>
       </article>
 
+      {/* Back at the left; Skip this step as a link, then Next at the right. */}
       <div class="row setup-foot">
         <Show when={stepNumber({ step: step() }) > 1}>
           <button class="btn btn-ghost" disabled={busy()} onClick={() => act("back")}>
+            <Icon name="arrow-left" size={16} />
             {t("setup.back")}
           </button>
         </Show>
-        <button class="btn btn-ghost" disabled={busy()} onClick={() => act("skip")}>
+        <span class="grow" />
+        <button class="link" disabled={busy()} onClick={() => act("skip")}>
           {t("setup.skip")}
         </button>
         <button

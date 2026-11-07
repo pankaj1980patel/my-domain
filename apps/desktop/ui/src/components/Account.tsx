@@ -10,7 +10,9 @@
 import { createSignal, For, onMount, Show, type JSX } from "solid-js";
 import { Portal } from "solid-js/web";
 import { commands, type AccountSession } from "../bindings";
-import { unwrap } from "../lib/core";
+import { peerIcon, state, unwrap } from "../lib/core";
+import { DeviceIcon } from "./DeviceIcon";
+import { Icon } from "./Icon";
 import { friendlyError, niceName, shortDate, timeAgo } from "../lib/words";
 import { rememberFocus, trapTab } from "../lib/a11y";
 import { toast } from "./ui";
@@ -256,6 +258,12 @@ export function SignOutAll() {
   );
 }
 
+/** The session's device icon: its own when it's one of yours, else a computer. */
+function sessionIcon(s: AccountSession): string {
+  if (s.current) return state.ownIcon || "monitor";
+  return s.node_id && state.peers.some((p) => p.node_id === s.node_id) ? peerIcon(s.node_id) : "monitor";
+}
+
 function sessionName(s: AccountSession): string {
   if (s.current) return t("account.thisDevice");
   return s.name ? niceName(s.name) : t("account.unknownDevice");
@@ -292,7 +300,13 @@ export function Sessions() {
   };
   return (
     <>
-      <h3>{t("account.sessionsTitle")}</h3>
+      {/* The title with Refresh as an icon button beside it. */}
+      <div class="tile-head">
+        <h3>{t("account.sessionsTitle")}</h3>
+        <button class="btn btn-ghost btn-sm btn-icon" aria-label={t("account.refresh")} title={t("account.refresh")} onClick={() => void load()}>
+          <Icon name="refresh" size={16} />
+        </button>
+      </div>
       <p class="muted small">{t("account.sessionsHint")}</p>
       <Show when={note()}>
         <p class="small muted">{note()}</p>
@@ -303,7 +317,8 @@ export function Sessions() {
             <div class="removed-list">
               <For each={l()}>
                 {(s) => (
-                  <div class="row removed-row">
+                  <div class="row removed-row session-row">
+                    <DeviceIcon icon={sessionIcon(s)} size={20} />
                     <div class="grow">
                       <div>
                         <Show when={s.current} fallback={sessionName(s)}>
@@ -318,7 +333,7 @@ export function Sessions() {
                       </div>
                     </div>
                     <Show when={!s.current}>
-                      <button class="btn btn-ghost btn-sm" disabled={busy()} onClick={() => setAsking(s)}>
+                      <button class="btn btn-ghost btn-sm btn-danger-ghost" disabled={busy()} onClick={() => setAsking(s)}>
                         {t("account.signOutSession")}
                       </button>
                     </Show>
@@ -329,9 +344,6 @@ export function Sessions() {
           </Show>
         )}
       </Show>
-      <button class="btn btn-ghost btn-sm" onClick={() => void load()}>
-        {t("account.refresh")}
-      </button>
       <Show when={asking()}>
         {(s) => (
           <ConfirmDialog

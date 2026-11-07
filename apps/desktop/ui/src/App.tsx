@@ -52,7 +52,6 @@ import { rememberFocus } from "./lib/a11y";
 import { commands } from "./bindings";
 import { Icon, type IconName, type Tone } from "./components/Icon";
 import { openPalette } from "./components/CommandPalette";
-import { Tabs } from "./components/Tabs";
 import { HotspotAsk } from "./components/HotspotAsk";
 import { PrintAsk } from "./components/PrintAsk";
 import { PermissionAsk, PermissionNotice } from "./components/PeerPermissions";
@@ -332,8 +331,9 @@ export default function App() {
         <a class="skip-link" href="#main" onClick={skip}>
           {t("a11y.skip")}
         </a>
-        <div class="shell">
-          <nav class="sidebar" aria-label={t("nav.label")}>
+        <div class="shell" classList={{ "shell-setup": view().name === "setup" }}>
+          {/* Hidden during first-run setup: nothing to wander off to. */}
+          <nav class="sidebar" aria-label={t("nav.label")} hidden={view().name === "setup"}>
             <div class="brand">
               <img src={logoSrc()} alt="" />
               <span class="brand-text">
@@ -413,7 +413,7 @@ export default function App() {
               </span>
               <span class="this-device-text">
                 <strong>{niceName(state.me?.name ?? "")}</strong>
-                <span class="muted small">{t("settings.thisDevice")}</span>
+                <span class="muted small">{t("nav.thisComputer")}</span>
               </span>
               <Icon name="chevron-right" />
             </button>
@@ -421,7 +421,13 @@ export default function App() {
           <main class="content" id="main" tabIndex={-1} ref={main}>
             {/* Search anything (the command palette), what's new, you. */}
             <header class="topbar">
-              <button class="topbar-search" onClick={openPalette} aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}>
+              {/* On Search the page's own field is the one: this one steps aside. */}
+              <button
+                class="topbar-search"
+                classList={{ "topbar-search-off": view().name === "search" }}
+                aria-hidden={view().name === "search" ? "true" : undefined}
+                tabIndex={view().name === "search" ? -1 : undefined}
+                onClick={openPalette} aria-keyshortcuts={isMac ? "Meta+K" : "Control+K"}>
                 <Icon name="search" />
                 <span class="grow">{t("topbar.search")}</span>
                 <kbd class="topbar-kbd">{isMac ? "⌘K" : "Ctrl K"}</kbd>
@@ -450,22 +456,6 @@ export default function App() {
             </header>
             <UpdateBanner />
             <KeyRotationBanner />
-            {/* Notes, Timers and Read later: one place, three tabs. */}
-            <Show when={is("notes") || is("timers") || is("readLater")}>
-              <div class="tool-tabs">
-                <Tabs
-                  label={t("nav.notesGroup")}
-                  idBase="tools"
-                  tabs={[
-                    { id: "notes", label: t("nav.notes"), icon: "notes" },
-                    { id: "timers", label: t("nav.timers"), icon: "timers", count: activeTimers() },
-                    { id: "readLater", label: t("nav.readLater"), icon: "readLater", count: unreadCount() },
-                  ]}
-                  selected={view().name}
-                  onSelect={(id) => go({ name: id as "notes" | "timers" | "readLater" })}
-                />
-              </div>
-            </Show>
             <Switch>
               <Match when={view().name === "home" && view()}>
                 {(v) => (
@@ -519,13 +509,13 @@ export default function App() {
                 )}
               </Match>
               <Match when={view().name === "notes" && view()}>
-                {(v) => <Notes request={(v() as { request?: NoteRequest }).request} />}
+                {(v) => <Notes request={(v() as { request?: NoteRequest }).request} onTool={(tool) => go({ name: tool })} />}
               </Match>
               <Match when={view().name === "timers"}>
-                <Timers />
+                <Timers onTool={(tool) => go({ name: tool })} />
               </Match>
               <Match when={view().name === "readLater"}>
-                <ReadLater />
+                <ReadLater onTool={(tool) => go({ name: tool })} />
               </Match>
               <Match when={view().name === "activity"}>
                 <Activity

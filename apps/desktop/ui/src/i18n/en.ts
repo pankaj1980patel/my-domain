@@ -630,7 +630,7 @@ export const en = {
   "files.reason.unknown": "something went wrong",
 
   // Browse files (another device's shared folders)
-  "info.title": "This device",
+  "info.title": "Status",
   "info.hint": "What {name} last said about itself.",
   "info.battery": "Battery",
   "info.batteryLevel": "{level}%",
@@ -953,7 +953,7 @@ export const en = {
   "settings.account": "Account",
   "settings.signedInAs": "Signed in as {name}",
   "settings.signOut": "Sign out",
-  "join.addDevice": "Add a device",
+  "join.addDevice": "Add device",
   "join.making": "Making a code…",
   "join.scan": "On your phone, point the camera at this code. On a computer, choose Join with a code and type:",
   "join.qrLabel": "QR code that adds a device to your account",
@@ -1110,7 +1110,7 @@ export const en = {
   // Themes (the brand kit's five palettes)
   "theme.cosmic-blue": "Cosmic Blue",
   "theme.cosmic-blue.desc": "The brand look: deep navy, vivid blue",
-  "theme.aurora": "Aurora",
+  "theme.aurora": "Aurora Purple",
   "theme.aurora.desc": "Expressive violet and pink",
   "theme.ocean": "Ocean Blue",
   "theme.ocean.desc": "Calm blues and aqua",
@@ -2498,8 +2498,8 @@ export const en = {
   "dash.problems": { one: "{count} problem found", other: "{count} problems found" },
   "quick.screen": "Screen",
   "auto.hooks": "Webhooks & commands",
-  "auto.newRule": "New rule",
-  "auto.rules": "My rules",
+  "auto.newRule": "New automation",
+  "auto.rules": "Automations",
   "auto.sub": "Make your devices work together on their own.",
   "dash.afternoon": "Good afternoon, {name}",
   "dash.evening": "Good evening, {name}",
@@ -2591,6 +2591,17 @@ export const en = {
   "timers.cancelLabel": "Cancel “{name}”",
   "transfers.clearTitle": "Clear finished transfers?",
   "transfers.clearBody": "They leave this list. The files themselves stay where they were saved.",
+  "settings.short.devices": "Your devices",
+  "settings.short.permissions": "Permissions",
+  "settings.short.wake": "Wake",
+  "settings.short.kvm": "Mouse & keyboard",
+  "settings.short.removed": "Removed",
+  "setup.short.name": "Name",
+  "setup.short.devices": "Devices",
+  "setup.short.features": "Features",
+  "setup.short.permissions": "Permissions",
+  "setup.short.connection": "Connection",
+  "nav.thisComputer": "This computer",
 } as const;
 
 /** The shape every language must have: same keys, plain strings or plurals. */
