@@ -283,26 +283,9 @@ class NetService : Service() {
         lastStatus = json
     }
 
-    /**
-     * Best-effort stable device id. Tries the IMEI (requires READ_PHONE_STATE and
-     * is only obtainable by privileged apps on API 29+), and falls back to
-     * ANDROID_ID — Google's official, permission-free device-id replacement.
-     */
-    private fun resolveDeviceId(): String {
-        imei()?.takeIf { it.isNotBlank() }?.let { return it }
-        return Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: ""
-    }
-
-    @Suppress("HardwareIds", "DEPRECATION", "MissingPermission")
-    private fun imei(): String? {
-        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_PHONE_STATE)
-            != android.content.pm.PackageManager.PERMISSION_GRANTED
-        ) return null
-        val tm = getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager ?: return null
-        return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) tm.imei else tm.deviceId
-        }.getOrNull()
-    }
+    /** This phone's id for your other devices: kept from the first launch
+     *  that chose it, so it never changes under an install (DeviceId). */
+    private fun resolveDeviceId(): String = DeviceId.resolve(this)
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
