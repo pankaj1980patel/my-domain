@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.heightIn
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.DropdownMenuItem
@@ -301,7 +303,7 @@ internal fun ActivityRowView(ctx: Context, a: ActivityRow, onOpen: (ActivityRow)
     val (icon, h) = activityIcon(a)
     val line = T.border
     Row(
-        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.small).clickable(role = Role.Button) { onOpen(a) }
+        Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(MaterialTheme.shapes.small).clickable(role = Role.Button) { onOpen(a) }
             .height(IntrinsicSize.Min).padding(horizontal = 4.dp),
         verticalAlignment = Alignment.Top,
     ) {

@@ -72,7 +72,9 @@ enum class ThemeId(val key: String, @StringRes val label: Int, @StringRes val de
 @Immutable
 data class Tokens(
     val bg: Color,
-    /** Glass panel (translucent over the sky). */
+    /** Glass panel (translucent over the sky): opaque enough (78%) that
+     *  [text2] and [text3] keep 4.5:1 on it over the star field's
+     *  brightest point. */
     val surface: Color,
     /** Raised: inputs, incoming bubbles, selected backgrounds. */
     val surface2: Color,
@@ -137,7 +139,7 @@ private val Danger = Color(0xFFFB7185)
 /** Cosmic Blue: the brand default. Deep navy, Royal Blue actions, Electric
  *  Cyan for interaction, Cosmic Gold for highlights. */
 private val CosmicBlueTokens = Tokens(
-    bg = Color(0xFF050B18), surface = Color(0xB80B1630), surface2 = Color(0xDB101D35), bar = Color(0xF00B1630),
+    bg = Color(0xFF050B18), surface = Color(0xC70B1630), surface2 = Color(0xDB101D35), bar = Color(0xF00B1630),
     border = Color(0xFF203454), borderStrong = Color(0xFF2A456A), controlBorder = Color(0xFF5D7598),
     text = Color(0xFFF4F8FF), text2 = Color(0xFFC6D5EA), text3 = Color(0xFF94A3B8),
     primary = Color(0xFF1455D9), onPrimary = Color.White,
@@ -155,7 +157,7 @@ private val CosmicBlueTokens = Tokens(
 
 /** Aurora Purple: expressive violet, Aurora Cyan interaction, pink highlights. */
 private val AuroraTokens = Tokens(
-    bg = Color(0xFF090817), surface = Color(0xB817152E), surface2 = Color(0xDB201D3D), bar = Color(0xF017152E),
+    bg = Color(0xFF090817), surface = Color(0xC717152E), surface2 = Color(0xDB201D3D), bar = Color(0xF017152E),
     border = Color(0xFF2E2A52), borderStrong = Color(0xFF433C74), controlBorder = Color(0xFF6F679E),
     text = Color(0xFFF7F4FF), text2 = Color(0xFFD6D0EA), text3 = Color(0xFFA8A2C2),
     primary = Color(0xFF713BDB), onPrimary = Color.White,
@@ -173,9 +175,9 @@ private val AuroraTokens = Tokens(
 
 /** Ocean Blue: calm blues, Aqua interaction, Mint for "connected". */
 private val OceanTokens = Tokens(
-    bg = Color(0xFF061321), surface = Color(0xB80D2439), surface2 = Color(0xDB12304A), bar = Color(0xF00D2439),
+    bg = Color(0xFF061321), surface = Color(0xC70D2439), surface2 = Color(0xDB12304A), bar = Color(0xF00D2439),
     border = Color(0xFF1D3D5A), borderStrong = Color(0xFF2A5578), controlBorder = Color(0xFF4F7A9C),
-    text = Color(0xFFF2FAFF), text2 = Color(0xFFC4DBE8), text3 = Color(0xFF8AA8BC),
+    text = Color(0xFFF2FAFF), text2 = Color(0xFFC4DBE8), text3 = Color(0xFF98B4C6),
     primary = Color(0xFF0759A6), onPrimary = Color.White,
     gradient = listOf(0f to Color(0xFF0759A6), 0.6f to Color(0xFF0A8FC4), 1f to Color(0xFF00B8D9)),
     // #00B8D9 alone is 2.4:1 under white.
@@ -292,8 +294,9 @@ private val type = Typography().let { base ->
         bodySmall = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 19.sp),
         labelLarge = TextStyle(fontFamily = Inter, fontSize = 14.sp, fontWeight = FontWeight.Bold),
         labelMedium = TextStyle(fontFamily = Inter, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-        // The kit's "eyebrow": small spaced capitals.
-        labelSmall = TextStyle(fontFamily = Inter, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.16.em),
+        // The kit's "eyebrow": small spaced capitals. Nothing in the app
+        // is smaller than 12 sp.
+        labelSmall = TextStyle(fontFamily = Inter, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.12.em),
     )
 }
 

@@ -307,7 +307,7 @@ private fun MapPicture(map: LinksMapInfo, pick: Picked?, onPick: (String) -> Uni
             fun effect(how: String?) = LinksMapPlan.dash(how)?.let { d ->
                 PathEffect.dashPathEffect(floatArrayOf(d[0].dp.toPx(), d[1].dp.toPx()))
             }
-            val style = TextStyle(fontSize = 10.sp, lineHeight = 12.sp, color = text, textAlign = TextAlign.Center)
+            val style = TextStyle(fontSize = 12.sp, lineHeight = 15.sp, color = text, textAlign = TextAlign.Center)
             val pad = 6.dp.toPx()
             // What a label mustn't cover: the devices, their names and the
             // labels already placed.

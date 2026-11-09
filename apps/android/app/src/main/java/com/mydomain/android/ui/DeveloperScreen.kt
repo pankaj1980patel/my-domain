@@ -96,7 +96,7 @@ fun DeveloperScreen(onBack: () -> Unit) {
         item {
             Tile(title = "Resource ledger") {
                 if (ledger.isEmpty()) Muted("Nothing held.")
-                ledger.forEach { e -> Text(ResourceLedger.book.describe(e), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2) }
+                ledger.forEach { e -> Text(ResourceLedger.book.describe(e), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = T.text2) }
                 Muted(if (Core.onScreen) "App on screen: screen loops run." else "App off screen: screen loops wait.")
             }
         }
@@ -114,7 +114,7 @@ fun DeveloperScreen(onBack: () -> Unit) {
             Tile(title = "Connection reports") {
                 ConnCheck.reports.forEach { (node, r) ->
                     Text(Core.peers.find { it.nodeId == node }?.name ?: node, style = MaterialTheme.typography.labelMedium, color = T.text)
-                    Text(r.json.toString(2), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2)
+                    Text(r.json.toString(2), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = T.text2)
                 }
             }
         }
@@ -142,7 +142,7 @@ fun DeveloperScreen(onBack: () -> Unit) {
                     Text(e.name, style = MaterialTheme.typography.labelMedium, color = T.text, modifier = Modifier.weight(1f))
                     Muted(timeAgo(e.ts))
                 }
-                Text(e.payload.take(400), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2)
+                Text(e.payload.take(400), style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = T.text2)
             }
         }
     }
