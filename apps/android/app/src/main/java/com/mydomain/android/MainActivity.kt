@@ -58,19 +58,9 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // Ask for READ_PHONE_STATE so a later launch can use the IMEI as the
-        // device id (this launch falls back to ANDROID_ID: the service, which
-        // resolves the id, starts immediately below and the id is set once).
-        val wanted = buildList {
-            add(Manifest.permission.READ_PHONE_STATE)
-            if (Sdk.rules(Build.VERSION_CODES.TIRAMISU)) add(Manifest.permission.POST_NOTIFICATIONS)
-            // Bluetooth: reach a computer when there's no shared network.
-            if (Sdk.rules(Build.VERSION_CODES.S)) {
-                add(Manifest.permission.BLUETOOTH_ADVERTISE)
-                add(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-        }.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
-        if (wanted.isNotEmpty()) runCatching { ActivityCompat.requestPermissions(this, wanted.toTypedArray(), 1001) }
+        // Nothing is asked for here: notifications and Bluetooth are asked
+        // for in first-run setup's permissions step, which says what each
+        // is for (SetupState, OnboardingScreen), after sign-in.
 
         // The service owns the engine (networking, clipboard, notifications).
         val serviceIntent = Intent(this, NetService::class.java)
@@ -94,19 +84,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        // The service started before the answer; start Bluetooth now that
-        // it's allowed (does nothing if it's already running or still denied).
-        if (requestCode == 1001) BleLink.start(applicationContext)
         if (requestCode == ASK_WIFI_SCAN) {
             val granted = grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED
             // Denied for good ("Don't ask again"): Android shows no prompt
             // any more, so open this app's settings to allow it there.
             if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
-                runCatching {
-                    startActivity(
-                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
-                    )
-                }
+                com.mydomain.android.ui.openOrSay(
+                    this, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                )
             }
             Controls.onChange()
         }

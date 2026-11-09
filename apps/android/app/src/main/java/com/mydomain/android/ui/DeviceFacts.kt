@@ -210,7 +210,7 @@ fun DeviceListRow(node: String, onOpen: () -> Unit) {
             Box(
                 Modifier.padding(start = 8.dp).background(T.accent, CircleShape).padding(horizontal = 8.dp, vertical = 2.dp)
                     .clearAndSetSemantics { contentDescription = unreadText },
-            ) { Text("$unread", color = T.onAccent, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold) }
+            ) { Text("$unread", color = T.onAccent, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.ExtraBold) }
         }
         Spacer(Modifier.width(8.dp))
         Chevron()

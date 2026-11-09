@@ -188,7 +188,7 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     OutlinedButton(
         // A minimum, so large text still fits; Material keeps a 48 dp touch
         // target around it.
-        onClick, modifier = modifier.heightIn(min = if (small) 36.dp else 44.dp), shape = MaterialTheme.shapes.small,
+        onClick, modifier = modifier.heightIn(min = if (small) 40.dp else 44.dp), shape = MaterialTheme.shapes.small,
         // Quiet: a soft fill, no outline.
         border = null,
         colors = ButtonDefaults.outlinedButtonColors(containerColor = T.surface2.copy(alpha = 0.55f), contentColor = T.text),

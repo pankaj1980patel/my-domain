@@ -45,8 +45,11 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Best-effort IMEI as a stable device id (granted apps only; falls back to ANDROID_ID). -->
-    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Never asked for. Earlier versions used the IMEI as the device id
+         where this was granted (Android 9 or older only); declared up to
+         Android 9 just so such an install can read it once more and keep
+         its id (DeviceId.kt). Remove once every install has run this. -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" android:maxSdkVersion="28" />
     <!-- Enumerate installed apps for the notification-sharing picker (API 30+).
          Note: Play Store requires a declared justification for this permission. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />

@@ -493,7 +493,7 @@ fun TopBar(title: String?, bellCount: Int, onBell: () -> Unit, onSettings: () ->
                 if (bellCount > 0) {
                     // White on the dark themes' danger pink is 2.7:1: a deeper red.
                     Badge(containerColor = if (T.isLight) T.danger else Color(0xFFE11D48), contentColor = Color.White) {
-                        Text(if (bellCount > 99) "99+" else "$bellCount", fontSize = 10.sp)
+                        Text(if (bellCount > 99) "99+" else "$bellCount", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }) { LIcon(R.drawable.ic_lucide_bell, T.text, 24.dp) }

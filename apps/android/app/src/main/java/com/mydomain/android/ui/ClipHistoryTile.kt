@@ -48,6 +48,7 @@ import com.mydomain.android.R
 import com.mydomain.android.core.ClipBook
 import com.mydomain.android.core.ClipEntry
 import com.mydomain.android.core.ClipLog
+import com.mydomain.android.core.ClipPage
 import com.mydomain.android.core.ClipPicture
 import com.mydomain.android.core.ClipRecord
 import com.mydomain.android.core.Core
@@ -114,7 +115,11 @@ fun ClipHistoryTile(node: String, name: String, found: Long? = null) {
     }
     // A new search starts from the top again.
     var limit by remember(node, query) { mutableIntStateOf(if (query.isEmpty()) start else PAGE) }
-    val page = ClipLog.page(node, query, limit)
+    // "Clear" waiting on its Undo: shown as cleared already.
+    val clearKey = "clips:$node"
+    val page = if (PendingClears.pending(clearKey)) ClipPage(emptyList(), 0, 0) else ClipLog.page(node, query, limit)
+    val undo = LocalUndo.current
+    val undoLabel = stringResource(R.string.notes_undo)
     var opened by remember(node) { mutableStateOf<ClipRecord?>(null) }
 
     val cleared = stringResource(R.string.clip_history_cleared)
@@ -127,8 +132,7 @@ fun ClipHistoryTile(node: String, name: String, found: Long? = null) {
             )
             if (page.kept > 0) {
                 GhostButton(stringResource(R.string.clip_history_clear), {
-                    ClipLog.clear(node)
-                    toast(cleared)
+                    PendingClears.ask(undo, clearKey, cleared, undoLabel) { ClipLog.clear(node) }
                 }, small = true)
             }
         }

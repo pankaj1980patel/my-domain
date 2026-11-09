@@ -52,7 +52,8 @@ fun progressLabel(stage: String?): String? = when (stage) {
     else -> null
 }
 
-/** Turn a core error into something a person can act on. */
+/** Turn a core error into something a person can act on: never the
+ *  core's own text (that is logged instead). */
 fun friendlyError(e: Throwable): String {
     when (e) {
         is MdException.NoKey -> return str(R.string.error_no_key)
@@ -62,21 +63,35 @@ fun friendlyError(e: Throwable): String {
         else -> {}
     }
     val raw = e.message ?: e.toString()
-    val m = raw.lowercase()
-    return when {
-        "update the server to use qr join" in m -> str(R.string.error_update_server)
-        "update the server to list sessions" in m -> str(R.string.error_update_server_sessions)
-        "incorrect password" in m -> str(R.string.error_wrong_password)
-        "expired or was already used" in m -> str(R.string.error_join_code_used)
-        "too many tries" in m -> str(R.string.error_too_many_tries)
-        "join code is damaged" in m || "isn't a my-domain join code" in m -> str(R.string.error_bad_join_link)
-        "connection closed" in m -> str(R.string.error_connection_closed)
-        "invalid credentials" in m || "401" in m -> str(R.string.error_bad_credentials)
-        "already exists" in m || "409" in m -> str(R.string.error_username_taken)
-        "timed out" in m || "timeout" in m -> str(R.string.error_timeout)
-        "dns" in m || "connection refused" in m || "network" in m -> str(R.string.error_unreachable)
-        "not started" in m -> str(R.string.error_not_started)
-        else -> raw
+    val res = ErrorWords.resOf(raw)
+    if (res == ErrorWords.FALLBACK) runCatching { android.util.Log.w("friendlyError", raw, e) }
+    return str(res)
+}
+
+/** Which plain-words message a core error's text gets (the pure part of
+ *  [friendlyError], unit-tested). Anything not known: [FALLBACK]. */
+object ErrorWords {
+    val FALLBACK = R.string.error_generic
+
+    fun resOf(raw: String): Int {
+        val m = raw.lowercase()
+        return when {
+            "update the server to use qr join" in m -> R.string.error_update_server
+            "update the server to list sessions" in m -> R.string.error_update_server_sessions
+            "incorrect password" in m -> R.string.error_wrong_password
+            "expired or was already used" in m -> R.string.error_join_code_used
+            "too many tries" in m -> R.string.error_too_many_tries
+            "join code is damaged" in m || "isn't a my-domain join code" in m -> R.string.error_bad_join_link
+            "device key didn't come through" in m -> R.string.error_join_no_key
+            "6-digit code" in m -> R.string.signin_join_missing
+            "connection closed" in m -> R.string.error_connection_closed
+            "invalid credentials" in m || "401" in m -> R.string.error_bad_credentials
+            "already exists" in m || "409" in m -> R.string.error_username_taken
+            "timed out" in m || "timeout" in m -> R.string.error_timeout
+            "dns" in m || "connection refused" in m || "network" in m || "unreachable" in m -> R.string.error_unreachable
+            "not started" in m -> R.string.error_not_started
+            else -> FALLBACK
+        }
     }
 }
 

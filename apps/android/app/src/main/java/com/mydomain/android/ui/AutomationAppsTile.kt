@@ -147,7 +147,7 @@ fun AutomationAppsTile() {
             examples.forEach { ex ->
                 val text = exampleText(ctx, ex, k)
                 Text(stringResource(ex.title), style = MaterialTheme.typography.bodyMedium, color = T.text)
-                Text(text, fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = T.text2)
+                Text(text, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = T.text2)
                 GhostButton(stringResource(R.string.automation_apps_copy), {
                     copySensitive(ctx, text)
                     toast(copied)

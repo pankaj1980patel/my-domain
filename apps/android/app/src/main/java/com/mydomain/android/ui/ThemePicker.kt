@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import androidx.compose.foundation.layout.heightIn
+
 import android.content.SharedPreferences
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -38,7 +40,7 @@ fun ThemePicker(prefs: SharedPreferences) {
                 shape = MaterialTheme.shapes.small,
                 color = T.surface2,
                 border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) T.accent else T.border),
-                modifier = Modifier.fillMaxWidth().selectable(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).selectable(
                     selected = selected, role = Role.RadioButton,
                     onClick = { ThemeStore.set(prefs, id) },
                 ),
