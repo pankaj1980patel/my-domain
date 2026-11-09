@@ -18,6 +18,9 @@ import androidx.core.content.ContextCompat
 import com.mydomain.android.core.NetworkingUtils.wifiIpv4
 import com.mydomain.android.core.ClipPrivacy
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.EngineBackoff
+import com.mydomain.android.core.EngineState
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.RemovedDevices
 import com.mydomain.android.core.KeyRotation
 import com.mydomain.android.core.KeyChanges
@@ -87,63 +90,26 @@ class NetService : Service() {
 
         createNotificationChannel()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(1, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(NotificationIds.SERVICE, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
-            startForeground(1, createNotification())
+            startForeground(NotificationIds.SERVICE, createNotification())
         }
         ResourceLedger.hold(ResourceBook.Kind.SERVICE, "NetService")
 
         // Restore the clipboard auto-sync ("active" mode) toggle.
         Core.enableClipSync(getSharedPreferences("md", MODE_PRIVATE).getBoolean("clip_sync", false))
 
-        // Initialize Rust core if not already done. Prefer the IMEI as a stable
-        // device id; on Android 10+ that's unreadable for normal apps, so fall
-        // back to ANDROID_ID (also stable across restarts/reinstalls).
         Core.labLogFile = java.io.File(filesDir, "events.log")
         Core.labLog("service start")
         // A fresh engine (new process): copies of files being sent by an
         // earlier process are orphans (their transfers died with it).
         if (Core.engine() == null) com.mydomain.android.core.OutgoingFiles.clearAll(this)
-        runCatching { MdEngine.start(resolveDeviceId(), Build.MODEL ?: "android", wifiIpv4(), filesDir.absolutePath, coreEvents, KeystoreSecrets(this)) }
-            .onFailure { Log.e("NetService", "engine failed to start", it) }
-        // Received files land in an app-private folder, then move to Downloads.
-        Core.engine()?.setDownloadDir(FileActions.downloadDir(this).absolutePath)
-        // Folders your other devices may browse and download from.
-        FileActions.shareFolders(this)
-        // What's playing here, for your other devices (needs notification access).
-        NowPlaying.start(this)
-        // Your computers may look at the photos (we answer "no access" until
-        // it's allowed), and the photo backup watches for new ones.
-        Core.engine()?.setGalleryEnabled(true)
-        // A computer's sound plays here (any Android: ComputerAudio.kt);
-        // this phone's audio on a computer: Android 10 or later.
-        Core.engine()?.setAudioRoles(true, PhoneAudio.supported)
-        // "Use nearby mode for media" (Settings).
-        NearbyMode.apply(this)
-        // Big files over Wi-Fi Direct or this phone's hotspot (WifiDirect.kt).
-        WifiDirect.init(this)
-        // Labels given on this phone before they were shared.
-        Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
-        // What kind of device this is (phone, tablet, foldable, TV; its
-        // model): your other devices draw its icon from it.
-        Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
-        // What your other devices shared as their wallpaper (DeviceArt).
-        Core.engine()?.let { e -> Thread { com.mydomain.android.core.Wallpapers.load(e) }.start() }
-        // Its wallpaper look, for its tile on your computers (Settings:
-        // "Share my wallpaper with my devices").
-        PhoneWallpaper.start(this)
-        // This app's version, for your other devices' health check.
-        Core.engine()?.let { e -> runCatching { e.setAppVersion(BuildConfig.VERSION_NAME) } }
-        PhotoBackup.start(this)
-        // Save battery: heavy background work waits while the battery is low,
-        // Battery Saver is on or the phone dozes (and big transfers on mobile data).
-        PowerSaver.start(this) { serviceScope.launch { pushStatus() } }
-        // Started by a push with no UI showing: background until it appears.
-        Core.engine()?.setBackground(!Core.visible)
-        Core.reload()
-        Fcm.init(this)
+        // Off the main thread (it opens sockets and may reach the server),
+        // again with a growing wait if it fails; [onEngineReady] then runs
+        // what needs the engine.
+        startEngine()
 
-        publishInstalledApps()
+        Fcm.init(this)
         Controls.onChange = { serviceScope.launch { pushStatus() } }
         Controls.init(this)
         Radios.init(this)
@@ -161,9 +127,110 @@ class NetService : Service() {
         DndWatch.start(this)
         startNetworking()
         BleLink.start(this)
+        serviceUp = true
         // Brought back if the phone kills it (ServiceKeeper.kt).
-        running = true
         ServiceKeeper.serviceUp(this)
+    }
+
+    /** The engine starting (and starting again after a failure). */
+    private var engineJob: Job? = null
+    /** [onEngineReady] ran for this service (main thread). */
+    private var engineReadyHere = false
+
+    /**
+     * Start the engine off the main thread. Prefer the IMEI as a stable
+     * device id; on Android 10+ that's unreadable for normal apps, so fall
+     * back to ANDROID_ID (also stable across restarts/reinstalls).
+     *
+     * A failed start is tried again after [EngineBackoff]'s wait (2 s,
+     * doubling, at most 5 minutes); [Core.engineState] says where it stands
+     * meanwhile, and [running] is false, so the keeper and a push both know
+     * there is no engine yet. [now]: a start waiting to try again tries at
+     * once. Main thread.
+     */
+    private fun startEngine(now: Boolean = false) {
+        if (engineReadyHere) return
+        if (engineJob?.isActive == true) {
+            if (!now || Core.engineState.value !is EngineState.Failed) return
+            engineJob?.cancel()
+        }
+        val deviceId = resolveDeviceId()
+        val name = Build.MODEL ?: "android"
+        val dir = filesDir.absolutePath
+        engineJob = serviceScope.launch {
+            var failures = 0
+            while (isActive) {
+                Core.setEngineState(EngineState.Starting)
+                val started = runCatching {
+                    MdEngine.start(deviceId, name, wifiIpv4(), dir, coreEvents, KeystoreSecrets(this@NetService))
+                }
+                if (started.isSuccess) {
+                    Core.setEngineState(EngineState.Ready)
+                    withContext(Dispatchers.Main) {
+                        if (!destroyed && !engineReadyHere) {
+                            engineReadyHere = true
+                            onEngineReady()
+                        }
+                    }
+                    return@launch
+                }
+                failures++
+                val wait = EngineBackoff.delayMs(failures)
+                val error = started.exceptionOrNull()
+                val why = error?.message ?: error?.javaClass?.simpleName ?: "?"
+                Log.e("NetService", "engine failed to start (try $failures, again in ${wait / 1000} s)", error)
+                Core.setEngineState(EngineState.Failed(why, failures, wait))
+                delay(wait)
+            }
+        }
+    }
+
+    /** The engine is up (main thread): what needs it, in the order it ran
+     *  in before the engine started off the main thread. */
+    private fun onEngineReady() {
+        // Received files land in an app-private folder, then move to Downloads.
+        ffi("setDownloadDir") { Core.engine()?.setDownloadDir(FileActions.downloadDir(this).absolutePath) }
+        // Folders your other devices may browse and download from.
+        FileActions.shareFolders(this)
+        // What's playing here, for your other devices (needs notification access).
+        NowPlaying.start(this)
+        // Your computers may look at the photos (we answer "no access" until
+        // it's allowed), and the photo backup watches for new ones.
+        ffi("setGalleryEnabled") { Core.engine()?.setGalleryEnabled(true) }
+        // A computer's sound plays here (any Android: ComputerAudio.kt);
+        // this phone's audio on a computer: Android 10 or later.
+        ffi("setAudioRoles") { Core.engine()?.setAudioRoles(true, PhoneAudio.supported) }
+        // "Use nearby mode for media" (Settings).
+        NearbyMode.apply(this)
+        // Big files over Wi-Fi Direct or this phone's hotspot (WifiDirect.kt).
+        WifiDirect.init(this)
+        // Labels given on this phone before they were shared.
+        Core.engine()?.let { com.mydomain.android.core.DeviceLabels.seed(it) }
+        // What kind of device this is (phone, tablet, foldable, TV; its
+        // model): your other devices draw its icon from it.
+        Core.engine()?.let { com.mydomain.android.core.DeviceKinds.reportOwn(this, it) }
+        // What your other devices shared as their wallpaper (DeviceArt).
+        Core.engine()?.let { e -> serviceScope.launch { ffi("wallpapers") { com.mydomain.android.core.Wallpapers.load(e) } } }
+        // Its wallpaper look, for its tile on your computers (Settings:
+        // "Share my wallpaper with my devices").
+        PhoneWallpaper.start(this)
+        // This app's version, for your other devices' health check.
+        Core.engine()?.let { e -> ffi("setAppVersion") { e.setAppVersion(BuildConfig.VERSION_NAME) } }
+        PhotoBackup.start(this)
+        // Save battery: heavy background work waits while the battery is low,
+        // Battery Saver is on or the phone dozes (and big transfers on mobile data).
+        PowerSaver.start(this) { serviceScope.launch { pushStatus() } }
+        // Started by a push with no UI showing: background until it appears.
+        ffi("setBackground") { Core.engine()?.setBackground(!Core.visible) }
+        // Re-read everything the screens show (calls into the core: off
+        // the main thread).
+        serviceScope.launch { ffi("reload") { Core.reload() } }
+        publishInstalledApps()
+        // What was read before the engine was up: battery and the
+        // controls (the status), Do Not Disturb, and the network.
+        serviceScope.launch { pushStatus() }
+        DndWatch.push(this)
+        networkSoon()
     }
 
     /**
@@ -208,7 +275,9 @@ class NetService : Service() {
         }
         PhotoBackup.setCharging(charging)
         PowerSaver.onBattery(pct, charging)
-        pushStatus()
+        // Building the status reads the controls, storage and memory, and
+        // calls into the core: not on the main thread, where this runs.
+        serviceScope.launch { pushStatus() }
     }
 
     private var battery: Pair<Int, Boolean>? = null
@@ -260,7 +329,9 @@ class NetService : Service() {
     }.getOrNull()
 
     /** Battery, the controls' state and the actions we take, for devices
-     *  that ask (`request_status`). Pushed only when it changed. */
+     *  that ask (`request_status`). Pushed only when it changed. Off the
+     *  main thread; one at a time. */
+    @Synchronized
     private fun pushStatus() {
         val o = Controls.state(this).put("actions", Controls.actions())
             .put("search_apps", DeviceActions.searchApps(this))
@@ -280,7 +351,7 @@ class NetService : Service() {
         val json = o.toString()
         if (json == lastStatus) return
         val engine = Core.engine() ?: return
-        engine.setDeviceStatus(json)
+        ffi("setDeviceStatus") { engine.setDeviceStatus(json) } ?: return
         lastStatus = json
     }
 
@@ -545,12 +616,9 @@ class NetService : Service() {
 
     private fun checkNetwork() {
         val now = snapshot()
-        val engine = Core.engine()
-        // Before the engine is up there's no one to tell: look again soon.
-        if (engine == null) {
-            netHandler.postDelayed(netCheck, 1_000)
-            return
-        }
+        // Before the engine is up there's no one to tell: it looks once it
+        // is ([onEngineReady]), not every second meanwhile.
+        val engine = Core.engine() ?: return
         if (netTold && !NetWatch.significant(lastNet, now)) return
         lastNet = now
         netTold = true
@@ -703,7 +771,7 @@ class NetService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        running = false
+        serviceUp = false
         destroyed = true
         Core.onVisibility = null
         netHandler.removeCallbacks(netCheck)
@@ -731,6 +799,19 @@ class NetService : Service() {
     /** Android brings a sticky service back after killing it (with a null
      *  intent); the health check (ServiceKeeper) covers phones that don't. */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Every startForegroundService wants startForeground again, also
+        // for a service already running (a push or the keeper starting it
+        // again while its engine isn't up).
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NotificationIds.SERVICE, createNotification(), ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            } else {
+                startForeground(NotificationIds.SERVICE, createNotification())
+            }
+        }
+        // Asked for again while the engine failed to start: try now rather
+        // than at the end of the wait.
+        startEngine(now = true)
         return START_STICKY
     }
 
@@ -742,9 +823,14 @@ class NetService : Service() {
     }
 
     companion object {
-        /** The service is running in this process. */
+        /** onCreate ran and onDestroy didn't yet. */
         @Volatile
-        var running = false
-            private set
+        private var serviceUp = false
+
+        /** The service is running in this process with its engine. While
+         *  the engine is starting, or failed to start, it isn't: the
+         *  keeper starts it again (which retries the engine at once). */
+        val running: Boolean
+            get() = serviceUp && Core.engineState.value == EngineState.Ready
     }
 }

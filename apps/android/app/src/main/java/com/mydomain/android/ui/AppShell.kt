@@ -97,7 +97,8 @@ fun App(prefs: SharedPreferences) {
     LaunchedEffect(Core.ready) {
         while (!Core.ready) {
             Core.awaitOnScreen()
-            Core.reload(); delay(500)
+            // A call into the core: off the main thread.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { runCatching { Core.reload() } }; delay(500)
         }
     }
 

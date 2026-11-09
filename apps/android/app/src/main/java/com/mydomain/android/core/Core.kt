@@ -26,8 +26,10 @@ import com.mydomain.android.ffi.Session
 import com.mydomain.android.ffi.runningEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -300,6 +302,18 @@ object Core {
     /** The running engine; none while [sample] mode is on, so no screen
      *  reads (or changes) the user's own data then. */
     fun engine(): MdEngine? = if (sample) null else runningEngine()
+
+    private val _engineState = MutableStateFlow<EngineState>(EngineState.Starting)
+
+    /** Starting, Ready or Failed (why): set by NetService as it starts the
+     *  engine; the push handler and the screens read it. Any thread. */
+    val engineState: StateFlow<EngineState> = _engineState.asStateFlow()
+
+    /** NetService only. */
+    fun setEngineState(state: EngineState) {
+        _engineState.value = state
+        labLog("engine: $state")
+    }
 
     /** Debug builds' sample mode (screenshots, `--ez md_sample true`):
      *  [SampleData]'s made-up devices on every screen, the engine and its

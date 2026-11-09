@@ -1,12 +1,15 @@
 package com.mydomain.android
 
 import android.content.Intent
+import android.os.Build
 import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.EngineState
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.ResourceBook
 import com.mydomain.android.core.ResourceLedger
 
@@ -35,14 +38,15 @@ class MdMessagingService : FirebaseMessagingService() {
         Core.labLog("push from ${sender.take(8)}: ${data["type"]}, $sent")
         stayAwake()
         if (!waitForEngine()) {
-            Log.w(TAG, "signal from $sender dropped: engine not ready")
+            Log.w(TAG, "signal from $sender dropped: engine not ready (${Core.engineState.value})")
+            Core.labLog("push dropped: engine ${Core.engineState.value}")
             return
         }
         Core.engine()?.let { engine ->
             // The link this brings is timed from when the push came, the
             // engine's start included (the connection report).
-            runCatching { engine.pushReceived(sender, (SystemClock.elapsedRealtime() - got).toULong()) }
-            engine.onSignal(sender, payload)
+            ffi("pushReceived") { engine.pushReceived(sender, (SystemClock.elapsedRealtime() - got).toULong()) }
+            ffi("onSignal") { engine.onSignal(sender, payload) }
         }
     }
 
@@ -52,8 +56,14 @@ class MdMessagingService : FirebaseMessagingService() {
         // A high-priority push may start a foreground service from the
         // background (and this app targets 28, so Android 12's limits on
         // that don't apply to it either).
-        runCatching { startForegroundService(Intent(this, NetService::class.java)) }
-            .onFailure { Log.w(TAG, "can't start NetService: $it") }
+        // Android 7 has no startForegroundService (the call threw, unseen,
+        // and every push was dropped): a plain start there, which Android 7
+        // allows from the background. A service whose engine failed to
+        // start tries it again at once.
+        val svc = Intent(this, NetService::class.java)
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(svc) else startService(svc)
+        }.onFailure { Log.w(TAG, "can't start NetService: $it") }
         // onMessageReceived runs on a worker thread and may block briefly;
         // look often at first (a warm start takes a few hundred ms).
         repeat(100) {
@@ -83,7 +93,9 @@ class MdMessagingService : FirebaseMessagingService() {
         }
     }
 
-    private fun ready() = runCatching { Core.engine()?.isReady() == true }.getOrDefault(false)
+    /** The engine is up ([Core.engineState]) and signed in. */
+    private fun ready() = Core.engineState.value == EngineState.Ready &&
+        ffi("isReady") { Core.engine()?.isReady() } == true
 
     private companion object {
         /** The one wake lock pushes take (times out by itself). */

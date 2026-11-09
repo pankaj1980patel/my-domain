@@ -18,8 +18,11 @@ import android.os.PowerManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Base64
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotifDedupe
 import com.mydomain.android.core.NotifFacts
 import com.mydomain.android.core.NotifFilter
@@ -32,6 +35,8 @@ import com.mydomain.android.core.notifFingerprint
 import java.io.ByteArrayOutputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 
 /**
  * Captures other apps' notifications and hands them to the Rust core, which
@@ -109,19 +114,24 @@ class NotifListener : NotificationListenerService() {
         // to the clipboard as before; only these never count.
         if (skip in setOf(NotifSkip.OWN, NotifSkip.ONGOING, NotifSkip.SUMMARY, NotifSkip.EMPTY)) return
 
-        val label = appLabel(n.packageName)
-        if (skip == NotifSkip.NONE) runCatching {
-            val engine = Core.engine() ?: return@runCatching
-            val rich = richJson(n, label, title, text) ?: return@runCatching
-            if (sentIcons.add(n.packageName)) appIconJpeg(n.packageName)?.let { engine.setAppIcon(n.packageName, it) }
-            engine.shareAppNotificationRich(n.packageName, rich.toString())
-            synchronized(shared) { shared[n.key] = n.packageName }
-        }
+        val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
+        // The rest off the main thread (where Android calls this): the
+        // pictures are scaled and encoded as JPEGs, and the core is called.
+        // In order, one at a time ([work]), as the notifications came.
+        AppScope.scope.launch(work) {
+            val label = appLabel(n.packageName)
+            if (skip == NotifSkip.NONE) runCatching {
+                val engine = Core.engine() ?: return@runCatching
+                val rich = richJson(n, label, title, text) ?: return@runCatching
+                if (sentIcons.add(n.packageName)) appIconJpeg(n.packageName)?.let { engine.setAppIcon(n.packageName, it) }
+                engine.shareAppNotificationRich(n.packageName, rich.toString())
+                synchronized(shared) { shared[n.key] = n.packageName }
+            }.onFailure { Log.w("NotifListener", "not shared: $it") }
 
-        Core.labLog("notification from ${n.packageName}")
-        if (getSharedPreferences("md", MODE_PRIVATE).getBoolean(PREF_SHARE_CODES, false)) {
-            val big = extras.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString().orEmpty()
-            shareCode(title, listOf(text, big).filter { it.isNotBlank() }.distinct().joinToString("\n"), label)
+            Core.labLog("notification from ${n.packageName}")
+            if (getSharedPreferences("md", MODE_PRIVATE).getBoolean(PREF_SHARE_CODES, false)) {
+                shareCode(title, listOf(text, big).filter { it.isNotBlank() }.distinct().joinToString("\n"), label)
+            }
         }
     }
 
@@ -130,9 +140,12 @@ class NotifListener : NotificationListenerService() {
      *  reported; the core tells just the devices subscribed to its app. */
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         val n = sbn ?: return
-        dedupe.forget(n.key)
-        val pkg = synchronized(shared) { shared.remove(n.key) } ?: return
-        runCatching { Core.engine()?.shareAppNotificationRemoved(pkg, n.key) }
+        // After the posts before it ([work] keeps the order).
+        AppScope.scope.launch(work) {
+            dedupe.forget(n.key)
+            val pkg = synchronized(shared) { shared.remove(n.key) } ?: return@launch
+            ffi("shareAppNotificationRemoved") { Core.engine()?.shareAppNotificationRemoved(pkg, n.key) }
+        }
     }
 
     /** Send the verification code in [text] (titled [title]), if one is
@@ -367,6 +380,10 @@ class NotifListener : NotificationListenerService() {
 
         /** What each notification last said (memory only). */
         private val dedupe = NotifDedupe()
+
+        /** Where posted and removed notifications are handled, one at a
+         *  time and in order, off the main thread. */
+        private val work = java.util.concurrent.Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
         /** Packages whose icon the core has (memory only, like its own). */
         private val sentIcons: MutableSet<String> = java.util.Collections.synchronizedSet(HashSet())
