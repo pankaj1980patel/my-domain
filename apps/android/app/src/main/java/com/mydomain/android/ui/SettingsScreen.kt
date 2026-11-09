@@ -568,10 +568,13 @@ fun SettingsScreen(
                         stringResource(R.string.help_settings_hint), onClick = onHelp, modifier = Modifier.foundMark(focus == "help"),
                     )
                 }
+                // Only once the app has crashed (every build).
+                CrashLogRow()
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Muted(
                         stringResource(R.string.settings_version, BuildConfig.VERSION_NAME),
-                        Modifier.heightIn(min = 48.dp).clickable(role = Role.Button) {
+                        Modifier.heightIn(min = 48.dp).clickable(role = Role.Button, enabled = BuildConfig.DEBUG) {
+                            // Debug builds only: the Developer screen shows raw events.
                             taps += 1
                             if (taps >= 7) {
                                 taps = 0

@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,12 @@ import kotlinx.coroutines.delay
 /** Hidden Developer screen: everything technical lives here, out of the way. */
 @Composable
 fun DeveloperScreen(onBack: () -> Unit) {
+    // Not in release builds (it shows raw events and the core's insides):
+    // whatever opened it, it closes at once. The crash log is in Settings.
+    if (!com.mydomain.android.BuildConfig.DEBUG) {
+        LaunchedEffect(Unit) { onBack() }
+        return
+    }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf("") }
@@ -79,6 +86,8 @@ fun DeveloperScreen(onBack: () -> Unit) {
                 Kv("LAN IP", Core.me?.ip ?: "")
                 Kv("QUIC port", Core.me?.quicPort?.toString() ?: "")
                 Kv("Server", Core.session?.serverUrl ?: "none")
+                val engine by Core.engineState.collectAsState()
+                Kv("Engine", engine.toString())
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     GhostButton("Firewall check", {
                         run {
@@ -131,6 +140,7 @@ fun DeveloperScreen(onBack: () -> Unit) {
                 }, enabled = ip.isNotBlank() && port.isNotBlank())
             }
         }
+        item { CrashLogRow() }
         item {
             Tile(title = "Event log") {
                 Field(filter, { filter = it }, "Filter by event name")

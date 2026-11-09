@@ -2096,4 +2096,13 @@
         <item quantity="one">பரிமாற்றங்கள் · %1$d நடைபெறுகிறது</item>
         <item quantity="other">பரிமாற்றங்கள் · %1$d நடைபெறுகின்றன</item>
     </plurals>
+
+    <!-- Stability: a note not saved, the crash log. -->
+    <string name="note_not_saved">உங்கள் குறிப்பு சேமிக்கப்படவில்லை: %1$s</string>
+    <string name="crash_log_title">செயலிழப்புப் பதிவு</string>
+    <string name="crash_log_hint">ஆப் ஏன் மூடியது. இந்த ஃபோனில் மட்டுமே வைக்கப்படும்</string>
+    <string name="crash_log_share">பகிர்</string>
+    <string name="crash_log_clear">அழி</string>
+    <string name="crash_log_close">மூடு</string>
+    <string name="crash_log_share_failed">பகிர எந்த ஆப்பும் இல்லை</string>
 </resources>

@@ -2096,4 +2096,13 @@
         <item quantity="one">Transfers · %1$d under way</item>
         <item quantity="other">Transfers · %1$d under way</item>
     </plurals>
+
+    <!-- Stability: a note not saved, the crash log. -->
+    <string name="note_not_saved">Your note wasn’t saved: %1$s</string>
+    <string name="crash_log_title">Crash log</string>
+    <string name="crash_log_hint">What made the app close. Kept on this phone only</string>
+    <string name="crash_log_share">Share</string>
+    <string name="crash_log_clear">Clear</string>
+    <string name="crash_log_close">Close</string>
+    <string name="crash_log_share_failed">No app to share it with</string>
 </resources>

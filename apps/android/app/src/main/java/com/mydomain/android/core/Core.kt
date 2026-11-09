@@ -634,8 +634,10 @@ object Core {
             WifiDirect.onRequest(app, payloadJson)
             return
         }
-        // A code event's payload holds the code itself: never log it.
-        labLog(if (name.startsWith("code")) name else "$name ${payloadJson.take(200)}")
+        // Secrets (codes, passwords, keys, clipboard text) never reach the
+        // logs: a code event is logged by name only, the rest redacted.
+        val redacted = if (BuildConfig.DEBUG) Redact.event(name, payloadJson) else ""
+        labLog(if (name.startsWith("code")) name else "$name ${redacted.take(200)}")
         val o = runCatching { JSONObject(payloadJson) }.getOrNull() ?: return
         val kind = o.optString("kind")
         val peersNow = if (kind == "peers_updated") engine()?.peers() else null
@@ -648,8 +650,11 @@ object Core {
             OutgoingFolders.transferEnded()
         }
         onMain {
-            devLog.add(0, DevEvent(System.currentTimeMillis(), name, payloadJson))
-            if (devLog.size > 500) devLog.removeRange(500, devLog.size)
+            // The Developer screen's list (debug builds only, redacted).
+            if (BuildConfig.DEBUG) {
+                devLog.add(0, DevEvent(System.currentTimeMillis(), name, redacted))
+                if (devLog.size > 500) devLog.removeRange(500, devLog.size)
+            }
             apply(o, peersNow)
             if (kind in WIDGET_KINDS) HomeWidget.refresh(app)
             if (kind in SHARE_TARGET_KINDS) ShareTargets.refresh(app)

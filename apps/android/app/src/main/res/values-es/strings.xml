@@ -2125,4 +2125,13 @@
         <item quantity="many">Transferencias · %1$d en curso</item>
         <item quantity="other">Transferencias · %1$d en curso</item>
     </plurals>
+
+    <!-- Stability: a note not saved, the crash log. -->
+    <string name="note_not_saved">Tu nota no se guardó: %1$s</string>
+    <string name="crash_log_title">Registro de fallos</string>
+    <string name="crash_log_hint">Por qué se cerró la app. Solo se guarda en este teléfono</string>
+    <string name="crash_log_share">Compartir</string>
+    <string name="crash_log_clear">Borrar</string>
+    <string name="crash_log_close">Cerrar</string>
+    <string name="crash_log_share_failed">No hay ninguna app para compartirlo</string>
 </resources>

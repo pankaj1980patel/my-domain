@@ -2096,4 +2096,13 @@
         <item quantity="one">ટ્રાન્સફર · %1$d ચાલુ</item>
         <item quantity="other">ટ્રાન્સફર · %1$d ચાલુ</item>
     </plurals>
+
+    <!-- Stability: a note not saved, the crash log. -->
+    <string name="note_not_saved">તમારી નોંધ સાચવાઈ નહીં: %1$s</string>
+    <string name="crash_log_title">ક્રેશ લૉગ</string>
+    <string name="crash_log_hint">ઍપ શાના કારણે બંધ થઈ. ફક્ત આ ફોન પર જ રાખવામાં આવે છે</string>
+    <string name="crash_log_share">શેર કરો</string>
+    <string name="crash_log_clear">સાફ કરો</string>
+    <string name="crash_log_close">બંધ કરો</string>
+    <string name="crash_log_share_failed">શેર કરવા માટે કોઈ ઍપ નથી</string>
 </resources>

@@ -7,8 +7,11 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mydomain.android.NoteReminders
+import com.mydomain.android.R
 import com.mydomain.android.NotesWidget
 import com.mydomain.android.ffi.NoteItem
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.util.concurrent.Executors
 
@@ -148,14 +151,31 @@ object Notes {
         return saved
     }
 
-    /** Save on the way out of the editor (the screen's scope is gone). */
+    /** Save on the way out of the editor (the screen's scope is gone). With
+     *  the engine still starting, it waits a little for it. One that can't
+     *  be saved says so: it used to be dropped without a word. */
     fun saveDetached(id: String?, f: Fields) {
-        Thread {
+        AppScope.bg("note save") {
             val saved = runCatching {
-                Core.engine()?.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color, f.remindAt, f.remindDone)
-            }.getOrNull()
-            if (saved != null) main.post { applySaved(saved) }
-        }.start()
+                val e = Core.engine()
+                    ?: withTimeoutOrNull(ENGINE_WAIT_MS) { Core.engineState.first { it == EngineState.Ready } }?.let { Core.engine() }
+                    ?: throw IllegalStateException("not started")
+                e.noteSave(id, f.title, f.body, f.pinned, f.checklist, f.color, f.remindAt, f.remindDone)
+            }
+            main.post {
+                saved.onSuccess { applySaved(it) }.onFailure { e -> notSaved(e) }
+            }
+        }
+    }
+
+    /** How long a save on the way out waits for a starting engine. */
+    private const val ENGINE_WAIT_MS = 10_000L
+
+    /** Tell the user the edit wasn't saved, and why (main thread). */
+    private fun notSaved(e: Throwable) {
+        android.util.Log.w("mydomain_notes", "note not saved: $e")
+        val why = runCatching { friendlyError(e) }.getOrDefault(e.toString())
+        android.widget.Toast.makeText(Core.app, Core.str(R.string.note_not_saved, why), android.widget.Toast.LENGTH_LONG).show()
     }
 
     /** Set note [id]'s reminder ([at] null: none; [done]: marked Done), the
