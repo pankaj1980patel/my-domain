@@ -2118,4 +2118,15 @@
     <string name="error_join_no_key">குறியீடு வேலை செய்தது, ஆனால் சாதன விசை வரவில்லை. பதிலாக உங்கள் கடவுச்சொல்லுடன் உள்நுழையுங்கள்.</string>
     <string name="set_sign_out_failed">வெளியேற முடியவில்லை. மீண்டும் முயலுங்கள்.</string>
     <string name="set_sign_out_clears">இது இந்தப் போனின் அரட்டை, கிளிப்போர்டு, பரிமாற்ற வரலாற்றையும் அழிக்கும்.</string>
+    <string name="more_workspace_sub">குறிப்புகள், டைமர்கள், பிறகு படிக்க</string>
+    <string name="more_conn_health">இணைப்புகளும் நலமும்</string>
+    <string name="more_conn_health_sub">ஒவ்வொரு சாதனமும் எப்படி இணைந்துள்ளது, எதைச் சரிசெய்ய வேண்டும்</string>
+    <string name="set_group_setup">அமைவு</string>
+    <string name="set_group_setup_sub">இந்தப் போனை அமையுங்கள், அல்லது முதல் அமைவை மீண்டும் இயக்குங்கள்</string>
+    <string name="onboard_again_hint">தொடக்கத்திலிருந்து: இந்தப் போனுக்குப் பெயரிடுங்கள், உங்கள் சாதனங்களைச் சேருங்கள், எதைப் பயன்படுத்துவது எனத் தேர்ந்தெடுங்கள்.</string>
+    <string name="banner_offline">நீங்கள் இணைப்பில் இல்லை</string>
+    <string name="banner_server">சேவையகத்தை அடைய முடியவில்லை</string>
+    <string name="banner_reconnecting">மீண்டும் இணைக்கிறது…</string>
+    <string name="banner_open">இணைப்புகள்</string>
+    <string name="devices_loading">உங்கள் சாதனங்கள் ஏற்றப்படுகின்றன…</string>
 </resources>

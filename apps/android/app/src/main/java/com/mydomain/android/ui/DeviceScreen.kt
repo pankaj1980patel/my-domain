@@ -354,7 +354,6 @@ private fun DeviceMenu(
         } else {
             Item(R.drawable.ic_lucide_link_2, R.string.connect) { run { Core.connect(node) } }
         }
-        Item(R.drawable.ic_lucide_shield_check, R.string.dev_health_check) { onDismiss(); onHealth() }
     }
 }
 

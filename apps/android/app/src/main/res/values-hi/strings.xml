@@ -2115,4 +2115,15 @@
     <string name="error_join_no_key">कोड काम कर गया, पर डिवाइस कुंजी नहीं पहुँची। इसकी जगह अपने पासवर्ड से साइन इन करें।</string>
     <string name="set_sign_out_failed">साइन आउट नहीं हो सका। फिर कोशिश करें।</string>
     <string name="set_sign_out_clears">इससे इस फ़ोन का चैट, क्लिपबोर्ड और ट्रांसफ़र इतिहास भी साफ़ हो जाता है।</string>
+    <string name="more_workspace_sub">नोट्स, टाइमर और बाद में पढ़ें</string>
+    <string name="more_conn_health">कनेक्शन और हेल्थ</string>
+    <string name="more_conn_health_sub">हर डिवाइस कैसे जुड़ा है, और क्या ठीक करना है</string>
+    <string name="set_group_setup">सेटअप</string>
+    <string name="set_group_setup_sub">इस फ़ोन को सेट करें, या पहली बार वाला सेटअप फिर चलाएँ</string>
+    <string name="onboard_again_hint">शुरू से: इस फ़ोन का नाम रखें, अपने डिवाइस जोड़ें और चुनें कि क्या इस्तेमाल करना है।</string>
+    <string name="banner_offline">आप ऑफ़लाइन हैं</string>
+    <string name="banner_server">सर्वर तक नहीं पहुँच पा रहे</string>
+    <string name="banner_reconnecting">फिर से जुड़ रहा है…</string>
+    <string name="banner_open">कनेक्शन</string>
+    <string name="devices_loading">आपके डिवाइस लोड हो रहे हैं…</string>
 </resources>

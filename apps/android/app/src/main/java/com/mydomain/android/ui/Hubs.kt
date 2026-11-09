@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import androidx.compose.material3.Badge
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -94,6 +95,9 @@ fun DevicesScreen(onOpen: (String) -> Unit, state: LazyListState = rememberLazyL
             if (all.isEmpty()) {
                 if (Core.peersLoaded) {
                     item { EmptyState(stringResource(R.string.home_empty_title), stringResource(R.string.home_empty_body)) }
+                } else {
+                    // Still reading the list: placeholder rows.
+                    item(key = "skeleton") { DeviceSkeleton(rows = 4) }
                 }
             } else if (list.isEmpty()) {
                 item { Muted(stringResource(R.string.devices_none_here), Modifier.padding(8.dp)) }
@@ -127,21 +131,28 @@ fun AddDeviceSheet(onClose: () -> Unit) {
 }
 
 /** Where More's rows go. */
-enum class MoreItem { Files, Messages, Notes, Timers, ReadLater, Automations, Search, Connections, Health, Settings, Help }
+enum class MoreItem { Search, Files, Messages, Workspace, Automations, ConnHealth }
 
-/** More: everything that isn't a tab, as rows with a chevron; Notes,
- *  Timers and Read later under one Workspace heading. */
+/** Where the Workspace hub's rows go. */
+enum class WorkItem { Notes, Timers, ReadLater }
+
+/** More: six rows with a chevron. Notes, Timers and Read later are under
+ *  Workspace; the links map and the health check under Connections &
+ *  health (red, read out, while the check has something red: the one
+ *  place it shows, with the dot on the More tab). Settings is the top
+ *  bar's gear; Help is in Settings and behind every screen's "?". */
 @Composable
 fun MoreScreen(state: LazyListState = rememberLazyListState(), onItem: (MoreItem) -> Unit) {
     val activeTransfers = TransferLog.list.count { !it.finished }
-    val notes = Notes.byId.size
-    val unread = ReadLater.unread()
-    val running = Timers.sorted().count { it.state == "running" }
     val rules = PhoneAutomations.items.size
     val bad = Health.bad
     LazyColumn(Modifier.fillMaxSize(), state = state, contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             RowGroup {
+                NavRow(
+                    R.drawable.ic_lucide_search, Hues.plain, stringResource(R.string.more_search),
+                    stringResource(R.string.more_search_sub), onClick = { onItem(MoreItem.Search) },
+                )
                 NavRow(
                     R.drawable.ic_lucide_arrow_left_right, Hues.files, stringResource(R.string.more_files),
                     if (activeTransfers > 0) pluralStringResource(R.plurals.transfers_under_way, activeTransfers, activeTransfers)
@@ -152,57 +163,105 @@ fun MoreScreen(state: LazyListState = rememberLazyListState(), onItem: (MoreItem
                     R.drawable.ic_lucide_message_circle, Hues.messages, stringResource(R.string.more_messages),
                     stringResource(R.string.more_messages_sub), onClick = { onItem(MoreItem.Messages) },
                 )
-            }
-        }
-        item {
-            RowGroup(stringResource(R.string.more_workspace)) {
                 NavRow(
-                    R.drawable.ic_lucide_sticky_note, Hues.plain, stringResource(R.string.notes_title),
-                    if (notes > 0) pluralStringResource(R.plurals.more_notes_count, notes, notes) else stringResource(R.string.notes_subtitle),
-                    onClick = { onItem(MoreItem.Notes) },
+                    R.drawable.ic_lucide_sticky_note, Hues.plain, stringResource(R.string.more_workspace),
+                    workspaceLine(), onClick = { onItem(MoreItem.Workspace) },
                 )
-                NavRow(
-                    R.drawable.ic_lucide_timer, Hues.plain, stringResource(R.string.timers_title),
-                    if (running > 0) pluralStringResource(R.plurals.timers_running, running, running) else stringResource(R.string.timers_entry_hint),
-                    onClick = { onItem(MoreItem.Timers) },
-                )
-                NavRow(
-                    R.drawable.ic_lucide_bookmark, Hues.plain, stringResource(R.string.read_later_title),
-                    if (unread > 0) pluralStringResource(R.plurals.read_later_unread_count, unread, unread) else stringResource(R.string.more_read_later_sub),
-                    onClick = { onItem(MoreItem.ReadLater) },
-                )
-            }
-        }
-        item {
-            RowGroup {
                 NavRow(
                     R.drawable.ic_lucide_zap, Hues.tools, stringResource(R.string.automations_title),
                     if (rules > 0) pluralStringResource(R.plurals.more_rules_count, rules, rules) else stringResource(R.string.more_automations_sub),
                     onClick = { onItem(MoreItem.Automations) },
                 )
-                NavRow(
-                    R.drawable.ic_lucide_search, Hues.plain, stringResource(R.string.more_search),
-                    stringResource(R.string.more_search_sub), onClick = { onItem(MoreItem.Search) },
-                )
-                NavRow(
-                    R.drawable.ic_lucide_network, Hues.plain, stringResource(R.string.more_connections),
-                    stringResource(R.string.map_entry_body), onClick = { onItem(MoreItem.Connections) },
-                )
-                // Something red in the health check: this row in red, read out.
-                NavRow(
-                    if (bad > 0) R.drawable.ic_lucide_shield else R.drawable.ic_lucide_shield_check,
-                    if (bad > 0) Hues.danger else Hues.plain, stringResource(R.string.more_security_health),
-                    if (bad > 0) pluralStringResource(R.plurals.health_needs_fixing, bad, bad) else stringResource(R.string.more_health_sub),
-                    onClick = { onItem(MoreItem.Health) },
-                )
-                NavRow(
-                    R.drawable.ic_lucide_settings, Hues.plain, stringResource(R.string.settings_title),
-                    stringResource(R.string.more_settings_sub), onClick = { onItem(MoreItem.Settings) },
-                )
-                NavRow(
-                    R.drawable.ic_lucide_circle_help, Hues.plain, stringResource(R.string.help_title),
-                    stringResource(R.string.help_settings_hint), onClick = { onItem(MoreItem.Help) },
-                )
+                HealthNavRow(
+                    R.drawable.ic_lucide_network, stringResource(R.string.more_conn_health),
+                    stringResource(R.string.more_conn_health_sub), bad,
+                ) { onItem(MoreItem.ConnHealth) }
+            }
+        }
+    }
+}
+
+/** Workspace's line under its name: what's running or waiting, else
+ *  what's in it. */
+@Composable
+private fun workspaceLine(): String {
+    val running = Timers.sorted().count { it.state == "running" }
+    val unread = ReadLater.unread()
+    return when {
+        running > 0 -> pluralStringResource(R.plurals.timers_running, running, running)
+        unread > 0 -> pluralStringResource(R.plurals.read_later_unread_count, unread, unread)
+        else -> stringResource(R.string.more_workspace_sub)
+    }
+}
+
+/** A row that turns red (a shield, the count read out, a badge) while the
+ *  health check has [bad] things to fix. */
+@Composable
+private fun HealthNavRow(icon: Int, title: String, sub: String, bad: Int, onClick: () -> Unit) {
+    val state = if (bad > 0) pluralStringResource(R.plurals.health_needs_fixing, bad, bad) else null
+    NavRow(
+        if (bad > 0) R.drawable.ic_lucide_shield else icon,
+        if (bad > 0) Hues.danger else Hues.plain, title, state ?: sub,
+        onClick = onClick, state = state,
+        trailing = {
+            if (bad > 0) {
+                Badge(containerColor = T.danger)
+                Spacer(Modifier.width(8.dp))
+            }
+            Chevron()
+        },
+    )
+}
+
+/** Workspace: Notes, Timers and Read later. */
+@Composable
+fun WorkspaceScreen(onBack: () -> Unit, onItem: (WorkItem) -> Unit) {
+    val notes = Notes.byId.size
+    val unread = ReadLater.unread()
+    val running = Timers.sorted().count { it.state == "running" }
+    Column(Modifier.fillMaxSize()) {
+        BackBar(stringResource(R.string.more_workspace), onBack)
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                RowGroup {
+                    NavRow(
+                        R.drawable.ic_lucide_sticky_note, Hues.plain, stringResource(R.string.notes_title),
+                        if (notes > 0) pluralStringResource(R.plurals.more_notes_count, notes, notes) else stringResource(R.string.notes_subtitle),
+                        onClick = { onItem(WorkItem.Notes) },
+                    )
+                    NavRow(
+                        R.drawable.ic_lucide_timer, Hues.plain, stringResource(R.string.timers_title),
+                        if (running > 0) pluralStringResource(R.plurals.timers_running, running, running) else stringResource(R.string.timers_entry_hint),
+                        onClick = { onItem(WorkItem.Timers) },
+                    )
+                    NavRow(
+                        R.drawable.ic_lucide_bookmark, Hues.plain, stringResource(R.string.read_later_title),
+                        if (unread > 0) pluralStringResource(R.plurals.read_later_unread_count, unread, unread) else stringResource(R.string.more_read_later_sub),
+                        onClick = { onItem(WorkItem.ReadLater) },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Connections & health: the links map and the health check. */
+@Composable
+fun ConnHealthScreen(onBack: () -> Unit, onMap: () -> Unit, onHealth: () -> Unit) {
+    Column(Modifier.fillMaxSize()) {
+        BackBar(stringResource(R.string.more_conn_health), onBack)
+        LazyColumn(Modifier.fillMaxSize(), contentPadding = ScreenPadding, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                RowGroup {
+                    NavRow(
+                        R.drawable.ic_lucide_network, Hues.plain, stringResource(R.string.more_connections),
+                        stringResource(R.string.map_entry_body), onClick = onMap,
+                    )
+                    HealthNavRow(
+                        R.drawable.ic_lucide_shield_check, stringResource(R.string.more_security_health),
+                        stringResource(R.string.more_health_sub), Health.bad, onHealth,
+                    )
+                }
             }
         }
     }

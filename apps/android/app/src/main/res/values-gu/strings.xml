@@ -2118,4 +2118,15 @@
     <string name="error_join_no_key">કોડ ચાલ્યો, પણ ડિવાઇસ કી ન આવી. તેના બદલે તમારા પાસવર્ડથી સાઇન ઇન કરો.</string>
     <string name="set_sign_out_failed">સાઇન આઉટ ન થઈ શક્યું. ફરી પ્રયાસ કરો.</string>
     <string name="set_sign_out_clears">આનાથી આ ફોનનો ચેટ, ક્લિપબોર્ડ અને ટ્રાન્સફર ઇતિહાસ પણ સાફ થાય છે.</string>
+    <string name="more_workspace_sub">નોંધો, ટાઇમર અને પછી વાંચો</string>
+    <string name="more_conn_health">કનેક્શન અને હેલ્થ</string>
+    <string name="more_conn_health_sub">દરેક ડિવાઇસ કેવી રીતે જોડાયેલું છે, અને શું સુધારવું</string>
+    <string name="set_group_setup">સેટઅપ</string>
+    <string name="set_group_setup_sub">આ ફોન સેટ કરો, અથવા પહેલી વારનું સેટઅપ ફરી ચલાવો</string>
+    <string name="onboard_again_hint">શરૂઆતથી: આ ફોનનું નામ રાખો, તમારા ડિવાઇસ ઉમેરો અને શું વાપરવું તે પસંદ કરો.</string>
+    <string name="banner_offline">તમે ઑફલાઇન છો</string>
+    <string name="banner_server">સર્વર સુધી પહોંચી શકાતું નથી</string>
+    <string name="banner_reconnecting">ફરી જોડાઈ રહ્યું છે…</string>
+    <string name="banner_open">કનેક્શન</string>
+    <string name="devices_loading">તમારા ડિવાઇસ લોડ થઈ રહ્યા છે…</string>
 </resources>

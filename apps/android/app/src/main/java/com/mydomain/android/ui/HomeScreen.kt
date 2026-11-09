@@ -71,7 +71,6 @@ fun HomeScreen(
     onBattery: () -> Unit = {},
     onActivity: () -> Unit = {},
     onActivityRow: (ActivityRow) -> Unit = {},
-    onHealth: () -> Unit = {},
     onOnboarding: () -> Unit = {},
     state: LazyListState = rememberLazyListState(),
 ) {
@@ -127,6 +126,9 @@ fun HomeScreen(
                             PrimaryButton(stringResource(R.string.join_add_device), onAddDevice)
                         }
                     }
+                } else {
+                    // Still reading the list: placeholder cards, not a blank page.
+                    item(key = "skeleton") { DeviceSkeleton(rows = 3, hero = true) }
                 }
             } else {
                 item(key = "hero") { HeroCard(hero, onOpen = { onOpen(hero) }, onRename = { onRename(hero) }) }
@@ -164,8 +166,6 @@ fun HomeScreen(
                     }
                 }
             }
-            // The health check, good or not (HealthScreen).
-            item(key = "health") { HealthCard(onHealth) }
             if (hero != null) item(key = "stats") { StatRow(hero) { onOpen(hero) } }
             if (devices.isNotEmpty()) {
                 item {
@@ -215,36 +215,6 @@ private fun HeroCard(node: String, onOpen: () -> Unit, onRename: () -> Unit) {
                 (viaText(node) ?: lastSeenText(node))?.let { Muted(it) }
                 FactChips(node)
             }
-        }
-    }
-}
-
-/** The health check as a card: "Device health" over the result (all good,
- *  worth a look, or how many problems need fixing; "Checking…" while it
- *  runs). */
-@Composable
-private fun HealthCard(onOpen: () -> Unit) {
-    val checks = Health.checks
-    val bad = Health.bad
-    val warn = checks.count { it.level == "warn" }
-    val (h, title) = when {
-        checks.isEmpty() -> Hue.Muted to stringResource(R.string.health_running)
-        bad > 0 -> Hue.Red to pluralStringResource(R.plurals.health_needs_fixing, bad, bad)
-        warn > 0 -> Hue.Amber to pluralStringResource(R.plurals.health_worth_look, warn, warn)
-        else -> Hue.Green to stringResource(R.string.home_health_good)
-    }
-    SoftCard(onClick = onOpen) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconBubble(if (bad > 0 || warn > 0) R.drawable.ic_lucide_shield else R.drawable.ic_lucide_shield_check, h, 52.dp)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(stringResource(R.string.home_health), style = MaterialTheme.typography.labelLarge, color = T.text2)
-                Text(
-                    title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold,
-                    color = if (checks.isEmpty()) T.text2 else hue(h),
-                )
-            }
-            Chevron()
         }
     }
 }

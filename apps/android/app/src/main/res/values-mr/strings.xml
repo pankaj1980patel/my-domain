@@ -2118,4 +2118,15 @@
     <string name="error_join_no_key">कोड चालला, पण डिव्हाइस की आली नाही. त्याऐवजी तुमच्या पासवर्डने साइन इन करा.</string>
     <string name="set_sign_out_failed">साइन आउट करता आले नाही. पुन्हा प्रयत्न करा.</string>
     <string name="set_sign_out_clears">यामुळे या फोनचा चॅट, क्लिपबोर्ड आणि ट्रान्सफर इतिहासही साफ होतो.</string>
+    <string name="more_workspace_sub">नोट्स, टायमर आणि नंतर वाचा</string>
+    <string name="more_conn_health">कनेक्शन आणि आरोग्य</string>
+    <string name="more_conn_health_sub">प्रत्येक डिव्हाइस कसे जोडलेले आहे, आणि काय दुरुस्त करायचे</string>
+    <string name="set_group_setup">सेटअप</string>
+    <string name="set_group_setup_sub">हा फोन सेट करा, किंवा पहिल्या वेळचे सेटअप पुन्हा चालवा</string>
+    <string name="onboard_again_hint">सुरुवातीपासून: या फोनला नाव द्या, तुमची डिव्हाइसेस जोडा आणि काय वापरायचे ते निवडा.</string>
+    <string name="banner_offline">तुम्ही ऑफलाइन आहात</string>
+    <string name="banner_server">सर्व्हरपर्यंत पोहोचता येत नाही</string>
+    <string name="banner_reconnecting">पुन्हा जोडत आहे…</string>
+    <string name="banner_open">कनेक्शन</string>
+    <string name="devices_loading">तुमची डिव्हाइसेस लोड होत आहेत…</string>
 </resources>

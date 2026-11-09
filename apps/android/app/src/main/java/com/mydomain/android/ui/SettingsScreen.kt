@@ -467,8 +467,10 @@ private enum class SettingsGroup(
         R.drawable.ic_lucide_shield, Hues.plain, R.string.set_group_helper, R.string.set_group_helper_sub,
         setOf("helper", "secure-mode", "shizuku"),
     ),
+    // Setting up this phone. The health check itself is under More ->
+    // Connections & health (its one place; the badge is on More).
     Health(
-        R.drawable.ic_lucide_shield_check, Hues.plain, R.string.set_group_health, R.string.set_group_health_sub,
+        R.drawable.ic_lucide_wrench, Hues.plain, R.string.set_group_setup, R.string.set_group_setup_sub,
         setOf("health", "setup"),
     ),
     Backup(
@@ -548,20 +550,7 @@ fun SettingsScreen(
                 }
                 RowGroup {
                     SettingsGroup.entries.filter { it != SettingsGroup.Account }.forEach { g ->
-                        val red = g == SettingsGroup.Health && Health.bad > 0
-                        NavRow(
-                            g.icon, g.hue, stringResource(g.title), stringResource(g.sub),
-                            onClick = { open = g.name },
-                            state = if (red) pluralStringResource(R.plurals.health_needs_fixing, Health.bad, Health.bad) else null,
-                            trailing = {
-                                // Something red in the health check.
-                                if (red) {
-                                    Badge(containerColor = T.danger)
-                                    Spacer(Modifier.width(8.dp))
-                                }
-                                Chevron()
-                            },
-                        )
+                        NavRow(g.icon, g.hue, stringResource(g.title), stringResource(g.sub), onClick = { open = g.name })
                     }
                 }
                 RowGroup {
@@ -666,9 +655,9 @@ private fun SettingsGroupPage(
             Box(Modifier.foundMark(focus == "shizuku")) { ShizukuSettingsTile() }
         }
         SettingsGroup.Health -> {
-            // The health check, and first-run setup again.
-            HealthSettingsTile(onHealth, onOnboarding)
+            // The checklist, and first-run setup again.
             SetupSettingsTile(onSetup)
+            SetupAgainTile(onOnboarding)
         }
         SettingsGroup.Backup -> SettingsBackupTile(Modifier.foundMark(focus == "backup"))
         SettingsGroup.Appearance -> Tile(Modifier.foundMark(focus == "appearance"), title = stringResource(R.string.settings_appearance)) {

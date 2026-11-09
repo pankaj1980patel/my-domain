@@ -26,6 +26,9 @@ import androidx.compose.material3.LocalContentColor
 import android.content.SharedPreferences
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.annotation.StringRes
 import androidx.annotation.DrawableRes
@@ -58,6 +61,8 @@ import com.mydomain.android.R
 import com.mydomain.android.core.Account
 import com.mydomain.android.core.Core
 import com.mydomain.android.core.DebugScreen
+import com.mydomain.android.core.Dest
+import com.mydomain.android.core.NavStack
 import com.mydomain.android.core.Findable
 import com.mydomain.android.core.FoundKind
 import com.mydomain.android.core.Health
@@ -120,9 +125,10 @@ private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
 
 /** Sign-in until ready; then the bottom navigation (Home, Devices,
  *  Activity, More) under a top bar (logo, the bell, Settings), plus the
- *  pushed screens: a device, Settings, Notes, Timers, Read later, Files &
- *  transfers, Messages, Automations, Search, the links map, the
- *  health check, Set up this phone, Developer and Help. */
+ *  pushed screens ([Dest]: a device, Settings, Notes, Timers, Read later,
+ *  Files & transfers, Messages, Automations, Search, the links map, the
+ *  health check, Set up this phone, Developer, Help and More's hubs) on a
+ *  back stack that Back pops. */
 @Composable
 fun App(prefs: SharedPreferences) {
     val snack = remember { SnackbarHostState() }
@@ -178,75 +184,54 @@ fun App(prefs: SharedPreferences) {
     }
 }
 
+/** The back stack, saved as text (NavStack). */
+private val StackSaver = androidx.compose.runtime.saveable.Saver<List<Dest>, ArrayList<String>>(
+    save = { NavStack.encode(it) },
+    restore = { NavStack.decode(it) },
+)
+
 @Composable
 private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
-    var device by rememberSaveable { mutableStateOf<String?>(null) }
-    var developer by rememberSaveable { mutableStateOf(false) }
-    var automations by rememberSaveable { mutableStateOf(false) }
-    var setup by rememberSaveable { mutableStateOf(false) }
-    var timers by rememberSaveable { mutableStateOf(false) }
-    var readLater by rememberSaveable { mutableStateOf(false) }
-    var linksMap by rememberSaveable { mutableStateOf(false) }
-    // Notes and Settings (tabs before the redesign), and More's hubs.
-    var notes by rememberSaveable { mutableStateOf(false) }
-    var settings by rememberSaveable { mutableStateOf(false) }
-    var filesHub by rememberSaveable { mutableStateOf(false) }
-    var filesTab by rememberSaveable { mutableStateOf(FilesTab.Files) }
-    var messages by rememberSaveable { mutableStateOf(false) }
-    var messagesTab by rememberSaveable { mutableStateOf(MessagesTab.Chats) }
+    // The screens pushed over the tabs, oldest first: Back pops the newest
+    // (NavStack), so it goes where you came from.
+    var stack by rememberSaveable(stateSaver = StackSaver) { mutableStateOf(emptyList<Dest>()) }
+    val push = { d: Dest -> stack = NavStack.push(stack, d) }
+    val pop = { stack = NavStack.pop(stack) }
+    /** The top screen changed in place (its tab, what it found). */
+    val update = { d: Dest -> stack = NavStack.replaceTop(stack, d) }
+    /** Only [d] over the tabs (a notification or shortcut took over). */
+    val only = { d: Dest -> stack = listOf(d) }
     // Devices: the "Add a device" sheet (its button, and Home's empty state).
     var adding by rememberSaveable { mutableStateOf(false) }
     // Each tab keeps its place; tapping the tab again goes to the top.
     val tabLists = Tab.entries.associateWith { rememberSaveable(saver = LazyListState.Saver) { LazyListState() } }
     val scope = rememberCoroutineScope()
-    // The health check and first-run setup (HealthScreen.kt).
-    var health by rememberSaveable { mutableStateOf(false) }
-    var onboarding by rememberSaveable { mutableStateOf(false) }
-    // Help: open (the topic list) and the topic shown, if any. Shown over
-    // whichever screen opened it, which comes back on Back.
-    var help by rememberSaveable { mutableStateOf(false) }
-    var helpTopic by rememberSaveable { mutableStateOf<String?>(null) }
-    val openHelp = { topic: String? ->
-        helpTopic = topic
-        help = true
-    }
 
-    // Search (from More): shown over the tabs; what a result opens is pushed
-    // over it, so Back comes back to the results as they were. The query,
-    // the type chips and the open groups (kind names, comma-separated)
-    // survive that and a rotation.
-    var search by rememberSaveable { mutableStateOf(false) }
+    // Search's query, type chips and open groups (kind names,
+    // comma-separated) survive what a result opens and a rotation.
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchKinds by rememberSaveable { mutableStateOf("") }
     var searchOpen by rememberSaveable { mutableStateOf("") }
-    // What a result opened, for that screen to bring into view and mark.
-    var deviceFocus by rememberSaveable { mutableStateOf<String?>(null) }
-    var foundTransfer by rememberSaveable { mutableStateOf<String?>(null) }
-    var foundAutomation by rememberSaveable { mutableStateOf<String?>(null) }
-    var settingsFocus by rememberSaveable { mutableStateOf<String?>(null) }
-    var foundNote by rememberSaveable { mutableStateOf<String?>(null) }
-    var foundLink by rememberSaveable { mutableStateOf<String?>(null) }
-    // Help opened from Search closes in one Back.
-    var helpFromSearch by rememberSaveable { mutableStateOf(false) }
 
-    val openDevice = { node: String, focus: String? -> deviceFocus = focus; device = node }
-    val openTransfers = { found: String? ->
-        foundTransfer = found
-        filesTab = FilesTab.Transfers
-        filesHub = true
+    val openHelp = { topic: String? -> push(Dest(Dest.Kind.Help, topic)) }
+    val openDevice = { node: String, focus: String? -> push(Dest(Dest.Kind.Device, node, focus)) }
+    val openTransfers = { found: String? -> push(Dest(Dest.Kind.Files, FilesTab.Transfers.key, found)) }
+    val openSettings = { focus: String? -> push(Dest(Dest.Kind.Settings, focus)) }
+    val openNotes = { found: String? -> push(Dest(Dest.Kind.Notes, found)) }
+    val openMessages = { t: MessagesTab ->
+        push(Dest(Dest.Kind.Messages, t.name))
+        Attention.seenAt = System.currentTimeMillis()
     }
-    val openSettings = { focus: String? -> settingsFocus = focus; settings = true }
-    val openNotes = { found: String? -> foundNote = found; notes = true }
     val openFound: (Findable) -> Unit = { f ->
         when (f.kind) {
             FoundKind.DEVICES -> openDevice(f.id, null)
             FoundKind.MESSAGES -> f.node?.let { openDevice(it, "msg:" + f.id) }
             FoundKind.CLIPBOARD -> f.node?.let { openDevice(it, "clip:" + f.id) }
             FoundKind.TRANSFERS -> openTransfers(f.id)
-            FoundKind.AUTOMATIONS -> { foundAutomation = f.id; automations = true }
-            FoundKind.HELP -> { helpFromSearch = true; openHelp(f.id) }
-            FoundKind.READ_LATER -> { foundLink = f.id; readLater = true }
+            FoundKind.AUTOMATIONS -> push(Dest(Dest.Kind.Automations, f.id))
+            FoundKind.HELP -> openHelp(f.id)
+            FoundKind.READ_LATER -> push(Dest(Dest.Kind.ReadLater, f.id))
             FoundKind.NOTES -> openNotes(f.id)
             FoundKind.FOLDERS, FoundKind.AUTOMATION_APPS, FoundKind.SETTINGS -> openSettings(
                 when (f.kind) {
@@ -264,48 +249,16 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             a.kind == "messages" && a.node != null -> openDevice(a.node!!, "msg:" + a.target)
             a.kind == "clipboard" && a.node != null -> openDevice(a.node!!, "clip:" + a.target)
             a.action == "note" -> openNotes(a.target)
-            a.action == "read_later" -> { foundLink = a.target; readLater = true }
-            a.action == "timer" -> timers = true
+            a.action == "read_later" -> push(Dest(Dest.Kind.ReadLater, a.target))
+            a.action == "timer" -> push(Dest(Dest.Kind.Timers))
             a.node != null -> openDevice(a.node!!, null)
         }
     }
-    val closeDevice = { device = null; deviceFocus = null }
-    val closeFiles = { filesHub = false; foundTransfer = null }
-    val closeAutomations = { automations = false; foundAutomation = null }
-    val closeHelp = { help = false; helpFromSearch = false }
-    val closeReadLater = { readLater = false; foundLink = null }
-    val closeSettings = { settings = false; settingsFocus = null }
-    val closeNotes = { notes = false; foundNote = null }
-    val openMessages = { t: MessagesTab ->
-        messagesTab = t
-        messages = true
-        Attention.seenAt = System.currentTimeMillis()
-    }
-    /** Close every pushed screen (a notification or shortcut took over). */
-    val closeAll = {
-        closeDevice()
-        developer = false
-        closeAutomations()
-        setup = false
-        timers = false
-        closeReadLater()
-        linksMap = false
-        health = false
-        onboarding = false
-        closeHelp()
-        helpTopic = null
-        closeNotes()
-        closeSettings()
-        closeFiles()
-        messages = false
-        adding = false
-        search = false
-    }
 
     // The health check: with the server now and every 10 minutes, quickly
-    // every minute in between (the Home card and the Settings badge);
-    // every 5 and 30 minutes while saving battery, and not at all while the
-    // app is off screen (PowerPolicy.healthStep).
+    // every minute in between (the badge on More); every 5 and 30 minutes
+    // while saving battery, and not at all while the app is off screen
+    // (PowerPolicy.healthStep).
     val ctx = LocalContext.current
     LaunchedEffect(Unit) {
         var lastRun: Long? = null
@@ -327,13 +280,13 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         if (Health.justSignedIn) {
             Health.justSignedIn = false
             val s = Health.loadSetup()
-            if (s != null && !s.finished) onboarding = true
+            if (s != null && !s.finished) push(Dest(Dest.Kind.Onboarding))
         }
     }
     val healthNav = HealthNav(
         onDevice = { openDevice(it, null) },
-        onMap = { linksMap = true },
-        onSettings = { health = false; onboarding = false; openSettings(null) },
+        onMap = { push(Dest(Dest.Kind.LinksMap)) },
+        onSettings = { stack = NavStack.without(stack, Dest.Kind.Health, Dest.Kind.Onboarding) + Dest(Dest.Kind.Settings) },
         onHelp = { openHelp(it) },
     )
 
@@ -349,8 +302,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A notification asked for Settings (e.g. to allow location sharing).
     LaunchedEffect(Core.showSettings) {
         if (Core.showSettings) {
-            closeAll()
-            openSettings(null)
+            only(Dest(Dest.Kind.Settings))
             Core.showSettings = false
         }
     }
@@ -358,9 +310,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A launcher shortcut asked for one device's screen.
     LaunchedEffect(Core.showDevice) {
         Core.showDevice?.let { node ->
-            closeAll()
             tab = Tab.Home
-            openDevice(node, null)
+            only(Dest(Dest.Kind.Device, node))
             Core.showDevice = null
         }
     }
@@ -368,8 +319,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A timer's notification asked for Timers.
     LaunchedEffect(Core.showTimers) {
         if (Core.showTimers) {
-            closeAll()
-            timers = true
+            only(Dest(Dest.Kind.Timers))
             Core.showTimers = false
         }
     }
@@ -377,8 +327,7 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     // A note reminder's notification asked for its note.
     LaunchedEffect(Core.showNote) {
         Core.showNote?.let { id ->
-            closeAll()
-            openNotes(id)
+            only(Dest(Dest.Kind.Notes, id))
             Core.showNote = null
         }
     }
@@ -391,7 +340,8 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         val want = Core.showScreen ?: return@LaunchedEffect
         if (want.id == shownScreen) return@LaunchedEffect
         shownScreen = want.id
-        closeAll()
+        stack = emptyList()
+        adding = false
         tab = Tab.Home
         when (want.screen) {
             DebugScreen.HOME, DebugScreen.SIGN_IN -> Unit
@@ -401,73 +351,36 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
             DebugScreen.ACTIVITY -> tab = Tab.Activity
             DebugScreen.SETTINGS -> openSettings(want.tab?.let { "group:$it" })
             DebugScreen.DEVICE -> openDevice(want.device ?: "", "tab:" + (want.tab ?: DeviceTab.Overview.key))
-            DebugScreen.DEVELOPER -> developer = true
-            DebugScreen.AUTOMATIONS -> automations = true
+            DebugScreen.DEVELOPER -> push(Dest(Dest.Kind.Developer))
+            DebugScreen.AUTOMATIONS -> push(Dest(Dest.Kind.Automations))
             DebugScreen.TRANSFERS -> openTransfers(null)
-            DebugScreen.FILES -> {
-                filesTab = FilesTab.entries.firstOrNull { it.key == want.tab } ?: FilesTab.Files
-                filesHub = true
-            }
+            DebugScreen.FILES -> push(
+                Dest(Dest.Kind.Files, (FilesTab.entries.firstOrNull { it.key == want.tab } ?: FilesTab.Files).key),
+            )
             DebugScreen.MESSAGES -> openMessages(
                 if (want.tab == "notifications") MessagesTab.Notifications else MessagesTab.Chats,
             )
-            DebugScreen.SETUP_PHONE -> setup = true
-            DebugScreen.TIMERS -> timers = true
-            DebugScreen.READ_LATER -> readLater = true
-            DebugScreen.LINKS_MAP -> linksMap = true
-            DebugScreen.HEALTH -> health = true
-            DebugScreen.ONBOARDING -> onboarding = true
+            DebugScreen.SETUP_PHONE -> push(Dest(Dest.Kind.Setup))
+            DebugScreen.TIMERS -> push(Dest(Dest.Kind.Timers))
+            DebugScreen.READ_LATER -> push(Dest(Dest.Kind.ReadLater))
+            DebugScreen.LINKS_MAP -> push(Dest(Dest.Kind.LinksMap))
+            DebugScreen.HEALTH -> push(Dest(Dest.Kind.Health))
+            DebugScreen.ONBOARDING -> push(Dest(Dest.Kind.Onboarding))
             DebugScreen.HELP -> openHelp(want.topic)
             DebugScreen.SEARCH -> {
                 searchQuery = want.query.orEmpty()
-                search = true
+                push(Dest(Dest.Kind.Search))
             }
         }
     }
 
-    val pushed = help || device != null || developer || automations || setup || timers || readLater || linksMap ||
-        health || onboarding || notes || settings || filesHub || messages || search
+    val top = stack.lastOrNull()
+    val pushed = top != null
+    // System Back: the newest pushed screen, else back to Home.
     BackHandler(enabled = pushed || tab != Tab.Home) {
-        when {
-            help && helpTopic != null && !helpFromSearch -> helpTopic = null
-            help -> closeHelp()
-            device != null -> closeDevice()
-            developer -> developer = false
-            automations -> closeAutomations()
-            setup -> setup = false
-            timers -> timers = false
-            readLater -> closeReadLater()
-            linksMap -> linksMap = false
-            onboarding -> onboarding = false
-            health -> health = false
-            notes -> closeNotes()
-            settings -> closeSettings()
-            filesHub -> closeFiles()
-            messages -> messages = false
-            search -> search = false
-            else -> tab = Tab.Home
-        }
+        if (pushed) pop() else tab = Tab.Home
     }
 
-    // What shows: one key per screen, so a change can fade between them.
-    val screen = when {
-        help -> "help"
-        device != null -> "device:$device"
-        developer -> "developer"
-        automations -> "automations"
-        setup -> "setup"
-        timers -> "timers"
-        readLater -> "readLater"
-        linksMap -> "linksMap"
-        onboarding -> "onboarding"
-        health -> "health"
-        notes -> "notes"
-        settings -> "settings"
-        filesHub -> "files"
-        messages -> "messages"
-        search -> "search"
-        else -> "tab:" + tab.name
-    }
     val still = reducedMotion()
     val bad = Health.bad
     val healthState = if (bad > 0) pluralStringResource(R.plurals.health_needs_fixing, bad, bad) else null
@@ -478,13 +391,23 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         // Status and navigation bars and a landscape cutout, once, here.
         contentWindowInsets = WindowInsets.systemBars.union(WindowInsets.displayCutout),
         topBar = {
-            if (!pushed) {
-                TopBar(
-                    title = if (tab == Tab.Home) null else stringResource(tab.label),
-                    bellCount = Attention.newMessages,
-                    onBell = { openMessages(if (Attention.newMessages > 0) MessagesTab.Chats else MessagesTab.Notifications) },
-                    onSettings = { openSettings(null) },
-                )
+            Column {
+                if (!pushed) {
+                    TopBar(
+                        title = if (tab == Tab.Home) null else stringResource(tab.label),
+                        bellCount = Attention.newMessages,
+                        onBell = { openMessages(if (Attention.newMessages > 0) MessagesTab.Chats else MessagesTab.Notifications) },
+                        onSettings = { openSettings(null) },
+                    )
+                }
+                // Offline, the server unreachable, reconnecting: on every
+                // screen but the map it opens (StatusBanner.kt).
+                if (top?.kind != Dest.Kind.LinksMap) {
+                    ConnectionBanner(
+                        Modifier.then(if (pushed) Modifier.windowInsetsPadding(WindowInsets.statusBars) else Modifier),
+                        onOpen = { push(Dest(Dest.Kind.LinksMap)) },
+                    )
+                }
             }
         },
         floatingActionButton = {
@@ -534,7 +457,10 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
         // The keyboard pushes every screen up, from here only.
         Box(Modifier.fillMaxSize().padding(inner).consumeWindowInsets(inner).imePadding()) {
             AnimatedContent(
-                targetState = screen,
+                targetState = top to tab,
+                // One key per screen: the same screen with another tab or
+                // topic doesn't fade (NavStack.key).
+                contentKey = { (d, t) -> d?.let(NavStack::key) ?: ("tab:" + t.name) },
                 transitionSpec = {
                     if (still) {
                         EnterTransition.None togetherWith ExitTransition.None
@@ -543,101 +469,48 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
                     }
                 },
                 label = "screen",
-            ) { key ->
-                when {
-                    key == "help" -> HelpScreen(
-                        helpTopic,
-                        onTopic = { if (it == null && helpFromSearch) closeHelp() else helpTopic = it },
-                        onBack = closeHelp,
+            ) { (d, t) ->
+                if (d != null) {
+                    Pushed(
+                        d, prefs, healthNav, push, pop, update,
+                        search = SearchState(
+                            searchQuery, { searchQuery = it },
+                            searchKinds, { searchKinds = it }, searchOpen, { searchOpen = it },
+                        ),
+                        openFound = openFound, openActivity = openActivity,
                     )
-                    key.startsWith("device:") -> DeviceScreen(
-                        key.removePrefix("device:"), onBack = closeDevice, focus = deviceFocus,
-                        onHealth = { closeDevice(); health = true },
-                    )
-                    key == "developer" -> DeveloperScreen(onBack = { developer = false })
-                    key == "automations" -> AutomationsScreen(onBack = closeAutomations, found = foundAutomation)
-                    key == "setup" -> SetupScreen(onBack = { setup = false }, onHelp = { openHelp("setup-phone") })
-                    key == "timers" -> TimersScreen(onBack = { timers = false }, onHelp = { openHelp("timers") })
-                    key == "readLater" -> ReadLaterScreen(onBack = closeReadLater, onHelp = { openHelp("read-later") }, found = foundLink)
-                    key == "linksMap" -> LinksMapScreen(
-                        onBack = { linksMap = false },
-                        onHelp = { openHelp("troubleshooting") },
-                        onDevice = { openDevice(it, null) },
-                    )
-                    key == "onboarding" -> OnboardingScreen(onClose = { onboarding = false }, nav = healthNav)
-                    key == "health" -> HealthScreen(onBack = { health = false }, nav = healthNav)
-                    key == "notes" -> NotesScreen(
-                        onHelp = { openHelp("notes") },
-                        openNote = foundNote,
-                        onOpened = { foundNote = null },
-                        onBack = closeNotes,
-                    )
-                    key == "settings" -> SettingsScreen(
-                        prefs,
-                        onDeveloper = { developer = true },
-                        onAutomations = { foundAutomation = null; automations = true },
-                        onSetup = { setup = true },
-                        onHelp = { openHelp(null) },
-                        onHealth = { health = true },
-                        onOnboarding = { onboarding = true },
-                        focus = settingsFocus,
-                        onBack = closeSettings,
-                    )
-                    key == "files" -> FilesHubScreen(
-                        filesTab, { filesTab = it }, onBack = closeFiles,
-                        onOpenDevice = { n, f -> openDevice(n, f) },
-                        foundTransfer = foundTransfer,
-                    )
-                    key == "messages" -> MessagesHubScreen(
-                        messagesTab, { messagesTab = it }, onBack = { messages = false },
-                        onOpenDevice = { n, f -> openDevice(n, f) },
-                        onActivityRow = openActivity,
-                    )
-                    key == "search" -> SearchScreen(
-                        query = searchQuery,
-                        onQuery = { searchQuery = it },
-                        kinds = kindsOf(searchKinds),
-                        onKinds = { searchKinds = it.joinToString(",") { k -> k.name } },
-                        expanded = kindsOf(searchOpen),
-                        onExpanded = { searchOpen = it.joinToString(",") { k -> k.name } },
-                        onOpen = openFound,
-                        onBack = { search = false },
-                    )
-                    key == "tab:" + Tab.Home.name -> HomeScreen(
-                        onOpen = { openDevice(it, null) },
-                        onOpenFocus = { n, f -> openDevice(n, f) },
-                        onRename = { openDevice(it, "edit") },
-                        onDevices = { tab = Tab.Devices },
-                        onAddDevice = { tab = Tab.Devices; adding = true },
-                        onBattery = { openSettings("battery") },
-                        onActivity = { tab = Tab.Activity },
-                        onActivityRow = openActivity,
-                        onHealth = { health = true },
-                        onOnboarding = { onboarding = true },
-                        state = tabLists.getValue(Tab.Home),
-                    )
-                    key == "tab:" + Tab.Devices.name -> DevicesScreen(
-                        onOpen = { openDevice(it, null) },
-                        state = tabLists.getValue(Tab.Devices),
-                    )
-                    key == "tab:" + Tab.Activity.name -> ActivityScreen(
-                        onTransfers = { openTransfers(null) },
-                        onOpen = openActivity,
-                        state = tabLists.getValue(Tab.Activity),
-                    )
-                    else -> MoreScreen(state = tabLists.getValue(Tab.More)) { item ->
-                        when (item) {
-                            MoreItem.Files -> { filesTab = FilesTab.Files; filesHub = true }
-                            MoreItem.Messages -> openMessages(MessagesTab.Chats)
-                            MoreItem.Notes -> openNotes(null)
-                            MoreItem.Timers -> timers = true
-                            MoreItem.ReadLater -> { foundLink = null; readLater = true }
-                            MoreItem.Automations -> { foundAutomation = null; automations = true }
-                            MoreItem.Search -> search = true
-                            MoreItem.Connections -> linksMap = true
-                            MoreItem.Health -> health = true
-                            MoreItem.Settings -> openSettings(null)
-                            MoreItem.Help -> openHelp(null)
+                } else {
+                    when (t) {
+                        Tab.Home -> HomeScreen(
+                            onOpen = { openDevice(it, null) },
+                            onOpenFocus = { n, f -> openDevice(n, f) },
+                            onRename = { openDevice(it, "edit") },
+                            onDevices = { tab = Tab.Devices },
+                            onAddDevice = { tab = Tab.Devices; adding = true },
+                            onBattery = { openSettings("battery") },
+                            onActivity = { tab = Tab.Activity },
+                            onActivityRow = openActivity,
+                            onOnboarding = { push(Dest(Dest.Kind.Onboarding)) },
+                            state = tabLists.getValue(Tab.Home),
+                        )
+                        Tab.Devices -> DevicesScreen(
+                            onOpen = { openDevice(it, null) },
+                            state = tabLists.getValue(Tab.Devices),
+                        )
+                        Tab.Activity -> ActivityScreen(
+                            onTransfers = { openTransfers(null) },
+                            onOpen = openActivity,
+                            state = tabLists.getValue(Tab.Activity),
+                        )
+                        Tab.More -> MoreScreen(state = tabLists.getValue(Tab.More)) { item ->
+                            when (item) {
+                                MoreItem.Files -> push(Dest(Dest.Kind.Files, FilesTab.Files.key))
+                                MoreItem.Messages -> openMessages(MessagesTab.Chats)
+                                MoreItem.Workspace -> push(Dest(Dest.Kind.Workspace))
+                                MoreItem.Automations -> push(Dest(Dest.Kind.Automations))
+                                MoreItem.Search -> push(Dest(Dest.Kind.Search))
+                                MoreItem.ConnHealth -> push(Dest(Dest.Kind.ConnHealth))
+                            }
                         }
                     }
                 }
@@ -646,6 +519,107 @@ private fun Main(prefs: SharedPreferences, snack: SnackbarHostState) {
     }
     // "Add a device": the join invite in a sheet (Back closes it).
     if (adding && !pushed) AddDeviceSheet(onClose = { adding = false })
+}
+
+/** Search's saved state, handed to its screen. */
+private class SearchState(
+    val query: String,
+    val onQuery: (String) -> Unit,
+    val kinds: String,
+    val onKinds: (String) -> Unit,
+    val open: String,
+    val onOpen: (String) -> Unit,
+)
+
+/** The screen [d] names, with where its buttons go. */
+@Composable
+private fun Pushed(
+    d: Dest,
+    prefs: SharedPreferences,
+    healthNav: HealthNav,
+    push: (Dest) -> Unit,
+    pop: () -> Unit,
+    update: (Dest) -> Unit,
+    search: SearchState,
+    openFound: (Findable) -> Unit,
+    openActivity: (ActivityRow) -> Unit,
+) {
+    val help = { topic: String -> push(Dest(Dest.Kind.Help, topic)) }
+    val openDevice = { n: String, f: String? -> push(Dest(Dest.Kind.Device, n, f)) }
+    when (d.kind) {
+        Dest.Kind.Help -> HelpScreen(
+            d.a,
+            // A topic (or a link in one) is pushed; its own back arrow pops.
+            onTopic = { if (it == null) pop() else push(Dest(Dest.Kind.Help, it)) },
+            onBack = pop,
+        )
+        Dest.Kind.Device -> DeviceScreen(
+            d.a ?: "", onBack = pop, focus = d.b,
+            onHealth = { push(Dest(Dest.Kind.Health)) },
+        )
+        Dest.Kind.Developer -> DeveloperScreen(onBack = pop)
+        Dest.Kind.Automations -> AutomationsScreen(onBack = pop, found = d.a)
+        Dest.Kind.Setup -> SetupScreen(onBack = pop, onHelp = { help("setup-phone") })
+        Dest.Kind.Timers -> TimersScreen(onBack = pop, onHelp = { help("timers") })
+        Dest.Kind.ReadLater -> ReadLaterScreen(onBack = pop, onHelp = { help("read-later") }, found = d.a)
+        Dest.Kind.LinksMap -> LinksMapScreen(
+            onBack = pop,
+            onHelp = { help("troubleshooting") },
+            onDevice = { openDevice(it, null) },
+        )
+        Dest.Kind.Onboarding -> OnboardingScreen(onClose = pop, nav = healthNav)
+        Dest.Kind.Health -> HealthScreen(onBack = pop, nav = healthNav)
+        Dest.Kind.Notes -> NotesScreen(
+            onHelp = { help("notes") },
+            openNote = d.a,
+            onOpened = { update(d.copy(a = null)) },
+            onBack = pop,
+        )
+        Dest.Kind.Settings -> SettingsScreen(
+            prefs,
+            onDeveloper = { push(Dest(Dest.Kind.Developer)) },
+            onAutomations = { push(Dest(Dest.Kind.Automations)) },
+            onSetup = { push(Dest(Dest.Kind.Setup)) },
+            onHelp = { push(Dest(Dest.Kind.Help)) },
+            onOnboarding = { push(Dest(Dest.Kind.Onboarding)) },
+            focus = d.a,
+            onBack = pop,
+        )
+        Dest.Kind.Files -> FilesHubScreen(
+            FilesTab.entries.firstOrNull { it.key == d.a } ?: FilesTab.Files,
+            { update(Dest(Dest.Kind.Files, it.key, d.b)) }, onBack = pop,
+            onOpenDevice = { n, f -> openDevice(n, f) },
+            foundTransfer = d.b,
+        )
+        Dest.Kind.Messages -> MessagesHubScreen(
+            MessagesTab.entries.firstOrNull { it.name == d.a } ?: MessagesTab.Chats,
+            { update(Dest(Dest.Kind.Messages, it.name)) }, onBack = pop,
+            onOpenDevice = { n, f -> openDevice(n, f) },
+            onActivityRow = openActivity,
+        )
+        Dest.Kind.Search -> SearchScreen(
+            query = search.query,
+            onQuery = search.onQuery,
+            kinds = kindsOf(search.kinds),
+            onKinds = { search.onKinds(it.joinToString(",") { k -> k.name }) },
+            expanded = kindsOf(search.open),
+            onExpanded = { search.onOpen(it.joinToString(",") { k -> k.name }) },
+            onOpen = openFound,
+            onBack = pop,
+        )
+        Dest.Kind.Workspace -> WorkspaceScreen(onBack = pop) { item ->
+            when (item) {
+                WorkItem.Notes -> push(Dest(Dest.Kind.Notes))
+                WorkItem.Timers -> push(Dest(Dest.Kind.Timers))
+                WorkItem.ReadLater -> push(Dest(Dest.Kind.ReadLater))
+            }
+        }
+        Dest.Kind.ConnHealth -> ConnHealthScreen(
+            onBack = pop,
+            onMap = { push(Dest(Dest.Kind.LinksMap)) },
+            onHealth = { push(Dest(Dest.Kind.Health)) },
+        )
+    }
 }
 
 /** Kinds saved as their names, comma-separated (unknown names dropped). */

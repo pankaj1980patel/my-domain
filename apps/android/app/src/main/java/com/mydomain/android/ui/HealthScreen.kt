@@ -350,21 +350,18 @@ fun HealthDeviceBanner(node: String, onOpen: () -> Unit) {
     }
 }
 
-/** Settings' tile: Health check and "Run setup again". */
+/** Settings' tile: "Run setup again" (first-run setup from its start). */
 @Composable
-fun HealthSettingsTile(onHealth: () -> Unit, onSetup: () -> Unit) {
+fun SetupAgainTile(onSetup: () -> Unit) {
     val scope = rememberCoroutineScope()
-    Tile(title = stringResource(R.string.health_settings_tile)) {
-        Muted(stringResource(R.string.health_settings_hint))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SoftButton(stringResource(R.string.health_open), onHealth, Modifier.weight(1f))
-            GhostButton(stringResource(R.string.onboard_again), {
-                scope.launch {
-                    runCatching { Health.act("restart") }
-                    onSetup()
-                }
-            }, Modifier.weight(1f))
-        }
+    Tile(title = stringResource(R.string.onboard_again)) {
+        Muted(stringResource(R.string.onboard_again_hint))
+        SoftButton(stringResource(R.string.onboard_again), {
+            scope.launch {
+                runCatching { Health.act("restart") }
+                onSetup()
+            }
+        }, Modifier.fillMaxWidth())
     }
 }
 

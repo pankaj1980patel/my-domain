@@ -2118,4 +2118,15 @@
     <string name="error_join_no_key">The code worked, but the device key didn’t come through. Sign in with your password instead.</string>
     <string name="set_sign_out_failed">Couldn’t sign out. Try again.</string>
     <string name="set_sign_out_clears">This also clears this phone’s chat, clipboard and transfer history.</string>
+    <string name="more_workspace_sub">Notes, timers and read later</string>
+    <string name="more_conn_health">Connections &amp; health</string>
+    <string name="more_conn_health_sub">How each device is linked, and what to fix</string>
+    <string name="set_group_setup">Setup</string>
+    <string name="set_group_setup_sub">Set up this phone, or run first-run setup again</string>
+    <string name="onboard_again_hint">Name this phone, add your devices and choose what to use, from the start.</string>
+    <string name="banner_offline">You’re offline</string>
+    <string name="banner_server">Server unreachable</string>
+    <string name="banner_reconnecting">Reconnecting…</string>
+    <string name="banner_open">Connections</string>
+    <string name="devices_loading">Loading your devices…</string>
 </resources>

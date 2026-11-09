@@ -2147,4 +2147,15 @@
     <string name="error_join_no_key">El código funcionó, pero la clave de dispositivo no llegó. Inicia sesión con tu contraseña.</string>
     <string name="set_sign_out_failed">No se pudo cerrar la sesión. Inténtalo de nuevo.</string>
     <string name="set_sign_out_clears">También borra el historial de chat, portapapeles y transferencias de este teléfono.</string>
+    <string name="more_workspace_sub">Notas, temporizadores y leer más tarde</string>
+    <string name="more_conn_health">Conexiones y estado</string>
+    <string name="more_conn_health_sub">Cómo se conecta cada dispositivo y qué arreglar</string>
+    <string name="set_group_setup">Configuración inicial</string>
+    <string name="set_group_setup_sub">Configura este teléfono o vuelve a hacer la configuración inicial</string>
+    <string name="onboard_again_hint">Pon nombre a este teléfono, añade tus dispositivos y elige qué usar, desde el principio.</string>
+    <string name="banner_offline">Sin conexión</string>
+    <string name="banner_server">No se puede conectar con el servidor</string>
+    <string name="banner_reconnecting">Reconectando…</string>
+    <string name="banner_open">Conexiones</string>
+    <string name="devices_loading">Cargando tus dispositivos…</string>
 </resources>
