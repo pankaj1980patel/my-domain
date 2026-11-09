@@ -127,6 +127,8 @@ fun App(prefs: SharedPreferences) {
             DownloadAskDialog()
             // A verify code scanned with the camera app: what came of it.
             VerifyScanResult()
+            // A new account's device key, shown once.
+            NewAccountKeyDialog()
         }
     }
 }

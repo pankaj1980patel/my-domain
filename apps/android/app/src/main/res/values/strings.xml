@@ -2096,4 +2096,20 @@
         <item quantity="one">Transfers · %1$d under way</item>
         <item quantity="other">Transfers · %1$d under way</item>
     </plurals>
+    <string name="signin_title_start">Let’s get started</string>
+    <string name="signin_choice_join_title">I already use it on another device</string>
+    <string name="signin_choice_join_body">Scan the code it shows, or type its 6-digit code. No password needed.</string>
+    <string name="signin_choice_new_title">This is my first device</string>
+    <string name="signin_choice_new_body">Create an account</string>
+    <string name="signin_choice_password">Sign in with a password</string>
+    <string name="signin_create_hint">Choose a username and password. A strong device key is made for you: it encrypts everything your devices send each other.</string>
+    <string name="signin_own_key">My own device key (optional)</string>
+    <string name="signin_own_key_hint">Leave it empty and a strong one is made for you.</string>
+    <string name="signin_other_ways">Other ways to sign in</string>
+    <string name="signin_missing_user_pass">Fill in your username and password.</string>
+    <string name="newkey_title">Your device key</string>
+    <string name="newkey_body">It encrypts everything your devices send each other. This phone keeps the encryption key made from it, so you never type it here. You need it only to sign in with your password on another device; adding a device with a code doesn’t. Copy it somewhere safe: it isn’t shown again.</string>
+    <string name="newkey_copy">Copy key</string>
+    <string name="newkey_copied">Device key copied</string>
+    <string name="newkey_done">I’ve saved it</string>
 </resources>

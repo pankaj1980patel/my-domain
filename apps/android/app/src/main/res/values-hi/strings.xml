@@ -2093,4 +2093,20 @@
         <item quantity="one">ट्रांसफ़र · %1$d जारी</item>
         <item quantity="other">ट्रांसफ़र · %1$d जारी</item>
     </plurals>
+    <string name="signin_title_start">चलिए शुरू करते हैं</string>
+    <string name="signin_choice_join_title">मैं इसे पहले से दूसरे डिवाइस पर इस्तेमाल करता/करती हूँ</string>
+    <string name="signin_choice_join_body">वह जो कोड दिखाता है उसे स्कैन करें, या उसका 6 अंकों का कोड लिखें। पासवर्ड की ज़रूरत नहीं।</string>
+    <string name="signin_choice_new_title">यह मेरा पहला डिवाइस है</string>
+    <string name="signin_choice_new_body">एक खाता बनाएँ</string>
+    <string name="signin_choice_password">पासवर्ड से साइन इन करें</string>
+    <string name="signin_create_hint">एक यूज़रनेम और पासवर्ड चुनें। आपके लिए एक मज़बूत डिवाइस कुंजी बनाई जाती है: यह आपके डिवाइसों के बीच भेजी गई हर चीज़ को एन्क्रिप्ट करती है।</string>
+    <string name="signin_own_key">मेरी अपनी डिवाइस कुंजी (वैकल्पिक)</string>
+    <string name="signin_own_key_hint">खाली छोड़ दें, आपके लिए एक मज़बूत कुंजी बन जाएगी।</string>
+    <string name="signin_other_ways">साइन इन करने के दूसरे तरीके</string>
+    <string name="signin_missing_user_pass">अपना यूज़रनेम और पासवर्ड भरें।</string>
+    <string name="newkey_title">आपकी डिवाइस कुंजी</string>
+    <string name="newkey_body">यह आपके डिवाइसों के बीच भेजी गई हर चीज़ को एन्क्रिप्ट करती है। यह फ़ोन इससे बनी एन्क्रिप्शन कुंजी रखता है, इसलिए यहाँ आपको इसे कभी लिखना नहीं पड़ेगा। इसकी ज़रूरत सिर्फ़ किसी दूसरे डिवाइस पर पासवर्ड से साइन इन करने के लिए है; कोड से डिवाइस जोड़ने में नहीं। इसे किसी सुरक्षित जगह कॉपी कर लें: यह दोबारा नहीं दिखेगी।</string>
+    <string name="newkey_copy">कुंजी कॉपी करें</string>
+    <string name="newkey_copied">डिवाइस कुंजी कॉपी हो गई</string>
+    <string name="newkey_done">मैंने इसे सहेज लिया</string>
 </resources>

@@ -2096,4 +2096,20 @@
         <item quantity="one">பரிமாற்றங்கள் · %1$d நடைபெறுகிறது</item>
         <item quantity="other">பரிமாற்றங்கள் · %1$d நடைபெறுகின்றன</item>
     </plurals>
+    <string name="signin_title_start">தொடங்குவோம்</string>
+    <string name="signin_choice_join_title">இதை ஏற்கனவே வேறொரு சாதனத்தில் பயன்படுத்துகிறேன்</string>
+    <string name="signin_choice_join_body">அது காட்டும் குறியீட்டை ஸ்கேன் செய்யுங்கள், அல்லது அதன் 6 இலக்கக் குறியீட்டை உள்ளிடுங்கள். கடவுச்சொல் தேவையில்லை.</string>
+    <string name="signin_choice_new_title">இது என் முதல் சாதனம்</string>
+    <string name="signin_choice_new_body">ஒரு கணக்கை உருவாக்கு</string>
+    <string name="signin_choice_password">கடவுச்சொல்லுடன் உள்நுழை</string>
+    <string name="signin_create_hint">ஒரு பயனர்பெயரையும் கடவுச்சொல்லையும் தேர்ந்தெடுங்கள். உங்களுக்காக ஒரு வலுவான சாதன விசை உருவாக்கப்படும்: உங்கள் சாதனங்கள் ஒன்றுக்கொன்று அனுப்பும் அனைத்தையும் அது மறையாக்குகிறது.</string>
+    <string name="signin_own_key">என் சொந்த சாதன விசை (விருப்பம்)</string>
+    <string name="signin_own_key_hint">காலியாக விட்டால் உங்களுக்காக வலுவான ஒன்று உருவாக்கப்படும்.</string>
+    <string name="signin_other_ways">உள்நுழைய வேறு வழிகள்</string>
+    <string name="signin_missing_user_pass">உங்கள் பயனர்பெயரையும் கடவுச்சொல்லையும் நிரப்புங்கள்.</string>
+    <string name="newkey_title">உங்கள் சாதன விசை</string>
+    <string name="newkey_body">உங்கள் சாதனங்கள் ஒன்றுக்கொன்று அனுப்பும் அனைத்தையும் இது மறையாக்குகிறது. இதிலிருந்து உருவான மறையாக்க விசையை இந்தப் போன் வைத்திருக்கும், அதனால் இங்கே இதை ஒருபோதும் உள்ளிட வேண்டியதில்லை. வேறொரு சாதனத்தில் கடவுச்சொல்லுடன் உள்நுழைய மட்டுமே இது தேவை; குறியீட்டுடன் சாதனத்தைச் சேர்க்கத் தேவையில்லை. இதைப் பாதுகாப்பான இடத்தில் நகலெடுத்து வையுங்கள்: இது மீண்டும் காட்டப்படாது.</string>
+    <string name="newkey_copy">விசையை நகலெடு</string>
+    <string name="newkey_copied">சாதன விசை நகலெடுக்கப்பட்டது</string>
+    <string name="newkey_done">சேமித்துவிட்டேன்</string>
 </resources>

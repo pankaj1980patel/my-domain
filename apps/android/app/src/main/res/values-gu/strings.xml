@@ -2096,4 +2096,20 @@
         <item quantity="one">ટ્રાન્સફર · %1$d ચાલુ</item>
         <item quantity="other">ટ્રાન્સફર · %1$d ચાલુ</item>
     </plurals>
+    <string name="signin_title_start">ચાલો શરૂ કરીએ</string>
+    <string name="signin_choice_join_title">હું તેને પહેલેથી બીજા ડિવાઇસ પર વાપરું છું</string>
+    <string name="signin_choice_join_body">તે જે કોડ બતાવે છે તે સ્કેન કરો, અથવા તેનો 6 અંકનો કોડ લખો. પાસવર્ડની જરૂર નથી.</string>
+    <string name="signin_choice_new_title">આ મારું પહેલું ડિવાઇસ છે</string>
+    <string name="signin_choice_new_body">એકાઉન્ટ બનાવો</string>
+    <string name="signin_choice_password">પાસવર્ડથી સાઇન ઇન કરો</string>
+    <string name="signin_create_hint">યુઝરનેમ અને પાસવર્ડ પસંદ કરો. તમારા માટે મજબૂત ડિવાઇસ કી બનાવાય છે: તે તમારા ડિવાઇસ એકબીજાને મોકલે તે બધું એન્ક્રિપ્ટ કરે છે.</string>
+    <string name="signin_own_key">મારી પોતાની ડિવાઇસ કી (વૈકલ્પિક)</string>
+    <string name="signin_own_key_hint">ખાલી રાખો, તમારા માટે મજબૂત કી બની જશે.</string>
+    <string name="signin_other_ways">સાઇન ઇન કરવાની બીજી રીતો</string>
+    <string name="signin_missing_user_pass">તમારું યુઝરનેમ અને પાસવર્ડ ભરો.</string>
+    <string name="newkey_title">તમારી ડિવાઇસ કી</string>
+    <string name="newkey_body">તે તમારા ડિવાઇસ એકબીજાને મોકલે તે બધું એન્ક્રિપ્ટ કરે છે. આ ફોન તેમાંથી બનેલી એન્ક્રિપ્શન કી રાખે છે, એટલે અહીં તમારે તે ક્યારેય લખવી નહીં પડે. તેની જરૂર ફક્ત બીજા ડિવાઇસ પર પાસવર્ડથી સાઇન ઇન કરવા માટે છે; કોડથી ડિવાઇસ ઉમેરવામાં નહીં. તેને કોઈ સુરક્ષિત જગ્યાએ કૉપિ કરી લો: તે ફરી બતાવાશે નહીં.</string>
+    <string name="newkey_copy">કી કૉપિ કરો</string>
+    <string name="newkey_copied">ડિવાઇસ કી કૉપિ થઈ</string>
+    <string name="newkey_done">મેં તે સાચવી લીધી</string>
 </resources>
