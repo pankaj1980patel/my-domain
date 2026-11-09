@@ -102,6 +102,7 @@
          app's own settings file (SettingsBackupTile.kt) instead. The rule
          files leave the same out, should backup ever be switched on. -->
     <application
+        android:name=".MdApp"
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"

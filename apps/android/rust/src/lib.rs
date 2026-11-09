@@ -14,7 +14,9 @@
 // discovery and messaging live in `mdcore`.
 
 use std::net::Ipv4Addr;
-use std::sync::{Arc, Mutex, OnceLock};
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock, PoisonError};
 
 use mdcore::engine::Engine;
 use mdcore::error::CoreError;
@@ -23,6 +25,14 @@ use mdcore::kv::FileKv;
 use mdcore::platform::{detect_local_ip, IfaceMode, Platform};
 
 uniffi::setup_scaffolding!();
+
+/// Lock `m`, even if a thread panicked while holding it: every value kept
+/// behind these locks is whole after any single write, so a panic elsewhere
+/// must not stop every later caller (a poisoned listener lock once stopped
+/// all events for good).
+fn lock<T: ?Sized>(m: &Mutex<T>) -> MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(PoisonError::into_inner)
+}
 
 // ---------------------------------------------------------------------------
 // Platform implementation
@@ -44,9 +54,7 @@ struct AndroidPlatform {
 
 impl AndroidPlatform {
     fn iface_v4(&self) -> Ipv4Addr {
-        self.wifi_ip
-            .lock()
-            .unwrap()
+        lock(&self.wifi_ip)
             .parse()
             .unwrap_or_else(|_| detect_local_ip().parse().unwrap_or(Ipv4Addr::UNSPECIFIED))
     }
@@ -103,7 +111,7 @@ impl Platform for AndroidPlatform {
     }
 
     fn fcm_token(&self) -> Option<String> {
-        self.fcm_token.lock().unwrap().clone()
+        lock(&self.fcm_token).clone()
     }
     // clipboard: handled in Kotlin (NetService), not through the core.
 }
@@ -648,33 +656,116 @@ pub struct FirewallStatus {
 
 /// The listener is replaceable: NetService can be recreated in the same
 /// process (the engine lives as long as the process).
+///
+/// The listener is copied out of the lock before it's called, and a call
+/// that fails is caught: a Kotlin exception in a callback comes back as a
+/// Rust panic, which used to poison the lock while it was held and stop
+/// every later event for good.
 #[derive(Default)]
 struct ListenerSink {
-    listener: Mutex<Option<Box<dyn EventListener>>>,
+    listener: Mutex<Option<Arc<dyn EventListener>>>,
+}
+
+impl ListenerSink {
+    fn set(&self, listener: Box<dyn EventListener>) {
+        *lock(&self.listener) = Some(Arc::from(listener));
+    }
+
+    fn current(&self) -> Option<Arc<dyn EventListener>> {
+        lock(&self.listener).clone()
+    }
 }
 
 impl EventSink for ListenerSink {
     fn emit(&self, ev: CoreEvent) {
-        let guard = self.listener.lock().unwrap();
-        let Some(l) = guard.as_ref() else {
+        let Some(l) = self.current() else {
             return;
         };
-        if let CoreEvent::AudioFrame {
-            from,
-            seq,
-            rate,
-            channels,
-            pcm,
-        } = ev
-        {
-            use base64::Engine as _;
-            if let Ok(pcm) = base64::engine::general_purpose::STANDARD.decode(pcm.as_bytes()) {
-                l.on_audio_frame(from, seq, rate, channels, pcm);
+        let name = ev.name();
+        let delivered = catch_unwind(AssertUnwindSafe(|| {
+            if let CoreEvent::AudioFrame {
+                from,
+                seq,
+                rate,
+                channels,
+                pcm,
+            } = ev
+            {
+                use base64::Engine as _;
+                if let Ok(pcm) = base64::engine::general_purpose::STANDARD.decode(pcm.as_bytes())
+                {
+                    l.on_audio_frame(from, seq, rate, channels, pcm);
+                }
+                return;
             }
-            return;
+            l.on_event(name.to_string(), ev.to_json().to_string());
+        }));
+        if delivered.is_err() {
+            log::error!("event listener failed on {name}; later events still go");
         }
-        l.on_event(ev.name().to_string(), ev.to_json().to_string());
     }
+}
+
+// ---------------------------------------------------------------------------
+// Panics: logged, and kept in a file the app's crash log shows
+// ---------------------------------------------------------------------------
+
+/// The file (in the app's files dir) Rust panics are appended to; the app's
+/// crash log (Kotlin `CrashLog`) shows it beside its own.
+pub const PANIC_LOG: &str = "rust-panics.log";
+/// The panic file is cut back to its newest half past this size.
+const PANIC_LOG_MAX: usize = 64 * 1024;
+
+/// One panic as a line block: when (unix seconds), the thread, where, why.
+fn panic_entry(at_unix: u64, thread: &str, location: &str, message: &str) -> String {
+    format!("--- {at_unix} panic on thread '{thread}' at {location}\n{message}\n")
+}
+
+/// Append `entry` to `path`, keeping the file under `max` bytes (the oldest
+/// entries go first, whole).
+fn append_capped(path: &Path, entry: &str, max: usize) -> std::io::Result<()> {
+    let mut text = std::fs::read_to_string(path).unwrap_or_default();
+    text.push_str(entry);
+    if text.len() > max {
+        let mut cut = text.len() - max / 2;
+        while !text.is_char_boundary(cut) {
+            cut += 1;
+        }
+        let from = text[cut..].find("\n--- ").map_or(cut, |i| cut + i + 1);
+        text = text[from..].to_string();
+    }
+    std::fs::write(path, text)
+}
+
+/// Log every panic (logcat, and [`PANIC_LOG`] in `data_dir` when given),
+/// then run the hook that was there before. Installed once per process.
+fn install_panic_hook(data_dir: &str) {
+    static INSTALLED: OnceLock<()> = OnceLock::new();
+    let file = (!data_dir.is_empty()).then(|| PathBuf::from(data_dir).join(PANIC_LOG));
+    INSTALLED.get_or_init(move || {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let message = info
+                .payload()
+                .downcast_ref::<&str>()
+                .map(|s| (*s).to_string())
+                .or_else(|| info.payload().downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "(no message)".into());
+            let location = info
+                .location()
+                .map_or_else(|| "?".into(), |l| format!("{}:{}", l.file(), l.line()));
+            let thread = std::thread::current();
+            let thread = thread.name().unwrap_or("unnamed");
+            log::error!("panic on thread '{thread}' at {location}: {message}");
+            if let Some(f) = &file {
+                let at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs());
+                let _ = append_capped(f, &panic_entry(at, thread, &location, &message), PANIC_LOG_MAX);
+            }
+            previous(info);
+        }));
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -708,7 +799,7 @@ pub fn running_engine() -> Option<Arc<MdEngine>> {
 /// running, logged-in engine it re-registers so the server stores it.
 #[uniffi::export]
 pub fn set_fcm_token(token: String) {
-    *fcm_token_cell().lock().unwrap() = (!token.is_empty()).then_some(token);
+    *lock(fcm_token_cell()) = (!token.is_empty()).then_some(token);
     if let Some(e) = ENGINE.get() {
         let _ = e.inner.refresh_from_server();
     }
@@ -738,6 +829,7 @@ impl MdEngine {
                 .with_max_level(log::LevelFilter::Info)
                 .with_tag("mydomain_net"),
         );
+        install_panic_hook(&data_dir);
         if let Some(e) = ENGINE.get() {
             e.set_listener(listener);
             return Ok(e.clone());
@@ -756,7 +848,7 @@ impl MdEngine {
             secrets: Arc::from(secrets),
         };
         let sink = Arc::new(ListenerSink::default());
-        *sink.listener.lock().unwrap() = Some(listener);
+        sink.set(listener);
         let inner = Engine::start(platform, sink.clone() as Arc<dyn EventSink>)?;
         log::info!("engine started");
         let engine = Arc::new(MdEngine {
@@ -770,7 +862,7 @@ impl MdEngine {
 
     /// Replace the event listener (e.g. a recreated service).
     pub fn set_listener(&self, listener: Box<dyn EventListener>) {
-        *self.sink.listener.lock().unwrap() = Some(listener);
+        self.sink.set(listener);
     }
 
     pub fn identity(&self) -> DeviceIdentity {
@@ -975,7 +1067,7 @@ impl MdEngine {
     /// The device's network changed (`wifi_ip`: its new Wi-Fi IPv4, or "").
     pub fn network_changed(&self, wifi_ip: String) {
         if wifi_ip.parse::<Ipv4Addr>().is_ok() {
-            *self.wifi_ip.lock().unwrap() = wifi_ip.clone();
+            *lock(&self.wifi_ip) = wifi_ip.clone();
         }
         self.inner.network_changed(Some(&wifi_ip));
     }
@@ -987,7 +1079,7 @@ impl MdEngine {
     /// IPv4, or "" without one (the address is then worked out again
     /// instead of keeping the old Wi-Fi one).
     pub fn network_changed_on(&self, wifi_ip: String, net: String) {
-        *self.wifi_ip.lock().unwrap() = if wifi_ip.parse::<Ipv4Addr>().is_ok() {
+        *lock(&self.wifi_ip) = if wifi_ip.parse::<Ipv4Addr>().is_ok() {
             wifi_ip.clone()
         } else {
             Ipv4Addr::UNSPECIFIED.to_string()
@@ -2490,5 +2582,82 @@ impl MdEngine {
 
     pub fn set_remote_download_settings(&self, prefs: RemoteDownloadPrefs) -> MdResult<()> {
         Ok(self.inner.set_remote_download_settings(prefs.into())?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    /// Fails (as a Kotlin exception does, by panicking) on its first event.
+    #[derive(Default)]
+    struct Flaky {
+        seen: AtomicUsize,
+    }
+
+    struct Shared(Arc<Flaky>);
+
+    impl EventListener for Shared {
+        fn on_event(&self, _name: String, _payload_json: String) {
+            if self.0.seen.fetch_add(1, Ordering::SeqCst) == 0 {
+                panic!("listener threw");
+            }
+        }
+        fn on_audio_frame(&self, _: String, _: u64, _: u32, _: u8, _: Vec<u8>) {}
+    }
+
+    fn event() -> CoreEvent {
+        CoreEvent::WsConnected {
+            node_id: "n".into(),
+        }
+    }
+
+    #[test]
+    fn a_failing_listener_doesnt_stop_later_events() {
+        let flaky = Arc::new(Flaky::default());
+        let sink = ListenerSink::default();
+        sink.set(Box::new(Shared(flaky.clone())));
+        sink.emit(event());
+        sink.emit(event());
+        sink.emit(event());
+        assert_eq!(flaky.seen.load(Ordering::SeqCst), 3);
+        // Nor does a new listener find the lock poisoned.
+        let next = Arc::new(Flaky::default());
+        sink.set(Box::new(Shared(next.clone())));
+        sink.emit(event());
+        assert_eq!(next.seen.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn a_poisoned_lock_is_still_usable() {
+        let m = Arc::new(Mutex::new(1));
+        let m2 = m.clone();
+        let _ = std::thread::spawn(move || {
+            let _g = m2.lock().unwrap();
+            panic!("poison it");
+        })
+        .join();
+        assert!(m.is_poisoned());
+        *lock(&m) += 1;
+        assert_eq!(*lock(&m), 2);
+    }
+
+    #[test]
+    fn panics_are_kept_newest_last_and_capped() {
+        let dir = std::env::temp_dir().join(format!("md-panic-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join(PANIC_LOG);
+        let _ = std::fs::remove_file(&f);
+        for i in 0..50 {
+            let e = panic_entry(i, "core", "src/x.rs:1", &format!("boom {i}"));
+            append_capped(&f, &e, 1_000).unwrap();
+        }
+        let text = std::fs::read_to_string(&f).unwrap();
+        assert!(text.len() <= 1_000);
+        assert!(text.starts_with("--- "), "cut at an entry: {text}");
+        assert!(text.contains("boom 49\n"));
+        assert!(!text.contains("boom 0\n"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

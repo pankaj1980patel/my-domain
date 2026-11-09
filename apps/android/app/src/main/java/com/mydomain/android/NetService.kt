@@ -381,11 +381,25 @@ class NetService : Service() {
         // A computer's sound, many frames a second, as bytes (no JSON or
         // base64 on this path): straight to the player's buffer, never
         // logged or kept.
+        // Neither may throw back into Rust: a failure there is caught and
+        // logged here, and the next event still comes (lib.rs `emit`).
         override fun onAudioFrame(from: String, seq: ULong, rate: UInt, channels: UByte, pcm: ByteArray) {
-            ComputerAudio.onFrame(from, seq.toLong(), rate.toInt(), channels.toInt(), pcm)
+            try {
+                ComputerAudio.onFrame(from, seq.toLong(), rate.toInt(), channels.toInt(), pcm)
+            } catch (e: Throwable) {
+                Log.e("NetService", "audio frame from $from failed", e)
+            }
         }
 
         override fun onEvent(name: String, payloadJson: String) {
+            try {
+                handleEvent(name, payloadJson)
+            } catch (e: Throwable) {
+                Log.e("NetService", "core event $name failed", e)
+            }
+        }
+
+        private fun handleEvent(name: String, payloadJson: String) {
             Core.onEvent(name, payloadJson)
             // The player follows a move to (or off) a local link.
             if (name == "nearby-media") {
