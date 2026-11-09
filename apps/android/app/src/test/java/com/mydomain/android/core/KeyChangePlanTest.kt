@@ -29,7 +29,7 @@ class KeyChangePlanTest {
         val a = KeyChangePlan.notificationId("phone")
         assertEquals(a, KeyChangePlan.notificationId("phone"))
         assertNotEquals(a, KeyChangePlan.notificationId("laptop"))
-        assertTrue(a and 0x6000_0000 == 0x6000_0000)
+        assertEquals(NotificationIds.Family.KEY_CHANGE, NotificationIds.familyOf(a))
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -65,8 +66,8 @@ import com.mydomain.android.core.ResourceLedger
 object PhoneAudio {
     private const val TAG = "mydomain_audio"
     const val CH = "phone_audio"
-    const val NOTE_ASK = 7311
-    const val NOTE_PLAYING = 7312
+    const val NOTE_ASK = NotificationIds.PHONE_AUDIO_ASK
+    const val NOTE_PLAYING = NotificationIds.PHONE_AUDIO_PLAYING
 
     val supported: Boolean get() = Build.VERSION.SDK_INT >= AudioPlan.MIN_SDK
 

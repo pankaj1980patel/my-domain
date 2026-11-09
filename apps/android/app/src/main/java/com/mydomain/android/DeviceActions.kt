@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -32,12 +33,11 @@ object DeviceActions {
     private const val TAG = "mydomain_actions"
     const val CH_RING = "ring"
     const val CH_LINKS = "links"
-    private const val RING_ID = 2001
+    private const val RING_ID = NotificationIds.RING
     private const val RING_MS = 30_000L
     const val ACTION_STOP_RING = "com.mydomain.android.STOP_RING"
 
     private val main = Handler(Looper.getMainLooper())
-    private val linkId = java.util.concurrent.atomic.AtomicInteger(3000)
     private var player: MediaPlayer? = null
     /** Alarm volume before ringing, restored when the ring stops. */
     private var savedVolume: Int? = null
@@ -171,7 +171,7 @@ object DeviceActions {
         val app = ctx.applicationContext
         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(clean))).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         if (Core.visible && runCatching { app.startActivity(intent) }.isSuccess) return true
-        val id = linkId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.LINK)
         val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_menu_call)
@@ -194,7 +194,7 @@ object DeviceActions {
         val launch = pm.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) ?: return false
         if (Core.visible && runCatching { app.startActivity(launch) }.isSuccess) return true
         val label = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
-        val id = linkId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.LINK)
         val pi = PendingIntent.getActivity(app, id, launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_menu_view)
@@ -212,7 +212,7 @@ object DeviceActions {
      *  with the text. Tapping opens it if it's a web link, else the app. */
     fun sharedText(ctx: Context, fromName: String, text: String, copied: Boolean) {
         val app = ctx.applicationContext
-        val id = linkId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.LINK)
         val link = text.trim().takeIf { isWebLink(it) && it.none(Char::isWhitespace) }
         val tap = if (link != null) {
             Intent(Intent.ACTION_VIEW, Uri.parse(link)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -250,7 +250,7 @@ object DeviceActions {
             .setAutoCancel(true)
             .build()
         // One notification per device and kind: a new one replaces the old.
-        val id = 0x5000_0000 or ((fromName + alert).hashCode() and 0x0FFF_FFFF)
+        val id = NotificationIds.of(NotificationIds.Family.BATTERY_ALERT, fromName + alert)
         runCatching { app.getSystemService(NotificationManager::class.java)?.notify(id, n) }
     }
 
@@ -330,7 +330,7 @@ object DeviceActions {
      *  (Android doesn't let a background app start an activity). */
     fun startOrNotify(app: Context, intent: Intent, title: String, text: String) {
         if (Core.visible && runCatching { app.startActivity(intent) }.isSuccess) return
-        val id = linkId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.LINK)
         val pi = PendingIntent.getActivity(app, id, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_media_play)
@@ -360,7 +360,7 @@ object DeviceActions {
                 .onFailure { Log.w(TAG, "can't open link: $it") }.isSuccess
             if (opened) return
         }
-        val id = linkId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.LINK)
         val pi = PendingIntent.getActivity(app, id, view, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(app, CH_LINKS)
             .setSmallIcon(android.R.drawable.ic_menu_view)

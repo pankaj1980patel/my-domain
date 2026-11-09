@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -102,8 +103,8 @@ object ComputerNotifs {
         return (key.startsWith("fd:") || key.startsWith("gtk:")) && capable(ctx, o.optString("from"))
     }
 
-    private fun idOf(node: String, key: String) = "pc|$node|$key".hashCode()
-    private fun summaryId(node: String) = "pc|$node".hashCode()
+    private fun idOf(node: String, key: String) = NotificationIds.of(NotificationIds.Family.COMPUTER_NOTIF, "$node|$key")
+    private fun summaryId(node: String) = NotificationIds.of(NotificationIds.Family.COMPUTER_SUMMARY, node)
     private fun group(node: String) = "computer:$node"
 
     /** Show it (requires POST_NOTIFICATIONS on API 33+; a no-op without). */

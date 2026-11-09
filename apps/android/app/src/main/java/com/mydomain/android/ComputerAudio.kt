@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.Notification
@@ -61,8 +62,8 @@ import com.mydomain.android.core.ResourceLedger
  */
 object ComputerAudio {
     private const val TAG = "mydomain_caudio"
-    const val NOTE_ASK = 7321
-    const val NOTE_PLAYING = 7322
+    const val NOTE_ASK = NotificationIds.COMPUTER_AUDIO_ASK
+    const val NOTE_PLAYING = NotificationIds.COMPUTER_AUDIO_PLAYING
 
     /** The computer whose sound plays here (or was asked to), if any. */
     var playingFrom by mutableStateOf<String?>(null)

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -108,7 +109,7 @@ object FileActions {
             .onFailure { Log.w(TAG, "can't set shared folders: $it") }
     }
 
-    private fun notifId(id: String) = 0x4000_0000 or (id.hashCode() and 0x0FFF_FFFF)
+    private fun notifId(id: String) = NotificationIds.of(NotificationIds.Family.FILE, id)
 
     private fun nm(ctx: Context) = ctx.getSystemService(NotificationManager::class.java)
 

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -63,8 +64,8 @@ import com.mydomain.android.core.ResourceLedger
 object CameraShare {
     private const val TAG = "mydomain_camera"
     private const val CH = "camera_share"
-    const val NOTE_ASK = 7311
-    const val NOTE_ON = 7312
+    const val NOTE_ASK = NotificationIds.CAMERA_ASK
+    const val NOTE_ON = NotificationIds.CAMERA_ON
     /** "Keep streaming while locked" (Settings): off by default. */
     const val PREF_KEEP_LOCKED = "camera_keep_locked"
 

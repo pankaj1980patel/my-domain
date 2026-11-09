@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.heading
 import android.app.KeyguardManager
@@ -71,7 +72,7 @@ import java.lang.ref.WeakReference
  */
 object LostMode {
     const val CH_LOST = "lost"
-    private const val NOTE_ID = 7701
+    private const val NOTE_ID = NotificationIds.LOST_MODE
     private const val MAX_MESSAGE = 500
     private const val MAX_CONTACT = 20
     private const val KEY_ON = "on"

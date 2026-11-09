@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.AlarmManager
 import android.app.Notification
 import android.app.NotificationChannel
@@ -164,8 +165,8 @@ object TimerAlarms {
         schedule(ctx, plan.next)
     }
 
-    private fun alarmId(id: String) = "timer-ring|$id".hashCode()
-    private fun runningId(id: String) = "timer|$id".hashCode()
+    private fun alarmId(id: String) = NotificationIds.of(NotificationIds.Family.TIMER_RING, id)
+    private fun runningId(id: String) = NotificationIds.of(NotificationIds.Family.TIMER_RUNNING, id)
 
     private fun schedule(ctx: Context, at: Long?) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return

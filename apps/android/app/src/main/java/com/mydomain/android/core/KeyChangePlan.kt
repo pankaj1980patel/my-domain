@@ -29,7 +29,7 @@ object KeyChangePlan {
         list.firstOrNull { it.nodeId == node && (showDismissed || !it.dismissed) }
 
     /** One notification per device: a newer key replaces the older one's. */
-    fun notificationId(node: String): Int = 0x6000_0000 or (node.hashCode() and 0x0FFF_FFFF)
+    fun notificationId(node: String): Int = NotificationIds.of(NotificationIds.Family.KEY_CHANGE, node)
 
     /** The words to show for a device: its name, else its id. */
     fun nameOf(c: KeyChangeInfo, peerName: (String) -> String?): String =

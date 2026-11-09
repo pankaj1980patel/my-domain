@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -148,7 +149,7 @@ object NoteReminders {
         schedule(ctx, plan.next)
     }
 
-    private fun notifId(id: String) = "note|$id".hashCode()
+    private fun notifId(id: String) = NotificationIds.of(NotificationIds.Family.NOTE_REMINDER, id)
 
     private fun schedule(ctx: Context, at: Long?) {
         val am = ctx.getSystemService(AlarmManager::class.java) ?: return

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.NotificationManager
@@ -28,7 +29,7 @@ import com.mydomain.android.core.PermsPlan
  */
 object PeerPerms {
     private const val TAG = "mydomain_perms"
-    const val NOTE_ASK = 7311
+    const val NOTE_ASK = NotificationIds.PEER_PERMISSION_ASK
     private val said = PermsPlan.Throttle()
     private val main = Handler(Looper.getMainLooper())
 

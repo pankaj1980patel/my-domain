@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -33,7 +34,6 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import android.os.SystemClock
 import com.mydomain.android.core.ResourceBook
 import com.mydomain.android.core.ResourceLedger
@@ -147,7 +147,6 @@ object PhoneAutomations {
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val noteId = AtomicInteger(9100)
 
     private var book: AutomationBook? = null
     private var file: File? = null
@@ -362,7 +361,7 @@ object PhoneAutomations {
             { e -> c.getString(R.string.automation_note_failed, what, friendlyError(e)) },
         )
         val open = Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-        val id = noteId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.AUTOMATION)
         val pi = PendingIntent.getActivity(c, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(c, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)

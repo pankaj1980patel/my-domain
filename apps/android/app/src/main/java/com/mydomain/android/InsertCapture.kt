@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import com.mydomain.android.ui.LIcon
 import android.Manifest
 import android.annotation.SuppressLint
@@ -143,7 +144,6 @@ import com.mydomain.android.core.ResourceLedger
  */
 object InsertCapture {
     private const val TAG = "mydomain_insert"
-    private const val NOTE_BASE = 7400
     const val ACTION_CANCEL = "com.mydomain.android.INSERT_CANCEL"
     const val EXTRA_ID = "id"
     const val EXTRA_FROM = "from"
@@ -155,7 +155,7 @@ object InsertCapture {
     @Volatile
     var screen: InsertCaptureActivity? = null
 
-    private fun note(id: String) = NOTE_BASE + (id.hashCode() and 0x3f)
+    private fun note(id: String) = NotificationIds.of(NotificationIds.Family.INSERT, id)
 
     fun intent(ctx: Context, id: String, from: String, mode: String, ask: Boolean): Intent =
         Intent(ctx, InsertCaptureActivity::class.java)

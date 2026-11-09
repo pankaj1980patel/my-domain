@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
@@ -51,7 +52,7 @@ object WifiDirect {
     const val PREF = "wifi_direct"
     private const val PREF_ASKED = "wifi_direct_asked"
     private const val CH = "wifi_direct"
-    const val NOTE_ASK = 7321
+    const val NOTE_ASK = NotificationIds.WIFI_DIRECT_ASK
     /** How often, and how many times, the group's state is looked at. */
     private const val POLL_MS = 500L
     private const val POLLS = (WifiDirectPlan.SETUP_MS / POLL_MS).toInt()

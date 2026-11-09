@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
@@ -19,7 +20,7 @@ import java.util.concurrent.TimeUnit
 object Privileged {
     private const val TAG = "mydomain_shizuku"
     const val SHIZUKU_PACKAGE = "moe.shizuku.privileged.api"
-    private const val ASK = 7401
+    private const val ASK = NotificationIds.PRIVILEGED_ASK
 
     /** Shizuku's state, for the phone's Settings and the status. */
     enum class State { NOT_INSTALLED, NOT_RUNNING, NOT_ALLOWED, READY }

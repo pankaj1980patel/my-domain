@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.*
 import android.content.*
 import android.content.pm.ServiceInfo
@@ -357,8 +358,6 @@ class NetService : Service() {
         }
     }
 
-    private val sharedNotifId = java.util.concurrent.atomic.AtomicInteger(1000)
-
     /** Post a peer-shared notification/call as a local OS notification. Requires
      *  POST_NOTIFICATIONS on API 33+; silently no-ops if not granted. */
     private fun postSharedNotification(title: String, text: String) {
@@ -369,7 +368,7 @@ class NetService : Service() {
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setAutoCancel(true)
             .build()
-        runCatching { getSystemService(NotificationManager::class.java)?.notify(sharedNotifId.incrementAndGet(), n) }
+        runCatching { getSystemService(NotificationManager::class.java)?.notify(NotificationIds.next(NotificationIds.Family.SHARED), n) }
     }
 
     /**

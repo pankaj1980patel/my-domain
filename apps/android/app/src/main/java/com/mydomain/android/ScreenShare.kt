@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.KeyguardManager
 import android.app.Notification
@@ -69,8 +70,8 @@ import com.mydomain.android.core.ResourceLedger
 object ScreenShare {
     private const val TAG = "mydomain_screen"
     private const val CH = "screen_share"
-    const val NOTE_ASK = 7301
-    const val NOTE_SHARING = 7302
+    const val NOTE_ASK = NotificationIds.SCREEN_SHARE_ASK
+    const val NOTE_SHARING = NotificationIds.SCREEN_SHARING
 
     /** Computers this screen is shared with now (empty: not sharing). For
      *  the device screen; the service keeps the real list. */

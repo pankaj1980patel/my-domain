@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -82,7 +83,7 @@ object SyncFolders {
                 .build()
             runCatching {
                 ctx.getSystemService(android.app.NotificationManager::class.java)
-                    ?.notify(0x5000_0000 or (p.id.hashCode() and 0x0FFF_FFFF), n)
+                    ?.notify(NotificationIds.of(NotificationIds.Family.SYNC, p.id), n)
             }
         }
     }

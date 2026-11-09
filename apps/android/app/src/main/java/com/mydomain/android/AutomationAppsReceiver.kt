@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -32,7 +33,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONObject
 import java.security.SecureRandom
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Automation apps on this phone (Tasker, MacroDroid, Automate, ...) asking
@@ -163,7 +163,6 @@ object AutomationAppsGate {
     private val lists = RateWindow(AutomationApps.LISTS_PER_MINUTE, AutomationApps.WINDOW_MS)
     private val keyFailures = RateWindow(AutomationApps.MAX_KEY_FAILURES, AutomationApps.WINDOW_MS)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val noteId = AtomicInteger(9300)
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("md", Context.MODE_PRIVATE)
 
@@ -375,7 +374,7 @@ object AutomationAppsGate {
         val open = Intent(ctx, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(PhoneLocation.EXTRA_OPEN_SETTINGS, true)
-        val id = noteId.incrementAndGet()
+        val id = NotificationIds.next(NotificationIds.Family.AUTOMATION_APP)
         val pi = PendingIntent.getActivity(ctx, id, open, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val n = NotificationCompat.Builder(ctx, PhoneAutomations.CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)

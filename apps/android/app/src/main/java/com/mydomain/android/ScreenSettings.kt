@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -30,7 +31,7 @@ import org.json.JSONObject
  */
 object ScreenSettings {
     private const val TAG = "mydomain_screen_set"
-    private const val NOTE_ASK = 7701
+    private const val NOTE_ASK = NotificationIds.SCREEN_SETTINGS_ASK
     /** Screen timeouts accepted, in seconds (5 s to 30 min). */
     private const val MIN_TIMEOUT_S = 5
     private const val MAX_TIMEOUT_S = 30 * 60

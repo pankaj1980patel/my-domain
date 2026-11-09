@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -54,7 +55,7 @@ object SecureMode {
     const val ADB_GRANT = "adb shell pm grant com.mydomain.android android.permission.WRITE_SECURE_SETTINGS"
 
     private const val CHANNEL = "phone_helper"
-    private const val NOTE_NEEDED = 7801
+    private const val NOTE_NEEDED = NotificationIds.SECURE_MODE_NEEDED
     private var lastTold = 0L
     private val main = Handler(Looper.getMainLooper())
 

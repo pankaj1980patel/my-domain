@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
@@ -23,7 +24,7 @@ object DownloadAsk {
     const val ACTION_ALLOW = "com.mydomain.android.DL_ALLOW"
     const val ACTION_DENY = "com.mydomain.android.DL_DENY"
 
-    private fun notifId(id: String) = 0x5000_0000 or (id.hashCode() and 0x0FFF_FFFF)
+    private fun notifId(id: String) = NotificationIds.of(NotificationIds.Family.DOWNLOAD_ASK, id)
 
     fun onEvent(ctx: Context, o: JSONObject) {
         val item = o.optJSONObject("item")?.let(RemoteDownloads::parse) ?: return

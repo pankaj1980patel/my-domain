@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -38,7 +39,7 @@ import org.json.JSONObject
 object WifiNetworks {
     private const val TAG = "mydomain_wifi"
     private const val MAX = 20
-    private const val NOTE_ID = 7501
+    private const val NOTE_ID = NotificationIds.WIFI_NETWORKS
     const val EXTRA_ASK = "ask_wifi_scan"
 
     /** The last scan, for the status (null until the first scan). */

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
@@ -35,8 +36,8 @@ import com.mydomain.android.core.ResourceLedger
 object PhoneLocation {
     private const val TAG = "mydomain_location"
     const val PREF = "share_location"
-    private const val NOTE_ASK = 7601
-    private const val NOTE_SHARED = 7602
+    private const val NOTE_ASK = NotificationIds.LOCATION_ASK
+    private const val NOTE_SHARED = NotificationIds.LOCATION_SHARED
     /** A fresh fix gets this long before the last known one is used. */
     private const val FIX_TIMEOUT_MS = 20_000L
 
