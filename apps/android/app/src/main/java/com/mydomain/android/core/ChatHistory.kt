@@ -64,7 +64,7 @@ object ChatHistory {
         onMain { enabled = on }
         if (!on) return
         io.execute {
-            val saved = runCatching { if (f.exists()) ChatLog.read(f.readText()) else null }.getOrNull()
+            val saved = runCatching { HistoryFile.read(f, HistoryFile::isJsonList, Core::historyLog)?.let { ChatLog.read(it) } }.getOrNull()
             if (saved == null || saved.total == 0) return@execute
             onMain {
                 // Turned off meanwhile: those are forgotten.

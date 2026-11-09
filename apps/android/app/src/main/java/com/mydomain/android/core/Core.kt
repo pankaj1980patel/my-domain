@@ -583,6 +583,13 @@ object Core {
      *  file instead: `adb shell run-as com.mydomain.android cat files/events.log`. */
     @Volatile var labLogFile: java.io.File? = null
 
+    /** A saved history (chat, clipboard, transfers, activity) was found
+     *  corrupt and moved aside ([HistoryFile]): logged in every build. */
+    fun historyLog(line: String) {
+        Log.w("mydomain_history", line)
+        labLog(line)
+    }
+
     /** Debug builds: one timestamped line in logcat and in `labLogFile`
      *  (rotated at 256 KB). */
     fun labLog(line: String) {

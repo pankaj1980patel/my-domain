@@ -83,7 +83,7 @@ object ClipLog {
             return
         }
         io.execute {
-            val saved = runCatching { if (f.exists()) ClipBook.decode(f.readText()) else emptyList() }.getOrDefault(emptyList())
+            val saved = runCatching { HistoryFile.read(f, HistoryFile::isJsonList, Core::historyLog)?.let { ClipBook.decode(it) } }.getOrNull().orEmpty()
             onMain {
                 // Turned off meanwhile: those are forgotten.
                 if (!enabled) return@onMain

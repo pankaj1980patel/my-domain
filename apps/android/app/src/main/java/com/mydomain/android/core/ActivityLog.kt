@@ -44,7 +44,7 @@ object ActivityLog {
         val f = File(ctx.applicationContext.filesDir, FILE)
         file = f
         io.execute {
-            val saved = runCatching { if (f.exists()) ActivityRecord.decode(f.readText()) else null }.getOrNull() ?: return@execute
+            val saved = runCatching { HistoryFile.read(f, HistoryFile::isJsonObject, Core::historyLog)?.let { ActivityRecord.decode(it) } }.getOrNull() ?: return@execute
             onMain {
                 // Entries kept while it was reading go on top.
                 val fresh = rec.entries

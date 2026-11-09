@@ -47,7 +47,7 @@ object TransferLog {
         val f = File(ctx.applicationContext.filesDir, FILE)
         file = f
         io.execute {
-            val saved = runCatching { if (f.exists()) TransferBook.decode(f.readText()) else emptyList() }.getOrDefault(emptyList())
+            val saved = runCatching { HistoryFile.read(f, HistoryFile::isJsonObject, Core::historyLog)?.let { TransferBook.decode(it) } }.getOrNull().orEmpty()
             if (saved.isEmpty()) return@execute
             onMain {
                 val newer = book.saved().isNotEmpty()
