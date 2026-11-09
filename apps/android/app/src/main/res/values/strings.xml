@@ -2114,4 +2114,8 @@
     <string name="newkey_done">I’ve saved it</string>
     <string name="chat_cleared">Chat cleared</string>
     <string name="clipboard_recent_cleared">Recent clips cleared</string>
+    <string name="error_generic">Something went wrong. Try again in a moment.</string>
+    <string name="error_join_no_key">The code worked, but the device key didn’t come through. Sign in with your password instead.</string>
+    <string name="set_sign_out_failed">Couldn’t sign out. Try again.</string>
+    <string name="set_sign_out_clears">This also clears this phone’s chat, clipboard and transfer history.</string>
 </resources>

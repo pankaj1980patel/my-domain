@@ -2114,4 +2114,8 @@
     <string name="newkey_done">சேமித்துவிட்டேன்</string>
     <string name="chat_cleared">அரட்டை அழிக்கப்பட்டது</string>
     <string name="clipboard_recent_cleared">சமீபத்திய கிளிப்புகள் அழிக்கப்பட்டன</string>
+    <string name="error_generic">ஏதோ தவறு நடந்தது. சிறிது நேரத்தில் மீண்டும் முயலுங்கள்.</string>
+    <string name="error_join_no_key">குறியீடு வேலை செய்தது, ஆனால் சாதன விசை வரவில்லை. பதிலாக உங்கள் கடவுச்சொல்லுடன் உள்நுழையுங்கள்.</string>
+    <string name="set_sign_out_failed">வெளியேற முடியவில்லை. மீண்டும் முயலுங்கள்.</string>
+    <string name="set_sign_out_clears">இது இந்தப் போனின் அரட்டை, கிளிப்போர்டு, பரிமாற்ற வரலாற்றையும் அழிக்கும்.</string>
 </resources>

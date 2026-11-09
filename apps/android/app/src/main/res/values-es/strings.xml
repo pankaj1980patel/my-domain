@@ -2143,4 +2143,8 @@
     <string name="newkey_done">Ya la he guardado</string>
     <string name="chat_cleared">Chat borrado</string>
     <string name="clipboard_recent_cleared">Recortes recientes borrados</string>
+    <string name="error_generic">Algo salió mal. Inténtalo de nuevo en un momento.</string>
+    <string name="error_join_no_key">El código funcionó, pero la clave de dispositivo no llegó. Inicia sesión con tu contraseña.</string>
+    <string name="set_sign_out_failed">No se pudo cerrar la sesión. Inténtalo de nuevo.</string>
+    <string name="set_sign_out_clears">También borra el historial de chat, portapapeles y transferencias de este teléfono.</string>
 </resources>

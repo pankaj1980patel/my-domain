@@ -2114,4 +2114,8 @@
     <string name="newkey_done">મેં તે સાચવી લીધી</string>
     <string name="chat_cleared">ચેટ સાફ કરી</string>
     <string name="clipboard_recent_cleared">તાજેતરની ક્લિપ સાફ કરી</string>
+    <string name="error_generic">કંઈક ખોટું થયું. થોડી વારમાં ફરી પ્રયાસ કરો.</string>
+    <string name="error_join_no_key">કોડ ચાલ્યો, પણ ડિવાઇસ કી ન આવી. તેના બદલે તમારા પાસવર્ડથી સાઇન ઇન કરો.</string>
+    <string name="set_sign_out_failed">સાઇન આઉટ ન થઈ શક્યું. ફરી પ્રયાસ કરો.</string>
+    <string name="set_sign_out_clears">આનાથી આ ફોનનો ચેટ, ક્લિપબોર્ડ અને ટ્રાન્સફર ઇતિહાસ પણ સાફ થાય છે.</string>
 </resources>

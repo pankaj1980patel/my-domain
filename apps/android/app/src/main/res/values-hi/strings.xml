@@ -2111,4 +2111,8 @@
     <string name="newkey_done">मैंने इसे सहेज लिया</string>
     <string name="chat_cleared">चैट साफ़ की गई</string>
     <string name="clipboard_recent_cleared">हाल की क्लिप साफ़ की गईं</string>
+    <string name="error_generic">कुछ गड़बड़ हो गई। थोड़ी देर में फिर कोशिश करें।</string>
+    <string name="error_join_no_key">कोड काम कर गया, पर डिवाइस कुंजी नहीं पहुँची। इसकी जगह अपने पासवर्ड से साइन इन करें।</string>
+    <string name="set_sign_out_failed">साइन आउट नहीं हो सका। फिर कोशिश करें।</string>
+    <string name="set_sign_out_clears">इससे इस फ़ोन का चैट, क्लिपबोर्ड और ट्रांसफ़र इतिहास भी साफ़ हो जाता है।</string>
 </resources>

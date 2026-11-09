@@ -233,6 +233,7 @@ fun rememberHealthFix(nav: HealthNav): (HealthPlan.Check) -> Unit {
     val scope = rememberCoroutineScope()
     val sent = stringResource(R.string.health_push_sent)
     val turnOn = rememberTurnOn { scope.launch { Health.run(ctx, server = false) } }
+    val open = rememberOpenScreen()
     return { c ->
         when (c.fix) {
             "retry" -> scope.launch { Health.run(ctx, server = true) }
@@ -247,9 +248,7 @@ fun rememberHealthFix(nav: HealthNav): (HealthPlan.Check) -> Unit {
                 }
             }
             "open_permission" -> HealthPlan.itemOf(c.detail)?.let(turnOn)
-            "free_space" -> runCatching {
-                ctx.startActivity(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
+            "free_space" -> open(listOf(Intent(DownloadManager.ACTION_VIEW_DOWNLOADS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)))
             "trust_key", "permissions" -> c.nodeId?.let(nav.onDevice)
             "encryption_key" -> nav.onSettings()
             "connect" -> c.nodeId?.let { node ->

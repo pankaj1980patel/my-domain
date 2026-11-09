@@ -344,8 +344,9 @@ fun PrintSettingsTile() {
             Modifier.announce(),
             style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
+        val open = rememberOpenScreen()
         SoftButton(stringResource(R.string.print_open_settings), onClick = {
-            runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_PRINT_SETTINGS)) }
+            open(listOf(Intent(android.provider.Settings.ACTION_PRINT_SETTINGS)))
         })
     }
 }
@@ -370,8 +371,9 @@ fun HelperSettingsTile() {
             stringResource(if (on) R.string.helper_on else R.string.helper_off), Modifier.announce(),
             style = MaterialTheme.typography.bodyMedium, color = T.text,
         )
+        val open = rememberOpenScreen()
         SoftButton(stringResource(R.string.helper_open), onClick = {
-            runCatching { ctx.startActivity(com.mydomain.android.SecureMode.settingsIntent(ctx)) }
+            open(listOf(com.mydomain.android.SecureMode.settingsIntent(ctx)))
         })
     }
 }
@@ -681,6 +683,8 @@ private fun SettingsGroupPage(
 @Composable
 private fun SignOutTile(scope: kotlinx.coroutines.CoroutineScope) {
     var asking by remember { mutableStateOf(false) }
+    val toast = LocalToast.current
+    val failed = stringResource(R.string.set_sign_out_failed)
     Tile(title = stringResource(R.string.settings_sign_out)) {
         Muted(stringResource(R.string.set_sign_out_hint))
         TextButton({ asking = true }, Modifier.heightIn(min = 48.dp)) {
@@ -692,12 +696,17 @@ private fun SignOutTile(scope: kotlinx.coroutines.CoroutineScope) {
             onDismissRequest = { asking = false },
             containerColor = T.bar,
             title = { Text(stringResource(R.string.set_sign_out_title), color = T.text) },
-            text = { Text(stringResource(R.string.set_sign_out_hint), color = T.text2) },
+            text = {
+                Text(
+                    stringResource(R.string.set_sign_out_hint) + "\n\n" + stringResource(R.string.set_sign_out_clears),
+                    color = T.text2,
+                )
+            },
             dismissButton = { TextButton({ asking = false }) { Text(stringResource(R.string.cancel), color = T.text2) } },
             confirmButton = {
                 TextButton({
                     asking = false
-                    scope.launch { runCatching { Core.signOut() } }
+                    scope.launch { runCatching { Core.signOut() }.onFailure { toast(failed) } }
                 }) { Text(stringResource(R.string.settings_sign_out), color = T.danger) }
             },
         )
@@ -747,13 +756,15 @@ private fun LanguageSetting() {
     val ctx = LocalContext.current
     if (android.os.Build.VERSION.SDK_INT >= 33) {
         Muted(stringResource(R.string.settings_language_hint))
+        val open = rememberOpenScreen()
         GhostButton(stringResource(R.string.settings_language), {
             val pkg = android.net.Uri.fromParts("package", ctx.packageName, null)
-            try {
-                ctx.startActivity(Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS, pkg))
-            } catch (_: Exception) {
-                runCatching { ctx.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
-            }
+            open(
+                listOf(
+                    Intent(android.provider.Settings.ACTION_APP_LOCALE_SETTINGS, pkg),
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg),
+                ),
+            )
         })
     } else {
         Muted(stringResource(R.string.settings_language_hint_old))

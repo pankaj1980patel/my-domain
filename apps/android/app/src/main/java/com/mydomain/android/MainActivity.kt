@@ -88,11 +88,9 @@ class MainActivity : ComponentActivity() {
             // Denied for good ("Don't ask again"): Android shows no prompt
             // any more, so open this app's settings to allow it there.
             if (!granted && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
-                runCatching {
-                    startActivity(
-                        Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
-                    )
-                }
+                com.mydomain.android.ui.openOrSay(
+                    this, Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")),
+                )
             }
             Controls.onChange()
         }

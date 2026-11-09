@@ -138,7 +138,7 @@ fun rememberTurnOn(after: () -> Unit): (SetupItem) -> Unit {
             val denied = result.isNotEmpty() && result.values.none { it }
             val activity = ctx as? Activity
             val silenced = activity != null && result.keys.none { ActivityCompat.shouldShowRequestPermissionRationale(activity, it) }
-            if (denied && silenced) SetupState.openAppDetails(ctx)
+            if (denied && silenced && !SetupState.openAppDetails(ctx)) toast(noScreen)
         }
         after()
     }

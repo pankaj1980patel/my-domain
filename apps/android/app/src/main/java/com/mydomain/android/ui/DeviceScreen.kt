@@ -893,6 +893,7 @@ private fun LocateRow(node: String, name: String, status: DeviceStatus) {
     val scope = rememberCoroutineScope()
     val ctx = LocalContext.current
     val asking = stringResource(R.string.locate_asking, name)
+    val noMap = stringResource(R.string.setup_no_screen)
     val place = status.location
     if (place != null) {
         val mins = ((System.currentTimeMillis() / 1000 - place.at) / 60).coerceAtLeast(0)
@@ -919,7 +920,7 @@ private fun LocateRow(node: String, name: String, status: DeviceStatus) {
             GhostButton(stringResource(R.string.locate_map), {
                 val geo = Intent(Intent.ACTION_VIEW, Uri.parse("geo:${place.lat},${place.lon}?q=${place.lat},${place.lon}"))
                 val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.openstreetmap.org/?mlat=${place.lat}&mlon=${place.lon}#map=17/${place.lat}/${place.lon}"))
-                runCatching { ctx.startActivity(geo) }.onFailure { runCatching { ctx.startActivity(web) } }
+                if (!tryOpen(ctx, geo, web)) toast(noMap)
             })
         }
     }

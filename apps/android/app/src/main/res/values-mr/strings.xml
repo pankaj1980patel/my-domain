@@ -2114,4 +2114,8 @@
     <string name="newkey_done">मी ती जतन केली</string>
     <string name="chat_cleared">चॅट साफ केली</string>
     <string name="clipboard_recent_cleared">अलीकडील क्लिप साफ केल्या</string>
+    <string name="error_generic">काहीतरी चुकले. थोड्या वेळाने पुन्हा प्रयत्न करा.</string>
+    <string name="error_join_no_key">कोड चालला, पण डिव्हाइस की आली नाही. त्याऐवजी तुमच्या पासवर्डने साइन इन करा.</string>
+    <string name="set_sign_out_failed">साइन आउट करता आले नाही. पुन्हा प्रयत्न करा.</string>
+    <string name="set_sign_out_clears">यामुळे या फोनचा चॅट, क्लिपबोर्ड आणि ट्रान्सफर इतिहासही साफ होतो.</string>
 </resources>
