@@ -141,6 +141,16 @@ object ChatHistory {
         }
     }
 
+    /** Forget every message, on this phone's storage too, keeping the
+     *  setting (signing out: the next account mustn't see them). Main thread. */
+    fun wipe() {
+        log.clearAll()
+        version++
+        val f = file ?: return
+        // After any save already queued (same thread), so nothing comes back.
+        io.execute { runCatching { f.delete() } }
+    }
+
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("md", Context.MODE_PRIVATE)
 
     private fun changed() {

@@ -30,7 +30,7 @@ object TransferLog {
      *  the real ones then. */
     val list: List<TransferRecord> get() = if (Core.sample) SampleData.transferRecords() else all
 
-    private val book = TransferBook()
+    private var book = TransferBook()
     private val main = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private var file: File? = null
@@ -131,6 +131,16 @@ object TransferLog {
     fun clearFinished() {
         if (Core.sample) return
         if (book.clearFinished()) changed(save = true)
+    }
+
+    /** Forget every transfer, finished or not, on this phone's storage too
+     *  (signing out). Main thread. */
+    fun wipe() {
+        book = TransferBook()
+        all = book.list
+        val f = file ?: return
+        // After any save already queued (same thread), so nothing comes back.
+        io.execute { runCatching { f.delete() } }
     }
 
     private fun changed(save: Boolean) {

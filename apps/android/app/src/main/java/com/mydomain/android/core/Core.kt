@@ -1477,7 +1477,23 @@ object Core {
         onMain {
             messages.clear(); activity.clear(); apps.clear(); progress.clear(); links.clear(); deviceStatus.clear(); clipHistory.clear(); listings.clear(); nowPlaying.clear()
         }
+        wipeAccountHistory()
         reload()
+    }
+
+    /** Forget what this phone kept of the signed-out account: its chats,
+     *  clipboard history and transfers, in memory and on storage (the next
+     *  account to sign in here mustn't see them). The settings that turn
+     *  each history on stay. Any thread; called by [signOut]. */
+    fun wipeAccountHistory() = onMain {
+        if (sample) return@onMain
+        messages.clear()
+        clipHistory.clear()
+        transfers.clear()
+        ChatHistory.wipe()
+        ClipLog.wipe()
+        TransferLog.wipe()
+        labLog("signed out: chat, clipboard and transfer history wiped")
     }
 }
 

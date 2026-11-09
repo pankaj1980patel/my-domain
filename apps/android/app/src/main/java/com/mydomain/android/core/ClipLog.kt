@@ -238,6 +238,21 @@ object ClipLog {
         }
     }
 
+    /** Forget every clip and kept picture, on this phone's storage too,
+     *  keeping the setting (signing out). Main thread. */
+    fun wipe() {
+        book.clearAll()
+        book.takeDropped()
+        all = book.list
+        val f = file ?: return
+        val pics = pictureDir
+        // After any save already queued (same thread), so nothing comes back.
+        io.execute {
+            runCatching { f.delete() }
+            pics?.listFiles()?.forEach { runCatching { it.delete() } }
+        }
+    }
+
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("md", Context.MODE_PRIVATE)
 
     private fun changed() {
