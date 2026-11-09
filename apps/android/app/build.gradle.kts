@@ -34,8 +34,26 @@ android {
         buildConfigField("int", "TARGET_SDK", "$targetSdk")
     }
 
+    // Release signing: the keystore and its password come from the
+    // environment (MD_RELEASE_KEYSTORE, MD_RELEASE_KEYSTORE_PASSWORD,
+    // MD_RELEASE_KEY_ALIAS), never from the repo. Without them a release
+    // build is left unsigned. See docs/RELEASING.md.
+    val releaseKeystore = System.getenv("MD_RELEASE_KEYSTORE")?.takeIf { it.isNotBlank() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("MD_RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("MD_RELEASE_KEY_ALIAS") ?: "my-domain"
+                keyPassword = System.getenv("MD_RELEASE_KEYSTORE_PASSWORD")
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

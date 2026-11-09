@@ -230,10 +230,11 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
-  # Built exactly like CI's android job: a debug APK, signed with the
-  # Android debug key. A release keystore is a later step.
+  # A release APK signed with the project's release key (secrets
+  # ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS),
+  # with the Firebase ids from GOOGLE_SERVICES_ANDROID_JSON so FCM works.
   android:
-    name: android (debug APK)
+    name: android (release APK)
     needs: version
     runs-on: ubuntu-latest
     env:
@@ -255,12 +256,26 @@ jobs:
         run: |
           NDK=$(grep -oP 'ndkVersion = "\K[^"]+' apps/android/app/build.gradle.kts)
           sdkmanager "ndk;$NDK"
-      - name: Build debug APK
+      - name: Release key and Firebase ids from secrets
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          GS_JSON: ${{ secrets.GOOGLE_SERVICES_ANDROID_JSON }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then echo "::error::ANDROID_KEYSTORE_BASE64 secret missing (docs/RELEASING.md)"; exit 1; fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          if [ -n "$GS_JSON" ]; then printf '%s' "$GS_JSON" > apps/android/google-services-android.json;
+          else echo "::warning::GOOGLE_SERVICES_ANDROID_JSON secret missing: this APK has push wake-up (FCM) off."; fi
+      - name: Build release APK
         working-directory: apps/android
-        run: ./gradlew --no-daemon assembleDebug
+        env:
+          MD_RELEASE_KEYSTORE: ${{ runner.temp }}/release.jks
+          MD_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          MD_RELEASE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: ./gradlew --no-daemon assembleRelease
       - run: |
           mkdir -p dist
-          cp apps/android/app/build/outputs/apk/debug/app-debug.apk "dist/my-domain_${VERSION}_android-debug.apk"
+          cp apps/android/app/build/outputs/apk/release/app-release.apk "dist/my-domain_${VERSION}_android.apk"
+          rm -f "$RUNNER_TEMP/release.jks" apps/android/google-services-android.json
       - uses: actions/upload-artifact@v4
         with:
           name: my-domain-${{ needs.version.outputs.version }}-android
@@ -309,5 +324,5 @@ jobs:
 
             These builds are not code-signed. See docs/release.md for how to
             open them on macOS and Windows. The Android APK is signed with
-            the debug key. Installed desktop apps update themselves once
+            the project's release key. Installed desktop apps update themselves once
             this release is published (when latest.json is attached).

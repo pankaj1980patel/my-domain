@@ -102,3 +102,19 @@ Generate a new pair, put the new public key in `tauri.conf.json`, replace both
 secrets and release. Apps already installed only trust the old key, so sign
 one release with the **old** key that carries the **new** public key first,
 then switch the secrets.
+
+## Android release signing
+
+The release workflow builds a **release** APK signed with the project's
+Android key (never the debug key). The keystore lives only on the
+maintainer's computer and in these repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: `base64 -i <keystore.jks>`
+- `ANDROID_KEYSTORE_PASSWORD`: the keystore and key password (the same one)
+- `ANDROID_KEY_ALIAS`: `my-domain`
+- `GOOGLE_SERVICES_ANDROID_JSON`: the Firebase ids file, so push wake-up works
+
+`apps/android/app/build.gradle.kts` signs a release build when
+`MD_RELEASE_KEYSTORE`, `MD_RELEASE_KEYSTORE_PASSWORD` and `MD_RELEASE_KEY_ALIAS`
+are set, and leaves it unsigned otherwise. Every update must use the same key:
+a phone refuses an update signed with a different one.
