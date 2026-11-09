@@ -692,8 +692,7 @@ impl EventSink for ListenerSink {
             } = ev
             {
                 use base64::Engine as _;
-                if let Ok(pcm) = base64::engine::general_purpose::STANDARD.decode(pcm.as_bytes())
-                {
+                if let Ok(pcm) = base64::engine::general_purpose::STANDARD.decode(pcm.as_bytes()) {
                     l.on_audio_frame(from, seq, rate, channels, pcm);
                 }
                 return;
@@ -761,7 +760,11 @@ fn install_panic_hook(data_dir: &str) {
                 let at = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
                     .map_or(0, |d| d.as_secs());
-                let _ = append_capped(f, &panic_entry(at, thread, &location, &message), PANIC_LOG_MAX);
+                let _ = append_capped(
+                    f,
+                    &panic_entry(at, thread, &location, &message),
+                    PANIC_LOG_MAX,
+                );
             }
             previous(info);
         }));

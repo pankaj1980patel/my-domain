@@ -883,7 +883,10 @@ mod tests {
         let fresh = DeviceKey::load_or_create(&store);
         assert_ne!(fresh.public(), old.public());
         assert!(store.1.get(KEY_KV).is_some(), "the new key is stored");
-        assert_eq!(store.0.get(PUBLIC_KV).as_deref(), Some(fresh.public().as_str()));
+        assert_eq!(
+            store.0.get(PUBLIC_KV).as_deref(),
+            Some(fresh.public().as_str())
+        );
         // The store forgets it was lost once a new one is in; the new key
         // is the one from now on, not a throwaway per start.
         store.2.lock().clear();
