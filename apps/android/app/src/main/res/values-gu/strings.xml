@@ -2129,4 +2129,5 @@
     <string name="banner_reconnecting">ફરી જોડાઈ રહ્યું છે…</string>
     <string name="banner_open">કનેક્શન</string>
     <string name="devices_loading">તમારા ડિવાઇસ લોડ થઈ રહ્યા છે…</string>
+    <string name="onboard_device_joined">એક ડિવાઇસ જોડાયું. આગળના પગલે જઈએ.</string>
 </resources>

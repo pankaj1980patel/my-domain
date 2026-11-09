@@ -2158,4 +2158,5 @@
     <string name="banner_reconnecting">Reconectando…</string>
     <string name="banner_open">Conexiones</string>
     <string name="devices_loading">Cargando tus dispositivos…</string>
+    <string name="onboard_device_joined">Se ha unido un dispositivo. Pasamos al siguiente paso.</string>
 </resources>

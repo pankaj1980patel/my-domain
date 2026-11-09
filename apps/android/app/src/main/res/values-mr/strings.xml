@@ -2129,4 +2129,5 @@
     <string name="banner_reconnecting">पुन्हा जोडत आहे…</string>
     <string name="banner_open">कनेक्शन</string>
     <string name="devices_loading">तुमची डिव्हाइसेस लोड होत आहेत…</string>
+    <string name="onboard_device_joined">एक डिव्हाइस जोडले गेले. पुढच्या टप्प्यावर जाऊया.</string>
 </resources>

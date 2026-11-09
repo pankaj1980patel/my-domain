@@ -2129,4 +2129,5 @@
     <string name="banner_reconnecting">மீண்டும் இணைக்கிறது…</string>
     <string name="banner_open">இணைப்புகள்</string>
     <string name="devices_loading">உங்கள் சாதனங்கள் ஏற்றப்படுகின்றன…</string>
+    <string name="onboard_device_joined">ஒரு சாதனம் சேர்ந்தது. அடுத்த படிக்குச் செல்கிறோம்.</string>
 </resources>

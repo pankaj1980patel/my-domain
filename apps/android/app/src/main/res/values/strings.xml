@@ -2129,4 +2129,5 @@
     <string name="banner_reconnecting">Reconnecting…</string>
     <string name="banner_open">Connections</string>
     <string name="devices_loading">Loading your devices…</string>
+    <string name="onboard_device_joined">A device joined. On to the next step.</string>
 </resources>

@@ -425,6 +425,10 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
         pickedLoaded = true
     }
     val step = Health.setup?.step ?: "name"
+    // The devices step: how many there were when it showed; one more (a
+    // device joined with the code shown) goes on by itself.
+    val peerCount = Core.peers.size
+    var peersAtStep by remember(step) { mutableStateOf(peerCount) }
     // The connection step is live.
     LaunchedEffect(step) {
         while (step == "connection") {
@@ -451,7 +455,7 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
             busy = true
             try {
                 when (step) {
-                    "name" -> Health.setName(name)
+                    "name" -> if (name.isNotBlank()) Health.setName(name)
                     "features" -> {
                         Health.setFeatures(HealthPlan.GROUPS.filter { it in picked })
                         applyGroups(ctx, picked.toList())
@@ -467,19 +471,26 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
         }
     }
 
+    val joined = stringResource(R.string.onboard_device_joined)
+    LaunchedEffect(step, peerCount) {
+        if (step == "devices" && peerCount > peersAtStep && !busy) {
+            peersAtStep = peerCount
+            toast(joined)
+            delay(1_200)
+            next()
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Muted(stringResource(R.string.onboard_step_of, HealthPlan.stepNumber(step), HealthPlan.STEPS.size))
-                Text(
-                    stringResource(stepRes(step)), Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.headlineSmall, color = T.text,
-                )
-            }
-            GhostButton(stringResource(R.string.onboard_later), onClose, small = true)
+        Column(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+            Muted(stringResource(R.string.onboard_step_of, HealthPlan.stepNumber(step), HealthPlan.STEPS.size))
+            Text(
+                stringResource(stepRes(step)), Modifier.semantics { heading() },
+                style = MaterialTheme.typography.headlineSmall, color = T.text,
+            )
         }
         Tile {
             when (step) {
@@ -531,16 +542,22 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
                 }
             }
         }
+        // Two buttons a step, each half the width, so their words wrap
+        // rather than clip at large font sizes: Later (first step) or Back,
+        // and Next. Nothing on a step is needed: Next goes on from any of
+        // them. "Skip setup" is on Home's card, which carries on after Later.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (HealthPlan.stepNumber(step) > 1) GhostButton(stringResource(R.string.onboard_back), { if (!busy) act("back", null) }, Modifier.weight(1f))
-            GhostButton(stringResource(R.string.onboard_skip), { if (!busy) act("skip", null) }, Modifier.weight(1f))
+            if (HealthPlan.stepNumber(step) > 1) {
+                GhostButton(stringResource(R.string.onboard_back), { if (!busy) act("back", null) }, Modifier.weight(1f))
+            } else {
+                GhostButton(stringResource(R.string.onboard_later), onClose, Modifier.weight(1f))
+            }
             PrimaryButton(
                 stringResource(if (step == "connection") R.string.onboard_done else R.string.onboard_next),
                 next,
                 Modifier.weight(1f),
-                enabled = !busy && (step != "name" || name.isNotBlank()),
+                enabled = !busy,
             )
         }
-        GhostButton(stringResource(R.string.onboard_skip_all), { if (!busy) act("skip_all", null) }, Modifier.fillMaxWidth(), small = true)
     }
 }
