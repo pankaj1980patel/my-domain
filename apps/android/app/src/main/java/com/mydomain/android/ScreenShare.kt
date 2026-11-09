@@ -33,7 +33,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.ScreenTouch
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
@@ -381,8 +383,14 @@ class ScreenShareService : Service() {
         h.post(object : Runnable {
             override fun run() {
                 if (current !== this@ScreenShareService) return
-                tick(r)
-                h.postDelayed(this, EVERY_MS)
+                // A failure on this thread would take the app down: a
+                // picture that can't be made is skipped, the next one tried.
+                try {
+                    tick(r)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "screen frame failed: $e")
+                }
+                if (current === this@ScreenShareService) h.postDelayed(this, EVERY_MS)
             }
         })
     }
@@ -395,7 +403,7 @@ class ScreenShareService : Service() {
         viewers.add(node)
         graceUntil = maxOf(graceUntil, System.currentTimeMillis() + START_GRACE_MS)
         changed()
-        if (offer) Thread { offerTo(node) }.start()
+        if (offer) AppScope.bg("screen offer") { offerTo(node) }
     }
 
     /** Tell [node] to watch; with no link yet, connect and try again for a
@@ -455,7 +463,7 @@ class ScreenShareService : Service() {
         }
         lastWatched = now
         val image = r.acquireLatestImage() ?: return
-        val jpeg = runCatching {
+        val jpeg = try { runCatching {
             val plane = image.planes[0]
             val padded = plane.rowStride / plane.pixelStride
             // One bitmap for every picture (two a second, ~4 MB each), not a new one each time.
@@ -471,19 +479,20 @@ class ScreenShareService : Service() {
             } finally {
                 if (cropped !== bmp) cropped.recycle()
             }
-        }.getOrNull()
-        image.close()
-        if (jpeg != null) runCatching { engine.screenFrameTo(jpeg, to) }
+        }.getOrNull() } finally {
+            runCatching { image.close() }
+        }
+        if (jpeg != null) ffi("screenFrameTo") { engine.screenFrameTo(jpeg, to) }
     }
 
     /** Tell computers that understand it that the sharing stopped. */
     private fun offerOff(nodes: List<String>) {
         val tell = nodes.filter { Core.deviceStatus[it]?.screenView == true }
         if (tell.isEmpty()) return
-        Thread {
-            val e = Core.engine() ?: return@Thread
-            tell.forEach { runCatching { e.screenOffer(it, false) } }
-        }.start()
+        AppScope.bg("screen offer off") {
+            val e = Core.engine() ?: return@bg
+            tell.forEach { ffi("screenOffer") { e.screenOffer(it, false) } }
+        }
     }
 
     private fun stop() {
@@ -495,18 +504,34 @@ class ScreenShareService : Service() {
         controlAllowed = false
         screenOff?.let { runCatching { unregisterReceiver(it) } }
         screenOff = null
-        runCatching { display?.release() }
-        runCatching { reader?.close() }
-        runCatching { projection?.stop() }
+        val d = display
+        val r = reader
+        val p = projection
+        val h = handler
+        val t = thread
         display = null
         reader = null
         projection = null
-        // On the share's thread, after any picture being made.
-        val h = handler
-        if (h != null) h.post { frameBitmap?.recycle(); frameBitmap = null }
         handler = null
-        thread?.quitSafely()
         thread = null
+        // The pictures are read on the share's thread, so the reader is
+        // closed there too, after any picture being made: closed from
+        // another thread mid-read, it threw on the share's thread and the
+        // app crashed. stop() runs on the main thread (Stop, screen off)
+        // as well as on the share's thread (locked, nobody watching).
+        val release = Runnable {
+            runCatching { d?.release() }
+            runCatching { r?.close() }
+            runCatching { p?.stop() }
+            frameBitmap?.recycle()
+            frameBitmap = null
+        }
+        when {
+            h == null -> release.run()
+            h.looper.thread === Thread.currentThread() -> release.run()
+            !h.post(release) -> release.run() // its thread has already quit
+        }
+        t?.quitSafely()
         ResourceLedger.release(ResourceBook.Kind.SERVICE, "ScreenShareService")
         if (wasCurrent) ScreenShare.published(emptySet(), false)
         stopForeground(STOP_FOREGROUND_REMOVE)
