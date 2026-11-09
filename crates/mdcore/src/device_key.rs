@@ -88,11 +88,21 @@ impl DeviceKey {
             return key;
         }
         let key = Self::generate();
+        // A key was made before (its public half is in kv) but can't be
+        // read. Two cases, told apart by the secure store itself:
+        // - it can't be read *right now* (a locked keyring, a passing
+        //   keystore error): use this key for this run only (peers will
+        //   refuse it) and keep the real one for the next start;
+        // - it can *never* be read again (`secure_lost`: the key that sealed
+        //   it is gone or permanently invalid, e.g. the app's data was
+        //   restored onto another phone): waiting would refuse every link
+        //   forever, so a new key takes its place. Peers then see a changed
+        //   key, which the user is asked to trust once.
         if store.get(PUBLIC_KV).is_some() {
-            // We have a key, but its store can't be read right now. Use this
-            // one for this run only (peers will refuse it) and keep the real
-            // one for the next start.
-            return key;
+            if !store.secure_lost(KEY_KV) {
+                return key;
+            }
+            eprintln!("[device_key] the stored key can never be read again: making a new one");
         }
         let value = B64.encode(&key.pkcs8);
         store.secure_set(KEY_KV, &value);
@@ -735,6 +745,11 @@ pub trait Store {
     }
     fn secure_set(&self, _key: &str, _value: &str) {}
     fn secure_clear(&self, _key: &str) {}
+    /// The secure store's secret under `key` can never be read again (see
+    /// `Platform::secret_lost`).
+    fn secure_lost(&self, _key: &str) -> bool {
+        false
+    }
 }
 
 impl<P: Platform> Store for P {
@@ -752,6 +767,9 @@ impl<P: Platform> Store for P {
     }
     fn secure_clear(&self, key: &str) {
         self.secret_set(key, None)
+    }
+    fn secure_lost(&self, key: &str) -> bool {
+        self.secret_lost(key)
     }
 }
 
@@ -785,9 +803,10 @@ mod tests {
         }
     }
 
-    /// kv plus a secure store (like the apps).
+    /// kv plus a secure store (like the apps); `.2`: the keys it says can
+    /// never be read again.
     #[derive(Default)]
-    struct WithSecrets(Mem, Mem);
+    struct WithSecrets(Mem, Mem, Mutex<Vec<String>>);
     impl Store for WithSecrets {
         fn get(&self, key: &str) -> Option<String> {
             self.0.get(key)
@@ -803,6 +822,9 @@ mod tests {
         }
         fn secure_clear(&self, key: &str) {
             self.1 .0.lock().remove(key);
+        }
+        fn secure_lost(&self, key: &str) -> bool {
+            self.2.lock().iter().any(|k| k == key)
         }
     }
 
@@ -848,6 +870,24 @@ mod tests {
         // Unlocked again: the real key is back.
         store.1.set(KEY_KV, stored.as_deref().unwrap());
         assert_eq!(DeviceKey::load_or_create(&store).public(), key.public());
+    }
+
+    #[test]
+    fn a_key_lost_for_good_is_replaced_and_kept() {
+        let store = WithSecrets::default();
+        let old = DeviceKey::load_or_create(&store);
+        // Restored onto another phone: the sealed key was dropped by the
+        // secure store, which says it can never be read again.
+        store.1 .0.lock().clear();
+        store.2.lock().push(KEY_KV.into());
+        let fresh = DeviceKey::load_or_create(&store);
+        assert_ne!(fresh.public(), old.public());
+        assert!(store.1.get(KEY_KV).is_some(), "the new key is stored");
+        assert_eq!(store.0.get(PUBLIC_KV).as_deref(), Some(fresh.public().as_str()));
+        // The store forgets it was lost once a new one is in; the new key
+        // is the one from now on, not a throwaway per start.
+        store.2.lock().clear();
+        assert_eq!(DeviceKey::load_or_create(&store).public(), fresh.public());
     }
 
     #[test]

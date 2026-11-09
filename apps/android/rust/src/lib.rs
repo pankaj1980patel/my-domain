@@ -98,6 +98,10 @@ impl Platform for AndroidPlatform {
         self.secrets.set(key.to_string(), value.map(str::to_string));
     }
 
+    fn secret_lost(&self, key: &str) -> bool {
+        self.secrets.lost(key.to_string())
+    }
+
     fn fcm_token(&self) -> Option<String> {
         self.fcm_token.lock().unwrap().clone()
     }
@@ -166,6 +170,11 @@ pub trait SecretStore: Send + Sync {
     fn get(&self, key: String) -> Option<String>;
     /// `None` deletes the secret.
     fn set(&self, key: String, value: Option<String>);
+    /// True when a secret was kept under `key` but can never be read again
+    /// (its Keystore key is gone or permanently invalid, e.g. after a
+    /// restore onto another phone); false when there is none, or it only
+    /// can't be read right now. The core then makes a new one.
+    fn lost(&self, key: String) -> bool;
 }
 
 /// Sends one whole frame over a Bluetooth connection (Kotlin: `BleLink`,

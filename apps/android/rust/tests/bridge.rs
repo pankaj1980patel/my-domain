@@ -66,6 +66,9 @@ impl SecretStore for MemSecrets {
             None => m.remove(&key),
         };
     }
+    fn lost(&self, _key: String) -> bool {
+        false
+    }
 }
 
 #[test]

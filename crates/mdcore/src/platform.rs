@@ -99,6 +99,13 @@ pub trait Platform: Send + Sync + 'static {
     }
     /// Store (`Some`) or delete (`None`) a secret.
     fn secret_set(&self, _key: &str, _value: Option<&str>) {}
+    /// The secure store kept a secret under `key` that can never be read
+    /// again (the key sealing it is gone or permanently invalid, e.g. after
+    /// a restore to another phone), as opposed to one it just can't read
+    /// right now (a locked keyring). Only then may it be replaced.
+    fn secret_lost(&self, _key: &str) -> bool {
+        false
+    }
 
     // --- push (roadmap: FCM) ---
     fn fcm_token(&self) -> Option<String> {

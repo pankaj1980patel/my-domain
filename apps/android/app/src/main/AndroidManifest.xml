@@ -92,8 +92,20 @@
          app never asks on its own, and falls back to inexact alarms. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- No Android backup or device-to-device transfer (decided 2026-11-09).
+         What the app keeps is this phone's identity and secrets (sealed
+         under a Keystore key that never leaves the phone, so a restored
+         copy could never be opened and the phone would be refused by your
+         other devices for good), the engine's state bound to that identity
+         (session, pinned device keys), and private histories (chat,
+         clipboard). None of it is worth moving; settings move with the
+         app's own settings file (SettingsBackupTile.kt) instead. The rule
+         files leave the same out, should backup ever be switched on. -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        tools:targetApi="31"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"

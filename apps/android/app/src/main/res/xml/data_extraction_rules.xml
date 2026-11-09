@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 and newer (dataExtractionRules): cloud backup and
+     device-to-device transfer. Off for this app (allowBackup="false",
+     targetSdk 28); should either ever apply, the same is left out as in
+     backup_rules.xml: this phone's identity, secrets, engine state and
+     histories. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="md_secrets.xml" />
+        <exclude domain="sharedpref" path="md_secrets_lost.xml" />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="md_secrets.xml" />
+        <exclude domain="sharedpref" path="md_secrets_lost.xml" />
+        <exclude domain="file" path="." />
+        <exclude domain="database" path="." />
+    </device-transfer>
+</data-extraction-rules>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older (fullBackupContent). Backup is off in the manifest
+     (allowBackup="false"); should it ever be switched on, this phone's
+     identity, secrets and engine state still stay out: a copy of them
+     restored on another phone can't be opened there (the Keystore key that
+     seals them never leaves this one) and would have your other devices
+     refuse it. -->
+<full-backup-content>
+    <!-- The sealed secrets (KeystoreSecrets.kt) and what was found lost. -->
+    <exclude domain="sharedpref" path="md_secrets.xml" />
+    <exclude domain="sharedpref" path="md_secrets_lost.xml" />
+    <!-- The engine's state (session.json, notes, pinned device keys...)
+         and the histories (chat, clipboard, transfers), all in files/. -->
+    <exclude domain="file" path="." />
+    <exclude domain="database" path="." />
+</full-backup-content>
