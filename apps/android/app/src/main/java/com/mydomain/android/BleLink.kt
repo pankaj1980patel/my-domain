@@ -20,6 +20,7 @@ import android.os.Build
 import android.os.ParcelUuid
 import android.util.Log
 import com.mydomain.android.core.Core
+import com.mydomain.android.core.ffi
 import com.mydomain.android.ffi.BleOut
 import java.io.ByteArrayOutputStream
 import java.util.UUID
@@ -57,6 +58,10 @@ object BleLink {
         var mtu = 23
         var subscribed = false
         var sending = false
+        /** Failed tries of the chunk at the head of [out]. */
+        var retries = 0
+        /** The chunk sent and not yet confirmed by onNotificationSent. */
+        var inFlight: ByteArray? = null
         val out = ArrayDeque<ByteArray>()
         val frame = ByteArrayOutputStream()
         /** A long write (prepare/execute) being put together. */
@@ -108,24 +113,31 @@ object BleLink {
             addCharacteristic(write)
             addCharacteristic(notify)
         }
-        s.addService(service) // advertising starts in onServiceAdded
-        pendingAdvertiser = { advertise(manager) }
+        // Set before addService: onServiceAdded can come (on a Binder
+        // thread) before addService returns, and it found nothing to start,
+        // so the phone never advertised.
+        pendingAdvertiser.set { advertise(manager) }
+        if (!s.addService(service)) { // advertising starts in onServiceAdded
+            Log.w(TAG, "can't add the service; not advertising")
+            pendingAdvertiser.set(null)
+        }
     }
 
     fun stop() {
         // Not started yet (the service is still being added): never start.
-        pendingAdvertiser = null
+        pendingAdvertiser.set(null)
         advertising?.let { cb -> runCatching { advertiser?.stopAdvertising(cb) } }
         advertising = null
         advertiser = null
         ResourceLedger.release(ResourceBook.Kind.BLUETOOTH, "BLE advertising (low power)")
-        conns.values.forEach { c -> c.linkId?.let { Core.engine()?.bleClosed(it.toULong()) } }
+        conns.values.forEach { c -> c.linkId?.let { ffi("bleClosed") { Core.engine()?.bleClosed(it.toULong()) } } }
         conns.clear()
         runCatching { server?.close() }
         server = null
     }
 
-    private var pendingAdvertiser: (() -> Unit)? = null
+    /** Starts advertising once the service is added (taken once). */
+    private val pendingAdvertiser = java.util.concurrent.atomic.AtomicReference<(() -> Unit)?>(null)
     private var advertiser: android.bluetooth.le.BluetoothLeAdvertiser? = null
 
     private fun advertise(manager: BluetoothManager) {
@@ -157,8 +169,9 @@ object BleLink {
 
     private val callback = object : BluetoothGattServerCallback() {
         override fun onServiceAdded(status: Int, service: BluetoothGattService) {
-            if (status == BluetoothGatt.GATT_SUCCESS && server != null) pendingAdvertiser?.invoke()
-            pendingAdvertiser = null
+            val start = pendingAdvertiser.getAndSet(null)
+            if (status == BluetoothGatt.GATT_SUCCESS && server != null) start?.invoke()
+            else Log.w(TAG, "service not added ($status); not advertising")
         }
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
@@ -169,7 +182,7 @@ object BleLink {
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     val c = conns.remove(device.address) ?: return
-                    c.linkId?.let { id -> toCore.execute { Core.engine()?.bleClosed(id.toULong()) } }
+                    c.linkId?.let { id -> toCore.execute { ffi("bleClosed") { Core.engine()?.bleClosed(id.toULong()) } } }
                     Log.i(TAG, "computer disconnected")
                 }
             }
@@ -229,8 +242,19 @@ object BleLink {
 
         override fun onNotificationSent(device: BluetoothDevice, status: Int) {
             val c = conns[device.address] ?: return
-            synchronized(c) { c.sending = false }
-            pump(c)
+            val failed = synchronized(c) {
+                val chunk = c.inFlight
+                c.inFlight = null
+                if (status == BluetoothGatt.GATT_SUCCESS || chunk == null) {
+                    c.sending = false
+                    c.retries = 0
+                    null
+                } else {
+                    chunk
+                }
+            }
+            // It didn't arrive: the same chunk again, not the next one.
+            if (failed != null) sendFailed(c, failed) else pump(c)
         }
     }
 
@@ -244,7 +268,7 @@ object BleLink {
                 pump(c)
             }
         }
-        c.linkId = engine.bleOpened(out).toLong()
+        c.linkId = ffi("bleOpened") { engine.bleOpened(out) }?.toLong()
     }
 
     private fun chunkIn(c: Conn, chunk: ByteArray) {
@@ -258,30 +282,73 @@ object BleLink {
         val frame = c.frame.toByteArray()
         c.frame.reset()
         val id = c.linkId ?: return
-        toCore.execute { Core.engine()?.bleFrame(id.toULong(), frame) }
+        toCore.execute { ffi("bleFrame") { Core.engine()?.bleFrame(id.toULong(), frame) } }
     }
 
-    /** Send the next queued chunk, one notification at a time. */
+    /** Send the next queued chunk, one notification at a time. A chunk
+     *  that couldn't go is put back and tried again shortly: dropping it
+     *  (as before) cut a piece out of the frame and corrupted it. */
     private fun pump(c: Conn) {
         val chunk = synchronized(c) {
             if (c.sending || !c.subscribed || c.out.isEmpty()) return
             c.sending = true
-            c.out.removeFirst()
+            c.out.removeFirst().also { c.inFlight = it }
         }
         val s = server
         val ch = fromPhone
-        val sent = if (s == null || ch == null) {
-            false
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            s.notifyCharacteristicChanged(c.device, ch, false, chunk) == BluetoothGatt.GATT_SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            ch.value = chunk
-            @Suppress("DEPRECATION")
-            s.notifyCharacteristicChanged(c.device, ch, false)
+        if (s == null || ch == null || conns[c.device.address] !== c) {
+            // Gone (stopped, or the computer left): nothing more goes to it.
+            synchronized(c) { c.out.clear(); c.inFlight = null; c.sending = false }
+            return
         }
-        if (!sent) synchronized(c) { c.sending = false }
+        val sent = runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                s.notifyCharacteristicChanged(c.device, ch, false, chunk) == BluetoothGatt.GATT_SUCCESS
+            } else {
+                @Suppress("DEPRECATION")
+                ch.value = chunk
+                @Suppress("DEPRECATION")
+                s.notifyCharacteristicChanged(c.device, ch, false)
+            }
+        }.getOrDefault(false)
+        // Sent: onNotificationSent says whether it arrived.
+        if (sent) return
+        val wasInFlight = synchronized(c) { (c.inFlight === chunk).also { if (it) c.inFlight = null } }
+        // Already answered by onNotificationSent (it failed there too).
+        if (wasInFlight) sendFailed(c, chunk)
     }
+
+    /** [chunk] didn't go: back at the head of the queue, tried again soon;
+     *  past [MAX_RETRIES] the connection is closed. */
+    private fun sendFailed(c: Conn, chunk: ByteArray) {
+        val s = server
+        val giveUp = synchronized(c) {
+            c.sending = false
+            c.retries++
+            if (c.retries > MAX_RETRIES) {
+                // The link is stuck. Dropping the rest would leave the
+                // computer half a frame, so the connection goes: both sides
+                // start clean when it connects again.
+                c.out.clear()
+                c.retries = 0
+                true
+            } else {
+                c.out.addFirst(chunk)
+                false
+            }
+        }
+        if (giveUp) {
+            Log.w(TAG, "notifications keep failing: closing the connection")
+            runCatching { s?.cancelConnection(c.device) }
+        } else {
+            retry.postDelayed({ pump(c) }, RETRY_MS)
+        }
+    }
+
+    private val retry = android.os.Handler(android.os.Looper.getMainLooper())
+    /** A chunk that didn't go is tried again this soon, this many times. */
+    private const val RETRY_MS = 30L
+    private const val MAX_RETRIES = 200
 
     private fun split(frame: ByteArray, packet: Int): List<ByteArray> {
         val body = (packet - 1).coerceAtLeast(1)
