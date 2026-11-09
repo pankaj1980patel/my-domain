@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.NotificationIds
 import android.app.AlarmManager
 import android.app.Notification
@@ -279,7 +280,7 @@ object TimerAlarms {
             pending[id] = JSONObject().put("op", op).put("n", adds).toString()
             writeMap(ctx, KEY_PENDING, pending)
         }
-        Thread { if (!flushPending(ctx)) startService(ctx) }.start()
+        AppScope.bg("timer flush") { if (!flushPending(ctx)) startService(ctx) }
     }
 
     private fun startService(ctx: Context) {
@@ -327,7 +328,7 @@ class TimerAlarmReceiver : BroadcastReceiver() {
         val id = intent.getStringExtra(TimerAlarms.EXTRA_ID)
         val op = intent.getStringExtra(TimerAlarms.EXTRA_OP)
         val pending = goAsync()
-        Thread {
+        AppScope.bg("timer alarm") {
             try {
                 when (intent.action) {
                     TimerAlarms.ACTION_ALARM -> TimerAlarms.check(ctx)
@@ -336,7 +337,7 @@ class TimerAlarmReceiver : BroadcastReceiver() {
             } finally {
                 pending.finish()
             }
-        }.start()
+        }
     }
 
     private companion object {

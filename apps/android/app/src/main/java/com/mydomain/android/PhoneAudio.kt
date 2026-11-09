@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.annotation.SuppressLint
@@ -139,7 +141,7 @@ object PhoneAudio {
      *  or it can't start), so it stops waiting. */
     fun decline(node: String) {
         if (node.isEmpty() || !(Core.engine()?.audioSink(node) ?: false)) return
-        Thread { runCatching { Core.engine()?.audioOffer(node, false) } }.start()
+        AppScope.bg("audioOffer") { ffi("audioOffer") { Core.engine()?.audioOffer(node, false) } }
     }
 
     fun channel(ctx: Context) {
@@ -336,7 +338,7 @@ class PhoneAudioService : Service() {
         targets.add(node)
         graceUntil = maxOf(graceUntil, System.currentTimeMillis() + START_GRACE_MS)
         changed()
-        if (offer) Thread { offerTo(node) }.start()
+        if (offer) AppScope.bg("audio offer") { offerTo(node) }
     }
 
     /** [node] stopped listening, or you stopped playing there ([tell] it);

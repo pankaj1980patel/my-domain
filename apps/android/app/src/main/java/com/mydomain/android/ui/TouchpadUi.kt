@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.core.AppScope
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.background
@@ -151,7 +152,7 @@ fun FullTouchpad(node: String, onDone: () -> Unit) {
         }
         DisposableEffect(node) {
             onDispose {
-                Thread { Core.screenWatch(node, false) }.start()
+                AppScope.bg("screen unwatch") { Core.screenWatch(node, false) }
                 Core.screens.remove(node)
             }
         }

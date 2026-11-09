@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -176,10 +177,10 @@ object PowerSaver {
         if (p == was && applied) return
         applied = true
         Log.i(TAG, "saving=${p.saving} reasons=${p.reasons} cap=${p.meteredCap}")
-        Thread {
+        AppScope.bg("power policy") {
             runCatching { Core.engine()?.setPowerPolicy(p.heavyAllowed, p.meteredCap.toULong()) }
             PhotoBackup.pushConditions()
-        }.start()
+        }
         if (p.saving != was.saving) onChange?.invoke()
     }
 }

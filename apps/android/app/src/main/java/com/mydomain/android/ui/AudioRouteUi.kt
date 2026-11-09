@@ -1,5 +1,6 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.core.AppScope
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -55,13 +56,13 @@ fun AudioRoutePicker(node: String) {
                     selected = route == r, role = Role.RadioButton,
                     onClick = {
                         route = r
-                        Thread {
+                        AppScope.bg("audio route") {
                             runCatching {
                                 val e = Core.engine() ?: return@runCatching
                                 e.setAudioRoute(node, r)
                                 if (ComputerAudio.playingFrom == node) e.audioListen(node, true)
                             }
-                        }.start()
+                        }
                     },
                 ),
                 verticalAlignment = Alignment.CenterVertically,

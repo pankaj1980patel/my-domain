@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import android.content.Context
 import android.util.Log
 import com.google.firebase.FirebaseApp
@@ -42,6 +44,6 @@ object Fcm {
     fun publish(token: String) {
         Log.i(TAG, "token ready (${token.take(8)}…)")
         // setFcmToken re-registers over the network: keep it off the main thread.
-        Thread { com.mydomain.android.ffi.setFcmToken(token) }.start()
+        AppScope.bg("fcm token") { ffi("setFcmToken") { com.mydomain.android.ffi.setFcmToken(token) } }
     }
 }

@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import com.mydomain.android.ui.LIcon
 import android.Manifest
@@ -221,10 +223,10 @@ object InsertCapture {
 
     /** Tell the computer no ([reason]: "cancelled", "no_permission", "error"). */
     fun cancel(id: String, reason: String) {
-        Thread {
+        AppScope.bg("insert cancel") {
             runCatching { Core.engine()?.insertCancel(id, reason) }
                 .onFailure { Log.w(TAG, "can't cancel: $it") }
-        }.start()
+        }
     }
 
     /** Whether request [id] is still waiting for its answer. */
@@ -387,7 +389,7 @@ class InsertCaptureActivity : ComponentActivity() {
         c.open(t)
         if (!opened) {
             opened = true
-            Thread { runCatching { Core.engine()?.insertOpened(requestId) } }.start()
+            AppScope.bg("insertOpened") { ffi("insertOpened") { Core.engine()?.insertOpened(requestId) } }
         }
     }
 

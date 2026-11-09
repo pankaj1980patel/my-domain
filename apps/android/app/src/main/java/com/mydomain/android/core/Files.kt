@@ -259,18 +259,18 @@ object OutgoingFolders {
      *  copies. Safe from any thread. */
     fun transferEnded() {
         if (staged.isEmpty() || !checking.compareAndSet(false, true)) return
-        Thread {
+        AppScope.bg("folder copies") {
             // The core counts a folder done just after it reports the file.
             Thread.sleep(1000)
             checking.set(false)
             // Taken first: a copy tracked after this is counted as going below.
             val before = staged.toList()
-            val going = Core.engine()?.foldersSending() ?: return@Thread
+            val going = Core.engine()?.foldersSending() ?: return@bg
             if (going == 0u) before.forEach {
                 staged.remove(it)
                 runCatching { it.deleteRecursively() }
             }
-        }.start()
+        }
     }
 
     /** Copies from more than a day ago go, sent or not. */

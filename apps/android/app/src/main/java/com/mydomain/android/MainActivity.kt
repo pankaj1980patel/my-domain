@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -78,7 +79,7 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("md", Context.MODE_PRIVATE)
         // Device lab: sign in with the test account in the background, so it
         // works even when the phone is locked (Compose only runs on screen).
-        devCredentials(intent)?.let { dev -> Thread { devLogin(prefs, dev) }.start() }
+        devCredentials(intent)?.let { dev -> AppScope.bg("dev login") { devLogin(prefs, dev) } }
         if (savedInstanceState == null) takeShare(intent)
         askWifiScan(intent)
         openSettings(intent)
@@ -266,7 +267,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        Thread {
+        AppScope.bg("resume refresh") {
             Core.reload()
             // Photo access may have been granted in Settings meanwhile.
             FileActions.shareFolders(applicationContext)
@@ -275,7 +276,7 @@ class MainActivity : ComponentActivity() {
             // Links being downloaded either way ("Download on…"), and any
             // question waiting here.
             com.mydomain.android.core.RemoteDownloads.refresh()
-        }.start()
+        }
     }
 
     override fun onStop() {

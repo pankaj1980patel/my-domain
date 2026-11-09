@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import android.app.Activity
 import android.app.AlertDialog
@@ -149,7 +151,7 @@ object ComputerAudio {
     fun decline(ctx: Context, node: String) {
         cancelAsk(ctx)
         main.post { offers.remove(node) }
-        Thread { runCatching { Core.engine()?.audioListen(node, false) } }.start()
+        AppScope.bg("audioListen") { ffi("audioListen") { Core.engine()?.audioListen(node, false) } }
     }
 
     /** Stop playing (telling the computer). */
@@ -304,7 +306,7 @@ class ComputerAudioService : Service() {
         // Another computer: that one stops.
         val old = node
         if (current === this && old.isNotEmpty()) {
-            Thread { runCatching { Core.engine()?.audioListen(old, false) } }.start()
+            AppScope.bg("audioListen") { ffi("audioListen") { Core.engine()?.audioListen(old, false) } }
         }
         node = n
         jitter.reset()
@@ -580,7 +582,7 @@ class ComputerAudioService : Service() {
         if (wasCurrent) current = null
         running = false
         val n = node
-        if (tell && n.isNotEmpty()) Thread { runCatching { Core.engine()?.audioListen(n, false) } }.start()
+        if (tell && n.isNotEmpty()) AppScope.bg("audioListen") { ffi("audioListen") { Core.engine()?.audioListen(n, false) } }
         if (wasCurrent) ComputerAudio.published(null, false, why)
         releaseLocks()
         ResourceLedger.release(ResourceBook.Kind.SERVICE, "ComputerAudioService")

@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.NotificationIds
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -233,7 +234,7 @@ object NoteReminders {
             pending[id] = JSONObject().put("done", done).apply { at?.let { put("at", it) } }.toString()
             writeMap(ctx, KEY_PENDING, pending)
         }
-        Thread { if (!flushPending(ctx)) startService(ctx) }.start()
+        AppScope.bg("reminder flush") { if (!flushPending(ctx)) startService(ctx) }
     }
 
     private fun startService(ctx: Context) {
@@ -278,7 +279,7 @@ class NoteReminderReceiver : BroadcastReceiver() {
         val ctx = context.applicationContext
         val id = intent.getStringExtra(NoteReminders.EXTRA_ID)
         val pending = goAsync()
-        Thread {
+        AppScope.bg("note reminder") {
             try {
                 when (intent.action) {
                     NoteReminders.ACTION_ALARM -> NoteReminders.check(ctx)
@@ -291,6 +292,6 @@ class NoteReminderReceiver : BroadcastReceiver() {
             } finally {
                 pending.finish()
             }
-        }.start()
+        }
     }
 }

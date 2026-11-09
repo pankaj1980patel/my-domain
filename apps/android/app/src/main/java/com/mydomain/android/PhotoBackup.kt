@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import android.content.Context
 import android.database.ContentObserver
 import android.net.ConnectivityManager
@@ -37,7 +38,7 @@ object PhotoBackup {
     private var netCallback: ConnectivityManager.NetworkCallback? = null
     private var app: Context? = null
     @Volatile private var charging = false
-    private val scan = Runnable { Thread { scanNow() }.start() }
+    private val scan = Runnable { AppScope.bg("photo scan") { scanNow() } }
 
     fun start(ctx: Context) {
         val c = ctx.applicationContext

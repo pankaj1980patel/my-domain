@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -63,6 +65,6 @@ object DownloadAsk {
     fun answer(ctx: Context, id: String, allow: Boolean) {
         dismiss(ctx, id)
         Core.init(ctx)
-        Thread { runCatching { Core.engine()?.remoteDownloadAnswer(id, allow, false) } }.start()
+        AppScope.bg("remoteDownloadAnswer") { ffi("remoteDownloadAnswer") { Core.engine()?.remoteDownloadAnswer(id, allow, false) } }
     }
 }

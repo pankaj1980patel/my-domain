@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.NotificationIds
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -73,10 +74,10 @@ object ComputerNotifs {
 
     private fun subscribe(node: String, on: Boolean) {
         synchronized(asked) { if (on) asked.add(node) else asked.remove(node) }
-        Thread {
+        AppScope.bg("computer notifications subscribe") {
             runCatching { Core.engine()?.subscribeApps(node, if (on) SUBSCRIBE_ALL else "[]") }
                 .onFailure { Core.labLog("computer notifications from $node: subscribe failed: ${it.javaClass.simpleName}") }
-        }.start()
+        }
     }
 
     /** A `device_status` from [node]: remember whether it can share, and
@@ -173,10 +174,10 @@ object ComputerNotifs {
     /** Swiped away here: the computer closes it too (if it's still there). */
     fun dismissed(ctx: Context, from: String, key: String) {
         forget(ctx, from, key)
-        Thread {
+        AppScope.bg("computer notification dismiss") {
             runCatching { Core.engine()?.notificationAction(from, key, -1L, null) }
                 .onFailure { Core.labLog("computer notification dismiss not sent: ${it.javaClass.simpleName}") }
-        }.start()
+        }
     }
 
     /** Drop [key]; the group's summary goes with its last notification. */

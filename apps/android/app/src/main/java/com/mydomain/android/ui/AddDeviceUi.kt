@@ -1,5 +1,7 @@
 package com.mydomain.android.ui
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -106,7 +108,7 @@ private fun InvitePanel(round: Int, onNewCode: () -> Unit, onClose: () -> Unit) 
 
     DisposableEffect(Unit) {
         onDispose {
-            if (live) Thread { runCatching { Core.engine()?.joinCancel() } }.start()
+            if (live) AppScope.bg("joinCancel") { ffi("joinCancel") { Core.engine()?.joinCancel() } }
         }
     }
 

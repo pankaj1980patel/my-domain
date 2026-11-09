@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import android.annotation.SuppressLint
 import android.app.Activity
@@ -70,7 +72,7 @@ object WifiDirect {
 
     fun setEnabled(ctx: Context, on: Boolean) {
         prefs(ctx).edit().putBoolean(PREF, on).apply()
-        Thread { runCatching { Core.engine()?.setWifiDirectEnabled(on) } }.start()
+        AppScope.bg("setWifiDirectEnabled") { ffi("setWifiDirectEnabled") { Core.engine()?.setWifiDirectEnabled(on) } }
     }
 
     /** This phone has Wi-Fi Direct at all. */
@@ -147,7 +149,7 @@ object WifiDirect {
     /** The hotspot for [sid] is up (main thread). */
     fun hotspotUp(sid: String, ssid: String, pass: String, hostIp: String?) {
         if (!move(sid, Event.GroupUp)) return
-        Thread { runCatching { Core.engine()?.wifiDirectHosted(sid, ssid, pass, hostIp.orEmpty()) } }.start()
+        AppScope.bg("wifiDirectHosted") { ffi("wifiDirectHosted") { Core.engine()?.wifiDirectHosted(sid, ssid, pass, hostIp.orEmpty()) } }
     }
 
     /** The hotspot for [sid] couldn't start (main thread). */
@@ -162,7 +164,7 @@ object WifiDirect {
     private fun fail(sid: String, why: String) {
         Log.i(TAG, "$sid: $why")
         if (phases.containsKey(sid)) move(sid, Event.Failure)
-        Thread { runCatching { Core.engine()?.wifiDirectFailed(sid, why) } }.start()
+        AppScope.bg("wifiDirectFailed") { ffi("wifiDirectFailed") { Core.engine()?.wifiDirectFailed(sid, why) } }
     }
 
     private fun listener(sid: String, what: String, ok: () -> Unit) = object : WifiP2pManager.ActionListener {
@@ -200,7 +202,7 @@ object WifiDirect {
             when {
                 group != null && group.isGroupOwner && name.isNotEmpty() && pass.isNotEmpty() -> {
                     if (move(sid, Event.GroupUp)) {
-                        Thread { runCatching { Core.engine()?.wifiDirectHosted(sid, name, pass, "") } }.start()
+                        AppScope.bg("wifiDirectHosted") { ffi("wifiDirectHosted") { Core.engine()?.wifiDirectHosted(sid, name, pass, "") } }
                     }
                 }
                 left > 0 -> main.postDelayed({ waitForGroup(sid, left - 1) }, POLL_MS)
@@ -235,7 +237,7 @@ object WifiDirect {
             when {
                 info != null && info.groupFormed && !info.isGroupOwner && !owner.isNullOrEmpty() -> {
                     if (move(sid, Event.Connected)) {
-                        Thread { runCatching { Core.engine()?.wifiDirectJoined(sid, owner) } }.start()
+                        AppScope.bg("wifiDirectJoined") { ffi("wifiDirectJoined") { Core.engine()?.wifiDirectJoined(sid, owner) } }
                     }
                 }
                 left > 0 -> main.postDelayed({ waitForOwner(sid, left - 1) }, POLL_MS)

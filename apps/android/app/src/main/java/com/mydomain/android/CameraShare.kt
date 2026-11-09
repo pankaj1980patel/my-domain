@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import com.mydomain.android.core.NotificationIds
 import android.Manifest
 import android.annotation.SuppressLint
@@ -124,10 +125,10 @@ object CameraShare {
 
     /** Tell [node] the camera is off for it, and why ("declined", ...). */
     fun tellOff(node: String, reason: String) {
-        Thread {
+        AppScope.bg("camera off") {
             runCatching { Core.engine()?.cameraOffer(node, false, false, null, reason) }
                 .onFailure { Log.w(TAG, "can't say the camera is off: $it") }
-        }.start()
+        }
     }
 
     fun channel(ctx: Context) {
@@ -526,10 +527,10 @@ class CameraShareService : Service() {
         photoFor.clear()
         if (bytes == null || to.isEmpty()) return
         val name = CameraFrames.photoName(System.currentTimeMillis())
-        Thread {
-            val e = Core.engine() ?: return@Thread
+        AppScope.bg("camera photo") {
+            val e = Core.engine() ?: return@bg
             for (node in to) {
-                val file = OutgoingFiles.newFile(this, name)
+                val file = OutgoingFiles.newFile(this@CameraShareService, name)
                 try {
                     file.writeBytes(bytes)
                     OutgoingFiles.track(e.sendFile(node, file.path), file)
@@ -538,7 +539,7 @@ class CameraShareService : Service() {
                     OutgoingFiles.discard(file)
                 }
             }
-        }.start()
+        }
     }
 
     private fun closeCamera() {

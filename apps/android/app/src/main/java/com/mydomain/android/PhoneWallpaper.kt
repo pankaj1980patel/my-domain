@@ -1,5 +1,6 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
 import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
@@ -71,13 +72,13 @@ object PhoneWallpaper {
             runCatching { engine.clearWallpaper() }
             return
         }
-        Thread {
+        AppScope.bg("wallpaper") {
             val colors = colors(app)
             val image = image(app)
             runCatching {
                 if (colors.isEmpty() && image == null) engine.clearWallpaper() else engine.setWallpaper(colors, image)
             }.onFailure { Log.w(TAG, "can't share the wallpaper", it) }
-        }.apply { name = "wallpaper"; isDaemon = true }.start()
+        }
     }
 
     /** Primary, secondary and tertiary colours, `#rrggbb`. */

@@ -380,10 +380,10 @@ object Core {
         Health.sample(emptyList())
         LinksMap.sample(null)
         // Read everything again (Notes, Timers and Read later too).
-        Thread {
+        AppScope.bg("end sample") {
             engine()?.let { DeviceKinds.load(it); Wallpapers.load(it) }
             reload()
-        }.start()
+        }
     }
 
     /** Events that change what the home-screen widget shows. */
@@ -438,7 +438,7 @@ object Core {
         labLog(if (now) "app visible" else "app in background")
         onMain { onScreen = now }
         runCatching { onVisibility?.invoke(now) }
-        Thread { engine()?.setBackground(!now) }.start()
+        AppScope.bg("set background") { ffi("setBackground") { engine()?.setBackground(!now) } }
     }
 
     /** [visible], for the screens (main thread): their timers and polls
@@ -474,9 +474,9 @@ object Core {
         HomeWidget.refresh(app)
         ShareTargets.refresh(app)
         // Your other devices see it too, while sharing is on.
-        Thread {
-            runCatching { engine()?.setSharedLabel(node, label.nickname, label.icon, label.color) }
-        }.start()
+        AppScope.bg("share label") {
+            ffi("setSharedLabel") { engine()?.setSharedLabel(node, label.nickname, label.icon, label.color) }
+        }
     }
 
     /** Whether device labels are shared with your other devices (on until
@@ -484,7 +484,7 @@ object Core {
     fun labelsShare(): Boolean = runCatching { engine()?.labelsShare() }.getOrNull() ?: true
 
     fun setLabelsShare(on: Boolean) {
-        Thread { runCatching { engine()?.setLabelsShare(on) } }.start()
+        AppScope.bg("labels share") { ffi("setLabelsShare") { engine()?.setLabelsShare(on) } }
     }
 
     internal fun onMain(block: () -> Unit) {
@@ -1116,8 +1116,9 @@ object Core {
     }
 
     /** Process-wide work that must outlive a screen (copying a big file
-     *  for sending keeps going when the user navigates away). */
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+     *  for sending keeps going when the user navigates away): the app's
+     *  one supervised scope ([AppScope]), continuing on the main thread. */
+    private val appScope = CoroutineScope(AppScope.scope.coroutineContext + Dispatchers.Main)
 
     /** Send [uris] to [node], off the screen's lifetime: one on its own,
      *  several as one batch (one row in Transfers, the files inside).

@@ -1,5 +1,7 @@
 package com.mydomain.android
 
+import com.mydomain.android.core.AppScope
+import com.mydomain.android.core.ffi
 import com.mydomain.android.core.NotificationIds
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -305,6 +307,6 @@ class FileActionReceiver : BroadcastReceiver() {
         }
         if (intent.action != FileActions.ACTION_CANCEL) return
         Core.init(context)
-        Thread { Core.engine()?.cancelFile(id) }.start()
+        AppScope.bg("cancel file") { ffi("cancelFile") { Core.engine()?.cancelFile(id) } }
     }
 }
