@@ -2141,4 +2141,6 @@
     <string name="newkey_copy">Copiar clave</string>
     <string name="newkey_copied">Clave de dispositivo copiada</string>
     <string name="newkey_done">Ya la he guardado</string>
+    <string name="chat_cleared">Chat borrado</string>
+    <string name="clipboard_recent_cleared">Recortes recientes borrados</string>
 </resources>

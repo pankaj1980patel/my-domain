@@ -2112,4 +2112,6 @@
     <string name="newkey_copy">की कॉपी करा</string>
     <string name="newkey_copied">डिव्हाइस की कॉपी झाली</string>
     <string name="newkey_done">मी ती जतन केली</string>
+    <string name="chat_cleared">चॅट साफ केली</string>
+    <string name="clipboard_recent_cleared">अलीकडील क्लिप साफ केल्या</string>
 </resources>

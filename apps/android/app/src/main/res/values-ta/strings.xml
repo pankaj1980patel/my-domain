@@ -2112,4 +2112,6 @@
     <string name="newkey_copy">விசையை நகலெடு</string>
     <string name="newkey_copied">சாதன விசை நகலெடுக்கப்பட்டது</string>
     <string name="newkey_done">சேமித்துவிட்டேன்</string>
+    <string name="chat_cleared">அரட்டை அழிக்கப்பட்டது</string>
+    <string name="clipboard_recent_cleared">சமீபத்திய கிளிப்புகள் அழிக்கப்பட்டன</string>
 </resources>

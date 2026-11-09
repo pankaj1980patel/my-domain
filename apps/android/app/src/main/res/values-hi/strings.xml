@@ -2109,4 +2109,6 @@
     <string name="newkey_copy">कुंजी कॉपी करें</string>
     <string name="newkey_copied">डिवाइस कुंजी कॉपी हो गई</string>
     <string name="newkey_done">मैंने इसे सहेज लिया</string>
+    <string name="chat_cleared">चैट साफ़ की गई</string>
+    <string name="clipboard_recent_cleared">हाल की क्लिप साफ़ की गईं</string>
 </resources>

@@ -679,16 +679,21 @@ private fun ChatTile(node: String, found: Long? = null) {
             fromHistory = true,
         )
     }
-    val merged = (older + live).sortedBy { it.ts }
+    // "Clear" waiting on its Undo: what it will remove is hidden already.
+    val clearKey = "chat:$node"
+    val merged = (older + live).filter { !PendingClears.hides(clearKey, it.ts) }.sortedBy { it.ts }
     val thread = merged.takeLast(if (keep) shown else 50)
-    val more = keep && (saved.more || merged.size > shown)
+    val undo = LocalUndo.current
+    val cleared = stringResource(R.string.chat_cleared)
+    val undoLabel = stringResource(R.string.notes_undo)
+    val more = keep && !PendingClears.pending(clearKey) && (saved.more || merged.size > shown)
 
     Tile {
         // The title, with "Clear" kept small at its end, away from the input.
         Row(verticalAlignment = Alignment.CenterVertically) {
             CardTitle(stringResource(R.string.chat_title), Modifier.weight(1f))
             if (thread.isNotEmpty()) {
-                TextButton({ Core.clearChat(node) }, Modifier.heightIn(min = 48.dp)) {
+                TextButton({ PendingClears.ask(undo, clearKey, cleared, undoLabel) { Core.clearChat(node) } }, Modifier.heightIn(min = 48.dp)) {
                     Text(stringResource(R.string.chat_clear), color = T.text2, style = MaterialTheme.typography.labelLarge)
                 }
             }
@@ -780,19 +785,27 @@ private fun ClipboardTile(node: String) {
     }
 }
 
+/** [PendingClears] key of the recent clipboard values. */
+private const val RECENT_CLIPS = "recent-clips"
+
 /** Recent clipboard values (memory only), each with a Copy button. */
 @Composable
 private fun ClipHistory() {
     val toast = LocalToast.current
     val copied = stringResource(R.string.clipboard_copied)
-    val recent = Core.clipHistory.take(8)
+    val undo = LocalUndo.current
+    val cleared = stringResource(R.string.clipboard_recent_cleared)
+    val undoLabel = stringResource(R.string.notes_undo)
+    val recent = Core.clipHistory.filter { !PendingClears.hides(RECENT_CLIPS, it.ts) }.take(8)
     if (recent.isEmpty()) return
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             stringResource(R.string.clipboard_recent), style = MaterialTheme.typography.labelLarge, color = T.text,
             modifier = Modifier.weight(1f).semantics { heading() },
         )
-        GhostButton(stringResource(R.string.clipboard_clear), { Core.clearClipHistory() }, small = true)
+        GhostButton(stringResource(R.string.clipboard_clear), {
+            PendingClears.ask(undo, RECENT_CLIPS, cleared, undoLabel) { Core.clearClipHistory() }
+        }, small = true)
     }
     recent.forEach { e ->
         Row(verticalAlignment = Alignment.CenterVertically) {

@@ -2112,4 +2112,6 @@
     <string name="newkey_copy">કી કૉપિ કરો</string>
     <string name="newkey_copied">ડિવાઇસ કી કૉપિ થઈ</string>
     <string name="newkey_done">મેં તે સાચવી લીધી</string>
+    <string name="chat_cleared">ચેટ સાફ કરી</string>
+    <string name="clipboard_recent_cleared">તાજેતરની ક્લિપ સાફ કરી</string>
 </resources>

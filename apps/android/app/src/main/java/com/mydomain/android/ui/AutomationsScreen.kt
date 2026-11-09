@@ -68,6 +68,8 @@ fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
     var editing by rememberSaveable(stateSaver = AutomationSaver) { mutableStateOf<Automation?>(null) }
     var isNew by rememberSaveable { mutableStateOf(false) }
     val deleted = stringResource(R.string.automation_deleted)
+    val undo = LocalUndo.current
+    val undoLabel = stringResource(R.string.notes_undo)
 
     BackHandler(enabled = editing != null) { editing = null }
 
@@ -88,7 +90,11 @@ fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
                 AutomationRow(
                     a,
                     onEdit = { isNew = false; editing = a },
-                    onDelete = { PhoneAutomations.delete(ctx, a.id); toast(deleted) },
+                    // Gone at once; Undo puts it back as it was.
+                    onDelete = {
+                        PhoneAutomations.delete(ctx, a.id)
+                        undo(deleted, undoLabel) { PhoneAutomations.add(ctx, a)?.let(toast) }
+                    },
                     modifier = Modifier.foundMark(a.id == found),
                 )
             }

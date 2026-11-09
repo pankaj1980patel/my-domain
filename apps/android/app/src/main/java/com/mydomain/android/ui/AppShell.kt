@@ -43,6 +43,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -71,9 +72,44 @@ import kotlinx.coroutines.launch
 /** Show a short message at the bottom of the screen. */
 val LocalToast = staticCompositionLocalOf<(String) -> Unit> { {} }
 
-/** Show a message with an action (e.g. Undo): (message, action label,
- *  what the action does). */
-val LocalUndo = staticCompositionLocalOf<(String, String, () -> Unit) -> Unit> { { _, _, _ -> } }
+/** A message with an action (e.g. Undo). `undo(message, label) { … }`
+ *  runs the block if the action is tapped; [later] also says what to do
+ *  once the message goes without it (the delete itself, held back until
+ *  then). */
+class UndoHost(private val show: (String, String, () -> Unit, () -> Unit) -> Unit) {
+    operator fun invoke(message: String, label: String, onUndo: () -> Unit) = show(message, label, onUndo) {}
+
+    /** [onUndo] if the action is tapped, else [onCommit] once the message
+     *  is gone (timed out, swiped, replaced, or the screen went away). */
+    fun later(message: String, label: String, onUndo: () -> Unit, onCommit: () -> Unit) = show(message, label, onUndo, onCommit)
+}
+
+val LocalUndo = staticCompositionLocalOf { UndoHost { _, _, _, _ -> } }
+
+/** Clears held back while their Undo shows: key ("chat:<node>",
+ *  "clips:<node>", "recent-clips") to when it was asked for. Screens hide
+ *  what such a clear will remove. */
+internal object PendingClears {
+    val since = mutableStateMapOf<String, Long>()
+
+    fun pending(key: String): Boolean = since.containsKey(key)
+
+    /** Hidden: something from [at] or before, under a clear waiting on [key]. */
+    fun hides(key: String, at: Long): Boolean = since[key]?.let { at <= it } ?: false
+
+    /** Hide now; do [clear] when the Undo goes unused (only if this is
+     *  still the clear waiting on [key]). */
+    fun ask(undo: UndoHost, key: String, message: String, label: String, clear: () -> Unit) {
+        val t0 = System.currentTimeMillis()
+        since[key] = t0
+        undo.later(message, label, onUndo = { if (since[key] == t0) since.remove(key) }) {
+            if (since[key] == t0) {
+                clear()
+                since.remove(key)
+            }
+        }
+    }
+}
 
 private enum class Tab(@StringRes val label: Int, @DrawableRes val icon: Int) {
     Home(R.string.tab_home, R.drawable.ic_lucide_house),
@@ -101,10 +137,19 @@ fun App(prefs: SharedPreferences) {
         }
     }
 
-    val undo: (String, String, () -> Unit) -> Unit = { msg, label, action ->
-        scope.launch {
-            snack.currentSnackbarData?.dismiss()
-            if (snack.showSnackbar(msg, actionLabel = label, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) action()
+    val undo = remember(snack, scope) {
+        UndoHost { msg, label, action, commit ->
+            scope.launch {
+                snack.currentSnackbarData?.dismiss()
+                var undone = false
+                try {
+                    undone = snack.showSnackbar(msg, actionLabel = label, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed
+                } finally {
+                    // Also when this is cancelled (signed out, the app closed):
+                    // what was asked for still happens.
+                    if (undone) action() else commit()
+                }
+            }
         }
     }
 

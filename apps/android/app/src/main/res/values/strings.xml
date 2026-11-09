@@ -2112,4 +2112,6 @@
     <string name="newkey_copy">Copy key</string>
     <string name="newkey_copied">Device key copied</string>
     <string name="newkey_done">I’ve saved it</string>
+    <string name="chat_cleared">Chat cleared</string>
+    <string name="clipboard_recent_cleared">Recent clips cleared</string>
 </resources>
