@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -412,11 +413,20 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
     val fix = rememberHealthFix(nav)
     val rows = rememberSetupRows()
     val turnOn = rememberTurnOn { rows.refresh() }
-    var name by remember { mutableStateOf(HealthPlan.suggestedName(Core.me?.name ?: "", DeviceKinds.own?.model ?: "")) }
-    var picked by remember { mutableStateOf(HealthPlan.GROUPS.toSet()) }
+    // The name typed and the groups picked survive a rotation (the groups
+    // as one comma-separated line; read from the saved setup only once).
+    var name by rememberSaveable { mutableStateOf(HealthPlan.suggestedName(Core.me?.name ?: "", DeviceKinds.own?.model ?: "")) }
+    var pickedLine by rememberSaveable { mutableStateOf(HealthPlan.GROUPS.joinToString(",")) }
+    var pickedLoaded by rememberSaveable { mutableStateOf(false) }
+    val picked = pickedLine.split(',').filter { it.isNotEmpty() }.toSet()
+    fun pick(next: Set<String>) {
+        pickedLine = HealthPlan.GROUPS.filter { it in next }.joinToString(",")
+    }
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) {
-        Health.loadSetup()?.let { s -> picked = s.enabled.toSet() }
+        val s = Health.loadSetup()
+        if (s != null && !pickedLoaded) pick(s.enabled.toSet())
+        pickedLoaded = true
     }
     val step = Health.setup?.step ?: "name"
     // The connection step is live.
@@ -490,7 +500,7 @@ fun OnboardingScreen(onClose: () -> Unit, nav: HealthNav) {
                 "features" -> {
                     Muted(stringResource(R.string.onboard_features_hint))
                     HealthPlan.GROUPS.forEach { g ->
-                        SwitchRow(stringResource(groupRes(g)!!), g in picked) { on -> picked = if (on) picked + g else picked - g }
+                        SwitchRow(stringResource(groupRes(g)!!), g in picked) { on -> pick(if (on) picked + g else picked - g) }
                         Muted(stringResource(whyGroupRes(g)))
                     }
                 }

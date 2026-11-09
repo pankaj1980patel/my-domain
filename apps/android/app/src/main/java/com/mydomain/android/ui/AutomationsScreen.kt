@@ -21,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,8 +65,8 @@ fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
     val toast = LocalToast.current
     remember { PhoneAutomations.load(ctx) }
     /** The one being edited (a fresh one when [isNew]), or none. */
-    var editing by remember { mutableStateOf<Automation?>(null) }
-    var isNew by remember { mutableStateOf(false) }
+    var editing by rememberSaveable(stateSaver = AutomationSaver) { mutableStateOf<Automation?>(null) }
+    var isNew by rememberSaveable { mutableStateOf(false) }
     val deleted = stringResource(R.string.automation_deleted)
 
     BackHandler(enabled = editing != null) { editing = null }
@@ -97,6 +99,29 @@ fun AutomationsScreen(onBack: () -> Unit, found: String? = null) {
         }
     }
 }
+
+/** The automation being edited, over a rotation (every field as text;
+ *  not checked, so a draft that isn't valid yet survives too). */
+private val AutomationSaver = Saver<Automation?, ArrayList<String>>(
+    save = { a ->
+        a?.let {
+            arrayListOf(
+                it.id, it.trigger.kind, it.trigger.node, it.trigger.level?.toString() ?: "", it.trigger.ssid,
+                it.node, it.action, it.args, it.label, it.enabled.toString(), it.lastFired?.toString() ?: "",
+            )
+        }
+    },
+    restore = { f ->
+        runCatching {
+            Automation(
+                id = f[0],
+                trigger = Trigger(f[1], f[2], f[3].toIntOrNull(), f[4]),
+                node = f[5], action = f[6], args = f[7], label = f[8],
+                enabled = f[9].toBoolean(), lastFired = f[10].toLongOrNull(),
+            )
+        }.getOrNull()
+    },
+)
 
 /** Your other devices' node ids. */
 private fun otherPeers(): List<String> {
@@ -152,13 +177,13 @@ private fun <V> Choices(options: List<Pair<V, String>>, selected: V, onPick: (V)
 private fun AutomationForm(start: Automation, isNew: Boolean, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val toast = LocalToast.current
-    var kind by remember(start.id) { mutableStateOf(start.trigger.kind) }
-    var watch by remember(start.id) { mutableStateOf(start.trigger.node) }
-    var level by remember(start.id) { mutableStateOf((start.trigger.level ?: 20).toString()) }
-    var ssid by remember(start.id) { mutableStateOf(start.trigger.ssid) }
-    var target by remember(start.id) { mutableStateOf(start.node) }
-    var presetId by remember(start.id) { mutableStateOf(AutoPresets.of(start)?.id ?: "") }
-    var note by remember(start.id) {
+    var kind by rememberSaveable(start.id) { mutableStateOf(start.trigger.kind) }
+    var watch by rememberSaveable(start.id) { mutableStateOf(start.trigger.node) }
+    var level by rememberSaveable(start.id) { mutableStateOf((start.trigger.level ?: 20).toString()) }
+    var ssid by rememberSaveable(start.id) { mutableStateOf(start.trigger.ssid) }
+    var target by rememberSaveable(start.id) { mutableStateOf(start.node) }
+    var presetId by rememberSaveable(start.id) { mutableStateOf(AutoPresets.of(start)?.id ?: "") }
+    var note by rememberSaveable(start.id) {
         mutableStateOf(
             if (start.action == AutoPresets.SEND_TEXT) runCatching { JSONObject(start.args).optString("text") }.getOrDefault("") else "",
         )

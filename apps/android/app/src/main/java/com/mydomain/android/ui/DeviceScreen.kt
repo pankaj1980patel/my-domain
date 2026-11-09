@@ -143,7 +143,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
     val prefs = remember { ctx.getSharedPreferences("md", Context.MODE_PRIVATE) }
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
-    var editing by remember(node, focus) { mutableStateOf(focus == "edit") }
+    var editing by rememberSaveable(node, focus) { mutableStateOf(focus == "edit") }
     var menu by remember { mutableStateOf(false) }
     val list = rememberLazyListState()
     val foundMessage = focus?.takeIf { it.startsWith("msg:") }?.removePrefix("msg:")?.toLongOrNull()
@@ -183,7 +183,7 @@ fun DeviceScreen(node: String, onBack: () -> Unit, focus: String? = null, onHeal
     // Arrange (a long press on a tile, or the menu): the screen's tiles in
     // the saved order, for this kind of device or this device alone
     // (PageLayoutStore).
-    var arranging by remember(node) { mutableStateOf(false) }
+    var arranging by rememberSaveable(node) { mutableStateOf(false) }
     var said by remember(node) { mutableStateOf("") }
     // Back leaves Arrange or the name editor first, not the page.
     BackHandler(enabled = arranging || editing) {
@@ -661,7 +661,7 @@ private const val CHAT_PAGE = 100
 private fun ChatTile(node: String, found: Long? = null) {
     val toast = LocalToast.current
     val scope = rememberCoroutineScope()
-    var text by remember { mutableStateOf("") }
+    var text by rememberSaveable(node) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     // The newest [CHAT_PAGE] saved messages ([ChatHistory]), [CHAT_PAGE]
     // more per "Show older messages".
@@ -1055,7 +1055,7 @@ private fun OpenOnTile(node: String, name: String) {
     val scope = rememberCoroutineScope()
     val run = rememberRun(node)
     val st = Core.deviceStatus[node]
-    var url by remember { mutableStateOf("") }
+    var url by rememberSaveable(node) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val linkSent = stringResource(R.string.find_link_sent, name)
     val linkQueued = stringResource(R.string.find_link_queued, name)
